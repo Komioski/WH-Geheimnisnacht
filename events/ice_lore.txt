@@ -1,0 +1,434 @@
+namespace = ice_lore
+
+# Assing the magic points budget toward four spell effects
+# Costs per full powred spells
+# 14 shardstorm per 4 flat dmg points
+# 20 Freezing blast/Permafrost per special effect 
+# 18 Blizzard
+# 23 Biting wind
+character_event = {
+	id = ice_lore.0
+	is_triggered_only = yes
+	hide_window = yes
+
+	immediate = {
+		calc_magic_power_effect = yes 
+		battle_magic_test_effect = yes
+		# Select enemy target
+		target_enemy_unit_owner_effect = yes
+		# Select spell composition
+		while = {
+			limit = {
+				check_variable = { which = "battle_casting_roll" value = 3.5 }
+			}
+			# Shardstorm base cost 14 magic points (can be scaled)
+			random_list = {
+				20 = {
+					change_variable = { 
+						which = "battle_casting_roll" 
+						value = -3.5
+					}
+					change_variable = {
+						which = "magic_dmg_flat" 
+						value = 1
+					}
+					set_character_flag = cast_shardstorm 
+				}
+				# Hex & dmg spell
+				20 = {
+					modifier = {
+						factor = 0
+						has_character_flag = cast_freezing_blast
+					}
+					modifier = {
+						factor = 0 
+						NOT = {
+							check_variable = { 
+								which = "battle_casting_roll" 
+								value =	20
+							}
+						}
+					}
+					change_variable = { 
+						which = "battle_casting_roll" 
+						value = -20
+					}
+					change_variable = {
+						which = "magic_dmg_flat" 
+						value = 4
+					}
+					set_character_flag = cast_freezing_blast
+				}
+				# Blizzard Hex & dmg spell
+				30 = {
+					modifier = {
+						factor = 0
+						has_character_flag = cast_blizzard
+					}
+					modifier = {
+						factor = 0
+						event_target:magic_target_unit_owner = {
+							any_controlled_unit = {
+								location = { province = event_target:magic_location }
+								center_flank_leader = {
+									combat = { 
+										flank_has_tactic = blinded_by_blizzard_tactic
+									}
+								}
+								right_flank_leader = {
+									combat = { 
+										flank_has_tactic = blinded_by_blizzard_tactic
+									}
+								}
+								left_flank_leader = {
+									combat = { 
+										flank_has_tactic = blinded_by_blizzard_tactic
+									}
+								}
+							}
+						}
+					}
+					modifier = {
+						factor = 0 
+						NOT = {
+							check_variable = { 
+								which = "battle_casting_roll" 
+								value =	18
+							}
+						}
+					}
+					change_variable = { 
+						which = "battle_casting_roll" 
+						value = -18
+					}
+					change_variable = {
+						which = "magic_dmg_flat" 
+						value = 4
+					}
+					set_character_flag = cast_blizzard
+				}
+				# Biting wind (costs 23, can be scaled)
+				20 = {
+					modifier = {
+						factor = 0
+						NOT = { 
+							check_variable = { 
+								which = "battle_casting_roll" 
+								value =	11.5
+							}
+						}
+					}
+					change_variable = { 
+						which = "battle_casting_roll" 
+						value = -11.5
+					}
+					change_variable = { which = "magic_dmg_percent" value = 1 }
+					change_variable = { which =  "magic_dmg_flat" value = 1 }
+					set_character_flag = cast_biting_wind
+				}
+			}
+		}
+		# Reporting event
+		if = {
+			OR = { 
+				has_character_flag = cast_biting_wind
+				has_character_flag = cast_blizzard
+				has_character_flag = cast_shardstorm
+				has_character_flag = cast_freezing_blast
+			}
+			character_event = { id = ice_lore.1 }
+		}
+		else = {
+			clr_magic_state = yes
+			clr_spell_flags_effect = yes
+		}
+	}
+}
+# Reporting and applying effects
+# Each battle lore applies various effect ( a mixture of those)
+# with certain chance. This event does that.
+character_event = {
+	id = ice_lore.1
+	title = dispatch_ice_desc
+	desc = {
+		trigger = { has_character_flag = cast_shardstorm }
+		text = ice_lore.10_desc
+	}
+	desc = {
+		# Biting winds
+		trigger = { has_character_flag = cast_biting_wind }
+		text = ice_lore.40_desc
+	}
+	desc = {
+		# Freezing blast
+		trigger = { has_character_flag = cast_freezing_blast }
+		text = ice_lore.20_desc
+	}
+	desc = {
+		# Blizzard
+		trigger = { has_character_flag = cast_blizzard }
+		text = ice_lore.30_desc
+	}
+	is_triggered_only = yes
+	picture = GFX_evt_mage_lore_ice
+
+	immediate = {
+		# Mark character target (if any)
+		event_target:magic_target_unit_owner = { 
+			target_random_commander_effect = yes 
+		}
+		# Set affects flanks
+		if = { 
+			limit = { has_character_flag = cast_freezing_blast }
+			random_list = {
+				20 = { set_character_flag = frozen_left }
+				20 = { set_character_flag = frozen_center }
+				20 = { set_character_flag = frozen_right }
+				20 = {
+					set_character_flag = frozen_left 
+					set_character_flag = frozen_center 
+				}
+				20 = {
+					set_character_flag = frozen_center 
+					set_character_flag = frozen_right
+				}
+			}
+		}
+	}
+	option = {
+		name = ice_lore_ok
+		#miscast_apply_effect = yes
+		event_target:magic_target_unit_owner = {
+			random_controlled_unit = {
+				limit = { location = { province = event_target:magic_location }}
+				# Unit dmg effect (absolute dmg)
+				magic_dmg_flat_effect = yes 
+				# Army dmg effect (percent dmg)
+				magic_dmg_percent_effect = yes 
+			}
+		}
+		# Blizzard tactics effect
+		if = { 
+			limit = { has_character_flag = cast_blizzard }
+			magic_blizzard_effect = yes
+		}
+		# Permafrost tactics effect
+		if = { 
+			limit = { has_character_flag = cast_freezing_blast }
+			magic_freezing_blast_effect = yes
+		}
+	}
+	after = {
+		hidden_tooltip = {
+			clr_magic_state = yes
+			clr_spell_flags_effect = yes
+			# TODO Send event to enemy commanders
+			hidden_tooltip = { 
+				event_target:magic_target_character = {	character_event = { id = ice_lore.2 }}
+			}
+		}
+	}
+}
+# Enemy Commander report
+character_event = {
+	id = ice_lore.2
+	title = dispatch_ice_desc
+	is_triggered_only = yes
+	picture = GFX_evt_mage_lore_ice
+	desc = {
+		trigger = { 
+			FROM = {
+				OR = {
+					has_character_flag = cast_shardstorm
+					has_character_flag = cast_biting_wind
+				}
+			}
+		}
+		text = ice_lore.40_enemy_desc
+	}
+	desc = {
+		# Freezing blast
+		trigger = { FROM = { has_character_flag = cast_freezing_blast }}
+		text = ice_lore.20_enemy_desc
+	}
+	desc = {
+		# Blizzard
+		trigger = { FROM = { has_character_flag = cast_blizzard }}
+		text = ice_lore.30_enemy_desc
+	}
+
+	option = { name = ice_lore_enemy_ok }
+}
+# Reporting event that applies shit too
+character_event = {
+	id = ice_lore.3
+	title = dispatch_ice_desc
+	desc = ice_cast_desc
+	is_triggered_only = yes
+	picture = "GFX_evt_kislev_ice_witch"
+
+
+	# Ice lore: shardstorm
+	option = {
+		name = ice_shardstorm_opt
+		hidden_tooltip = {
+			set_character_flag = magic_select_dmg_unit
+		}
+	}
+	# Ice lore: freezing blast # special
+	option = {
+		name = ice_freezing_blast_opt
+		set_character_flag = magic_select_special
+	}
+	# Ice lore: blizzard
+	option = {
+		name = ice_blizzard_opt
+		set_character_flag = magic_select_hex
+	}
+	# Ice lore: biting wind
+	option = {
+		name = ice_biting_wind_opt
+		set_character_flag = magic_select_dmg_army
+		custom_tooltip = {
+			text = ice_biting_wind_tooltip
+		}
+	}
+}
+
+# DEBUG EVENTS
+character_event = {
+	id = ice_lore.999
+	is_triggered_only = yes
+	title = "TEST"
+	desc = "CEHCKING TACTICS SWAP"
+	picture = GFX_evt_mage_lore_ice
+
+	# Shardstorm mixture of flat dmg and hero dmg
+	option = {
+		name = "OK"
+
+		any_controlled_unit = {
+			center_flank_leader = {
+				combat = {
+					if = {
+						limit = { 
+							NOT = {
+								troops = { 
+									who = archers
+									value = 0.01
+								}
+							}
+						}
+						PREV =  { set_character_flag = "archers_ove_1%" }
+					}
+					else_if = {
+						limit = { 
+							troops = { 
+								who = archers
+								value = 0.01
+							}
+							NOT = {
+								troops = { 
+									who = archers
+									value = 0.02
+								}
+							}
+						}
+						PREV =  { set_character_flag = "archers_ove_1%" }
+					}
+					else_if = {
+						limit = { 
+							troops = { 
+								who = archers
+								value = 0.02
+							}
+						}
+						PREV =  { set_character_flag = "archers_ove_2%" }
+						set_flank_tactic = blinded_by_blizzard_tactic
+					}
+				}
+			}
+			right_flank_leader = {
+				combat = {
+					if = {
+						limit = { 
+							NOT = {
+								troops = { 
+									who = archers
+									value = 0.01
+								}
+							}
+						}
+						PREV =  { set_character_flag = "archers_ove_1%" }
+					}
+					else_if = {
+						limit = { 
+							troops = { 
+								who = archers
+								value = 0.01
+							}
+							NOT = {
+								troops = { 
+									who = archers
+									value = 0.02
+								}
+							}
+						}
+						PREV =  { set_character_flag = "archers_ove_1%" }
+					}
+					else_if = {
+						limit = { 
+							troops = { 
+								who = archers
+								value = 0.02
+							}
+						}
+						PREV =  { set_character_flag = "archers_ove_2%" }
+						set_flank_tactic = blinded_by_blizzard_tactic
+					}
+				}
+			}
+
+			left_flank_leader = {
+				combat = {
+					if = {
+						limit = { 
+							NOT = {
+								troops = { 
+									who = archers
+									value = 0.01
+								}
+							}
+						}
+						PREV =  { set_character_flag = "archers_ove_1%" }
+					}
+					else_if = {
+						limit = { 
+							troops = { 
+								who = archers
+								value = 0.01
+							}
+							NOT = {
+								troops = { 
+									who = archers
+									value = 0.02
+								}
+							}
+						}
+						PREV =  { set_character_flag = "archers_ove_1%" }
+					}
+					else_if = {
+						limit = { 
+							troops = { 
+								who = archers
+								value = 0.02
+							}
+						}
+						PREV =  { set_character_flag = "archers_ove_2%" }
+						set_flank_tactic = blinded_by_blizzard_tactic
+					}
+				}
+			}
+		}
+	}
+}

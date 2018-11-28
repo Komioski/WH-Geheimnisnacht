@@ -1,0 +1,1857 @@
+# This is basic spellcast check performed each time characters casts a spell
+# Outcomes
+# 	1. success + miscast
+# 	2. success
+#	3. failure
+# 	3. failure + miscast
+#
+# Casting roll
+# 1. Get effective "magic_power" stat for character
+# 2. Get spell difficulty into variable "spell_value"
+# 3. casting_roll = spell_value / ( 2  + magic_power) - 5
+#
+# From that on the casting_roll is single variable that decides probability of
+# success (with exception of learning stat which also counts a little and
+# represents "spellcraft")
+#
+# Prob(succesful spellcast) = Prob(casting_roll = X)
+#
+# Miscast chance depends mostly on spell
+# Prob(miscast) = P( spell_value = X)
+# Miscasts types themselves are random, with more severe being less likely.
+
+
+# Calculates effective magic stat, given enviromental conditions and items
+calc_magic_power_effect = {
+	if = {
+		limit = {
+			OR = {
+				trait = hollowed
+				trait = incapable
+			}
+		}
+		set_variable = { which = "magic_power" value = 0 }
+	}
+	# 1
+	else_if = {
+		limit = {
+			OR = {
+				trait = hedge_wizard
+				trait = mage_apprentice
+				trait = bray_shaman
+				trait = greenskin_shaman
+				trait = warlock_engineer
+			}
+		}
+		set_variable = { which = "magic_power" value = 1 }
+	}
+	# 2
+	else_if = {
+		limit = {
+			OR = {
+				trait = witch
+				trait = warlock
+				trait = khemri_liche_priest
+			}
+		}
+		set_variable = { which = "magic_power" value = 2 }
+	}
+	# 3
+	else_if = {
+		limit = {
+			OR = {
+				trait = chaos_dwarf_sorcerer
+				trait = asrai_spellsinger
+				trait = druchi_sorceress
+				trait = druchi_mage
+				trait = grey_seer
+				trait = skink_priest
+				trait = chaos_sorcerer
+			}
+		}
+		set_variable = { which = "magic_power" value = 3 }
+	}
+	# 4
+	else_if = {
+		limit = {
+			OR = {
+				trait = ice_witch
+				trait = asur_mage
+				# innate magic power
+				trait = creature_slann
+			}
+		}
+		set_variable = { which = "magic_power" value = 4 }
+	}
+	else = {
+		set_variable = { which = "magic_power" value = 0 }
+	}
+
+	if = {
+		limit = { trait = magic_potential_2 }
+		change_variable = { which = "magic_power" value = 0.5 }
+	}
+}
+# For battle magic casting is tad bit different given is average that matters
+# and amount of successufl spells
+# TODO Merge with normal casting roll eventually
+battle_magic_test_effect = {
+	# battle_casting_roll =
+	#	<char magic> * <average d10 roll modified by learning>
+	#
+	# It is an amount of points to be distributed among spells to be casted
+	# Rationale the more magic you are using through battle the more
+	# miscast chances are generated
+	set_variable = { which = "magic_dices" which = "magic_power" }
+	set_variable = { which = "battle_casting_roll" value = 0 }
+
+	while = {
+		limit = { check_variable = { which = "magic_dices" value = 1 }}
+		subtract_variable = { which = "magic_dices" value = 1 }
+		random_list = {
+			10 = {
+				change_variable = { which = "battle_casting_roll" value = 1 }
+				modifier = {
+					factor = 0.33
+					OR = {
+						trait = lore_dark_magic
+						trait = lore_chaos
+						trait = lore_slaanesh
+						trait = lore_tzeentch
+						trait = lore_nurgle
+						trait = lore_necromancy
+					}
+				}
+			}
+			10 = {
+				change_variable = { which = "battle_casting_roll" value = 2 }
+				modifier = {
+					factor = 0.5
+					OR = {
+						trait = lore_dark_magic
+						trait = lore_chaos
+						trait = lore_slaanesh
+						trait = lore_tzeentch
+						trait = lore_nurgle
+						trait = lore_necromancy
+					}
+				}
+			}
+			10 = { change_variable = { which = "battle_casting_roll" value = 3 }}
+			10 = { change_variable = { which = "battle_casting_roll" value = 4 }}
+			10 = { change_variable = { which = "battle_casting_roll" value = 5 }}
+			10 = { change_variable = { which = "battle_casting_roll" value = 6 }}
+			10 = { change_variable = { which = "battle_casting_roll" value = 7 }}
+			10 = { change_variable = { which = "battle_casting_roll" value = 8 }}
+			10 = { change_variable = { which = "battle_casting_roll" value = 9 }}
+			10 = { change_variable = { which = "battle_casting_roll" value = 10 }}
+		}
+	}
+	set_variable = { which = "magic_dices" value = 0 }
+	# Channelling modifier
+	random_list = {
+		50 = {
+			# Place based modifiers
+			modifier = {
+				factor = 1.2
+				learning = 10
+			}
+			modifier = {
+				factor = 1.2
+				learning = 13
+			}
+			modifier = {
+				factor = 1.2
+				learning = 16
+			}
+			modifier = {
+				factor = 1.2
+				learning = 19
+			}
+			modifier = {
+				factor = 1.2
+				learning = 21
+			}
+			modifier = {
+				factor = 1.2
+				learning = 24
+			}
+			modifier = {
+				factor = 1.2
+				learning = 27
+			}
+			modifier = {
+				factor = 1.2
+				learning = 30
+			}
+			change_variable = { which = "battle_casting_roll" which = "magic_power" }
+		}
+		50 = {
+			# Price of ice magic
+			modifier = {
+				factor = 2.0
+				location = {
+					NOR = {
+						climate = severe_winter
+						is_winter = yes
+						region = world_old_world_kislev
+						region = world_troll_country
+						region = world_norsca
+						region = world_new_world_land_of_chill
+						region = world_chaos_wastes
+					}
+				}
+			}
+			modifier = {
+				factor = 1.2
+				NOT = { learning = 8 }
+			}
+			modifier = {
+				factor = 1.5
+				NOT = { learning = 5 }
+			}
+		}
+	}
+}
+# Casting test, it is requred to have variable set
+# Variable spell_value should be set earlier by specific spell
+casting_test_effect = {
+	if = {
+		NOT = { limit = { check_variable = "spell_value" value = 1 }}
+		log = "casting_test_effect: [Root.GetTitledName] spell_value unset!"
+	}
+	# Chance to cast successfully
+	clr_character_flag = last_spell_success
+	clr_character_flag = last_spell_failure
+	clr_character_flag = last_spell_miscast
+	calc_magic_power_effect = yes
+
+	# Spell value is amount used to get
+	# 30 / (2 + 4) - 5 = 1 -> 50%
+	# 10 / (2 + 2) - 5 = 1 -> 93%
+	# Perform calculation (casting roll)
+	# Casting
+	change_variable = { which = "magic_power" value = 2 }
+	set_variable = { which = "casting_roll" which = "spell_value" }
+	divide_variable = { which = "casting_roll" which= "magic_power" }
+	subtract_variable = { which = "casting_roll" value = 5 }
+	# Revert
+	change_variable = { which = "magic_power" value = -2 }
+	# Calculate effective magic stats
+	random_list = {
+		50 = {
+			# Place based modifiers
+			modifier = {
+				factor = 2.0
+				NOT = {
+					check_variable = { which = "casting_roll" value	= -0.5 }
+				}
+			}
+			modifier = {
+				factor = 1.9
+				NOT = {
+					check_variable = { which = "casting_roll" value = -1.0 }
+				}
+			}
+			modifier = {
+				factor = 1.7
+				NOT = {
+					check_variable = { which = "casting_roll" value = -1.5 }
+				}
+			}
+			modifier = {
+				factor = 1.7
+				NOT = {
+					check_variable = { which = "casting_roll" value = -2.0 }
+				}
+			}
+			modifier = {
+				factor = 1.6
+				NOT = {
+					check_variable = { which = "casting_roll" value	= -2.5 }
+				}
+			}
+			modifier = {
+				factor = 1.5
+				NOT = {
+					check_variable = { which = "casting_roll" value = -3.0 }
+				}
+			}
+			modifier = {
+				factor = 1.2
+				learning = 10
+			}
+			modifier = {
+				factor = 1.2
+				learning = 13
+			}
+			modifier = {
+				factor = 1.2
+				learning = 16
+			}
+			modifier = {
+				factor = 1.2
+				learning = 19
+			}
+			modifier = {
+				factor = 1.2
+				learning = 21
+			}
+			modifier = {
+				factor = 1.2
+				learning = 24
+			}
+			modifier = {
+				factor = 1.2
+				learning = 27
+			}
+			modifier = {
+				factor = 1.2
+				learning = 30
+			}
+			# Dark magic is more powerfull
+			modifier = {
+				factor = 1.4
+				trait = lore_dark_magic
+			}
+			set_character_flag = last_spell_success
+			custom_tooltip = { text = " spell success " }
+		}
+		50 = {
+			# Price of ice magic
+			modifier = {
+				factor = 2.0
+				location = {
+					NOR = {
+						climate = severe_winter
+						is_winter = yes
+						region = world_old_world_kislev
+						region = world_troll_country
+						region = world_norsca
+						region = world_new_world_land_of_chill
+						region = world_chaos_wastes
+					}
+				}
+			}
+			modifier = {
+				factor = 2.0
+				check_variable = { which = "casting_roll" value	= 0.5 }
+			}
+			modifier = {
+				factor = 1.9
+				check_variable = { which = "casting_roll" value	= 1.0 }
+			}
+			modifier = {
+				factor = 1.7
+				check_variable = { which = "casting_roll" value	= 1.5 }
+			}
+
+			modifier = {
+				factor = 1.7
+				check_variable = { which = "casting_roll" value	= 2.0 }
+			}
+			modifier = {
+				factor = 1.6
+				check_variable = { which = "casting_roll" value	= 2.5 }
+			}
+			modifier = {
+				factor = 1.5
+				check_variable = { which = "casting_roll" value	= 3.0 }
+			}
+			modifier = {
+				factor = 1.2
+				NOT = { learning = 8 }
+			}
+			modifier = {
+				factor = 1.5
+				NOT = { learning = 5 }
+			}
+			set_character_flag = last_spell_failure
+			custom_tooltip = { text = " spell failure " }
+		}
+	}
+
+	# Miscast test
+	random_list = {
+		92 = {
+			# Place based modifiers
+			modifier = {
+				factor = 1.2
+				learning = 10
+			}
+			modifier = {
+				factor = 1.2
+				learning = 13
+			}
+			modifier = {
+				factor = 1.2
+				learning = 16
+			}
+			modifier = {
+				factor = 1.2
+				learning = 19
+			}
+			modifier = {
+				factor = 1.2
+				learning = 21
+			}
+			modifier = {
+				factor = 1.2
+				learning = 24
+			}
+			modifier = {
+				factor = 1.2
+				learning = 27
+			}
+			modifier = {
+				factor = 1.2
+				learning = 30
+			}
+			modifier = {
+				factor = 1.1
+				trait = patient
+			}
+			modifier = {
+				factor = 0.9
+				trait = wroth
+			}
+			modifier = {
+				factor = 0.9
+				in_battle = yes
+			}
+			modifier = {
+				factor = 0.9
+				in_siege = yes
+			}
+			modifier = {
+				factor = 0.9
+				trait = wounded
+			}
+		}
+		80 = {
+			# Hedge wizardary is not safe
+			modifier = {
+				factor = 1.5
+				trait = hedge_wizard
+			}
+			# Dark magic is unsafe
+			modifier = {
+				factor = 1.5
+				OR = {
+					trait = lore_dark_magic
+					trait = lore_slaanesh
+					trait = lore_tzeentch
+					trait = lore_nurgle
+					trait = lore_necromancy
+				}
+			}
+			modifier = {
+				factor = 0
+				has_character_flag = last_spell_failure
+			}
+			modifier = {
+				factor = 0
+				NOT = { check_variable = { which = "spell_value" value = 3 }}
+			}
+			modifier = {
+				factor = 1.2
+				check_variable = { which = "spell_value" value = 6 }
+			}
+			modifier = {
+				factor = 1.2
+				check_variable = { which = "spell_value" value = 9 }
+			}
+			modifier = {
+				factor = 1.2
+				check_variable = { which = "spell_value" value = 12 }
+			}
+			modifier = {
+				factor = 1.2
+				check_variable = { which = "spell_value" value = 15 }
+			}
+			modifier = {
+				factor = 1.2
+				check_variable = { which = "spell_value" value = 18 }
+			}
+			modifier = {
+				factor = 1.2
+				check_variable = { which = "spell_value" value= 21 }
+			}
+			modifier = {
+				factor = 1.2
+				check_variable = { which = "spell_value" value = 24 }
+			}
+			modifier = {
+				factor = 1.2
+				check_variable = { which = "spell_value" value = 27 }
+			}
+			# CASTER TRAITS and miscast chance
+			# Special mages - they are more disciplined than others
+			modifier = {
+				factor = 0.75
+				NOT = { has_character_flag = spell_fatigue }
+				OR = {
+					trait = ice_witch
+					trait = druchi_mage
+					trait = druchi_sorceress
+					trait = asrai_spellsinger
+				}
+			}
+			# Hardest to corrupt
+			modifier = {
+				factor = 0.9
+				NOT = { has_character_flag = spell_fatigue }
+				trait = lore_light
+			}
+			# Asur mages are disciplined - they do not feed chaos
+			modifier = {
+				factor = 0.5
+				OR = {
+					trait = asur_mage
+					trait = skink_priest
+				}
+			}
+			set_character_flag = last_spell_miscast
+		}
+	}
+
+	# Clearning variables
+	set_variable = { which = "casting_roll" value = 0 }
+}
+
+# Calculate miscasts
+miscast_roll_effect = {
+	random_list = {
+		# Minor Aethyric shock - wounded
+		20 = { set_character_flag = miscast_wound }
+		# Minor Mental block
+		20 = { set_character_flag = miscast_mental_block}
+		# Minor Unnatural aura
+		15 = { set_character_flag = miscast_unnatural_aura }
+		#  so far 55
+		# Major Lunacy and learning (chance for lunacy)
+		15 = {
+			set_character_flag = miscast_vision
+			modifier = {
+				factor = 0
+				NOR = {
+					check_variable = { which = "spell_value" value = 7 }
+					check_variable = {
+						which = "battle_casting_roll" value = 15
+					}
+				}
+			}
+		}
+		# Demon possession (temporary 3-7 days)
+		10 = {
+			modifier = {
+				factor = 0
+				NOR = {
+					check_variable = { which = "spell_value" value = 7 }
+					check_variable = {
+						which = "battle_casting_roll" value = 15
+					}
+				}
+			}
+			set_character_flag = miscast_possession
+		}
+		# Enfeeblement (magical health modifier)
+		10 = {
+			set_character_flag = miscast_enfeeblement
+			modifier = {
+				factor = 0
+				NOR = {
+					check_variable = { which = "spell_value" value = 7 }
+					check_variable = {
+						which = "battle_casting_roll" value = 15
+					}
+				}
+			}
+		}
+		# Mutation possible if you are dark lore user
+		1 = {
+			set_character_flag = miscast_mutation
+			modifier = {
+				factor = 10
+				has_dark_lore_trigger = yes
+				NOR = {
+					trait = creature_elf
+					check_variable = { which = "spell_value" value = 7 }
+					check_variable = {
+						which = "battle_casting_roll" value = 15
+					}
+				}
+			}
+		}
+		# Catastrophies, 91-100 in total
+		# Tzeentch lash (incapable for 3 days)
+		4 = {
+			modifier = {
+				factor = 0
+				NOR = {
+					check_variable = { which = "spell_value" value = 10 }
+					check_variable = {
+						which = "battle_casting_roll"
+						value = 20
+					}
+				}
+			}
+			set_character_flag = miscast_incapable
+		}
+		# Sucked into realm of chaos (death)
+		2 = {
+			modifier = {
+				factor = 0
+				NOR = {
+					check_variable = { which = "spell_value" value = 10 }
+					check_variable = {
+						which = "battle_casting_roll"
+						value = 20
+					}
+				}
+			}
+			set_character_flag = miscast_death
+		}
+		# Aethyric Assault  (maim)
+		4 = {
+			modifier = {
+				factor = 0
+				trait = maimed
+			}
+			modifier = {
+				factor = 0
+				NOR = {
+					check_variable = { which = "spell_value" value = 10 }
+					check_variable = {
+						which = "battle_casting_roll"
+						value = 20
+					}
+				}
+			}
+			set_character_flag = miscast_maim
+		}
+	}
+	hidden_tooltip = {
+		set_variable = { which = "spell_value" value = 0 }
+	}
+}
+# Consumes specific miscast flags and generic flag and
+# generates effect
+miscast_apply_effect = {
+	trigger_switch = {
+		on_trigger = has_character_flag
+		miscast_wound = {
+			add_trait = wounded
+			clr_character_flag = miscast_wound
+		}
+		miscast_unnatural_aura = {
+			clr_character_flag = miscast_unnatural_aura
+			add_character_modifier = {
+				name = unnatural_aura
+				days = 30
+			}
+		}
+		miscast_mental_block = {
+			clr_character_flag = miscast_mental_block
+			add_character_modifier = {
+				name = mental_block
+				days = 5
+			}
+		}
+		# major
+		miscast_possession = {
+			add_trait = possessed
+			clr_character_flag = miscast_possessed
+			# TODO trigger event
+		}
+		miscast_health = {
+			clr_character_flag = miscast_health
+			add_character_modifier = {
+				name = enfeeblement
+				days = 30
+			}
+		}
+		miscast_vision = {
+			change_variable = { which = "lunatic_counter" value = 10 }
+			clr_character_flag = miscast_vision
+			# TODO trigger event
+		}
+		miscast_mutation = {
+			change_variable = { which = "mutation_counter" value = 10 }
+			clr_character_flag = miscast_mutation
+			# TODO trigger event
+			random_mutation_effect = yes
+		}
+		# Catastrophy
+		miscast_maim = {
+			add_trait = maim
+			clr_character_flag = miscast_maim
+		}
+		miscast_death = {
+			death = { death_reason = death_accident }
+			clr_character_flag = miscast_death
+		}
+		miscast_incapable = {
+			add_trait = incapable
+			#TODO add event that removes it
+			clr_character_flag = miscast_incapable
+		}
+	}
+	clr_character_flag = last_spell_miscast
+}
+
+clr_spell_flags_effect = {
+	# Generic flags
+	clr_character_flag = last_spell_success
+	clr_character_flag = last_spell_failure
+	clr_character_flag = last_spell_miscast
+	clr_character_flag = selected_spell
+	# Witch lore: ice magic
+	clr_character_flag = cast_shardstorm
+	clr_character_flag = cast_freezing_blast
+	clr_character_flag = cast_winter_kiss
+	clr_character_flag = cast_biting_wind
+	clr_character_flag = cast_blizzard
+
+	# Dark lore: necromancy
+	clr_character_flag = cast_raise_dead
+	clr_character_flag = cast_call_of_vanhel
+	clr_character_flag = cast_curse_of_years
+	clr_character_flag = cast_wind_of_death
+
+        # Dark lore: chaos undivided
+	clr_character_flag = cast_veil_of_corruption
+	clr_character_flag = cast_burning_blood
+	clr_character_flag = cast_word_of_pain
+
+	# Dark lore: Tzeentch
+	clr_character_flag = cast_tzeentchs_firestorm
+	clr_character_flag = cast_blue_flame_of_tzeentch
+
+	# Dark lore: Nurgle
+	clr_character_flag = cast_tzeentchs_firestorm
+	clr_character_flag = cast_blue_flame_of_tzeentch
+
+        clear_flags_with_prefix	= cast_
+}
+
+clr_magic_state = {
+	event_target:magic_caster = {
+		# Casting & Channeling & Spellcraft test vars & flags
+		set_variable = { which = "spell_value" value = 0 }
+		set_variable = { which = "casting_roll" value = 0 }
+		set_variable = { which = "battle_casting_roll" value = 0 }
+		clr_character_flag = last_spell_success
+		clr_character_flag = last_spell_failure
+		clr_character_flag = last_spell_miscast
+
+		set_variable = { which = "magic_dmg_char" value = 0 }
+		set_variable = { which = "magic_dmg_flat" value = 0 }
+		set_variable = { which = "magic_dmg_percent" value = 0 }
+		set_variable = { which = "magic_morale_dmg" value = 0 }
+		set_variable = { which = "magic_morale_heal" value = 0 }
+	}
+	set_variable = { which = "hit_points" value = 0 }
+	event_target:magic_target = {
+		set_variable = { which = "hit_points" value = 0 }
+	}
+}
+
+########################################################################
+# Battle magic effects
+########################################################################
+# Battle magic effect that caster:
+# - is a leader
+# - is in battle
+
+calc_hp_bonus_effect = {
+	if = {
+		limit = { trait = strong }
+		change_variable = { which = "hit_points" value = 1 }
+	}
+
+}
+# SCOPE caster character
+magic_blizzard_effect = {
+	event_target:magic_target_unit_owner = {
+		random_controlled_unit = {
+			limit = { location = { province = event_target:magic_location }}
+			center_flank_leader = {
+				combat = {
+					if = {
+						limit = {
+							NOR = {
+								flank_has_tactic = pursue_tactic
+								flank_has_tactic = retreat_tactic
+								flank_has_tactic = flank_retreat_odds
+								flank_has_tactic = flank_retreat_tactic
+							}
+							OR = {
+								troops = {
+									who = archers
+									value = 0.05
+								}
+								troops = {
+									who = gunpowder
+									value = 0.05
+								}
+								troops = {
+									who = horse_archers
+									value = 0.05
+								}
+							}
+						}
+						set_flank_tactic = blinded_by_blizzard_tactic
+						ROOT = { set_character_flag = blizzard_set }
+					}
+				}
+			}
+			right_flank_leader = {
+				combat = {
+					if = {
+						limit = {
+							NOR = {
+								flank_has_tactic = pursue_tactic
+								flank_has_tactic = retreat_tactic
+								flank_has_tactic = flank_retreat_odds
+								flank_has_tactic = flank_retreat_tactic
+							}
+							NOT = {
+								ROOT =	{
+									has_character_flag = blizzard_set
+								}
+							}
+							OR = {
+								troops = {
+									who = archers
+									value = 0.05
+								}
+								troops = {
+									who = gunpowder
+									value = 0.05
+								}
+								troops = {
+									who = horse_archers
+									value = 0.05
+								}
+							}
+						}
+						set_flank_tactic = blinded_by_blizzard_tactic
+						ROOT = { set_character_flag = blizzard_set }
+					}
+				}
+			}
+			left_flank_leader = {
+				combat = {
+					if = {
+						limit = {
+							NOT = {
+								ROOT =	{
+									has_character_flag = blizzard_set
+								}
+							}
+							OR = {
+								troops = {
+									who = archers
+									value = 0.05
+								}
+								troops = {
+									who = gunpowder
+									value = 0.05
+								}
+								troops = {
+									who = horse_archers
+									value = 0.05
+								}
+							}
+						}
+						set_flank_tactic = blinded_by_blizzard_tactic
+					}
+				}
+			}
+		}
+	}
+	clr_character_flag = blizzard_set
+}
+# Apply tactic
+# ROOT should be caster
+magic_freezing_blast_effect = {
+	# Selcet which flanks spell affects
+	event_target:magic_target_unit_owner = {
+		random_controlled_unit = {
+			limit = { location = { province = event_target:magic_location }}
+			center_flank_leader = {
+				combat = {
+					if = {
+						limit = {
+							NOR = {
+								flank_has_tactic = pursue_tactic
+								flank_has_tactic = retreat_tactic
+								flank_has_tactic = flank_retreat_odds
+								flank_has_tactic = flank_retreat_tactic
+							}
+							ROOT = { has_character_flag = frozen_center }
+						}
+						set_flank_tactic = frozen_tactic
+					}
+				}
+			}
+			left_flank_leader = {
+				combat = {
+					if = {
+						limit = {
+							NOR = {
+								flank_has_tactic = pursue_tactic
+								flank_has_tactic = retreat_tactic
+								flank_has_tactic = flank_retreat_odds
+								flank_has_tactic = flank_retreat_tactic
+							}
+							ROOT = { has_character_flag = frozen_left }
+						}
+						set_flank_tactic = frozen_tactic
+					}
+				}
+			}
+			right_flank_leader = {
+				combat = {
+					if = {
+						limit = {
+							NOR = {
+								flank_has_tactic = pursue_tactic
+								flank_has_tactic = retreat_tactic
+								flank_has_tactic = flank_retreat_odds
+								flank_has_tactic = flank_retreat_tactic
+							}
+							ROOT = {
+							has_character_flag = frozen_right }
+						}
+						set_flank_tactic = frozen_tactic
+					}
+				}
+			}
+		}
+	}
+	clr_character_flag = frozen_center
+	clr_character_flag = frozen_right
+	clr_character_flag = frozen_left
+}
+magic_pavane_of_slaanesh_effect = {
+	event_target:magic_target_unit_owner = {
+		random_controlled_unit = {
+			limit = { location = { province = event_target:magic_location }}
+			center_flank_leader = {
+				combat = {
+					if = {
+						limit = {
+							NOR = {
+								flank_has_tactic = pursue_tactic
+								flank_has_tactic = retreat_tactic
+								flank_has_tactic = flank_retreat_odds
+								flank_has_tactic = flank_retreat_tactic
+							}
+							NOR = {
+								troops = {
+									who = undead_horde
+									value = 0.2
+								}
+								troops = {
+									who = daemonic_host
+									value = 0.2
+								}
+							}
+						}
+						set_flank_tactic = pavane_of_slaanesh_tactic
+						ROOT = { set_character_flag = tactics_set }
+					}
+				}
+			}
+			right_flank_leader = {
+				combat = {
+					if = {
+						limit = {
+							NOR = {
+								flank_has_tactic = pursue_tactic
+								flank_has_tactic = retreat_tactic
+								flank_has_tactic = flank_retreat_odds
+								flank_has_tactic = flank_retreat_tactic
+							}
+							NOR = {
+								troops = {
+									who = undead_horde
+									value = 0.2
+								}
+								troops = {
+									who = daemonic_host
+									value = 0.2
+								}
+								ROOT =	{
+									has_character_flag = tactics_set
+								}
+							}
+						}
+						set_flank_tactic = pavane_of_slaanesh_tactic
+						ROOT = { set_character_flag = tactics_set }
+					}
+				}
+			}
+			left_flank_leader = {
+				combat = {
+					if = {
+						limit = {
+							NOT = {
+								ROOT =	{
+									has_character_flag = blizzard_set
+								}
+							}
+							NOR = {
+								troops = {
+									who = undead_horde
+									value = 0.2
+								}
+								troops = {
+									who = daemonic_host
+									value = 0.2
+								}
+							}
+						}
+						set_flank_tactic = pavane_of_slaanesh_tactic
+						ROOT = { set_character_flag = tactics_set }
+					}
+				}
+			}
+		}
+	}
+	clr_character_flag = tactics_set
+}
+
+# In battle magic character damage
+magic_dmg_character_effect = {
+	# It is required to have magic_damage_flat
+	export_to_variable = { which = "hit_points" value = health }
+	calc_hp_bonus_effect = yes
+	while = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_char" value = 1 }
+			}
+		}
+		event_target:magic_caster = {
+			subtract_variable = { which = "magic_dmg_char" value = 1 }
+		}
+		random_list = {
+			1 = { subtract_variable = { which = "hit_points" value = 1 } }
+			1 = { subtract_variable = { which = "hit_points" value = 2 } }
+			1 = { subtract_variable = { which = "hit_points" value = 3 } }
+			1 = { subtract_variable = { which = "hit_points" value = 4 } }
+		}
+	}
+	random_list = {
+		20 = {  # No effect
+			modifier = {
+				factor = 0
+				NOT = { check_variable = { which = "hit_points" value = 1 }}
+			}
+			modifier = {
+				factor = 2.0
+				check_variable = { which = "hit_points" value = 2 }
+			}
+			modifier = {
+				factor = 1.5
+				NOT = {
+					event_target:magic_caster = {
+						combat_rating_diff = {
+							character = PREV
+							value = 3
+						}
+					}
+				}
+			}
+		}
+		20 = { # Wounded
+			add_trait = wounded
+			modifier = {
+				factor = 2.0
+				NOT = { check_variable = { which = "hit_points" value = 1 }}
+			}
+			modifier = {
+				factor = 0
+				OR = {
+					trait = wouned
+					trait = maimed
+				}
+			}
+		}
+		20 = { # Maimed
+			add_trait = maimed
+			modifier = {
+				factor = 2.0
+				NOT = { check_variable = { which = "hit_points" value = 0 }}
+			}
+			modifier = {
+				factor = 1.5
+				NOT = { check_variable = { which = "hit_points" value = 0 }}
+			}
+			modifier = {
+				factor = 1.5
+				trait = wounded
+			}
+		}
+		20 = { # Killed
+			modifier = {
+				factor = 0
+				AND = {
+					check_variable = { which = "hit_points" value = 1 }
+					NOR = {
+						trait = maimed
+						trait = wounded
+					}
+				}
+			}
+			modifier = {
+				factor = 1.5
+				NOT = { check_variable = { which = "hit_points" value = 0 }}
+			}
+			modifier = {
+				factor = 1.5
+				NOT = { check_variable = { which = "hit_points" value = -2 }}
+			}
+			modifier = {
+				factor = 1.5
+				trait = wounded
+			}
+			modifier = {
+				factor = 1.5
+				trait = maimed
+			}
+			death = {
+				death_reason = death_battle
+				killer = event_target:magic_caster
+			}
+		}
+	}
+	set_variable = { which = "magic_dmg_char" value = 0 }
+}
+
+#  Flat magic battle damge (up to 8*40 = 320 troops of damage)
+magic_dmg_flat_effect = {
+	# The mean is 30 troops lost per magic_damage flat
+	# This represents amount of troops a mage can kill in one battle
+	# averaging over
+	# Assuming that one spell on 0-3 kill, each spell around 6 minutes
+	# 0-30 per hour * 3 fighting 0-90 = 45 per day
+	#while = {
+	#	limit = {
+	#		event_target:magic_caster = {
+	#			check_variable = { which = "magic_dmg_flat" value = 1 }
+	#		}
+	#	}
+	#	event_target:magic_caster = {
+	#		subtract_variable = { which = "magic_dmg_flat" value = 1 }
+	#	}
+	#}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_flat" value = 1 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { amount = 20 }}
+			2 = { damage_unit = { amount = 30 }}
+			1 = { damage_unit = { amount = 40 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_flat" value = 2 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { amount = 20 }}
+			2 = { damage_unit = { amount = 30 }}
+			1 = { damage_unit = { amount = 40 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_flat" value = 3 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { amount = 20 }}
+			2 = { damage_unit = { amount = 30 }}
+			1 = { damage_unit = { amount = 40 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_flat" value = 4 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { amount = 20 }}
+			2 = { damage_unit = { amount = 30 }}
+			1 = { damage_unit = { amount = 40 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_flat" value = 5 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { amount = 20 }}
+			2 = { damage_unit = { amount = 30 }}
+			1 = { damage_unit = { amount = 40 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_flat" value = 6 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { amount = 20 }}
+			2 = { damage_unit = { amount = 30 }}
+			1 = { damage_unit = { amount = 40 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_flat" value = 7 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { amount = 20 }}
+			2 = { damage_unit = { amount = 30 }}
+			1 = { damage_unit = { amount = 40 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_flat" value = 8 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { amount = 20 }}
+			2 = { damage_unit = { amount = 30 }}
+			1 = { damage_unit = { amount = 40 }}
+		}
+	}
+	hidden_tooltip = {
+		event_target:magic_caster = {
+			set_variable = { which = "magic_dmg_flat" value = 0 }
+		}
+	}
+}
+
+# Army wide damage (up to 8 * 0.04 32% of damage)
+magic_dmg_percent_effect = {
+	#while = {
+	#	limit = {
+	#		event_target:magic_caster = {
+	#			check_variable = { which = "magic_dmg_percent" value = 1 }
+	#		}
+	#	}
+	#	event_target:magic_caster = {
+	#		subtract_variable = { which = "magic_dmg_percent" value = 1 }
+	#	}
+	#	# at 1000 flat dmg and this one are equal more or less
+	#	random_list = {
+	#		1 = { damage_unit = { percentage = 0.02 }}
+	#		2 = { damage_unit = { percentage = 0.03 }}
+	#		1 = { damage_unit = { percentage = 0.04 }}
+	#	}
+	#}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_percent" value = 1 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { percentage = 0.02 }}
+			2 = { damage_unit = { percentage = 0.03 }}
+			1 = { damage_unit = { percentage = 0.04 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_percent" value = 2 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { percentage = 0.02 }}
+			2 = { damage_unit = { percentage = 0.03 }}
+			1 = { damage_unit = { percentage = 0.04 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_percent" value = 3 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { percentage = 0.02 }}
+			2 = { damage_unit = { percentage = 0.03 }}
+			1 = { damage_unit = { percentage = 0.04 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_percent" value = 4 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { percentage = 0.02 }}
+			2 = { damage_unit = { percentage = 0.03 }}
+			1 = { damage_unit = { percentage = 0.04 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_percent" value = 5 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { percentage = 0.02 }}
+			2 = { damage_unit = { percentage = 0.03 }}
+			1 = { damage_unit = { percentage = 0.04 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_percent" value = 6 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { percentage = 0.02 }}
+			2 = { damage_unit = { percentage = 0.03 }}
+			1 = { damage_unit = { percentage = 0.04 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_percent" value = 7 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { percentage = 0.02 }}
+			2 = { damage_unit = { percentage = 0.03 }}
+			1 = { damage_unit = { percentage = 0.04 }}
+		}
+	}
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_dmg_percent" value = 8 }
+			}
+		}
+		random_list = {
+			1 = { damage_unit = { percentage = 0.02 }}
+			2 = { damage_unit = { percentage = 0.03 }}
+			1 = { damage_unit = { percentage = 0.04 }}
+		}
+	}
+	hidden_tooltip = {
+		event_target:magic_caster = {
+			set_variable = { which = "magic_dmg_percent" value = 0 }
+		}
+	}
+}
+# Morale heal & damage
+magic_morale_heal_effect = {
+	while = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_morale_heal" value = 1 }
+			}
+		}
+		event_target:magic_caster = {
+			subtract_variable = { which = "magic_morale_heal" value = 1 }
+		}
+		random_list = {
+			1 = { damage_unit_morale = -0.02 }
+			2 = { damage_unit_morale = -0.03 }
+			1 = { damage_unit_morale = -0.04 }
+		}
+	}
+}
+# Morale heal & damage
+magic_morale_dmg_effect = {
+	while = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_morale_dmg" value = 1	}
+			}
+		}
+		event_target:magic_caster = {
+			subtract_variable = { which = "magic_morale_dmg" value = 1 }
+		}
+		random_list = {
+			1 = { damage_unit_morale = 0.01	}
+			2 = { damage_unit_morale = 0.02	}
+			1 = { damage_unit_morale = 0.03	}
+		}
+	}
+}
+
+# Raise undead (use only where there are none)
+# Currently is not working properly due to the fact that targetted damage unit
+# doesn't work
+magic_raise_dead_effect = {
+	if = {
+		limit = {
+			event_target:magic_caster = {
+				has_character_flag = summoned_undead_horde
+				any_controlled_unit  = {
+					AND = {
+						troops = { who = undead_horde value = 0.002 }
+						location = {
+							province = event_target:magic_location
+						}
+					}
+				}
+			}
+		}
+		# Heal
+		while = {
+			limit = {
+				event_target:magic_caster = {
+					check_variable = { which = "magic_summon_undead" value = 1 }
+				}
+			}
+			event_target:magic_caster = {
+				subtract_variable = { which = "magic_summon_undead" value = 1 }
+			}
+			random_controlled_unit = {
+				limit = {
+					AND = {
+						troops = {
+							who = undead_horde
+							value = 0.002
+						}
+						location = {
+							province = event_target:magic_location
+						}
+					}
+				}
+				random_list = {
+					1 = { damage_unit = { amount = -20 type = undead_horde }}
+					2 = { damage_unit = { amount = -30 type = undead_horde }}
+					1 = { damage_unit = { amount = -40 type = undead_horde }}
+				}
+			}
+		}
+	}
+	else_if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_summon_undead" value = 5 }
+			}
+		}
+		spawn_unit = {
+			  owner = event_target:magic_caster
+			  province = event_target:magic_loc
+			  home = event_target:magic_caster
+			  troops = {
+				undead_horde = { 200 200 }
+			  }
+			  attrition = 0.0
+			  reinforces = yes
+			  disband_on_peace = no
+			  maintenance_multiplier = 0.0
+			  earmark = undead_horde
+		}
+		set_character_flag = summoned_undead_horde
+	}
+	else_if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_summon_undead" value = 4 }
+			}
+		}
+		spawn_unit = {
+			  owner = event_target:magic_caster
+			  province = event_target:magic_loc
+			  home = event_target:magic_caster
+			  troops = {
+				undead_horde = { 140 140 }
+			  }
+			  attrition = 0.0
+			  reinforces = yes
+			  disband_on_peace = no
+			  maintenance_multiplier = 0.0
+			  earmark = undead_horde
+		}
+		set_character_flag = summoned_undead_horde
+	}
+	else_if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_summon_undead" value = 3 }
+			}
+		}
+		spawn_unit = {
+			  owner = event_target:magic_caster
+			  province = event_target:magic_loc
+			  home = event_target:magic_caster
+			  troops = {
+				undead_horde = { 100 100 }
+			  }
+			  attrition = 0.0
+			  reinforces = yes
+			  disband_on_peace = no
+			  maintenance_multiplier = 0.0
+			  earmark = undead_horde
+		}
+		set_character_flag = summoned_undead_horde
+	}
+	else_if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_summon_undead" value = 2 }
+			}
+		}
+		spawn_unit = {
+			  owner = event_target:magic_caster
+			  province = event_target:magic_loc
+			  home = event_target:magic_caster
+			  troops = {
+				undead_horde = { 70 70 }
+			  }
+			  attrition = 0.0
+			  reinforces = yes
+			  disband_on_peace = no
+			  maintenance_multiplier = 0.0
+			  earmark = undead_horde
+		}
+		set_character_flag = summoned_undead_horde
+	}
+	else_if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = { which = "magic_summon_undead" value = 1 }
+			}
+		}
+		spawn_unit = {
+			  owner = event_target:magic_caster
+			  province = event_target:magic_loc
+			  home = event_target:magic_caster
+			  troops = {
+				undead_horde = { 40 40 }
+			  }
+			  attrition = 0.0
+			  reinforces = yes
+			  disband_on_peace = no
+			  maintenance_multiplier = 0.0
+			  earmark = undead_horde
+		}
+		set_character_flag = summoned_undead_horde
+	}
+}
+# Summons daemons or heal existing ones
+magic_summon_daemons_effect = {
+	if = {
+		limit = {
+			AND = {
+				has_character_flag = summoned_daemons
+				any_controlled_unit = {
+					AND = {
+						troops = {
+							who = daemonic_host
+							value = 0.002
+						}
+						location = {
+							province = event_target:magic_location
+						}
+					}
+				}
+			}
+		}
+		# Heal
+		while = {
+			limit = {
+				event_target:magic_caster = {
+					check_variable = {
+						which = "magic_summon_daemons"
+						value = 1
+					}
+				}
+			}
+			event_target:magic_caster = {
+				subtract_variable = {
+					which = "magic_summon_daemons"
+					value = 1
+				}
+				any_controlled_unit = {
+					limit = {
+						AND = {
+							troops = {
+								who = daemonic_host
+								value = 0.002
+							}
+							location = {
+								province = event_target:magic_location
+							}
+						}
+					}
+					random_list = {
+						1 = {
+							damage_unit = {
+								amount = -20
+								type = daemonic_host
+							}
+						}
+						2 = {
+							damage_unit = {
+								amount = -30
+								type = daemonic_host
+							}
+						}
+						1 = {
+							damage_unit = {
+								amount = -40
+								type = daemonic_host
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	# If not healed
+	else_if = {
+		limit = {
+			event_target:magic_caster = {
+				check_variable = {
+					which = "magic_summon_daemons"
+					value = 1
+				}
+			}
+		}
+		spawn_unit = {
+			  owner = event_target:magic_caster
+			  province = event_target:magic_loc
+			  troops = {
+				daemonic_host = { 40 40 }
+			  }
+			  attrition = 0.0
+			  reinforces = no
+			  disband_on_peace = yes
+			  maintenance_multiplier = 0.0
+			  earmark = summoned_daemons
+			  #home = event_target:magic_loc
+		}
+		hidden_tooltip = {
+			set_variable = {
+				which = "magic_summon_daemons"
+				value = 0
+			}
+			set_character_flag = summoned_daemons
+		}
+	}
+}
+
+# Targets random hostile unit in a province of caster
+# Depends on:
+# - magic_location
+# - magic_caster
+# Sets:
+# - magic_target_unit_owner
+#
+target_enemy_unit_owner_effect = {
+	# WORKS in 2 fist cases
+	# TODO: test case 3
+	# Case 1 - enemy directly controls unit
+	random_independent_ruler = {
+		limit = {
+			war_with = ROOT
+			any_controlled_unit = {
+				location = { province = event_target:magic_location }
+			}
+		}
+		save_event_target_as = magic_target_unit_owner
+	}
+	# case 2 - no directly owned hostile units, check realm characters
+	if = {
+		limit = { not = { event_target:magic_target_unit_owner = { always = yes }}}
+		random_independent_ruler = {
+			limit = { any_realm_character = { war_with = root }}
+			random_realm_character = {
+				limit = {
+					war_with = root
+					any_controlled_unit = {
+						location = {
+							province = event_target:magic_location
+						}
+					}
+				}
+				save_event_target_as = magic_target_unit_owner
+			}
+		}
+	}
+	# case 3 - out of realm characters
+	if = {
+		limit = { not = { event_target:magic_target_unit_owner = { always = yes }}}
+		any_mercenary_band = {
+			limit = {
+				war_with = root
+				holder_scope = {
+					any_controlled_unit = {
+						location = {
+							province = event_target:magic_location
+						}
+						unit_is_in_combat = yes
+					}
+				}
+			}
+			save_event_target_as = magic_target_unit_owner
+		}
+	}
+
+	# case 4 empty - no character's whatsoever
+	event_target:magic_target_unit_owner = {
+		leader = {
+			log = "[this.gettitledfirstname] is unit leader"
+		}
+	}
+}
+# Target random enemy commander
+# THIS = enemy leader
+target_random_commander_effect = {
+	random_list = {
+		# Random realm character
+		50 = {
+			modifier = {
+				factor = 0
+				NOT = {
+					any_realm_character = {
+						war_with = ROOT
+						location = {
+							province = event_target:magic_location
+						}
+						in_command = yes
+					}
+				}
+			}
+			random_realm_character = {
+				limit = {
+					war_with = ROOT
+					in_command = yes
+					location = {
+						province = event_target:magic_location
+					}
+				}
+				save_event_target_as = magic_target_character
+				ROOT = { set_character_flag = option_realm_character }
+			}
+		}
+		# (THIS)
+		20 = {
+			modifier = {
+				factor = 0
+				NOT = {
+					in_command = yes
+					location = {
+						province = event_target:magic_location
+					}
+				}
+			}
+			save_event_target_as = magic_target_character
+		}
+		# Mercenaries : leader
+		15 = {
+			modifier = {
+				factor = 0
+				NOT = {
+					any_mercenary_band = {
+						holder_scope = {
+							war_with = ROOT
+							location = {
+								province = event_target:magic_location
+							}
+							in_command = yes
+						}
+					}
+				}
+			}
+			# Get band
+			any_mercenary_band = {
+				# Get owner
+				limit = {
+					holder_scope = {
+						war_with = ROOT
+						location = {
+							province = event_target:magic_location
+						}
+					}
+				}
+				holder_scope = {
+					save_event_target_as = magic_target_character
+				}
+			}
+		}
+		# Mercenaries : Random ruler
+		15 = {
+			modifier = {
+				factor = 0
+				NOT = {
+					any_mercenary_band = {
+						war_with = ROOT
+						any_realm_character = {
+							location = {
+								province = event_target:magic_location
+							}
+							in_command = yes
+						}
+					}
+				}
+			}
+			any_mercenary_band = {
+				limit = { holder_scope = { war_with = ROOT } }
+				random_realm_character = {
+					limit = {
+						in_command = yes
+						location = {
+							province = event_target:magic_location
+						}
+					}
+					save_event_target_as = magic_target_character
+				}
+			}
+		}
+	}
+}
+
+# TARGETING EVENT: controlled_unit
+target_commanded_unit_effect  = {
+	any_realm_character = {
+		set_character_flag = is_realm_character
+		random_unit = {
+			limit = {
+				location = { province = event_target:magic_location }
+				OR = {
+					center_flank_leader = { character = PREVPREV }
+					left_flank_leader = { character = PREVPREV }
+					right_flank_leader = { character = PREVPREV }
+					leader = { character = PREVPREV }
+				}
+			}
+			save_event_target_as = magic_target_unit
+		}
+	}
+}

@@ -27,3 +27,7 @@ replace_path = "gfx/flags"
 replace_path = "events"
 replace_path = "decisions"
 replace_path = "music"
+
+picture = "icon.jpg"
+
+tags = { "Complete Overhaul" "warhammer" "fantasy" }

@@ -7,24 +7,22 @@ NDefines.NDiplomacy.DEFENSIVE_PACT_BASE_SIZE = 0.0								-- This is the base si
 NDefines.NDiplomacy.MAX_INFAMY_GAIN = 15										-- This is the max infamy gained from a single source
 NDefines.NDiplomacy.EVERY_DEFENSIVE_PACT_JOIN_THREAT = 10000					-- If threat is this high, members of all defensive pacts against a target will join
 NDefines.NDiplomacy.EVERY_DEFENSIVE_PACT_EXCEPT_HEADS_JOIN_THREAT = 10000	-- If threat is this high, members of all defensive pacts against a target will join, except religious heads that only joins when their own group is attacked
-NDefines.NDiplomacy.OTHER_DEFENSIVE_PACT_JOIN_THREAT = 10000						-- If threat is this high, other religious groups band together when attacked, if it's lower every defensive pact acts on it's own
+NDefines.NDiplomacy.OTHER_DEFENSIVE_PACT_JOIN_THREAT = 10000					-- If threat is this high, other religious groups band together when attacked, if it's lower every defensive pact acts on it's own
+
 NDefines.NDiplomacy.SHORT_REIGN_YEARS_END = 8
 NDefines.NDiplomacy.LONG_REIGN_YEARS_START = 9
 NDefines.NDiplomacy.MAX_LONG_REIGN_BONUS = 50
 NDefines.NDiplomacy.SHORT_REIGN_OPINION_MULT = 1.5
 NDefines.NDiplomacy.LONG_REIGN_PENALTY = -2
 NDefines.NDiplomacy.LONG_REIGN_OPINION_MULT = 0.4
--- END OF REGIN MODIFIERS
-NDefines.NDiplomacy.MINIMUM_SEND_GIFT_COST = 20
-NDefines.NDiplomacy.SEND_GIFT_INCOME_SCALEFACTOR = 24
+
 NDefines.NDiplomacy.PRESTIGE_OPINION_DIV = 100
 NDefines.NDiplomacy.PRESTIGE_OPINION_MAX = 20
 NDefines.NDiplomacy.PIETY_OPINION_DIV = 25
 NDefines.NDiplomacy.PIETY_OPINION_MAX = 20
+
 NDefines.NDiplomacy.MAX_PREP_INV_TARGET_HOLDINGS = 100
 NDefines.NDiplomacy.MAX_PREP_INV_ATTACKER_HOLDINGS = 100
-NDefines.NDiplomacy.BASE_REVOLT_CHANCE_MOD = 500
-NDefines.NDiplomacy.TOG_REVOLT_CHANCE_MOD = 200
 NDefines.NDiplomacy.JAIN_LIEGE_OPINION_BONUS = 30
 NDefines.NDiplomacy.MAX_DIPLO_DISTANCE = 1000
 NDefines.NDiplomacy.IMPRISON_CHARACTER_INTERACTION_THRESHOLD_FOR_NO = 0
@@ -69,18 +67,20 @@ NDefines.NDiplomacy.ASK_TO_EMBARGO_INTERACTION_THRESHOLD_FOR_YES = 0
 NDefines.NDiplomacy.MAKE_CONSORT_INTERACTION_THRESHOLD_FOR_NO = 0
 NDefines.NDiplomacy.MAKE_CONSORT_INTERACTION_THRESHOLD_FOR_YES = 0
 NDefines.NDiplomacy.DISMISS_CONSORT_INTERACTION_ENABLED = 0
+
 NDefines.NCharacter.MAX_CHILD_BIRTH_AGE = 3000
 NDefines.NCharacter.MALE_ATTRACTION_CUTOFF = 10000
 NDefines.NCharacter.FEMALE_ATTRACTION_CUTOFF = 10000
-NDefines.NTitle.DE_JURE_ASSIMILATION_YEARS = 1000
-NDefines.NTitle.EMPIRE_DE_JURE_ASSIMILATION_YEARS = 1000
+
+NDefines.NTitle.DE_JURE_ASSIMILATION_YEARS = 750
+NDefines.NTitle.EMPIRE_DE_JURE_ASSIMILATION_YEARS = 750
+
 NDefines.NReligion.ELECTOR_TITLE_AGE_FACTOR = 0.5
-NDefines.NNomad.MAX_MANPOWER_POPULATION_MULTIPLIER = 0.4
-NDefines.NNomad.START_POPULATION = 0.6
-NDefines.NNomad.START_MANPOWER = 0.5
-NDefines.NNomad.MIN_STARTING_HORDE_SUBUNITS = 5
+
 NDefines.NNomad.ALWAYS_GENERATE_NOMADS = 1
-NDefines.NMilitary.LEVY_MAINTENANCE_FACTOR = 0.5
+
+NDefines.NMilitary.LEVY_MAINTENANCE_FACTOR = 1.0
+
 NDefines.NTechnology.DONT_EXECUTE_TECH_BEFORE = 2000
 NDefines.NTechnology.IDEAL_YEAR_LEVEL_0 = 2000
 NDefines.NTechnology.IDEAL_YEAR_LEVEL_1 = 2050
@@ -92,15 +92,16 @@ NDefines.NTechnology.IDEAL_YEAR_LEVEL_6 = 2400
 NDefines.NTechnology.IDEAL_YEAR_LEVEL_7 = 2450
 NDefines.NTechnology.IDEAL_YEAR_LEVEL_8 = 2500
 NDefines.NTechnology.IDEAL_YEAR_AHEAD_PENALTY_INVEST = 0.35
+
 NDefines.NEngine.MISSING_SCRIPTED_SUCCESSOR_ERROR_CUTOFF_YEAR = 2010
 NDefines.NEngine.MISSING_SCRIPTED_SUCCESSOR_ERROR_CUTOFF_MONTH = 1
 NDefines.NEngine.MISSING_SCRIPTED_SUCCESSOR_ERROR_CUTOFF_DAY = 1
+
 NDefines.NAI.AI_EMPEROR_CREATES_KINGDOMS = 1
-NDefines.NAI.BASE_AI_ARMY_SIZE = 30000
+
 NDefines.NFrontend.CAMERA_LOOKAT_X = 2200.0
 NDefines.NFrontend.CAMERA_START_X = 2200.0
 NDefines.NFrontend.CAMERA_END_X = 2200.0
-NDefines.NFrontend.GUI_MOVE_SPEED = 300
 NDefines.NFrontend.FRONTEND_POS_X = 2200.0
 NDefines.NFrontend.FRONTEND_POS_Y = 1000.0
 NDefines.NFrontend.FRONTEND_POS_Z = 200.0
@@ -109,6 +110,7 @@ NDefines.NFrontend.SETTINGS_POS_X = 2200.0
 NDefines.NFrontend.MP_OPTIONS_POS_X = 1360.0
 NDefines.NFrontend.MP_OPTIONS_LOOK_X = 1490.0
 NDefines.NFrontend.TUTORIAL_POS_X = 1600
+
 NDefines.NEndGame.DYN1_ID = 10047
 NDefines.NEndGame.DYN2_ID = 19000
 NDefines.NEndGame.DYN3_ID = 23001

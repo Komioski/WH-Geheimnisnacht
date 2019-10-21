@@ -1,4 +1,4 @@
-# hf-wip
+# WH:Geheimnisnacht
 The Current Development Version of WH:Geheimnisnacht
 
 The main branch is intended for developer use only while the testing branch will be open to the "Lab-Rat" community.

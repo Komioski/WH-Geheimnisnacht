@@ -126,4 +126,4 @@ NDefines.NEndGame.DYN13_ID = 19003
 NDefines.NEndGame.DYN14_ID = 79085
 NDefines.NEndGame.DYN15_ID = 14018
 
-NDefines.NRulerDesigner.MAX_AGE = 150
+NDefines.NRulerDesigner.MAX_AGE = 500

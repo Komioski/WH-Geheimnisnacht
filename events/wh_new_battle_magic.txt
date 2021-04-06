@@ -55,6 +55,9 @@ character_event = {
 		is_alive = yes
 		uses_new_battle_magic_system = yes
 		in_battle = yes
+		combat = {
+			is_retreating = no
+		}
 	}
 	
 	immediate = {
@@ -154,6 +157,7 @@ character_event = {
 
 narrative_event = {
 	id = magicengine.5
+	title = EVTTITLEmagicengine5
 	desc = EVTDESCmagicengine5
 	picture = GFX_evt_mage_lore_fire
 	is_triggered_only = yes
@@ -174,7 +178,14 @@ character_event = {
 	
 	immediate = {
 		#Keep up to date for trait localisation
-		new_battle_magic_calc_magic_pool = yes	
+		new_battle_magic_calc_magic_pool = yes
+		if={
+			limit={
+				is_trained_mage=yes
+				z_has_magic_power_true=no
+			}
+			z_magic_power_random = yes
+		}
 	}
 	
 	option = {
@@ -223,139 +234,181 @@ character_event = {
 		
 }
 
-#######Using magic for siege, ty Hippo, really it was mostly your code so all credit to you
+character_event = {
+	id = magicengine.18
+	is_triggered_only = yes
+	hide_window = yes
+	
+	trigger = {
+		has_character_modifier = magic_siege_timer
+	}
+	
+	immediate = {
+		remove_character_modifier = magic_siege_timer
+	}
+}
+
+character_event = {
+	id = magicengine.19
+	is_triggered_only = yes
+	hide_window = yes
+	
+	trigger = {
+		uses_new_battle_magic_system = yes
+	}
+	
+	immediate = {
+		new_battle_magic_calc_magic_pool = yes
+		character_event = { id = magicengine.17 days = 1 }	
+	}
+}
+
+character_event = {
+	id = magicengine.17
+	is_triggered_only = yes
+	hide_window = yes
+	
+	trigger = {
+		NOT = { has_character_modifier = magic_siege_timer }
+		#No cheating by removing commanders and reassigning them	
+		uses_new_battle_magic_system = yes		
+		AND = {
+			NOT = { location = { has_province_modifier = magic_siege1 } }
+			NOT = { location = { has_province_modifier = magic_siege2 } }
+			NOT = { location = { has_province_modifier = magic_siege3 } }
+			NOT = { location = { has_province_modifier = magic_siege4 } }
+		}
+	}
+	
+	immediate = {
+		#Save location so repeat_event doesnt trigger when you have moved province and started a new chain
+		location = {
+			save_event_target_as = siege_location
+        }
+		#set duration to a few days before the repeat event to be safe
+		add_character_modifier = { name = magic_siege_timer hidden = yes duration = 30 }
+		character_event = { id = magicengine.20 days = 1 }	
+	}
+}
+
 character_event = {
 	id = magicengine.20
 	hide_window = yes
 	is_triggered_only = yes
 	
 	trigger = {
-		#The triggering commander may not be a mage, but others in the flanks might be
-		#is_alive = yes	
+		at_location = event_target:siege_location		
+		uses_new_battle_magic_system = yes
+		location = {
+			NOT = { owner = { same_realm = ROOT } }
+			#Checks for any instance of raiding or wars that would make you hostile with the realm
+			OR = {
+				owner = { any_liege = { war_with = ROOT } }
+				owner = { war_with = ROOT }
+				owner = { ROOT = { any_liege = { war_with = PREVPREV } } }
+				owner = { any_liege = { ROOT = { any_liege = { war_with = PREVPREV } } } }
+			}
+		}	
 	}
 	
 	immediate = {
+		#We can't check for an active siege otherwise battles would stop the casting starting again when they finish, 
+		#and we don't want the modifier applied immediatly, otherwise you leave siege mods in a line as your army walks
+		#This variable is local to the event chain
+		change_variable = { which = "local_siegemonths" value = 1 }
 		if = {
-            limit = { 
-                in_command = yes
-				siege = {
-					is_attacker = yes
+			limit = { check_variable = { which =  "local_siegemonths" value = 2 } }
+			log = "[This.GetID] started casting siege magic for month [local_siegemonths] of the siege"
+			if = {
+				limit = { 
+					#in_command = yes
+					uses_new_battle_magic_system = yes
 				}
-                uses_new_battle_magic_system = yes
-                same_realm = ROOT
-            }
-			character_event = { id = magicengine.21 }	
-			magic_xp_counter = yes
-            change_variable = { which = "local_siegecasterlevel" which = "cl" }
-			add_character_modifier = {
-					name = magic_siege_pool_reduction_timer
-					hidden = yes
-					duration = 30
+				character_event = { id = magicengine.21 }	
+				magic_xp_counter = yes
+				add_character_modifier = { name = magic_siege_pool_reduction_timer hidden = yes duration = 90 }
+				new_battle_magic_calc_magic_pool = yes
+				if = {
+					limit = {
+						khorne_summoner = yes
+					}
+					set_variable = { which = cl value = 2 }
+				}
 			}
-			new_battle_magic_calc_magic_pool = yes
+			
 			if = {
 				limit = {
-					khorne_summoner = yes
+					check_variable = { which = cl value == 0 }
 				}
-				change_variable = { which = "local_siegecasterlevel" value = 2 }
+				break = yes
 			}
-        }
-        any_province_character = {
-            limit = {
-                in_command = yes
-				siege = {
-					is_attacker = yes
-				}
-                uses_new_battle_magic_system = yes
-                same_realm = ROOT
-            }
-			character_event = { id = magicengine.21 }	
-			magic_xp_counter = yes
-            change_variable = { which = "local_siegecasterlevel" which = "cl" }
-			add_character_modifier = {
-					name = magic_siege_pool_reduction_timer
-					hidden = yes
-					duration = 30
-			}
-			new_battle_magic_calc_magic_pool = yes
-			if = {
-				limit = {
-					khorne_summoner = yes
-				}
-				change_variable = { which = "local_siegecasterlevel" value = 2 }
-			}
-        }
-		if = {
-			limit = {
-				check_variable = { which =  "local_siegecasterlevel" value == 0 }
-			}
-			break = yes
-		}
-	
-		if = {
-			limit = { 
-				check_variable = { which = local_siegecasterlevel value = 1 }
-				check_variable = { which = local_siegecasterlevel value <= 3 }
-			}
-			location = {
-				add_province_modifier = { name = magic_siege1 duration = 100 } 
-			}
-		}
-		else_if = {
-			limit = { 
-				check_variable = { which = local_siegecasterlevel value >= 4 }
-				check_variable = { which = local_siegecasterlevel value <= 6 }
-			}
-			location = {
-				add_province_modifier = { name = magic_siege2 duration = 150 } 
-			}
-		}
-		else_if = {
-			limit = { 
-				check_variable = { which = local_siegecasterlevel value >= 7 }
-				check_variable = { which = local_siegecasterlevel value <= 9 }
-			}
-			location = {
-				add_province_modifier = { name = magic_siege3 duration = 200 } 
-			}
-		}
-		else_if = {
-			limit = { 
-				check_variable = { which = local_siegecasterlevel value > 9 }
-			}
-			location = {
-				add_province_modifier = { name = magic_siege4 duration = 365 } 
-			}
-		}
 		
-		if = {
-			limit = {	
-				NOT = { has_global_flag = player_told_how_siege_magic_works }
-				OR = { 
-					ai = no
-					location = {
-						any_province_character = {
-							limit = {
-								in_command = yes
-								siege = {
-									is_attacker = yes
-								}
-								uses_new_battle_magic_system = yes
-							}
-							AND = {
-								OR = {
-									has_minor_title = title_commander
-									has_job_title = job_marshal
-								}
-								liege = { ai = no }
-							}
-						}
-					}									
-				}			
+			if = {
+				limit = { 
+					check_variable = { which = cl value = 1 }
+					NOT = { check_variable = { which = cl value = 2 } }
+				}
+				location = {
+					add_province_modifier = { name = magic_siege1 duration = 60 stacking = yes } 
+				}
 			}
-			set_global_flag = player_told_how_siege_magic_works
-			narrative_event = { id = magicengine.22 }		
-		}
+			else_if = {
+				limit = { 
+					check_variable = { which = cl value = 2 }
+					NOT = { check_variable = { which = cl value = 3 } }
+				}
+				location = {
+					add_province_modifier = { name = magic_siege2 duration = 90 stacking = yes }			
+				}
+			}
+			else_if = {
+				limit = { 
+					check_variable = { which = cl value = 3 }
+					NOT = { check_variable = { which = cl value = 4 } }
+				}
+				location = {
+					add_province_modifier = { name = magic_siege3 duration = 120 stacking = yes }
+				}
+			}
+			else_if = {
+				limit = { 
+					check_variable = { which = cl value = 4 }
+				}
+				location = {
+					add_province_modifier = { name = magic_siege4 duration = 150 stacking = yes }
+				}
+			}
+			
+			if = {
+				limit = {	
+					NOT = { has_global_flag = player_told_how_siege_magic_works }
+					OR = { 
+						ai = no
+						location = {
+							any_province_character = {
+								limit = {
+									in_command = yes
+									siege = {
+										is_attacker = yes
+									}
+									uses_new_battle_magic_system = yes
+								}
+								AND = {
+									OR = {
+										has_minor_title = title_commander
+										has_job_title = job_marshal
+									}
+									liege = { ai = no }
+								}
+							}
+						}									
+					}			
+				}
+				set_global_flag = player_told_how_siege_magic_works
+				narrative_event = { id = magicengine.22 }		
+			}
+		}	
+		repeat_event = { id = magicengine.20 days = 30 }
 	}
 	
 	option = {
@@ -370,7 +423,7 @@ character_event = {
 	notification = yes
 	
 	trigger = {
-		#So you don't get spammed every 10 days of an ongoing siege
+		#So you don't get spammed every 30 days of an ongoing siege
 		NOT = { has_character_modifier = magic_siege_pool_reduction_timer }
 	}
 
@@ -381,6 +434,7 @@ character_event = {
 
 narrative_event = {
 	id = magicengine.22
+	title = EVTTITLEmagicengine22
 	desc = EVTDESCmagicengine22
 	picture = GFX_evt_mage_lore_fire
 	is_triggered_only = yes

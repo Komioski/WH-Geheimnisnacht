@@ -1,3 +1,8 @@
+NDefines.NCharacter.FERTILITY_BASE_MULT = 0.4
+NDefines.NCharacter.SECONDARY_SPOUSE_FERTILITY_MULT = 0.25
+NDefines.NEngine.EVENT_PROCESS_OFFSET = 20
+NDefines.NEngine.COURTIER_EVENT_PROCESS_OFFSET = 100
+
 NDefines.NDiplomacy.DEFENSIVE_PACT_THREAT_LIMIT = 0.05							-- The amount of provinces in a realm that is needed for beeing a valid target of a defensive pact
 NDefines.NDiplomacy.DEFENSIVE_PACT_SIZE_RATIO = 1.0							-- Relative size requirement is this at 100% threat
 NDefines.NDiplomacy.DEFENSIVE_PACT_MAX_RANGE = 200								-- At 100% threat characters are able to join defensive pacts against targets of this distance
@@ -8,7 +13,7 @@ NDefines.NDiplomacy.MAX_INFAMY_GAIN = 15										-- This is the max infamy gain
 NDefines.NDiplomacy.EVERY_DEFENSIVE_PACT_JOIN_THREAT = 100 				-- If threat is this high, members of all defensive pacts against a target will join
 NDefines.NDiplomacy.EVERY_DEFENSIVE_PACT_EXCEPT_HEADS_JOIN_THREAT = 100	-- If threat is this high, members of all defensive pacts against a target will join, except religious heads that only joins when their own group is attacked
 NDefines.NDiplomacy.OTHER_DEFENSIVE_PACT_JOIN_THREAT = 100					-- If threat is this high, other religious groups band together when attacked, if it's lower every defensive pact acts on it's own
-		
+
 NDefines.NDiplomacy.SHORT_REIGN_YEARS_END = 8
 NDefines.NDiplomacy.LONG_REIGN_YEARS_START = 9
 NDefines.NDiplomacy.MAX_LONG_REIGN_BONUS = 50
@@ -78,7 +83,8 @@ NDefines.NNomad.ALWAYS_GENERATE_NOMADS = 1
 
 NDefines.NMilitary.LEVY_MAINTENANCE_FACTOR = 1.0
 NDefines.NMilitary.PAGAN_HOME_SUPPLY_MOD = 0.25					-- Non Pagans suffer extreme attrition in some Pagan homelands (based on province religion)
-NDefines.NMilitary.COMMAND_MODIFIER_MARTIAL_MULTIPLIER = 0.04	  -- How much positive command modifiers are increased, and negative modifiers decreased (capped to 100% for negative), per point of martial
+NDefines.NMilitary.COMMAND_MODIFIER_MARTIAL_MULTIPLIER = 0.02	  -- How much positive command modifiers are increased, and negative modifiers decreased (capped to 100% for negative), per point of martial
+NDefines.NMilitary.TERRAIN_SPEC_BONUS = 0.1						-- Bonus to fighting in this terrain if you have that terrain as your
 
 NDefines.NTechnology.PAGAN_HOME_ATTRITION_REMOVAL_LEVEL = 7.0
 NDefines.NTechnology.DONT_EXECUTE_TECH_BEFORE = 2000

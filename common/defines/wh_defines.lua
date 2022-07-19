@@ -79,6 +79,7 @@ NDefines.NTitle.EMPIRE_DE_JURE_ASSIMILATION_YEARS = 750
 
 NDefines.NReligion.ELECTOR_TITLE_AGE_FACTOR = 0.5
 
+NDefines.NEconomy.PATRICIAN_AGE_RESPECT_FACTOR = 0				-- The effect of Age on the Respect value for Doge elections (age * age * factor)
 NDefines.NNomad.ALWAYS_GENERATE_NOMADS = 1
 
 NDefines.NMilitary.LEVY_MAINTENANCE_FACTOR = 1.0

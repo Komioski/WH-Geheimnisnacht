@@ -787,6 +787,28 @@ v1.3.7:
 - Varied Ogre mercenaries to use all 3 primary cultures firegut, irongut, and ogre main
 - Enabled and converted event chain JD.1000 a five year pulse event finding Ormazd Adventurers to target Estalia/Tilea
     > This should interact with the converted reconquista system allowing for some more back and forth between the three world regions
+
+- Added a missing check for magic_law_3 in the has_magic_law_1_or_above scripted trigger
+- Removed potential from berserker, reaver, ravager, seaking, sea_queen and pirate
+- Some cb bug fixes
+- Removed defensive attrition from spider gobbos
+- Should have fixed the scaled wealth costs of restoring a place of power
+- Changed Varangian Guard references to Kreml guard
+- More localisation flavor and fixes
+- donate_money_to_witch_hunters can now be clicked at 300 gold
+- Added in several breaks that should stop marriage loops
+- Disabled marriage for beastmen and Fimir.
+- Beastmen should use the split clan decision to give away titles.
+- Added in a decision for Fimir to give away titles
+- Added wh_marriage_exlusion_trigger instead of pasting the traits in the file.
+- Replaced ai interval with ai = no for give_province_amazon_2 decision. Ai uses a different decision
+- Created a decision for AI fimir to grant titles
+- Replaced Blood Keep Vampire Knights special troop with retinuesize_perc up to 35%
+- Overhauled balanced and documented skaven artifacts
+- Overhauled balanced and documented banner artifacts
+- Overhauled balanced and documented magic artifacts
+- Overhauled balanced and documented Ogre artifacts
+- Overhauled balanced and documented Tombking artifacts
 ------------------------------------------------------
 v1.3.6:
 ------------------------------------------------------

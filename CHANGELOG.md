@@ -6,7 +6,7 @@
 ------------------------------------------------------
 CURRENT CHECKSUM
 ------------------------------------------------------
-    ||  PUBLIC RELEASE = HLCN ||
+    ||  PUBLIC RELEASE = ARPF ||
 ------------------------------------------------------
 TABLE OF CONTENTS
 ------------------------------------------------------
@@ -15,7 +15,8 @@ TABLE OF CONTENTS
 > CHANGELOG HISTORY
     - v1.4.1    - [PLANNED] Pirates, Adventurers, Colonies
     - v1.4.0    - [PLANNED] Performance Rebuild
-    - v1.3.7    >> CURRENT
+    - v1.3.7.1  >> CURRENT
+    - v1.3.7
     - v1.3.6
     - v1.3.51
     - v1.3.5    - A Cold Tyrant
@@ -41,7 +42,112 @@ TABLE OF CONTENTS
     - v1.0.0    - Legacy Release
 > RELEVANT CHANGES BEFORE LEGACY
 ------------------------------------------------------
-v1.3.7:   <<< CURRENT RELEASE
+v1.3.7.1:   <<< CURRENT RELEASE
+------------------------------------------------------
+- Removed full_hostility = yes from Greenskin CBs
+- Diversified the witch hunter mercenary composition
+- root_makes_from_vampire_effect now clears secret religions to prevent chaos vampires
+- Adjusted vampire opinion maluses
+- Some adjustments to math involved in The Empire re-unification event calculations
+- Added retinues at game start to several of the Border Princes
+- Fixed the bald commander problem in portrait_properties
+- Various position fixes across the map
+- Fixed a province border issue with the mountains of Naggaroth that caused an inexplicable CTD
+- Successfully cleansing Greenskins now ptoperly removes ALL Greenskin modifiers
+- Rot Helm artifact now has a modifier
+- Fixed the bug with children of Zoltán in the chaos wastes not being his
+- Trevari gfx should no longer crash the game on the ruler designer, this should be the last one
+- Dawi City walls now have a description and localization
+- Repaired a government issue with vampiric and Tilean/Estalians
+- Fixed the claim_championship_nurgle offmap decision
+- The antideath effect now works correctly in the legendary warband missions
+- Twins should now get their appropriate trait and culture, finally, closing that loophole
+- Removed the marriage option from the Brayherd divine union event
+- Fixed ordering of portraits_empire gfx so that the nose layer is properly hidden by the staked/burned traits
+- Restored RoI tiger hunting event chain, but did not check localization
+- Properly locked the hold_tiger_hunt decision to humans in world_greater_araby and world_new_world_lustria
+- Should have limited the jungles of Lustria to its continent properly now
+- Added Ogre Firemouth trait to mirror the Slaughtermaster trait and applied it in character history and in scripted effects
+- Updated Ogre Slaughtermaster and Firemouth trait GFX
+- Updated Khemri mask trait GFX
+- Removed "train a warbear mount" decision since its now part of the mount market system
+- Fixed spawned daemon localization
+- Changed the age of spawned/summoned daemons due to a certain age range defaulting to child GFX (Machine spirits make no sense)
+- Changed the pre-triggers of the events depending on these ages to more appropriate culture triggers
+- Enabled Demon child and Life leach event chains from vanilla for chaos cultists
+- Reformatted character history files for future reworks and legibility
+- Further tightened the potential/allow/abort blocks for faith and heritage childhood focuses to limited players exploiting the system
+- Many Vanilla artifacts reverted to default values to fix some errors until the final files can be overhauled
+- Updated artifact affects to use proper combat phase modifiers
+- The "hunt for a vampire" quest for the Cult of Morr society should now register as completed
+- Lowered the prestige/piety malus when winning or losing a war against peasant revolts
+- Updated Subfeudal government Icon and Charframe ring GFX for final polish
+- Chaos offmap currency gain for ambitious trait boosted for all chaos offmaps
+- Fixed "Whistler" Dynasty culture
+- Fixed a few missing origin_descriptions for alliance opinions
+- Fixed some fathers incorrectly set as mothers in history
+- Fixed incorrect references to the old insanity trait
+- Fixed history setup for b_tecnotica to use proper buildings
+- Loads of history effect fixes
+- Repaired marriage/age issues in history files
+- Fixed fertility effect
+- Fixed Ulthuan Vortex detection effect in the DOOM Counter
+- Fixed missing is_trigger_only block for lustria.29 #Return of the Chameleon Skinks
+- Cleaned up history for wonder_tor_lithanel
+- Added missing Goblin Creature trait to the Broken Nose tribe leader
+- Some Choas offmap cost balancing
+- Cleaned up and polished Vulture Mountain map terrain and borders
+- Finally cleaned up the borders around the Araby coast
+- Minor fixes to norscan society events
+- Restored missing opinion modifiers tied to norscan society
+- magic_law_cost_effect and magic_law_refund_effect massively scaled down to stop extreme negatives when taking land. TODO: NEED to really examine this to close edge cases and for balance
+- Fixed the GFX for narrow flank to no longer cover casualties GUI
+- Cleared all Validator errors with combat_tactics
+- Complete Overhaul of combat_tactics, focusing on synergy and lowering tactic activation time to allow for more diversity in battle results.
+  > Makes combat_tactics more internally consistent, and intuitive by restoring symmetry between tactic groups, and improving cooperation between different unit types
+  > Changes all troop checks to bracketed checks against total troops in order to prevent Horse Archers from triggering Light Cavalry tactics and War Elephants from triggering Heavy Cavalry tactics
+  (and for consistency)
+  > Most tactics now last only 8 days and some only 6 (instead of 12 or 18 days)
+  > Retreat calculations greatly expanded, a flank leaders traits and personality directly influence chance of retreat
+  > flanks are now more likely to retreat without a leader
+  > Pursuit of a retreating flank lowered from a 25% chance to 20% chance
+  > Added 2 new combat tactics that can fire if you have either a trained mage or magical spells in a flank
+  > Improved cooperation between different unit types
+    - Light Infantry recieve more support from everyone
+    - Horse Archers receive better support from Light Cavalry
+    - Archers receive better support from Horse Archers
+    - Light Cavalry receive better support from Archers
+    - Gunpowder is now properly accounted for
+    - Artillery is now properly accounted for
+    - War Machines are now properly accounted for
+    - Heavy Infantry receive better support from Heavy Cavalry
+    - Pikemen receive better support from Heavy Infantry
+    - Heavy Cavalry receive better support from Pikemen
+- Overhauled the voting weights for patrician succession in defines.lua
+  > Original Formula:
+  (campaign fund × 5) + age² + (prestige × 2) + a random factor of 500 points = total respect
+  > New Formula
+  (campaign fund × 2) + (age² × 0.3) + (prestige × 5) + a random factor of 200 points = total respect
+- Added a Bespoke targetted decision to destroy an inactive wonder, this is tied to a game rule for cost.
+  > Some care was taken to make this only apply to inactive wonders that are tier 1-2 and damaged.
+  > So pillage the wonder first until it meets the requirements to destroy!
+- Overhauled Mount Market Completely, Streamlined for ease of use
+  > Added special minor title for Brettonnians above the Count Tier called "Stable Master" with special tie in events that influence the mount system
+  > Cleaned up mount events and decisions and added ways to get chariots and other mounts also lowered costs
+- Some cleanup to the nautical events, changed namespace to ships.x tightened it to hopefully exclude allies, rebels, and mercenaries.
+  > Included the antideath effect in the naval outcome scripts to prevent malekith and other is_invincible_trigger characters from random drownings
+  > However, after a bit of a chuckle. I left a 1% chance for the Everchosen to drown
+  > Changed the wealth gain/loss when raiding ships in naval combat
+  > Changed the Admiral trait to a more lore friendly "Sea Captain"
+- Removed a few more provinces for AI, all lakes in the New World:
+  > Cold Water Lake
+  > Lake of the Abyss
+  > Black Lake
+  > Witch Sea
+  > Kraken Lake
+  > Wyvern Lake
+------------------------------------------------------
+v1.3.7:
 ------------------------------------------------------
 - Changed some on_action events to be in custom random lists to ensure factions are recieving relevant events
 - Reworked Ulthuan depopulation to be a simpler system and less taxing on the engine
@@ -163,7 +269,7 @@ v1.3.7:   <<< CURRENT RELEASE
 - Province border changes in Norsca
 - Lots of History changes for characters in Norsca
 - fixed all cases of "Ã¯Â¿Â½" in the localisation files after the correction of files to ANSI
-- Added artifacts.info containing all insformation for balancing and creating new artifacts
+- Added artifacts.info containing all information for balancing and creating new artifacts
 - Reworked "03_artifacts_druchii" - added a manifest, organized and balanced
 - Adjusted artifact spawns for druchii
 - Created system to allocate artifact amounts based on tier (see artifact_spawns.info)
@@ -228,7 +334,7 @@ v1.3.7:   <<< CURRENT RELEASE
 - Slightly reworked "Duel_effect" as part of Everchosen quest fix
 - Reworked opinion_modifiers for the "knights_of_brettonia" society (Was 45+ now closer to 15+)
 - Impaler, Wroth, and Cruel are now negative instead of positive traits for the "knights_of_brettonia" society
-- Fixed the bug where you could invite members to you cult who had already joined
+- Fixed the bug where you could invite members to your cult who had already joined
 - Added some easter egg code for the "Egg of Quango"
 - Ice witches removed from mage ward teaching system for now as its handled through the society
 - Added easter egg code for the Winter Equinox for norscan_gods
@@ -267,7 +373,7 @@ v1.3.7:   <<< CURRENT RELEASE
     > religion = grail
     > trait = noble
     > is_adult = yes
-    > is_female = no
+    > is_female = no  
 - Fixed Bretonnian Trebuchet stats
 - Fixed commander requirements for orcs and goblins
 - Updated family palace requirements to create a slaver post
@@ -281,7 +387,7 @@ v1.3.7:   <<< CURRENT RELEASE
 - Becoming a champion/chosen/prince of a specific god will now give you their respective religion
 - Created few dark elf characers.
 - Druchii Sorceresses under malekith should no longer be thrown to agnatic
-- Allowed dreuchii to use the court mage mechanics.
+- Allowed Druchii  to use the court mage mechanics.
  > Male mages living under malekith are of course outlawed.
  > Elves have lower requirement to pass.
  > Elves can become apprentice even when adult. Minimum of 15 learning required when adult.
@@ -300,13 +406,13 @@ v1.3.7:   <<< CURRENT RELEASE
 - Nomadic governmant changes
     > Severe crash fixes:
         - game does not support changing nomadic governments (order to chaos and vice verca)
-        - If an heir is in a different religion group than the father it chanegs the heir to the rulers religion
+        - If an heir is in a different religion group than the father it changes the heir to the rulers religion
 - Trading decisions issue fixed
-- Fixed Replublics so they are playable again
-- Seperated world_troll_country from kislev and norsca regions, since it causes ai to gain -100 IQ (on top of their zero IQ) and destory their armies marching in to Norsca
+- Fixed Republics  so they are playable again
+- Seperated world_troll_country from kislev and norsca regions, since it causes ai to gain -100 IQ (on top of their zero IQ) and destroy their armies marching in to Norsca
 - Added a cb to kill skaven surface realms
 - Buffed imperial wonders a bit since ai is still struggeling against local threats until we can implement overhaul
-- Temporarily removed the wonder from the oak of ages
+- Temporarily removed the special building from the oak of ages
 - Cleaned up the tooltip for the unique Herdstone buildings for beastmen
 - Overhauled the custom map mode module, the third section is now entirely dedicated to warhammer specific map modes as intended:
     > Places of Power are tied to the corresponding gameplay element, this allows you to see them and their respective game states visually
@@ -404,20 +510,19 @@ v1.3.7:   <<< CURRENT RELEASE
 - Restored pinky and the brain easter egg
 - Reformatted history/characters/6000_skaven added a manifest, re-ID characters from 6000 range to 700 range
 - bloodline and history fixes for fatandira
-- females will not kicked out of the grail society, they still cant join but if they somehow manage to enter they will not get kicked out
-- warhammer marriage correction rule removed
-- orc county conquest creates more threat
-- chaos raid ends inconclusively if the ruler is no longer of chaos religion
+- Females will not kicked out of the grail society, they still cant join but if they somehow manage to enter they will not get kicked out
+- Warhammer marriage correction rule removed
+- Orc county conquest creates more threat
+- Chaos raid ends inconclusively if the ruler is no longer of chaos religion
 - limited the county conquest cb on old world
 - halo of maidenly wrath no longer has the requirement you have to be in the grail knight societiy
-- removed has global marriage correction options
+- Removed global marriage correction options
 - Mutation ping event set to five year pulse
 - Places of Power balancing
 - Fixed pagan_conquest CB
 - Added a cost to ulthuan colonisation CB
 - history name changes
 - Granted Louis his bloodline again
-- Fixed goblin/hobgoblin localization swap for creature_trait
 - Fixed the immortal suspicions event to only fire for specific religion groups
 - Attempt made to correct interspecies breeding loophole using twins
 - Bloodlines created when becoming a daemon prince now give general opinion to all members of the chaos gods group instead of solely slaanesh
@@ -460,7 +565,7 @@ v1.3.7:   <<< CURRENT RELEASE
 - Title changes made, The Order of the Raven is now a Playable Holy Order
 - Effect added when gaining the title of the Order of the Raven
 - Special building added to Monte Negro
-- Allowed cathayans to use the Cupbearer minor title
+- Allowed Cathayans to use the Cupbearer minor title
 - Set Novazong as "Sha'shala The Grand Generals" Cupbearer and gave him the blood chalice artifact intended for him
 - Repaired the Bloodline and Sword "Sha'shala The Grand General" is supposed to start with
 - Warp Tear special building adjusted slightly
@@ -523,7 +628,7 @@ v1.3.7:   <<< CURRENT RELEASE
 - new_character_effect now only has a 5% chance to fire magicpotential.1 and an 8% chance to fire wh_magic_law.40 which determine magic sensitive characters
 - Added clear_favour_effect to reset offmap favour
 - Zar Tat-Ugek now starts with 1000 nurgle favour
-- AzalaÃ¯s now starts with 800 tzeentch favour
+- Azalai's now starts with 800 tzeentch favour
 - Should have finally replaced all instances of the old favour system for chaos
 - Final pieces of old doom system converted over
 - Settra is now a level 1 wizard and has acess to the lore of nehekhara spells

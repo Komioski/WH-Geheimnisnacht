@@ -1,5 +1,10 @@
-NDefines.NCharacter.FERTILITY_BASE_MULT = 0.4
-NDefines.NCharacter.SECONDARY_SPOUSE_FERTILITY_MULT = 0.25
+NDefines.NEconomy.DOGE_SUCC_RANDOM_FACTOR = 100									-- 500 The random Respect factor on actual Doge succession.
+NDefines.NEconomy.PATRICIAN_CAMPAIGN_FUND_FACTOR = 2									-- 5 The effect of money in the Campaign Fund on Doge elections (money * factor).
+NDefines.NEconomy.PATRICIAN_PRESTIGE_RESPECT_FACTOR = 5									-- 2 The effect of Prestige on the Respect value for Doge elections (prestige * factor).
+NDefines.NEconomy.PATRICIAN_AGE_RESPECT_FACTOR = 0.3									-- 1 The effect of Age on the Respect value for Doge elections (age * age * factor).
+
+NDefines.NCharacter.FERTILITY_BASE_MULT = 0.30
+NDefines.NCharacter.SECONDARY_SPOUSE_FERTILITY_MULT = 0.20
 NDefines.NEngine.EVENT_PROCESS_OFFSET = 20
 NDefines.NEngine.COURTIER_EVENT_PROCESS_OFFSET = 100
 

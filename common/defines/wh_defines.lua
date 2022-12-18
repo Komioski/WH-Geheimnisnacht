@@ -3,6 +3,9 @@ NDefines.NEconomy.PATRICIAN_CAMPAIGN_FUND_FACTOR = 2									-- 5 The effect of 
 NDefines.NEconomy.PATRICIAN_PRESTIGE_RESPECT_FACTOR = 5									-- 2 The effect of Prestige on the Respect value for Doge elections (prestige * factor).
 NDefines.NEconomy.PATRICIAN_AGE_RESPECT_FACTOR = 0.3									-- 1 The effect of Age on the Respect value for Doge elections (age * age * factor).
 
+NDefines.NEconomy.WONDER_STACKING_PENALTY = 0					-- Additional cost for each consecutive wonder construction
+NDefines.NEconomy.WONDER_STACKING_PENALTY_SAME_TYPE = 0				-- Extra penalty for construction wonders of the same type
+
 NDefines.NCharacter.FERTILITY_BASE_MULT = 0.30
 NDefines.NCharacter.SECONDARY_SPOUSE_FERTILITY_MULT = 0.20
 NDefines.NEngine.EVENT_PROCESS_OFFSET = 20

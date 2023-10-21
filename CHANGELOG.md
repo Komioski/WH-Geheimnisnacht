@@ -42,7 +42,68 @@ TABLE OF CONTENTS
     - v1.0.0    - Legacy Release
 > RELEVANT CHANGES BEFORE LEGACY
 ------------------------------------------------------
-v1.3.7.1:   <<< CURRENT RELEASE
+v1.3.8:   <<< CURRENT RELEASE
+------------------------------------------------------
+- Fixed a minor bug related to magic laws
+- Fixed the excessive spawning of greenskin courtiers due to government issues
+- Fixed pegasus and gryphon mount market localisation
+- anti-death trigger should now work with legend missions
+- Warrior Society Loot Province Mission should now finish properly
+- Fixed the magic learning event chain. The event demanded that the tutor be dead.... Instead of alive
+- Limited CB's against the Frostholme Lodge barony title. Which should prevent Erengrad from taking the school as a dejure vassal
+- Vampires can now form republic governments if they meet the requirements
+- Shieldmaidens can now be appointed as commanders
+- The Hollowed trait can now be seen by all mages, even outside of the realm. Since all mages should be able to detect a hollowed being
+- khorne_berserker trait should no longer be removed on reload
+- Fixed a cultist event pointing to the wrong religion
+- For now legendary raids ignore targets that are invincible
+- Raids should now allow more targets, before planned proper overhaul
+- Made some minor loc changes to the Otilla house
+- Fixed nomads having access to count and duke tier CB
+- Added in a decision to join a dynasty.
+  > Pick the trait during Ruler Design and for 60 days you will have an option in-game to join an existing dynasty.
+  > limits: Same race and being a chaos follower/vampire while the target is not will result in being disinherited and having a cadet dynasty.
+- General fixes and renaming event IDs of the house customizer
+- Fixed province interface for players missing Reapers Due DLC
+- First pass done adding magic archers to combat tactics
+- Properly assign racial traits for saurus and hill goblins
+- limited Beastmen from becoming a daemon prince or chosen
+- Minor Chaos Dwarf building fixes
+- Some quest target fixes for the warband mission looting a province
+- Added a mootlander culture
+- Reworked dwarven_reconquest CB
+- Reworked greenskin_subjugation CB
+- Added an exhaustion system to the Waaagh CB to prevent abuse
+- Changes made to duelscore weight if you have the rush of hunt
+- Added a possibility for the heart of averlorn to be exhausted
+- Clerics like mages less
+- Vlad will now prticipate in more duels during battles
+- Soldier Distinguishes himself can now give you a necromancer
+- Several mount market fixes
+- Wearing specific artifacts can now make you "mad"
+- Random mutations should be less common
+- Fixed provinces wrongly assigned as islands
+- Lustria jungle was growing too fast due to wrong use of "factor", Jungle should grow slower now
+- First pass Implementation of the imperial wonders.
+- allowed nordlanders to loot
+- Added full hostility to Vlads CB so he is also hostile to other incursions for the same title
+- Reworked Westerland's merchants, gave them more power, but Westerland is allowed to draft more troops from them
+- Several performance optimisations
+- Added Beastman Gor unit (All beastmen unit models will use the one gor model for now)
+- Fixed Stegadon animation errors
+- Removed normal maps on dwarves and skaven units (Don't need them in ck2)
+- Changed the cumulative price increase for every Great Work you have to 0%
+- Change the Quest required to take the "Desecrate Temple" decision. Tested and quest can now be completed
+- Fixed Freebootaz Conquest CB
+- Some fixes for cancer in long-lived races
+- Fix tribal and nomadic Warpstone mines so they carry over when converted to Castle or City
+- Technology now increases retinue size
+- Fixed Scaling in combat tactics for retreat odds for flanks without a leader
+- Added beastmen unit model
+- Fixed stegadon unit model attack animation
+- removed alpha layer from dwarven and skaven unit models
+------------------------------------------------------
+v1.3.7.1:
 ------------------------------------------------------
 - Removed full_hostility = yes from Greenskin CBs
 - Diversified the witch hunter mercenary composition

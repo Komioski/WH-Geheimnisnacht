@@ -44,6 +44,12 @@ TABLE OF CONTENTS
 ------------------------------------------------------
 v1.3.8:   <<< CURRENT RELEASE
 ------------------------------------------------------
+- Added generic lizardmen artifacts
+- Updated the Bloodedge artifact
+- Fix for dawi port 3 building dependency
+- Minor overhaul of skaven buildings
+- Some fixes to mercenaries
+- 
 - Fixed a minor bug related to magic laws
 - Fixed the excessive spawning of greenskin courtiers due to government issues
 - Fixed pegasus and gryphon mount market localisation

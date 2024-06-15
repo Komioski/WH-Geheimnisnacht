@@ -77,6 +77,7 @@ NDefines.NDiplomacy.ASK_TO_EMBARGO_INTERACTION_THRESHOLD_FOR_NO = 10
 NDefines.NDiplomacy.ASK_TO_EMBARGO_INTERACTION_THRESHOLD_FOR_YES = 10
 NDefines.NDiplomacy.MAKE_CONSORT_INTERACTION_THRESHOLD_FOR_NO = 10
 NDefines.NDiplomacy.MAKE_CONSORT_INTERACTION_THRESHOLD_FOR_YES = 10
+NDefines.NDiplomacy.ABSORB_CLAN_INTERACTION_ENABLED = 0
 
 NDefines.NCharacter.MAX_CHILD_BIRTH_AGE = 3000
 NDefines.NCharacter.MALE_ATTRACTION_CUTOFF = 10000
@@ -89,6 +90,7 @@ NDefines.NReligion.ELECTOR_TITLE_AGE_FACTOR = 0.5
 
 NDefines.NEconomy.PATRICIAN_AGE_RESPECT_FACTOR = 0				-- The effect of Age on the Respect value for Doge elections (age * age * factor)
 NDefines.NNomad.ALWAYS_GENERATE_NOMADS = 1
+NDefines.NNomad.POPULATION_TAX_MULTIPLIER = 0.0025
 
 NDefines.NMilitary.LEVY_MAINTENANCE_FACTOR = 1.0
 NDefines.NMilitary.PAGAN_HOME_SUPPLY_MOD = 0.25					-- Non Pagans suffer extreme attrition in some Pagan homelands (based on province religion)
@@ -128,7 +130,6 @@ NDefines.NFrontend.SETTINGS_POS_X = 2200.0
 NDefines.NFrontend.MP_OPTIONS_POS_X = 1360.0
 NDefines.NFrontend.MP_OPTIONS_LOOK_X = 1490.0
 NDefines.NFrontend.TUTORIAL_POS_X = 1600
-
 NDefines.NEndGame.DYN1_ID = 10047
 NDefines.NEndGame.DYN2_ID = 19000
 NDefines.NEndGame.DYN3_ID = 23001

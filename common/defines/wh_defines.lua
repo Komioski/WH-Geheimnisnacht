@@ -1,5 +1,13 @@
-NDefines.NCharacter.FERTILITY_BASE_MULT = 0.4
-NDefines.NCharacter.SECONDARY_SPOUSE_FERTILITY_MULT = 0.25
+NDefines.NEconomy.DOGE_SUCC_RANDOM_FACTOR = 100									-- 500 The random Respect factor on actual Doge succession.
+NDefines.NEconomy.PATRICIAN_CAMPAIGN_FUND_FACTOR = 2									-- 5 The effect of money in the Campaign Fund on Doge elections (money * factor).
+NDefines.NEconomy.PATRICIAN_PRESTIGE_RESPECT_FACTOR = 5									-- 2 The effect of Prestige on the Respect value for Doge elections (prestige * factor).
+NDefines.NEconomy.PATRICIAN_AGE_RESPECT_FACTOR = 0.3									-- 1 The effect of Age on the Respect value for Doge elections (age * age * factor).
+
+NDefines.NEconomy.WONDER_STACKING_PENALTY = 0					-- Additional cost for each consecutive wonder construction
+NDefines.NEconomy.WONDER_STACKING_PENALTY_SAME_TYPE = 0				-- Extra penalty for construction wonders of the same type
+
+NDefines.NCharacter.FERTILITY_BASE_MULT = 0.30
+NDefines.NCharacter.SECONDARY_SPOUSE_FERTILITY_MULT = 0.20
 NDefines.NEngine.EVENT_PROCESS_OFFSET = 20
 NDefines.NEngine.COURTIER_EVENT_PROCESS_OFFSET = 100
 
@@ -69,6 +77,7 @@ NDefines.NDiplomacy.ASK_TO_EMBARGO_INTERACTION_THRESHOLD_FOR_NO = 10
 NDefines.NDiplomacy.ASK_TO_EMBARGO_INTERACTION_THRESHOLD_FOR_YES = 10
 NDefines.NDiplomacy.MAKE_CONSORT_INTERACTION_THRESHOLD_FOR_NO = 10
 NDefines.NDiplomacy.MAKE_CONSORT_INTERACTION_THRESHOLD_FOR_YES = 10
+NDefines.NDiplomacy.ABSORB_CLAN_INTERACTION_ENABLED = 0
 
 NDefines.NCharacter.MAX_CHILD_BIRTH_AGE = 3000
 NDefines.NCharacter.MALE_ATTRACTION_CUTOFF = 10000
@@ -81,11 +90,13 @@ NDefines.NReligion.ELECTOR_TITLE_AGE_FACTOR = 0.5
 
 NDefines.NEconomy.PATRICIAN_AGE_RESPECT_FACTOR = 0				-- The effect of Age on the Respect value for Doge elections (age * age * factor)
 NDefines.NNomad.ALWAYS_GENERATE_NOMADS = 1
+NDefines.NNomad.POPULATION_TAX_MULTIPLIER = 0.0025
 
 NDefines.NMilitary.LEVY_MAINTENANCE_FACTOR = 1.0
 NDefines.NMilitary.PAGAN_HOME_SUPPLY_MOD = 0.25					-- Non Pagans suffer extreme attrition in some Pagan homelands (based on province religion)
 NDefines.NMilitary.COMMAND_MODIFIER_MARTIAL_MULTIPLIER = 0.02	  -- How much positive command modifiers are increased, and negative modifiers decreased (capped to 100% for negative), per point of martial
 NDefines.NMilitary.TERRAIN_SPEC_BONUS = 0.1						-- Bonus to fighting in this terrain if you have that terrain as your
+NDefines.NMilitary.RETINUE_INCREASE_PER_TECH = 1	
 
 NDefines.NTechnology.PAGAN_HOME_ATTRITION_REMOVAL_LEVEL = 7.0
 NDefines.NTechnology.DONT_EXECUTE_TECH_BEFORE = 2000
@@ -119,7 +130,6 @@ NDefines.NFrontend.SETTINGS_POS_X = 2200.0
 NDefines.NFrontend.MP_OPTIONS_POS_X = 1360.0
 NDefines.NFrontend.MP_OPTIONS_LOOK_X = 1490.0
 NDefines.NFrontend.TUTORIAL_POS_X = 1600
-
 NDefines.NEndGame.DYN1_ID = 10047
 NDefines.NEndGame.DYN2_ID = 19000
 NDefines.NEndGame.DYN3_ID = 23001

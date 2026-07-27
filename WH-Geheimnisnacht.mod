@@ -1,7 +1,7 @@
 name = "WH: Geheimnisnacht"
-path = "mod/WH-Geheimnisnacht"
+path = "mod/WH-Geheimnisnacht-master"
 
-user_dir = "WH-Geheimnisnacht"
+user_dir = "WH-Geheimnisnacht-master"
 
 replace_path = "bookmarks"
 replace_path = "history/characters"

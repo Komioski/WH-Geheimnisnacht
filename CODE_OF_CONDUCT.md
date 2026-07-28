@@ -8,9 +8,9 @@ This code of conduct outlines our expectations for all those who participate in 
 
 We invite all those who participate in WH: Geheimnisnacht to help us create safe and positive experiences for everyone.
 
-## 2. Open [Source/Culture/Tech] Citizenship
+## 2. Mod Community Citizenship
 
-A supplemental goal of this Code of Conduct is to increase open [source/culture/tech] citizenship by encouraging participants to recognize and strengthen the relationships between our actions and their effects on our community.
+A supplemental goal of this Code of Conduct is to increase Mod Community citizenship by encouraging participants to recognize and strengthen the relationships between our actions and their effects on our community.
 
 Communities mirror the societies in which they exist and positive action is essential to counteract the many forms of inequality and abuses of power that exist in society.
 
@@ -25,7 +25,6 @@ The following behaviors are expected and requested of all community members:
  * Attempt collaboration before conflict.
  * Refrain from demeaning, discriminatory, or harassing behavior and speech.
  * Be mindful of your surroundings and of your fellow participants. Alert community leaders if you notice a dangerous situation, someone in distress, or violations of this Code of Conduct, even if they seem inconsequential.
- * Remember that community event venues may be shared with members of the public; please be respectful to all patrons of these locations.
 
 ## 4. Unacceptable Behavior
 
@@ -59,9 +58,7 @@ Additionally, community organizers are available to help those experiencing unac
 
 ## 8. Addressing Grievances
 
-If you feel you have been falsely or unfairly accused of violating this Code of Conduct, you should notify Gypsy Machine with a concise description of your grievance. Your grievance will be handled in accordance with our existing governing policies. 
-
-
+If you feel you have been falsely or unfairly accused of violating this Code of Conduct, you should notify Gypsy Machine with a concise description of your grievance. Your grievance will be handled in accordance with our existing governing policies.
 
 ## 9. Scope
 
@@ -75,9 +72,16 @@ Komioski@protonmail.com
 
 ## 11. License and attribution
 
-The Citizen Code of Conduct is distributed by [Stumptown Syndicate](http://stumptownsyndicate.org) under a [Creative Commons Attribution-ShareAlike license](http://creativecommons.org/licenses/by-sa/3.0/). 
+The Citizen Code of Conduct is distributed by [Geheimnisnacht Development Team] under a [Creative Commons Attribution-ShareAlike license]
+(http://creativecommons.org/licenses/by-sa/3.0/).
 
-Portions of text derived from the [Django Code of Conduct](https://www.djangoproject.com/conduct/) and the [Geek Feminism Anti-Harassment Policy](http://geekfeminism.wikia.com/wiki/Conference_anti-harassment/Policy).
+Portions of text derived from:
+the [Stumptown Syndicate](http://stumptownsyndicate.org),
+the [Django Code of Conduct](https://www.djangoproject.com/conduct/),
+and the [Geek Feminism Anti-Harassment Policy](http://geekfeminism.wikia.com/wiki/Conference_anti-harassment/Policy).
+
+
+_Revision 3.0. adopted by the team on 10 January 2021. Posted 22 May 2026._
 
 _Revision 2.3. Posted 6 March 2017._
 
@@ -85,4 +89,4 @@ _Revision 2.2. Posted 4 February 2016._
 
 _Revision 2.1. Posted 23 June 2014._
 
-_Revision 2.0, adopted by the [Stumptown Syndicate](http://stumptownsyndicate.org) board on 10 January 2013. Posted 17 March 2013._
+_Revision 2.0, adopted by the board on 10 January 2013. Posted 17 March 2013._

@@ -3,12 +3,12 @@
 -----
 Major Contributors:
 -----
-  - Komioski
+  - Komioski    
+  - Deadliest Income
 -----
 Minor Contributors:
 -----
   - ManuSwaG
-  - Ataz
   - YourBestFriendJo
 -----
 Soundtrack
@@ -29,7 +29,6 @@ Major Contributors:
   - Bloodroyal
   - DarkReborn
   - Arasakes
-  - Deadliest Income
   - GrandiSlayer
   - Humppa
   - Seansoken
@@ -41,6 +40,7 @@ Major Contributors:
 -----
 Minor Contributors:
 -----
+  - Ataz
   - Skorpin
   - Ignis
   - Jihadi John

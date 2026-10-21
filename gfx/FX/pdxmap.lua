@@ -215,47 +215,57 @@ float3 calculate_secondary( float2 uv, float3 vColor, float2 vPos )
 }
 
 // --- CK3-style political map -------------------------------------------------
-// Instead of painting every province in a flat colour, map modes now draw a
-// strong colour band along realm borders that fades towards the middle, where
-// the terrain shows through with only a light tint.
-// Tuning values (sizes are in map pixels):
-static const float BORDER_GRADIENT_WIDTH = 8.0f;	// how far the colour band reaches inland
-static const float EDGE_COLOR_STRENGTH   = 0.9f;	// 1 = vanilla flat colour right at the border
-static const float CENTER_TINT_STRENGTH  = 0.45f;	// tint over the terrain in the middle (0 = plain terrain)
+// Instead of painting every province in a flat colour, map modes draw a colour
+// band along realm borders that fades out smoothly. Away from borders the
+// terrain shows through with no tint at all.
+// Tuning values (sizes are in map pixels; the map is 3840 x 2560):
+static const float BORDER_GRADIENT_WIDTH = 12.0f;	// how far the colour band reaches inland
+static const int   BORDER_GRADIENT_STEPS = 12;		// samples per direction, about 1 per map pixel; lower = faster but more banding
+static const float EDGE_COLOR_STRENGTH   = 1.0f;	// 1 = vanilla flat colour right at the border
 
-// 1 if the map colour at uv differs from the centre colour, else 0
-float ColorDiffers( float2 uv, float4 vCenter )
+#ifdef PDX_OPENGL
+#define BORDER_LOOP
+#else
+#define BORDER_LOOP [loop]
+#endif
+
+// How different the map colour at uv is from the centre colour (0 = same)
+float ColorDistance( float2 uv, float4 vCenter )
 {
-	float4 vOther = tex2D( ProvinceColorMap, uv );
-	float4 vDiff = abs( vOther - vCenter );
-	return step( 0.02f, max( max( vDiff.r, vDiff.g ), max( vDiff.b, vDiff.a ) ) );
+	float4 vDiff = abs( tex2Dlod( ProvinceColorMap, float4( uv, 0.0f, 0.0f ) ) - vCenter );
+	return dot( vDiff, float4( 1.0f, 1.0f, 1.0f, 1.0f ) );
 }
 
-// Share of the 8 taps on a ring of the given radius that land in another colour
-float RingHits( float2 uv, float4 vCenter, float vRadius )
-{
-	float2 d = vRadius / vMapSize.xy;
-	float2 e = d * 0.7071f;
-	float vHits =
-		  ColorDiffers( uv + float2(  d.x,  0.0f ), vCenter )
-		+ ColorDiffers( uv + float2( -d.x,  0.0f ), vCenter )
-		+ ColorDiffers( uv + float2(  0.0f,  d.y ), vCenter )
-		+ ColorDiffers( uv + float2(  0.0f, -d.y ), vCenter )
-		+ ColorDiffers( uv + float2(  e.x,  e.y ), vCenter )
-		+ ColorDiffers( uv + float2( -e.x,  e.y ), vCenter )
-		+ ColorDiffers( uv + float2(  e.x, -e.y ), vCenter )
-		+ ColorDiffers( uv + float2( -e.x, -e.y ), vCenter );
-	return saturate( vHits * 0.5f ); // 2 of 8 taps already counts as fully "at the border"
-}
-
-// 1 right at a realm border, falling to 0 at BORDER_GRADIENT_WIDTH pixels inland
+// 1 right at a realm border, falling smoothly to 0 at BORDER_GRADIENT_WIDTH pixels inland.
+// Walks outwards in 8 directions and finds how far away the colour changes.
+// The colour map is linearly filtered, so the change ramps over one pixel;
+// measuring that ramp gives a distance finer than one pixel and a smooth fade.
 float GetBorderProximity( float2 uv, float4 vCenter )
 {
-	float vNear = RingHits( uv, vCenter, BORDER_GRADIENT_WIDTH * 0.25f );
-	float vMid  = RingHits( uv, vCenter, BORDER_GRADIENT_WIDTH * 0.5f );
-	float vFar  = RingHits( uv, vCenter, BORDER_GRADIENT_WIDTH );
-	float vProximity = max( vNear, max( vMid * 0.6f, vFar * 0.25f ) );
-	return smoothstep( 0.0f, 1.0f, vProximity );
+	float vStep = BORDER_GRADIENT_WIDTH / float( BORDER_GRADIENT_STEPS );
+	float2 vTexel = 1.0f / vMapSize.xy;
+	float2 vDir = float2( 1.0f, 0.0f );
+	float vNearest = BORDER_GRADIENT_WIDTH;
+
+	BORDER_LOOP
+	for ( int i = 0; i < 8; ++i )
+	{
+		float vMax = 0.0f;	// biggest colour difference seen so far along this direction
+		float vSum = 0.0f;	// running total of vMax, tells how early the change happened
+		BORDER_LOOP
+		for ( int k = 1; k <= BORDER_GRADIENT_STEPS; ++k )
+		{
+			vMax = max( vMax, ColorDistance( uv + vDir * ( float( k ) * vStep ) * vTexel, vCenter ) );
+			vSum += vMax;
+		}
+		float vDist = vStep * ( float( BORDER_GRADIENT_STEPS ) - vSum / max( vMax, 0.0001f ) );
+		vNearest = min( vNearest, vMax > 0.02f ? vDist : BORDER_GRADIENT_WIDTH );
+
+		vDir = float2( vDir.x - vDir.y, vDir.x + vDir.y ) * 0.70710678f; // turn 45 degrees
+	}
+
+	float vProximity = saturate( 1.0f - vNearest / BORDER_GRADIENT_WIDTH );
+	return vProximity * vProximity * ( 3.0f - 2.0f * vProximity ); // smoothstep easing
 }
 // -----------------------------------------------------------------------------
 
@@ -516,9 +526,8 @@ float4 main( VS_OUTPUT_TERRAIN Input ) : COLOR
 	}
 	else
 	{
-		// Terrain as it looks in the plain terrain map mode, lightly tinted with the realm colour
+		// Terrain as it looks in the plain terrain map mode, used away from borders
 		float3 vTerrain = GetOverlay( sample.rgb, TerrainColor, 0.75f );
-		float3 vCenterColor = GetOverlay( vTerrain, terrain_color.rgb, CENTER_TINT_STRENGTH );
 
 		// Vanilla flat map-mode colour, used at the border
 		sample.rgb = GetOverlay( sample.rgb, TerrainColor, 0.5f );
@@ -526,7 +535,7 @@ float4 main( VS_OUTPUT_TERRAIN Input ) : COLOR
 		float3 vFlatColor = ( dot(sample.rgb, GREYIFY) * vBlend.x + terrain_color.rgb * vBlend.y );
 
 		float vProximity = GetBorderProximity( Input.uv, terrain_color );
-		vOut = lerp( vCenterColor, vFlatColor, vProximity * EDGE_COLOR_STRENGTH );
+		vOut = lerp( vTerrain, vFlatColor, vProximity * EDGE_COLOR_STRENGTH );
 	}
 
 	vOut = calculate_secondary( Input.uv, vOut, Input.prepos.xz );

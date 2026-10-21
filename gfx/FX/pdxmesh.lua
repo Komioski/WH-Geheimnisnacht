@@ -8,7 +8,7 @@ Samplers = {
 		AddressV = "Wrap";
 		MipMapLodBias = -1;
 		MaxAnisotropy = 4;
-	},	
+	},
 	SpecularMap = {
 		Index = 1;
 		MinFilter = "Linear";
@@ -17,9 +17,9 @@ Samplers = {
 		AddressU = "Wrap";
 		AddressV = "Wrap";
 		MipMapLodBias = -1;
-		
-	},	
-	
+
+	},
+
 	NormalMap = {
 		Index = 2;
 		MinFilter = "Linear";
@@ -28,7 +28,7 @@ Samplers = {
 		AddressU = "Wrap";
 		AddressV = "Wrap";
 		MipMapLodBias = -1;
-	},	
+	},
 
 	FlagMap = {
 		Index = 3;
@@ -38,8 +38,8 @@ Samplers = {
 		AddressU = "Clamp";
 		AddressV = "Clamp";
 		MipMapLodBias = -1;
-	},	
-	
+	},
+
 	FoWTexture = {
 		Index = 4;
 		MinFilter = "Linear";
@@ -47,8 +47,8 @@ Samplers = {
 		MipFilter = "Linear";
 		AddressU = "Clamp";
 		AddressV = "Clamp";
-	},	
-	
+	},
+
 	FoWDiffuse = {
 		Index = 5;
 		MinFilter = "Linear";
@@ -56,7 +56,7 @@ Samplers = {
 		MipFilter = "Linear";
 		AddressU = "Wrap";
 		AddressV = "Wrap";
-	},	
+	},
 }
 
 AddSamplers()
@@ -171,7 +171,7 @@ CONSTANT_BUFFER( 1, 32 )
 	float4x4 WorldMatrix;
 	float4 PrimaryColor;
 	float4 SecondaryColor;
-	float4 TertiaryColor; 
+	float4 TertiaryColor;
 	float4 TextureAtlasCoords;
 	float4 AtlasHalfColor;
 	float4 AtlasCutoff;
@@ -200,7 +200,7 @@ PdxMeshStandard = {
 	ShaderModel = 3;
 }
 
--- Pietrko shader for Vortex
+-- EU4 shader for Vortex
 PdxMeshAlphaBlend = {
 	VertexShader = "VertexPdxMeshStandard";
 	PixelShader = "PixelPdxMeshRotateUV";
@@ -214,7 +214,7 @@ PdxMeshAnimateUVAdditiveBlending = {
 	VertexShader = "VertexPdxMeshStandard";
 	PixelShader = "PixelPdxMeshAnimateUV";
 	ShaderModel = 3;
-	
+
 	BlendState = "BlendStateAlphaAdditive";
 }
 
@@ -222,7 +222,7 @@ PdxMeshAnimateUVAlphaBlending = {
 	VertexShader = "VertexPdxMeshStandard";
 	PixelShader = "PixelPdxMeshAnimateUV";
 	ShaderModel = 3;
-	
+
 	BlendState = "BlendStateAlphaBlend";
 	DepthStencil = "DepthStencilNoZWrite"
 }
@@ -231,7 +231,7 @@ PdxMeshAnimateUVAdditiveBlendingSkinned = {
 	VertexShader = "VertexPdxMeshStandardSkinned";
 	PixelShader = "PixelPdxMeshAnimateUV";
 	ShaderModel = 3;
-	
+
 	BlendState = "BlendStateAlphaAdditive";
 	DepthStencil = "DepthStencilNoZWrite"
 }
@@ -240,7 +240,7 @@ PdxMeshAnimateUVAlphaBlendingSkinned = {
 	VertexShader = "VertexPdxMeshStandardSkinned";
 	PixelShader = "PixelPdxMeshAnimateUV";
 	ShaderModel = 3;
-	
+
 	BlendState = "BlendStateAlphaBlend";
 	DepthStencil = "DepthStencilNoZWrite"
 }
@@ -301,7 +301,7 @@ DeclareShader( "VertexPdxMeshStandard", [[
 VS_OUTPUT_PDXMESHSTANDARD main( const VS_INPUT_PDXMESHSTANDARD v )
 {
   	VS_OUTPUT_PDXMESHSTANDARD Out;
-			
+
 	float4 vPosition = float4( v.vPosition.xyz, 1.0f );
 	Out.vNormal = normalize( mul( v.vNormal, CastTo3x3( WorldMatrix ) ) );
 	Out.vTangent = normalize( mul( v.vTangent.xyz, CastTo3x3( WorldMatrix ) ) );
@@ -310,7 +310,7 @@ VS_OUTPUT_PDXMESHSTANDARD main( const VS_INPUT_PDXMESHSTANDARD v )
 	Out.vPosition = mul( vPosition, WorldMatrix );
 	Out.vPos = Out.vPosition;
 	Out.vPosition = mul( Out.vPosition, ViewProjectionMatrix );
-	
+
 	Out.vUV0 = v.vUV0;
 	Out.vUV1 = v.vUV1;
 	return Out;
@@ -323,7 +323,7 @@ DeclareShader( "VertexPdxMeshStandardSkinned", [[
 VS_OUTPUT_PDXMESHSTANDARD main( const VS_INPUT_PDXMESHSTANDARD v )
 {
   	VS_OUTPUT_PDXMESHSTANDARD Out;
-			
+
 	float4 vPosition = float4( v.vPosition.xyz, 1.0f );
 	float4 vSkinnedPosition = float4( 0, 0, 0, 0 );
 	float3 vSkinnedNormal = float3( 0, 0, 0 );
@@ -369,10 +369,10 @@ DeclareShader( "VertexPdxMeshStandardBillboard", [[
 VS_OUTPUT_PDXMESHSTANDARD main( const VS_INPUT_PDXMESHSTANDARD v )
 {
   	VS_OUTPUT_PDXMESHSTANDARD Out;
-			
+
 	Out.vPosition = float4(v.vPosition.xyz * 0.55f * clamp( 0.35f + ( vCamPos.y / 500.0f ), 0.45f, 2.2f ), 1.0);
 	//Out.vPosition = float4( v.vPosition.xyz, 1.0f );
-	
+
 #	ifdef PDX_OPENGL
 
 	float4x4 Rot = float4x4( ViewMatrix[0][0], ViewMatrix[1][0], ViewMatrix[2][0], 0.0f,
@@ -384,18 +384,18 @@ VS_OUTPUT_PDXMESHSTANDARD main( const VS_INPUT_PDXMESHSTANDARD v )
 	float4x4 Rot = { ViewMatrix._m00_m10_m20, 0.0f,
                      ViewMatrix._m01_m11_m21, 0.0f,
 					 ViewMatrix._m02_m12_m22, 0.0f,
-					 0.0f, 0.0f, 0.0f, 1.0f }; 
+					 0.0f, 0.0f, 0.0f, 1.0f };
 #	endif
-	
+
 	Out.vPosition = mul( Out.vPosition, Rot );
-	Out.vPosition = mul( Out.vPosition, WorldMatrix );	
-	
+	Out.vPosition = mul( Out.vPosition, WorldMatrix );
+
 	Out.vPos = Out.vPosition;
-	Out.vPosition = mul( Out.vPosition, ViewProjectionMatrix );	
-	
+	Out.vPosition = mul( Out.vPosition, ViewProjectionMatrix );
+
 	Out.vUV0 = v.vUV0;
 	Out.vUV1 = v.vUV1;
-		
+
 #	ifdef PDX_OPENGL
 	Out.vNormal = normalize( mul( v.vNormal.xyz, float3x3(WorldMatrix) ) );
 	Out.vTangent = normalize( mul( v.vTangent.xyz, float3x3(WorldMatrix) ) ) * v.vTangent.w;
@@ -406,7 +406,7 @@ VS_OUTPUT_PDXMESHSTANDARD main( const VS_INPUT_PDXMESHSTANDARD v )
 
 	Out.vBitangent = normalize( cross( Out.vNormal, Out.vTangent ) * v.vTangent.w );
 
-	
+
 	return Out;
 }
 
@@ -421,7 +421,7 @@ VS_OUTPUT_PDXMESHSTANDARD main( const VS_INPUT_PDXMESHSTANDARD v )
 
 
 DeclareShader( "PixelPdxMeshStandard", [[
-	
+
 float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 {
 	float3 vPos = In.vPos.xyz / In.vPos.w;
@@ -430,7 +430,7 @@ float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 
 	float4 vColor = tex2D( DiffuseMap, In.vUV0 );
 	float4 vSpecColor = tex2D( SpecularMap, In.vUV0 );
-	
+
 	/*float3 vNormalSample = UnpackNormal( NormalMap, In.vUV0 );
 	float3x3 TBN = Create3x3( normalize( In.vTangent ), normalize( In.vBitangent ), normalize( In.vNormal ) );
 	float3 vNormal = mul( vNormalSample, TBN );*/
@@ -440,26 +440,26 @@ float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 	float vFoW = GetFoW( vPos, FoWTexture, FoWDiffuse );
 	vColor.rgb = ApplyDistanceFog( vColor.rgb, vPos ) * vFoW;
 	vColor.rgb = ComposeSpecular( vColor.rgb, CalculateSpecular( vPos, vNormal, (vSpecColor.a * 2.0 ) ) * vFoW );
-	
+
 	return vColor;
 }
-	
+
 ]] )
 
 --[[
 ------------------------------------------------------------
--- Pietrko Ulthuan Vortex shader
+-- Ulthuan Vortex shader
 ------------------------------------------------------------
 --]]
 
 DeclareShader( "PixelPdxMeshRotateUV", [[
-	
+
 float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 {
 	float3 vPos = In.vPos.xyz / In.vPos.w;
 
 	float4 vFoWColor = GetFoWColor( vPos, FoWTexture);
-	
+
 	// Addition by me
 	const float ANIMATION_SPEED = 0.5;
 	float t = vFoWOpacity_Time.y * ANIMATION_SPEED;
@@ -470,7 +470,7 @@ float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 
 	float4 vColor = tex2D( DiffuseMap, float2(U, V));
 	float4 vSpecColor = tex2D( SpecularMap, In.vUV0 );
-	
+
 	/*float3 vNormalSample = UnpackNormal( NormalMap, In.vUV0 );
 	float3x3 TBN = Create3x3( normalize( In.vTangent ), normalize( In.vBitangent ), normalize( In.vNormal ) );
 	float3 vNormal = mul( vNormalSample, TBN );*/
@@ -480,41 +480,41 @@ float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 	float vFoW = GetFoW( vPos, FoWTexture, FoWDiffuse );
 	vColor.rgb = ApplyDistanceFog( vColor.rgb, vPos ) * vFoW;
 	vColor.rgb = ComposeSpecular( vColor.rgb, CalculateSpecular( vPos, vNormal, (vSpecColor.a * 2.0 ) ) * vFoW );
-	
+
 	return vColor;
 }
-	
+
 ]] )
 
 
 
 DeclareShader( "PixelPdxMeshColor", [[
-	
+
 float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 {
 	float3 vPos = In.vPos.xyz / In.vPos.w;
-	
+
 	float4 vFoWColor = GetFoWColor( vPos, FoWTexture);
-	
+
 	float4 vColor = tex2D( DiffuseMap, In.vUV0 );
 	float4 vSpecColor = tex2D( SpecularMap, In.vUV0 );
 	float3 vNormal = normalize( In.vNormal );
 
 	float vIsColonial = saturate( ( AtlasCutoff.x - 0.1f ) * 1000.0f );
 	float3 vTertiaryColor = TertiaryColor.rgb * ( 1.0f - vIsColonial ) + AtlasHalfColor.rgb * vIsColonial;
-		
-	vColor.rgb = lerp( vColor.rgb, 
-	        vColor.rgb * ( vSpecColor.r * PrimaryColor.rgb ), 
+
+	vColor.rgb = lerp( vColor.rgb,
+	        vColor.rgb * ( vSpecColor.r * PrimaryColor.rgb ),
 		    vSpecColor.r );
 
-	vColor.rgb = lerp( vColor.rgb, 
-	        vColor.rgb * ( vSpecColor.g * SecondaryColor.rgb ), 
+	vColor.rgb = lerp( vColor.rgb,
+	        vColor.rgb * ( vSpecColor.g * SecondaryColor.rgb ),
 		    vSpecColor.g );
 
-	vColor.rgb = lerp( vColor.rgb, 
-	        vColor.rgb * ( vSpecColor.b * vTertiaryColor ), 
-		    vSpecColor.b );	
-	
+	vColor.rgb = lerp( vColor.rgb,
+	        vColor.rgb * ( vSpecColor.b * vTertiaryColor ),
+		    vSpecColor.b );
+
 	vColor.rgb = CalculateLighting( vColor.rgb, vNormal );
 	float vFoW = GetFoW( vPos, FoWTexture, FoWDiffuse );
 	vColor.rgb = ApplyDistanceFog( vColor.rgb, vPos ) * vFoW;
@@ -522,19 +522,19 @@ float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 
 	return float4( vColor.rgb, 1.0f );
 }
-	
+
 ]] )
 
 DeclareShader( "PixelPdxMeshAnimateUV", [[
-	
+
 float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 {
 	float3 vPos = In.vPos.xyz / In.vPos.w;
 
 	float4 vFoWColor = GetFoWColor( vPos, FoWTexture);
-	
+
 	const float ANIMATION_SPEED = 1.0;
-	
+
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////
 	////PrimaryColor.x below represents the UV animation speed. We can't have a constant buffer alias/////////
@@ -543,13 +543,13 @@ float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 	////our parser // Mohammed                                                                                   /////////
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////
-	
+
 	float t = frac( vFoWOpacity_Time.y * PrimaryColor.x * ANIMATION_SPEED );
 
 	float4 vColor = tex2D( DiffuseMap, float2( In.vUV0.x, In.vUV0.y + t ) );
 	vColor.a = tex2D( DiffuseMap, In.vUV0 ).a;
 	float4 vSpecColor = tex2D( SpecularMap, In.vUV0 );
-	
+
 	/*float3 vNormalSample = UnpackNormal( NormalMap, In.vUV0 );
 	float3x3 TBN = Create3x3( normalize( In.vTangent ), normalize( In.vBitangent ), normalize( In.vNormal ) );
 	float3 vNormal = mul( vNormalSample, TBN );*/
@@ -559,27 +559,27 @@ float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 	float vFoW = GetFoW( vPos, FoWTexture, FoWDiffuse );
 	vColor.rgb = ApplyDistanceFog( vColor.rgb, vPos ) * vFoW;
 	vColor.rgb = ComposeSpecular( vColor.rgb, CalculateSpecular( vPos, vNormal, (vSpecColor.a * 2.0 ) ) * vFoW );
-	
+
 	return vColor;
 }
 
 ]] )
 
 DeclareShader( "PixelPdxMeshTextureAtlas", [[
-	
+
 float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 {
 	float3 vPos = In.vPos.xyz / In.vPos.w;
-	
+
 	float4 vFoWColor = GetFoWColor( vPos, FoWTexture);
-	
+
 	float4 vColor = tex2D( DiffuseMap, In.vUV0 );
 	float4 vSpecColor = tex2D( SpecularMap, In.vUV0 );
 	float3 vTabardColor = tex2D( FlagMap, GetTexCoordsInAtlas( In.vUV1 ) ).rgb;
 	float3 vNormal = normalize( In.vNormal );
 
 	float3 vFinal = vColor.rgb * ( 1 - vColor.a ) + vColor.rgb * vColor.a * vTabardColor;
-	
+
 	vFinal.rgb = CalculateLighting( vFinal.rgb, vNormal );
 	float vFoW = GetFoW( vPos, FoWTexture, FoWDiffuse );
 	vFinal.rgb = ApplyDistanceFog( vFinal.rgb, vPos ) * vFoW;
@@ -592,7 +592,7 @@ float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 
 
 DeclareShader( "PixelPdxMeshStandardTabard", [[
-	
+
 float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 {
 	float4 vColor = tex2D( DiffuseMap, In.vUV0 );
@@ -606,58 +606,58 @@ float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 	float3x3 TNB = float3x3( vTangent, vNormal, vBitangent );
 	vNormal = mul( vNormalSample, TNB );
 	vNormal = vNormalSample;
-	
+
 	float3 vFinal = vColor.rgb * ( 1 - vColor.a ) + vColor.rgb * vColor.a * vTabardColor;
 
 	vFinal = CalculateLighting( vFinal, vNormal );
-	
+
 	float3 vPos = In.vPos.xyz / In.vPos.w;
 	float vFoW = GetFoW( vPos, FoWTexture, FoWDiffuse );
 	vFinal = ApplyDistanceFog( vFinal, vPos ) * vFoW;
-	
+
 	vFinal = ComposeSpecular( vFinal, CalculateSpecular( vPos, vNormal, vSpecColor.r ) ); // * vFoW );
 
 	return float4( vFinal, 1 );
 }
-	
+
 ]] )
 
 
 DeclareShader( "PixelPdxMeshStandardShield", [[
-	
+
 float4 main( VS_OUTPUT_PDXMESHSTANDARD In ) : COLOR
 {
-	
+
 	float4 vColor = tex2D( DiffuseMap, In.vUV0 );
 	float4 vSpecColor = tex2D( SpecularMap, In.vUV0 );
-	
+
 	float3 vNormalSample = UnpackNormal( NormalMap, In.vUV0 );
 	float3x3 TBN = Create3x3( normalize( In.vTangent ), normalize( In.vBitangent ), normalize( In.vNormal ) );
 	float3 vNormal = mul( vNormalSample, TBN );
-	
-	vColor.rgb = lerp( vColor.rgb, 
-	        vColor.rgb * ( vSpecColor.r * PrimaryColor.rgb ), 
+
+	vColor.rgb = lerp( vColor.rgb,
+	        vColor.rgb * ( vSpecColor.r * PrimaryColor.rgb ),
 		    vSpecColor.r );
 
-	vColor.rgb = lerp( vColor.rgb, 
-	        vColor.rgb * ( vSpecColor.g * SecondaryColor.rgb ), 
+	vColor.rgb = lerp( vColor.rgb,
+	        vColor.rgb * ( vSpecColor.g * SecondaryColor.rgb ),
 		    vSpecColor.g );
 
-	vColor.rgb = lerp( vColor.rgb, 
-	        vColor.rgb * ( vSpecColor.b * TertiaryColor.rgb ), 
+	vColor.rgb = lerp( vColor.rgb,
+	        vColor.rgb * ( vSpecColor.b * TertiaryColor.rgb ),
 		    vSpecColor.b );
 
 	vColor.rgb = CalculateLighting( vColor.rgb, vNormal );
-	
+
 	float3 vPos = In.vPos.xyz / In.vPos.w;
 	float vFoW = GetFoW( vPos, FoWTexture, FoWDiffuse );
 	vColor.rgb = ApplyDistanceFog( vColor.rgb, vPos ) * vFoW;
-	
+
 	vColor.rgb = ComposeSpecular( vColor.rgb, CalculateSpecular( vPos, vNormal, (vSpecColor.a * 2.0 ) ) * vFoW );
-	
+
 	return vColor;
 }
-	
+
 ]] )
 
 
@@ -683,7 +683,7 @@ VS_OUTPUT_DEBUGNORMAL main( const VS_INPUT_DEBUGNORMAL v )
 
 	Out.vPosition = mul( WorldMatrix, float4( v.vPosition.xyz, 1.0 ) );
 	Out.vPosition.xyz += mul( CastTo3x3(WorldMatrix), v.vNormal ) * v.vOffset * 0.3f;
-	Out.vPosition = mul( ViewProjectionMatrix, Out.vPosition );	
+	Out.vPosition = mul( ViewProjectionMatrix, Out.vPosition );
 
 	Out.vUV0 = v.vUV0;
 
@@ -698,7 +698,7 @@ DeclareShader( "VertexDebugNormalSkinned", [[
 VS_OUTPUT_DEBUGNORMAL main( const VS_INPUT_DEBUGNORMAL v )
 {
   	VS_OUTPUT_DEBUGNORMAL Out;
-			
+
 	float4 vPosition = float4( v.vPosition.xyz, 1.0 );
 	float4 vSkinnedPosition = float4( 0, 0, 0, 0 );
 	float3 vSkinnedNormal = float3( 0, 0, 0 );
@@ -709,7 +709,7 @@ VS_OUTPUT_DEBUGNORMAL main( const VS_INPUT_DEBUGNORMAL v )
     {
 		int nIndex = int( v.vBoneIndex[i] );
 		float4x4 mat = matBones[nIndex];
-		vSkinnedPosition += mul( mat, vPosition ) * vWeight[i];	
+		vSkinnedPosition += mul( mat, vPosition ) * vWeight[i];
 		vSkinnedNormal += mul( CastTo3x3(mat), v.vNormal ) * vWeight[i];
 	}
 
@@ -717,7 +717,7 @@ VS_OUTPUT_DEBUGNORMAL main( const VS_INPUT_DEBUGNORMAL v )
 
 	vSkinnedNormal = normalize( mul( CastTo3x3(WorldMatrix), vSkinnedNormal ) );
 	Out.vPosition.xyz += vSkinnedNormal * v.vOffset * 0.3f;
-	Out.vPosition = mul( ViewProjectionMatrix, Out.vPosition );	
+	Out.vPosition = mul( ViewProjectionMatrix, Out.vPosition );
 
 	Out.vUV0 = v.vUV0;
 
@@ -728,11 +728,11 @@ VS_OUTPUT_DEBUGNORMAL main( const VS_INPUT_DEBUGNORMAL v )
 
 
 DeclareShader( "PixelDebugNormal", [[
-	
+
 float4 main( VS_OUTPUT_DEBUGNORMAL In ) : COLOR
 {
 	float4 vColor = float4( 0.0f, 1.0f, 0.0f, 1.0f );
 	return vColor;
 }
-	
+
 ]] )

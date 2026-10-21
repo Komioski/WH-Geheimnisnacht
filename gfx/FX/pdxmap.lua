@@ -214,6 +214,51 @@ float3 calculate_secondary( float2 uv, float3 vColor, float2 vPos )
 	return vColor * ( 1.0f - vSecondary.a ) + ( vSecondColor / nDivisor ) * vSecondary.a;
 }
 
+// --- CK3-style political map -------------------------------------------------
+// Instead of painting every province in a flat colour, map modes now draw a
+// strong colour band along realm borders that fades towards the middle, where
+// the terrain shows through with only a light tint.
+// Tuning values (sizes are in map pixels):
+static const float BORDER_GRADIENT_WIDTH = 8.0f;	// how far the colour band reaches inland
+static const float EDGE_COLOR_STRENGTH   = 0.9f;	// 1 = vanilla flat colour right at the border
+static const float CENTER_TINT_STRENGTH  = 0.45f;	// tint over the terrain in the middle (0 = plain terrain)
+
+// 1 if the map colour at uv differs from the centre colour, else 0
+float ColorDiffers( float2 uv, float4 vCenter )
+{
+	float4 vOther = tex2D( ProvinceColorMap, uv );
+	float4 vDiff = abs( vOther - vCenter );
+	return step( 0.02f, max( max( vDiff.r, vDiff.g ), max( vDiff.b, vDiff.a ) ) );
+}
+
+// Share of the 8 taps on a ring of the given radius that land in another colour
+float RingHits( float2 uv, float4 vCenter, float vRadius )
+{
+	float2 d = vRadius / vMapSize.xy;
+	float2 e = d * 0.7071f;
+	float vHits =
+		  ColorDiffers( uv + float2(  d.x,  0.0f ), vCenter )
+		+ ColorDiffers( uv + float2( -d.x,  0.0f ), vCenter )
+		+ ColorDiffers( uv + float2(  0.0f,  d.y ), vCenter )
+		+ ColorDiffers( uv + float2(  0.0f, -d.y ), vCenter )
+		+ ColorDiffers( uv + float2(  e.x,  e.y ), vCenter )
+		+ ColorDiffers( uv + float2( -e.x,  e.y ), vCenter )
+		+ ColorDiffers( uv + float2(  e.x, -e.y ), vCenter )
+		+ ColorDiffers( uv + float2( -e.x, -e.y ), vCenter );
+	return saturate( vHits * 0.5f ); // 2 of 8 taps already counts as fully "at the border"
+}
+
+// 1 right at a realm border, falling to 0 at BORDER_GRADIENT_WIDTH pixels inland
+float GetBorderProximity( float2 uv, float4 vCenter )
+{
+	float vNear = RingHits( uv, vCenter, BORDER_GRADIENT_WIDTH * 0.25f );
+	float vMid  = RingHits( uv, vCenter, BORDER_GRADIENT_WIDTH * 0.5f );
+	float vFar  = RingHits( uv, vCenter, BORDER_GRADIENT_WIDTH );
+	float vProximity = max( vNear, max( vMid * 0.6f, vFar * 0.25f ) );
+	return smoothstep( 0.0f, 1.0f, vProximity );
+}
+// -----------------------------------------------------------------------------
+
 ]] )
 
 AddSamplers()
@@ -471,9 +516,17 @@ float4 main( VS_OUTPUT_TERRAIN Input ) : COLOR
 	}
 	else
 	{
+		// Terrain as it looks in the plain terrain map mode, lightly tinted with the realm colour
+		float3 vTerrain = GetOverlay( sample.rgb, TerrainColor, 0.75f );
+		float3 vCenterColor = GetOverlay( vTerrain, terrain_color.rgb, CENTER_TINT_STRENGTH );
+
+		// Vanilla flat map-mode colour, used at the border
 		sample.rgb = GetOverlay( sample.rgb, TerrainColor, 0.5f );
 		float2 vBlend = float2( 0.35f, 0.4f );
-		vOut = ( dot(sample.rgb, GREYIFY) * vBlend.x + terrain_color.rgb * vBlend.y );
+		float3 vFlatColor = ( dot(sample.rgb, GREYIFY) * vBlend.x + terrain_color.rgb * vBlend.y );
+
+		float vProximity = GetBorderProximity( Input.uv, terrain_color );
+		vOut = lerp( vCenterColor, vFlatColor, vProximity * EDGE_COLOR_STRENGTH );
 	}
 
 	vOut = calculate_secondary( Input.uv, vOut, Input.prepos.xz );

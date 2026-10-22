@@ -526,8 +526,16 @@ float4 main( VS_OUTPUT_TERRAIN Input ) : COLOR
 	}
 	else
 	{
-		// Terrain as it looks in the plain terrain map mode, used away from borders
+		// Terrain as it looks in the plain terrain map mode, used away from borders,
+		// including seasonal snow. The detailed normal is only used for the snow,
+		// so lighting of the colour band stays as in vanilla.
 		float3 vTerrain = GetOverlay( sample.rgb, TerrainColor, 0.75f );
+		float3 vDetailNormal = normalize( terrain_normal );
+		float3 vSnowNormal = normal.yxz * vDetailNormal.x
+			+ normal.xyz * vDetailNormal.y
+			+ normal.xzy * vDetailNormal.z;
+		float4 vFoWColor = GetFoWColor( Input.prepos, FoWTexture );
+		vTerrain = ApplySnow( vTerrain, Input.prepos, vSnowNormal, vFoWColor, FoWDiffuse );
 
 		// Vanilla flat map-mode colour, used at the border
 		sample.rgb = GetOverlay( sample.rgb, TerrainColor, 0.5f );

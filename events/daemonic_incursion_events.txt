@@ -11,6 +11,11 @@
 # daemonic_incursion.1 runs from on_offmap_yearly_pulse (ROOT = the realm's
 # governor, FROM = the offmap power). The war uses the daemonic_incursion CB,
 # whose end blocks banish the host and move the doom counter.
+#
+# The odds follow the warp realms' statuses ("warp tides"), which
+# daemonic_incursion.10 moves each year: an ascendant realm sends more hosts,
+# a realm under attack in the warp sends fewer. daemonic_incursion.30 does the
+# same for the Brayherd, raising warherds out of the deep forests.
 
 namespace = daemonic_incursion
 
@@ -48,7 +53,7 @@ character_event = {
 
 	immediate = {
 		random_list = {
-			10 = { # Incursion
+			6 = { # Incursion
 				modifier = {
 					factor = 2
 					is_doom_high_trigger = yes
@@ -66,12 +71,68 @@ character_event = {
 					FROM = { has_policy = warp_endtimes }
 				}
 				modifier = {
-					factor = 0.25
+					factor = 0.5
 					FROM = { has_policy = warp_focused_warp }
 				}
-				modifier = {
-					factor = 1.5
+				# Warp tides (see daemonic_incursion.10)
+				modifier = { # This realm is ascendant
+					factor = 3
 					FROM = { has_status = warp_ascendant }
+				}
+				modifier = { # The Ruinous Powers stand united
+					factor = 2
+					FROM = { has_status = warp_united }
+				}
+				modifier = { # Busy defending its own realm in the warp
+					factor = 0.25
+					FROM = {
+						OR = {
+						has_status = warp_khorne_invasion
+						has_status = warp_nurgle_invasion
+						has_status = warp_slaanesh_invasion
+						has_status = warp_tzeentch_invasion
+						}
+					}
+				}
+				modifier = { # Busy invading another realm in the warp
+					factor = 0.5
+					FROM = { is_offmap_tag = khorne_warp }
+					OR = {
+						nurgle_warp = { has_status = warp_khorne_invasion }
+						slaanesh_warp = { has_status = warp_khorne_invasion }
+						tzeentch_warp = { has_status = warp_khorne_invasion }
+						undivided_warp = { has_status = warp_khorne_invasion }
+					}
+				}
+				modifier = { # Busy invading another realm in the warp
+					factor = 0.5
+					FROM = { is_offmap_tag = nurgle_warp }
+					OR = {
+						khorne_warp = { has_status = warp_nurgle_invasion }
+						slaanesh_warp = { has_status = warp_nurgle_invasion }
+						tzeentch_warp = { has_status = warp_nurgle_invasion }
+						undivided_warp = { has_status = warp_nurgle_invasion }
+					}
+				}
+				modifier = { # Busy invading another realm in the warp
+					factor = 0.5
+					FROM = { is_offmap_tag = slaanesh_warp }
+					OR = {
+						khorne_warp = { has_status = warp_slaanesh_invasion }
+						nurgle_warp = { has_status = warp_slaanesh_invasion }
+						tzeentch_warp = { has_status = warp_slaanesh_invasion }
+						undivided_warp = { has_status = warp_slaanesh_invasion }
+					}
+				}
+				modifier = { # Busy invading another realm in the warp
+					factor = 0.5
+					FROM = { is_offmap_tag = tzeentch_warp }
+					OR = {
+						khorne_warp = { has_status = warp_tzeentch_invasion }
+						nurgle_warp = { has_status = warp_tzeentch_invasion }
+						slaanesh_warp = { has_status = warp_tzeentch_invasion }
+						undivided_warp = { has_status = warp_tzeentch_invasion }
+					}
 				}
 				character_event = { id = daemonic_incursion.2 }
 			}
@@ -89,6 +150,13 @@ character_event = {
 	is_triggered_only = yes
 
 	immediate = {
+		# Araby lies furthest from the polar gates and is the safest of all.
+		# Daemons also care less for the lands of the undead and greenskins.
+		random_list = {
+			75 = { set_character_flag = incursion_wants_usual_prey }
+			20 = { set_character_flag = incursion_spares_araby }
+			5 = { }
+		}
 		random_independent_ruler = {
 			limit = {
 				is_playable = yes
@@ -104,8 +172,29 @@ character_event = {
 				}
 				any_realm_province = { is_land = yes }
 			}
+			preferred_limit = {
+				OR = {
+					AND = {
+						ROOT = { has_character_flag = incursion_wants_usual_prey }
+						daemonic_incursion_araby_trigger = no
+						daemonic_incursion_unloved_prey_trigger = no
+					}
+					AND = {
+						ROOT = { has_character_flag = incursion_spares_araby }
+						daemonic_incursion_araby_trigger = no
+					}
+					ROOT = {
+						NOR = {
+							has_character_flag = incursion_wants_usual_prey
+							has_character_flag = incursion_spares_araby
+						}
+					}
+				}
+			}
 			save_event_target_as = incursion_target
 		}
+		clr_character_flag = incursion_wants_usual_prey
+		clr_character_flag = incursion_spares_araby
 		if = {
 			limit = { NOT = { event_target:incursion_target = { always = yes } } }
 			break = yes
@@ -251,5 +340,1184 @@ narrative_event = {
 
 	option = {
 		name = EVTOPTA_daemonic_incursion_4
+	}
+}
+
+###########################################
+# Warp tides
+###########################################
+
+# The Chaos realms' statuses shift (hidden)
+# Fired from on_offmap_yearly_pulse. ROOT = governor, FROM = offmap.
+# Stable realms can become ascendant (one at a time) or be invaded by a rival
+# power; ascendant and invaded realms settle back to stable after a while.
+# At very high doom the Realm of Undivided can unite all four powers.
+character_event = {
+	id = daemonic_incursion.10
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			OR = {
+				is_offmap_tag = khorne_warp
+				is_offmap_tag = nurgle_warp
+				is_offmap_tag = slaanesh_warp
+				is_offmap_tag = tzeentch_warp
+				is_offmap_tag = undivided_warp
+				is_offmap_tag = brayherd_warp
+			}
+		}
+	}
+
+	immediate = {
+		FROM = {
+			if = {
+				limit = {
+					is_offmap_tag = khorne_warp
+					has_status = warp_stable
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 3 }
+					}
+				}
+				random_list = {
+					5 = { # Rise to ascendancy
+						modifier = {
+							factor = 0
+							OR = {
+								warp_any_realm_ascendant_trigger = yes
+								warp_powers_united_trigger = yes
+							}
+						}
+						modifier = {
+							factor = 2
+							is_doom_high_trigger = yes
+						}
+						modifier = {
+							factor = 3
+							is_doom_very_high_trigger = yes
+						}
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_ascendant
+					}
+					6 = { # A rival power invades
+						modifier = {
+							factor = 0
+							warp_powers_united_trigger = yes
+						}
+						random_list = {
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									nurgle_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_nurgle_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									slaanesh_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_slaanesh_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									tzeentch_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_tzeentch_invasion
+							}
+						}
+					}
+					88 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = khorne_warp
+					has_status = warp_ascendant
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 4 }
+					}
+				}
+				random_list = {
+					20 = { # The tide ebbs
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_stable
+					}
+					8 = { # The other powers band together against it
+						random_list = {
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									nurgle_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_nurgle_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									slaanesh_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_slaanesh_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									tzeentch_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_tzeentch_invasion
+							}
+						}
+					}
+					72 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = khorne_warp
+					OR = {
+						has_status = warp_nurgle_invasion
+						has_status = warp_slaanesh_invasion
+						has_status = warp_tzeentch_invasion
+					}
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 2 }
+					}
+				}
+				random_list = {
+					35 = { # The invaders are thrown back
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_stable
+					}
+					65 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = nurgle_warp
+					has_status = warp_stable
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 3 }
+					}
+				}
+				random_list = {
+					5 = { # Rise to ascendancy
+						modifier = {
+							factor = 0
+							OR = {
+								warp_any_realm_ascendant_trigger = yes
+								warp_powers_united_trigger = yes
+							}
+						}
+						modifier = {
+							factor = 2
+							is_doom_high_trigger = yes
+						}
+						modifier = {
+							factor = 3
+							is_doom_very_high_trigger = yes
+						}
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_ascendant
+					}
+					6 = { # A rival power invades
+						modifier = {
+							factor = 0
+							warp_powers_united_trigger = yes
+						}
+						random_list = {
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									khorne_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_khorne_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									slaanesh_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_slaanesh_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									tzeentch_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_tzeentch_invasion
+							}
+						}
+					}
+					88 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = nurgle_warp
+					has_status = warp_ascendant
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 4 }
+					}
+				}
+				random_list = {
+					20 = { # The tide ebbs
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_stable
+					}
+					8 = { # The other powers band together against it
+						random_list = {
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									khorne_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_khorne_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									slaanesh_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_slaanesh_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									tzeentch_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_tzeentch_invasion
+							}
+						}
+					}
+					72 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = nurgle_warp
+					OR = {
+						has_status = warp_khorne_invasion
+						has_status = warp_slaanesh_invasion
+						has_status = warp_tzeentch_invasion
+					}
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 2 }
+					}
+				}
+				random_list = {
+					35 = { # The invaders are thrown back
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_stable
+					}
+					65 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = slaanesh_warp
+					has_status = warp_stable
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 3 }
+					}
+				}
+				random_list = {
+					5 = { # Rise to ascendancy
+						modifier = {
+							factor = 0
+							OR = {
+								warp_any_realm_ascendant_trigger = yes
+								warp_powers_united_trigger = yes
+							}
+						}
+						modifier = {
+							factor = 2
+							is_doom_high_trigger = yes
+						}
+						modifier = {
+							factor = 3
+							is_doom_very_high_trigger = yes
+						}
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_ascendant
+					}
+					6 = { # A rival power invades
+						modifier = {
+							factor = 0
+							warp_powers_united_trigger = yes
+						}
+						random_list = {
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									khorne_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_khorne_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									nurgle_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_nurgle_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									tzeentch_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_tzeentch_invasion
+							}
+						}
+					}
+					88 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = slaanesh_warp
+					has_status = warp_ascendant
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 4 }
+					}
+				}
+				random_list = {
+					20 = { # The tide ebbs
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_stable
+					}
+					8 = { # The other powers band together against it
+						random_list = {
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									khorne_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_khorne_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									nurgle_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_nurgle_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									tzeentch_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_tzeentch_invasion
+							}
+						}
+					}
+					72 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = slaanesh_warp
+					OR = {
+						has_status = warp_khorne_invasion
+						has_status = warp_nurgle_invasion
+						has_status = warp_tzeentch_invasion
+					}
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 2 }
+					}
+				}
+				random_list = {
+					35 = { # The invaders are thrown back
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_stable
+					}
+					65 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = tzeentch_warp
+					has_status = warp_stable
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 3 }
+					}
+				}
+				random_list = {
+					5 = { # Rise to ascendancy
+						modifier = {
+							factor = 0
+							OR = {
+								warp_any_realm_ascendant_trigger = yes
+								warp_powers_united_trigger = yes
+							}
+						}
+						modifier = {
+							factor = 2
+							is_doom_high_trigger = yes
+						}
+						modifier = {
+							factor = 3
+							is_doom_very_high_trigger = yes
+						}
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_ascendant
+					}
+					6 = { # A rival power invades
+						modifier = {
+							factor = 0
+							warp_powers_united_trigger = yes
+						}
+						random_list = {
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									khorne_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_khorne_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									nurgle_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_nurgle_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									slaanesh_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_slaanesh_invasion
+							}
+						}
+					}
+					88 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = tzeentch_warp
+					has_status = warp_ascendant
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 4 }
+					}
+				}
+				random_list = {
+					20 = { # The tide ebbs
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_stable
+					}
+					8 = { # The other powers band together against it
+						random_list = {
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									khorne_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_khorne_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									nurgle_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_nurgle_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									slaanesh_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_slaanesh_invasion
+							}
+						}
+					}
+					72 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = tzeentch_warp
+					OR = {
+						has_status = warp_khorne_invasion
+						has_status = warp_nurgle_invasion
+						has_status = warp_slaanesh_invasion
+					}
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 2 }
+					}
+				}
+				random_list = {
+					35 = { # The invaders are thrown back
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_stable
+					}
+					65 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = undivided_warp
+					has_status = warp_stable
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 3 }
+					}
+				}
+				random_list = {
+					5 = { # Rise to ascendancy
+						modifier = {
+							factor = 0
+							OR = {
+								warp_any_realm_ascendant_trigger = yes
+								warp_powers_united_trigger = yes
+							}
+						}
+						modifier = {
+							factor = 2
+							is_doom_high_trigger = yes
+						}
+						modifier = {
+							factor = 3
+							is_doom_very_high_trigger = yes
+						}
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_ascendant
+					}
+					6 = { # A rival power invades
+						modifier = {
+							factor = 0
+							warp_powers_united_trigger = yes
+						}
+						random_list = {
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									khorne_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_khorne_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									nurgle_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_nurgle_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									slaanesh_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_slaanesh_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									tzeentch_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_tzeentch_invasion
+							}
+						}
+					}
+					1 = { # The Ruinous Powers unite
+						modifier = {
+							factor = 0
+							NOT = { is_doom_very_high_trigger = yes }
+						}
+						modifier = {
+							factor = 0
+							warp_any_realm_ascendant_trigger = yes
+						}
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_united
+						khorne_warp = {
+							set_offmap_flag = no_status_news
+							clr_offmap_flag = warp_tide_turned
+							set_offmap_flag = warp_tide_turned
+							set_status = warp_united
+						}
+						nurgle_warp = {
+							set_offmap_flag = no_status_news
+							clr_offmap_flag = warp_tide_turned
+							set_offmap_flag = warp_tide_turned
+							set_status = warp_united
+						}
+						slaanesh_warp = {
+							set_offmap_flag = no_status_news
+							clr_offmap_flag = warp_tide_turned
+							set_offmap_flag = warp_tide_turned
+							set_status = warp_united
+						}
+						tzeentch_warp = {
+							set_offmap_flag = no_status_news
+							clr_offmap_flag = warp_tide_turned
+							set_offmap_flag = warp_tide_turned
+							set_status = warp_united
+						}
+					}
+					88 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = undivided_warp
+					has_status = warp_ascendant
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 4 }
+					}
+				}
+				random_list = {
+					20 = { # The tide ebbs
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_stable
+					}
+					8 = { # The other powers band together against it
+						random_list = {
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									khorne_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_khorne_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									nurgle_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_nurgle_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									slaanesh_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_slaanesh_invasion
+							}
+							10 = {
+								modifier = { # An ascendant power goes looking for a fight
+									factor = 3
+									tzeentch_warp = { has_status = warp_ascendant }
+								}
+								clr_offmap_flag = warp_tide_turned
+								set_offmap_flag = warp_tide_turned
+								set_status = warp_tzeentch_invasion
+							}
+						}
+					}
+					72 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = undivided_warp
+					OR = {
+						has_status = warp_khorne_invasion
+						has_status = warp_nurgle_invasion
+						has_status = warp_slaanesh_invasion
+						has_status = warp_tzeentch_invasion
+					}
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 2 }
+					}
+				}
+				random_list = {
+					35 = { # The invaders are thrown back
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_stable
+					}
+					65 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					is_offmap_tag = undivided_warp
+					has_status = warp_united
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 5 }
+					}
+				}
+				random_list = {
+					20 = { # The alliance of the Ruinous Powers breaks apart
+						modifier = {
+							factor = 0.5
+							is_doom_very_high_trigger = yes
+						}
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_stable
+						khorne_warp = {
+							set_offmap_flag = no_status_news
+							clr_offmap_flag = warp_tide_turned
+							set_offmap_flag = warp_tide_turned
+							set_status = warp_stable
+						}
+						nurgle_warp = {
+							set_offmap_flag = no_status_news
+							clr_offmap_flag = warp_tide_turned
+							set_offmap_flag = warp_tide_turned
+							set_status = warp_stable
+						}
+						slaanesh_warp = {
+							set_offmap_flag = no_status_news
+							clr_offmap_flag = warp_tide_turned
+							set_offmap_flag = warp_tide_turned
+							set_status = warp_stable
+						}
+						tzeentch_warp = {
+							set_offmap_flag = no_status_news
+							clr_offmap_flag = warp_tide_turned
+							set_offmap_flag = warp_tide_turned
+							set_status = warp_stable
+						}
+					}
+					80 = { }
+				}
+			}
+			else_if = { # The beastmen herds gather under one banner
+				limit = {
+					is_offmap_tag = brayherd_warp
+					has_status = warp_stable
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 5 }
+					}
+				}
+				random_list = {
+					3 = {
+						modifier = {
+							factor = 1.5
+							is_doom_high_trigger = yes
+						}
+						modifier = {
+							factor = 2
+							is_doom_very_high_trigger = yes
+						}
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_united
+					}
+					97 = { }
+				}
+			}
+			else_if = { # The herds scatter again
+				limit = {
+					is_offmap_tag = brayherd_warp
+					has_status = warp_united
+					OR = {
+						NOT = { has_offmap_flag = warp_tide_turned }
+						had_offmap_tmp_flag = { flag = warp_tide_turned years = 5 }
+					}
+				}
+				random_list = {
+					15 = {
+						clr_offmap_flag = warp_tide_turned
+						set_offmap_flag = warp_tide_turned
+						set_status = warp_stable
+					}
+					85 = { }
+				}
+			}
+		}
+	}
+}
+
+# A warp realm changed status: tell the players who would notice (hidden)
+# Fired from on_offmap_status_changed. ROOT = governor, FROM = offmap.
+character_event = {
+	id = daemonic_incursion.11
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			OR = {
+				is_offmap_tag = khorne_warp
+				is_offmap_tag = nurgle_warp
+				is_offmap_tag = slaanesh_warp
+				is_offmap_tag = tzeentch_warp
+				is_offmap_tag = undivided_warp
+				is_offmap_tag = brayherd_warp
+			}
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { FROM = { has_offmap_flag = no_status_news } }
+			FROM = { clr_offmap_flag = no_status_news }
+			break = yes
+		}
+		any_player = {
+			limit = {
+				OR = {
+					religion_group = chaos_gods_group
+					trait = creature_beastman
+					FROM = {
+						OR = {
+							has_status = warp_ascendant
+							has_status = warp_united
+						}
+					}
+				}
+			}
+			narrative_event = { id = daemonic_incursion.12 }
+		}
+	}
+}
+
+# News from the warp
+narrative_event = {
+	id = daemonic_incursion.12
+	title = EVTNAME_daemonic_incursion_12
+	desc = {
+		trigger = {
+			FROM = { is_offmap_governor = khorne_warp }
+			khorne_warp = { has_status = warp_ascendant }
+		}
+		text = EVTDESC_daemonic_incursion_12_khorne_ascendant
+	}
+	desc = {
+		trigger = {
+			FROM = { is_offmap_governor = nurgle_warp }
+			nurgle_warp = { has_status = warp_ascendant }
+		}
+		text = EVTDESC_daemonic_incursion_12_nurgle_ascendant
+	}
+	desc = {
+		trigger = {
+			FROM = { is_offmap_governor = slaanesh_warp }
+			slaanesh_warp = { has_status = warp_ascendant }
+		}
+		text = EVTDESC_daemonic_incursion_12_slaanesh_ascendant
+	}
+	desc = {
+		trigger = {
+			FROM = { is_offmap_governor = tzeentch_warp }
+			tzeentch_warp = { has_status = warp_ascendant }
+		}
+		text = EVTDESC_daemonic_incursion_12_tzeentch_ascendant
+	}
+	desc = {
+		trigger = {
+			FROM = { is_offmap_governor = undivided_warp }
+			undivided_warp = { has_status = warp_ascendant }
+		}
+		text = EVTDESC_daemonic_incursion_12_undivided_ascendant
+	}
+	desc = {
+		trigger = {
+			OR = {
+				AND = {
+					FROM = { is_offmap_governor = nurgle_warp }
+					nurgle_warp = { has_status = warp_khorne_invasion }
+				}
+				AND = {
+					FROM = { is_offmap_governor = slaanesh_warp }
+					slaanesh_warp = { has_status = warp_khorne_invasion }
+				}
+				AND = {
+					FROM = { is_offmap_governor = tzeentch_warp }
+					tzeentch_warp = { has_status = warp_khorne_invasion }
+				}
+				AND = {
+					FROM = { is_offmap_governor = undivided_warp }
+					undivided_warp = { has_status = warp_khorne_invasion }
+				}
+			}
+		}
+		text = EVTDESC_daemonic_incursion_12_khorne_invades
+	}
+	desc = {
+		trigger = {
+			OR = {
+				AND = {
+					FROM = { is_offmap_governor = khorne_warp }
+					khorne_warp = { has_status = warp_nurgle_invasion }
+				}
+				AND = {
+					FROM = { is_offmap_governor = slaanesh_warp }
+					slaanesh_warp = { has_status = warp_nurgle_invasion }
+				}
+				AND = {
+					FROM = { is_offmap_governor = tzeentch_warp }
+					tzeentch_warp = { has_status = warp_nurgle_invasion }
+				}
+				AND = {
+					FROM = { is_offmap_governor = undivided_warp }
+					undivided_warp = { has_status = warp_nurgle_invasion }
+				}
+			}
+		}
+		text = EVTDESC_daemonic_incursion_12_nurgle_invades
+	}
+	desc = {
+		trigger = {
+			OR = {
+				AND = {
+					FROM = { is_offmap_governor = khorne_warp }
+					khorne_warp = { has_status = warp_slaanesh_invasion }
+				}
+				AND = {
+					FROM = { is_offmap_governor = nurgle_warp }
+					nurgle_warp = { has_status = warp_slaanesh_invasion }
+				}
+				AND = {
+					FROM = { is_offmap_governor = tzeentch_warp }
+					tzeentch_warp = { has_status = warp_slaanesh_invasion }
+				}
+				AND = {
+					FROM = { is_offmap_governor = undivided_warp }
+					undivided_warp = { has_status = warp_slaanesh_invasion }
+				}
+			}
+		}
+		text = EVTDESC_daemonic_incursion_12_slaanesh_invades
+	}
+	desc = {
+		trigger = {
+			OR = {
+				AND = {
+					FROM = { is_offmap_governor = khorne_warp }
+					khorne_warp = { has_status = warp_tzeentch_invasion }
+				}
+				AND = {
+					FROM = { is_offmap_governor = nurgle_warp }
+					nurgle_warp = { has_status = warp_tzeentch_invasion }
+				}
+				AND = {
+					FROM = { is_offmap_governor = slaanesh_warp }
+					slaanesh_warp = { has_status = warp_tzeentch_invasion }
+				}
+				AND = {
+					FROM = { is_offmap_governor = undivided_warp }
+					undivided_warp = { has_status = warp_tzeentch_invasion }
+				}
+			}
+		}
+		text = EVTDESC_daemonic_incursion_12_tzeentch_invades
+	}
+	desc = {
+		trigger = {
+			FROM = { is_offmap_governor = undivided_warp }
+			undivided_warp = { has_status = warp_united }
+		}
+		text = EVTDESC_daemonic_incursion_12_united
+	}
+	desc = {
+		trigger = {
+			FROM = { is_offmap_governor = brayherd_warp }
+			brayherd_warp = { has_status = warp_united }
+		}
+		text = EVTDESC_daemonic_incursion_12_brayherd_united
+	}
+	desc = {
+		trigger = {
+			OR = {
+				AND = {
+					FROM = { is_offmap_governor = khorne_warp }
+					khorne_warp = { has_status = warp_stable }
+				}
+				AND = {
+					FROM = { is_offmap_governor = nurgle_warp }
+					nurgle_warp = { has_status = warp_stable }
+				}
+				AND = {
+					FROM = { is_offmap_governor = slaanesh_warp }
+					slaanesh_warp = { has_status = warp_stable }
+				}
+				AND = {
+					FROM = { is_offmap_governor = tzeentch_warp }
+					tzeentch_warp = { has_status = warp_stable }
+				}
+				AND = {
+					FROM = { is_offmap_governor = undivided_warp }
+					undivided_warp = { has_status = warp_stable }
+				}
+				AND = {
+					FROM = { is_offmap_governor = brayherd_warp }
+					brayherd_warp = { has_status = warp_stable }
+				}
+			}
+		}
+		text = EVTDESC_daemonic_incursion_12_stable
+	}
+	picture = GFX_evt_daemons
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTA_daemonic_incursion_12
+		trigger = { religion_group = chaos_gods_group }
+	}
+	option = {
+		name = EVTOPTB_daemonic_incursion_12
+		trigger = { NOT = { religion_group = chaos_gods_group } }
+	}
+}
+
+###########################################
+# Beastmen incursions
+###########################################
+
+# The Brayherd raises a warherd out of the deep forests (hidden)
+# Fired from on_offmap_yearly_pulse. ROOT = governor, FROM = brayherd_warp.
+# Uses the existing beastmen uprising (beastmen.1) in a forest province.
+character_event = {
+	id = daemonic_incursion.30
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_offmap_tag = brayherd_warp }
+		NOT = {
+			has_game_rule = {
+				name = provincial_revolts
+				value = none
+			}
+		}
+	}
+
+	immediate = {
+		random_list = {
+			6 = { # A warherd gathers
+				modifier = {
+					factor = 2.5
+					FROM = { has_status = warp_united }
+				}
+				modifier = {
+					factor = 1.5
+					is_doom_high_trigger = yes
+				}
+				modifier = {
+					factor = 2
+					is_doom_very_high_trigger = yes
+				}
+				random_province = {
+					limit = {
+						is_land = yes
+						OR = {
+							terrain = forest
+							terrain = woods
+						}
+						has_owner = yes
+						NOT = { region = world_chaos_wastes }
+						NOT = { has_province_flag = beastman_horde_inv }
+						NOT = { has_province_modifier = recent_county_uprising }
+						owner = {
+							NOR = {
+								trait = creature_beastman
+								in_revolt = yes
+							}
+						}
+					}
+					preferred_limit = { # The herds stir first where a herdstone stands
+						has_province_modifier = beastman_herdstone
+					}
+					set_province_flag = beastman_horde_inv
+					province_event = { id = beastmen.1 }
+				}
+			}
+			94 = { }
+		}
 	}
 }

@@ -15,8 +15,9 @@
 #
 # - The Pigbarter Compact. Pigbarter is a trading town of five houses from
 #   five corners of the world, perched among greenskins, ogres and Chaos
-#   dwarfs. It starts with a compact for its defence, its neighbours keep
-#   demanding tribute, and when the town falls its houses scatter home.
+#   dwarfs. It starts with a compact for its defence and a standing guard,
+#   gets help from the houses' kin when attacked, sees an occasional tribute
+#   demand, and when the town falls its houses go home.
 
 namespace = communard_concord
 
@@ -275,6 +276,9 @@ namespace = pigbarter_compact
 
 # The Pigbarter Compact
 # Fired at game start from the Trademaster's history (38051).
+# Pigbarter starts with a stockade-and-garrison compact modifier and a
+# standing guard paid for by the five houses, so it can hold out among its
+# neighbours for a while.
 character_event = {
 	id = pigbarter_compact.1
 	desc = EVTDESC_pigbarter_compact_1
@@ -290,6 +294,24 @@ character_event = {
 
 	immediate = {
 		set_global_flag = pigbarter_compact
+		1274 = {
+			add_province_modifier = {
+				name = pigbarter_compact
+				duration = -1
+			}
+		}
+		spawn_unit = {
+			province = 1274
+			home = 1274
+			owner = ROOT
+			earmark = pigbarter_house_guard
+			attrition = 0.5
+			troops = {
+				heavy_infantry = { 600 600 }
+				archers = { 400 400 }
+				ogre_maneater = { 150 150 }
+			}
+		}
 	}
 
 	option = { # Pay the ogre tribes to keep the peace
@@ -299,11 +321,12 @@ character_event = {
 		1274 = {
 			add_province_modifier = {
 				name = pigbarter_ogre_peace
-				years = 10
+				duration = 7300
 			}
 		}
+		custom_tooltip = { text = pigbarter_ogre_peace_tooltip }
 		hidden_effect = {
-			character_event = { id = pigbarter_compact.4 days = 1095 random = 730 }
+			character_event = { id = pigbarter_compact.4 days = 365 }
 		}
 	}
 	option = { # Raise a stockade and arm the houses
@@ -313,17 +336,20 @@ character_event = {
 		1274 = {
 			add_province_modifier = {
 				name = pigbarter_stockade
-				years = 25
+				duration = -1
 			}
 		}
 		hidden_effect = {
-			character_event = { id = pigbarter_compact.4 days = 1095 random = 730 }
+			character_event = { id = pigbarter_compact.4 days = 365 }
 		}
 	}
 }
 
-# Neighbours eye the town (hidden)
-# Repeats every few years while the Trademaster still holds Pigbarter.
+# Yearly watch over Pigbarter (hidden)
+# Sends help from the houses' kin when Pigbarter is attacked, and now and
+# then a tribute demand. Demands are kept rare: none in the first five
+# years, at least six years apart (eight after paying), only from strong
+# non-human neighbours, and never from ogres while the ogre peace holds.
 character_event = {
 	id = pigbarter_compact.4
 	hide_window = yes
@@ -331,22 +357,38 @@ character_event = {
 	is_triggered_only = yes
 
 	trigger = {
-		has_landed_title = d_pigbarter
 		NOT = { has_global_flag = pigbarter_fallen }
-		1274 = { owner = { same_realm = ROOT } }
 	}
 
 	immediate = {
 		if = {
 			limit = {
-				any_neighbor_independent_ruler = {
-					NOT = { trait = creature_human }
-					NOT = { is_merchant_republic = yes }
+				has_landed_title = d_pigbarter
+				1274 = { owner = { same_realm = ROOT } }
+			}
+			# Kin abroad send help when Pigbarter is attacked
+			if = {
+				limit = {
+					any_war = { defender = { character = ROOT } }
+					NOT = { has_character_modifier = pigbarter_aid_timer }
+				}
+				character_event = { id = pigbarter_compact.6 }
+			}
+			# Tribute demands
+			else_if = {
+				limit = {
+					year = 2015
+					war = no
+					NOT = { has_character_modifier = pigbarter_tribute_timer }
+					any_neighbor_independent_ruler = { pigbarter_tribute_demander_trigger = yes }
+				}
+				random_list = {
+					20 = { character_event = { id = pigbarter_compact.5 } }
+					80 = { }
 				}
 			}
-			character_event = { id = pigbarter_compact.5 }
 		}
-		character_event = { id = pigbarter_compact.4 days = 1095 random = 730 }
+		character_event = { id = pigbarter_compact.4 days = 365 }
 	}
 }
 
@@ -361,45 +403,105 @@ character_event = {
 
 	immediate = {
 		random_neighbor_independent_ruler = {
-			limit = {
-				NOT = { trait = creature_human }
-				NOT = { is_merchant_republic = yes }
-			}
+			limit = { pigbarter_tribute_demander_trigger = yes }
 			save_event_target_as = pigbarter_neighbour
 		}
 	}
 
 	option = { # Pay
 		name = EVTOPTA_pigbarter_compact_5
-		trigger = { wealth = 75 }
+		trigger = { wealth = 50 }
 		ai_chance = { factor = 70 }
-		wealth = -75
+		wealth = -50
+		add_character_modifier = {
+			name = pigbarter_tribute_timer
+			years = 8
+			hidden = yes
+		}
 		event_target:pigbarter_neighbour = {
-			wealth = 75
+			wealth = 50
 			opinion = {
 				modifier = opinion_happy
 				who = ROOT
-				years = 5
+				years = 8
 			}
 		}
 	}
 	option = { # Refuse
 		name = EVTOPTB_pigbarter_compact_5
 		ai_chance = { factor = 30 }
+		add_character_modifier = {
+			name = pigbarter_tribute_timer
+			years = 6
+			hidden = yes
+		}
 		event_target:pigbarter_neighbour = {
-			add_claim = c_pigbarter
 			opinion = {
 				modifier = opinion_insulted
 				who = ROOT
 				years = 5
 			}
 		}
+		custom_tooltip = { text = pigbarter_refuse_tribute_tooltip }
+		hidden_effect = {
+			random_list = {
+				50 = { # They take it as an insult and lay claim to the town
+					modifier = {
+						factor = 0.5
+						1274 = { has_province_modifier = pigbarter_stockade }
+					}
+					event_target:pigbarter_neighbour = { add_claim = c_pigbarter }
+				}
+				50 = { }
+			}
+		}
 	}
 }
 
-# Pigbarter falls (hidden): the houses scatter home
+# The houses' kin send help
+character_event = {
+	id = pigbarter_compact.6
+	desc = EVTDESC_pigbarter_compact_6
+	picture = GFX_evt_merchant_ship_at_sea_republic
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTA_pigbarter_compact_6
+		add_character_modifier = {
+			name = pigbarter_aid_timer
+			years = 5
+			hidden = yes
+		}
+		wealth = 100
+		spawn_unit = {
+			province = 1274
+			home = 1274
+			owner = ROOT
+			earmark = pigbarter_kin_sellswords
+			disband_on_peace = yes
+			attrition = 0.5
+			troops = {
+				heavy_infantry = { 500 500 }
+				archers = { 300 300 }
+				light_cavalry = { 200 200 }
+			}
+		}
+	}
+}
+
+# Pigbarter falls (hidden): the houses go home
 # Fired from on_new_holder and on_new_holder_usurpation.
 # ROOT = new holder, FROM = title, FROMFROM = old holder.
+# The house members who aren't landed leave for their house's home:
+# - House of Yabbas (Arabyan): Copher
+# - Westerlander house: Marienburg (the League if it exists)
+# - Cathayan house: back along the eastern trade roads to Cathay
+# - Reman house: Remas
+# - Strigany house: Sylvania
+# If a home has no holder they go to another ruler of their people, and if
+# there is none of those either, to another merchant republic.
 character_event = {
 	id = pigbarter_compact.10
 	hide_window = yes
@@ -419,48 +521,74 @@ character_event = {
 
 	immediate = {
 		set_global_flag = pigbarter_fallen
-		save_event_target_as = pigbarter_conqueror
+		1274 = { remove_province_modifier = pigbarter_compact }
 
-		# Where each house goes
-		random_independent_ruler = { # House of Yabbas (Arabyan)
-			limit = { culture_group = arabyan_group }
-			preferred_limit = { is_merchant_republic = yes }
-			save_event_target_as = pigbarter_refuge_araby
+		# House of Yabbas: Copher
+		c_copher = {
+			holder_scope = { save_event_target_as = pigbarter_home_araby }
 		}
-		random_independent_ruler = { # Westerlander house
-			limit = { culture_group = imperial_group }
-			preferred_limit = {
-				OR = {
-					has_landed_title = k_marienburg_league
-					culture = westerlander
-				}
+		if = {
+			limit = { NOT = { event_target:pigbarter_home_araby = { always = yes } } }
+			random_independent_ruler = {
+				limit = { culture_group = arabyan_group }
+				save_event_target_as = pigbarter_home_araby
 			}
-			save_event_target_as = pigbarter_refuge_westerland
 		}
-		random_independent_ruler = { # Cathayan house
-			limit = { culture_group = oriental_group }
-			save_event_target_as = pigbarter_refuge_cathay
+		# Westerlander house: Marienburg
+		if = {
+			limit = { k_marienburg_league = { has_holder = yes } }
+			k_marienburg_league = { holder_scope = { save_event_target_as = pigbarter_home_westerland } }
 		}
-		random_independent_ruler = { # Reman house
-			limit = { culture_group = tilean_group }
-			preferred_limit = { is_merchant_republic = yes }
-			save_event_target_as = pigbarter_refuge_tilea
+		else = {
+			c_marienburg = { holder_scope = { save_event_target_as = pigbarter_home_westerland } }
 		}
-		random_independent_ruler = { # Strigany house
-			limit = {
-				OR = {
-					culture_group = strigany_group
-					religion_group = necromantic_group
-				}
+		if = {
+			limit = { NOT = { event_target:pigbarter_home_westerland = { always = yes } } }
+			random_independent_ruler = {
+				limit = { culture_group = imperial_group }
+				save_event_target_as = pigbarter_home_westerland
 			}
-			save_event_target_as = pigbarter_refuge_strigany
 		}
-		random_independent_ruler = { # Anyone left over goes to another merchant republic
+		# Cathayan house: Cathay
+		offmap_cathay = { governor = { save_event_target_as = pigbarter_home_cathay } }
+		if = {
+			limit = { NOT = { event_target:pigbarter_home_cathay = { always = yes } } }
+			random_independent_ruler = {
+				limit = { culture_group = oriental_group }
+				save_event_target_as = pigbarter_home_cathay
+			}
+		}
+		# Reman house: Remas
+		c_remas = { holder_scope = { save_event_target_as = pigbarter_home_tilea } }
+		if = {
+			limit = { NOT = { event_target:pigbarter_home_tilea = { always = yes } } }
+			random_independent_ruler = {
+				limit = { culture_group = tilean_group }
+				save_event_target_as = pigbarter_home_tilea
+			}
+		}
+		# Strigany house: Sylvania
+		k_sylvania = { holder_scope = { save_event_target_as = pigbarter_home_strigany } }
+		if = {
+			limit = { NOT = { event_target:pigbarter_home_strigany = { always = yes } } }
+			random_independent_ruler = {
+				limit = {
+					OR = {
+						culture_group = strigany_group
+						religion_group = necromantic_group
+					}
+				}
+				save_event_target_as = pigbarter_home_strigany
+			}
+		}
+		# Fallback: another merchant republic
+		random_independent_ruler = {
 			limit = {
 				is_merchant_republic = yes
 				NOT = { character = ROOT }
 			}
-			save_event_target_as = pigbarter_refuge_any
+			preferred_limit = { has_landed_title = e_communards }
+			save_event_target_as = pigbarter_home_any
 		}
 
 		any_character = {
@@ -476,28 +604,28 @@ character_event = {
 				}
 			}
 			if = {
-				limit = { dynasty = 48135 event_target:pigbarter_refuge_araby = { always = yes } }
-				move_character = event_target:pigbarter_refuge_araby
+				limit = { dynasty = 48135 event_target:pigbarter_home_araby = { always = yes } }
+				move_character = event_target:pigbarter_home_araby
 			}
 			else_if = {
-				limit = { dynasty = 13583 event_target:pigbarter_refuge_westerland = { always = yes } }
-				move_character = event_target:pigbarter_refuge_westerland
+				limit = { dynasty = 13583 event_target:pigbarter_home_westerland = { always = yes } }
+				move_character = event_target:pigbarter_home_westerland
 			}
 			else_if = {
-				limit = { dynasty = 9192 event_target:pigbarter_refuge_cathay = { always = yes } }
-				move_character = event_target:pigbarter_refuge_cathay
+				limit = { dynasty = 9192 event_target:pigbarter_home_cathay = { always = yes } }
+				move_character = event_target:pigbarter_home_cathay
 			}
 			else_if = {
-				limit = { dynasty = 43176 event_target:pigbarter_refuge_tilea = { always = yes } }
-				move_character = event_target:pigbarter_refuge_tilea
+				limit = { dynasty = 43176 event_target:pigbarter_home_tilea = { always = yes } }
+				move_character = event_target:pigbarter_home_tilea
 			}
 			else_if = {
-				limit = { dynasty = 87072 event_target:pigbarter_refuge_strigany = { always = yes } }
-				move_character = event_target:pigbarter_refuge_strigany
+				limit = { dynasty = 87072 event_target:pigbarter_home_strigany = { always = yes } }
+				move_character = event_target:pigbarter_home_strigany
 			}
 			else_if = {
-				limit = { event_target:pigbarter_refuge_any = { always = yes } }
-				move_character = event_target:pigbarter_refuge_any
+				limit = { event_target:pigbarter_home_any = { always = yes } }
+				move_character = event_target:pigbarter_home_any
 			}
 		}
 

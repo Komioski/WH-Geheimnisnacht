@@ -84,6 +84,7 @@ class Index:
         self.file_info = {}         # rel path -> dict(namespaces, encoding, brace_errors, faction, header)
         self.fired_by = defaultdict(list)   # id -> [source strings]
         self.random_listed = set()  # ids that appear in on_action random_events
+        self.job_listed = set()  # ids listed in common/job_actions events lists
         self.pulse_listed = defaultdict(set)  # id -> on_action names (events = { } lists)
         self.external_calls = []    # (source, id) from non-event files
         self.scripted_triggers = {}
@@ -277,6 +278,19 @@ class Index:
                 continue
             block, _ = pdx.parse(pdx.read(path)[0])
             label = rel[len('common/'):]
+            if rel.startswith('common/job_actions'):
+                # Job actions list their MTTH events by id; the game only checks
+                # them for characters doing that action.
+                for name, op, body, l in block:
+                    if not isinstance(body, list):
+                        continue
+                    for k, op2, v, l2 in body:
+                        if k == 'events' and isinstance(v, list):
+                            for item in v:
+                                eid = item[2] if item[0] is None else item[0]
+                                if isinstance(eid, str):
+                                    self.fired_by[eid].append('job_action:' + name)
+                                    self.job_listed.add(eid)
             for eid in pdx.event_calls(block):
                 self.fired_by[eid].append(label)
                 self.external_calls.append((rel, eid))

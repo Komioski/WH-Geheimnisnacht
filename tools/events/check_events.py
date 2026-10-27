@@ -71,7 +71,7 @@ def check(idx, only=None):
                 if LOC_KEY.match(key) and key not in idx.loc and key not in ('OK',):
                     out.append(('WARN', ev.path, ev.line, '%s: no localisation for %s %s' % (ev.id, kind, key)))
         strong = set(ev.pre) & STRONG_PRE
-        if not ev.triggered_only and ev.has_mtth and not strong:
+        if not ev.triggered_only and ev.has_mtth and not strong and ev.id not in idx.job_listed:
             out.append(('WARN', ev.path, ev.line, '%s: MTTH event with no cheap pre-trigger '
                         '(only_playable, only_rulers, religion_group, has_character_flag...)' % ev.id))
         pulses = idx.pulse_listed.get(ev.id, set()) & PULSES

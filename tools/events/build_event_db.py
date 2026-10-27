@@ -78,7 +78,7 @@ def main():
         })
     path = os.path.join(OUT_DIR, 'event_database.csv')
     with open(path, 'w', newline='', encoding='utf-8') as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(fh, fieldnames=list(rows[0]), lineterminator='\n')
         writer.writeheader()
         writer.writerows(rows)
     write_stats(rows, idx)

@@ -35,7 +35,9 @@ The tools only see the mod's own files. Vanilla on_actions that the mod does not
 
 Refactored files follow these rules. `events/S_skaven_events.txt` is the reference example.
 
-**One file per subject, one namespace per file.** Namespaces are short lowercase faction or subject words (`skaven`, `witch_hunters`), never author initials. File names keep their prefix for now so diffs stay readable; the folder stays flat.
+**One file per subject, one namespace per file.** Namespaces are short lowercase faction or subject words (`skaven`, `whunter`), 12 characters at most, never author initials.
+
+**Short event numbers.** Number events from 1 and keep them below 1000. Give each section of a file its own block of numbers with room to grow (Skaven: breeding 1-14, old age 20, succession 30-36, warpstone 40, land demands 50-55, Vulkan 60). Loc keys follow the id: `EVTDESC<namespace><number>` and `EVTOPTA<namespace><number>`, `EVTOPTB...` for options in order, with a `b` suffix for a second desc or name variant. File names keep their prefix for now so diffs stay readable; the folder stays flat.
 
 **File header.** A comment block at the top: what the file covers, the namespace, a `# Faction:` tag, a table of contents by id range, and where the events are fired from.
 

@@ -13,7 +13,8 @@ WARN   missing localisation (mod events only), non-cp1252-safe encoding,
        MTTH or pulse event without a cheap pre-trigger, weight_multiplier on an
        event that is never in a random_events list (the weights do nothing),
        on_action listing an event that does not exist
-STYLE  space-indented lines, `break = yes` (use else_if), commented-out code
+STYLE  space-indented lines, `break = yes` (use else_if), commented-out code,
+       event numbers of 1000+ or namespaces longer than 12 characters (mod files)
 """
 import os
 import re
@@ -56,6 +57,12 @@ def check(idx, only=None):
             out.append(('ERROR', ev.path, ev.line, 'namespace %s is never declared' % ev.namespace))
         elif ev.namespace and ev.namespace not in spaces and ev.origin == 'mod':
             out.append(('STYLE', ev.path, ev.line, '%s uses a namespace declared in another file' % ev.id))
+        if only is not None and ev.origin == 'mod':
+            num = ev.id.split('.')[-1]
+            if num.isdigit() and int(num) >= 1000:
+                out.append(('STYLE', ev.path, ev.line, '%s: keep event numbers below 1000' % ev.id))
+            if len(ev.namespace) > 12:
+                out.append(('STYLE', ev.path, ev.line, 'namespace %s is long; keep it under 12 characters' % ev.namespace))
         for callee in sorted(set(ev.calls)):
             if callee not in known:
                 out.append(('ERROR', ev.path, ev.line, '%s fires missing event %s' % (ev.id, callee)))

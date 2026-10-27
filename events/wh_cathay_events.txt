@@ -1,0 +1,1015 @@
+###########################################
+#                                         #
+# Grand Cathay: expansion and wars        #
+#                                         #
+###########################################
+
+# Two halves:
+# - cathay_expansion: what an Expansionist Cathay does in the west. It sends
+#   armies to its colonies when they are attacked, sends settlers in peace,
+#   and hunts the exiles who fled the Dragon Throne (rebel generals,
+#   displaced princes, and anyone who sacked Cathay).
+# - cathay_war: Cathay's own wars at home. Chaos assaults the Great Bastion
+#   (End Times, needs doom), ogre tribes raid out of the Mountains of
+#   Mourning, and the Skaven gnaw at the empire from below. Chaos alone can
+#   take the Dragon Throne; the Dragon Emperor may come back for it.
+#
+# Yearly events fire from on_offmap_yearly_pulse: ROOT = governor, FROM = offmap.
+# Loc: localisation/00_cathay_wars.csv
+
+namespace = cathay_expansion
+namespace = cathay_war
+
+###########################################
+# Expansionist Cathay
+###########################################
+
+# Expansionist Cathay looks west (hidden)
+character_event = {
+	id = cathay_expansion.1
+	hide_window = yes
+
+	has_dlc = "Jade Dragon"
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			has_policy = cathay_expansionist
+			offmap_ruler = { NOT = { cathay_chaos_claimant_faith_trigger = yes } } # A Chaos usurper does not care for the colonies
+			NOR = {
+				has_status = cathay_famine
+				has_status = cathay_plague
+			}
+			OR = {
+				NOT = { has_offmap_tmp_flag = cathay_expansion_acted }
+				had_offmap_tmp_flag = { flag = cathay_expansion_acted years = 2 }
+			}
+		}
+	}
+
+	immediate = {
+		random_list = {
+			40 = { # An army for a colony under attack
+				trigger = {
+					any_independent_ruler = {
+						cathay_colony_ruler_trigger = yes
+						war = yes
+						is_primary_war_defender = yes
+						NOT = { has_character_modifier = cathay_expedition_aid_cd }
+					}
+				}
+				modifier = {
+					factor = 0.25
+					cathay_beset_trigger = yes
+				}
+				random_independent_ruler = {
+					limit = {
+						cathay_colony_ruler_trigger = yes
+						war = yes
+						is_primary_war_defender = yes
+						NOT = { has_character_modifier = cathay_expedition_aid_cd }
+					}
+					character_event = { id = cathay_expansion.2 }
+				}
+				FROM = { set_offmap_tmp_flag = cathay_expansion_acted }
+			}
+			15 = { # Settlers for a colony at peace
+				trigger = {
+					any_independent_ruler = {
+						cathay_colony_ruler_trigger = yes
+						war = no
+						NOT = { has_character_modifier = cathay_settlers_cd }
+					}
+				}
+				random_independent_ruler = {
+					limit = {
+						cathay_colony_ruler_trigger = yes
+						war = no
+						NOT = { has_character_modifier = cathay_settlers_cd }
+					}
+					character_event = { id = cathay_expansion.4 }
+				}
+				FROM = { set_offmap_tmp_flag = cathay_expansion_acted }
+			}
+			25 = { # Hunt an exile
+				trigger = {
+					any_character = {
+						cathay_exile_trigger = yes
+						NOT = { has_character_modifier = cathay_hunted_cd }
+					}
+				}
+				modifier = { # The Dragon Emperor never forgets
+					factor = 2
+					dragon_emperor_reigns_trigger = yes
+				}
+				random_character = {
+					limit = {
+						cathay_exile_trigger = yes
+						NOT = { has_character_modifier = cathay_hunted_cd }
+					}
+					preferred_limit = { has_character_flag = cathay_sworn_vengeance }
+					add_character_modifier = {
+						name = cathay_hunted_cd
+						years = 5
+						hidden = yes
+					}
+					save_event_target_as = cathay_hunted_exile
+					if = { # A guest at someone's court: demand them back
+						limit = {
+							is_ruler = no
+							host = { is_ruler = yes }
+						}
+						host = { character_event = { id = cathay_expansion.6 } }
+					}
+					else = { # Send the jade assassins
+						ROOT = { character_event = { id = cathay_expansion.5 } }
+					}
+				}
+				FROM = { set_offmap_tmp_flag = cathay_expansion_acted }
+			}
+			20 = { }
+		}
+	}
+}
+
+# The Dragon sends aid. ROOT = colony ruler, FROM = governor
+character_event = {
+	id = cathay_expansion.2
+	title = EVTNAME_cathay_expansion_2
+	desc = EVTDESC_cathay_expansion_2
+	picture = GFX_evt_china_invades
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_character_modifier = {
+			name = cathay_expedition_aid_cd
+			years = 5
+			hidden = yes
+		}
+		capital_scope = { save_event_target_as = cathay_aid_landing }
+		spawn_unit = {
+			province = event_target:cathay_aid_landing
+			owner = ROOT
+			troops = {
+				light_infantry = { 1500 1500 }
+				heavy_infantry = { 1000 1000 }
+				archers = { 1500 1500 }
+				light_cavalry = { 500 500 }
+			}
+			earmark = cathay_dragon_host
+			disband_on_peace = yes
+			attrition = 1.0
+		}
+		if = {
+			limit = { offmap_cathay = { has_status = cathay_golden_age } }
+			spawn_unit = {
+				province = event_target:cathay_aid_landing
+				owner = ROOT
+				troops = {
+					heavy_infantry = { 1500 1500 }
+				}
+				earmark = cathay_dragon_host
+				disband_on_peace = yes
+				attrition = 1.0
+			}
+		}
+		any_player = {
+			limit = {
+				NOT = { character = ROOT }
+				has_offmap_news_enabled = offmap_cathay
+				is_within_diplo_range = ROOT
+			}
+			narrative_event = { id = cathay_expansion.3 }
+		}
+	}
+
+	option = {
+		name = EVTOPTA_cathay_expansion_2
+		custom_tooltip = { text = cathay_dragon_host_tt }
+		add_offmap_currency = {
+			offmap = offmap_cathay
+			value = 50
+		}
+	}
+}
+
+# News: Cathay sends an army west. ROOT = player, FROM = colony ruler
+narrative_event = {
+	id = cathay_expansion.3
+	title = NEWS_FROM_CATHAY
+	desc = EVTDESC_cathay_expansion_3
+	picture = GFX_evt_china_expansionist
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+
+	is_triggered_only = yes
+
+	option = {
+		name = INTERESTING
+	}
+}
+
+# Settlers from Cathay. ROOT = colony ruler, FROM = governor
+character_event = {
+	id = cathay_expansion.4
+	title = EVTNAME_cathay_expansion_4
+	desc = EVTDESC_cathay_expansion_4
+	picture = GFX_evt_china_open
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_character_modifier = {
+			name = cathay_settlers_cd
+			years = 10
+			hidden = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTA_cathay_expansion_4
+		wealth = 100
+		capital_scope = {
+			add_province_modifier = {
+				name = cathayan_settlers
+				duration = 5475
+			}
+		}
+	}
+}
+
+# The jade assassins strike (hidden). ROOT = governor
+character_event = {
+	id = cathay_expansion.5
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:cathay_hunted_exile = { is_alive = yes }
+	}
+
+	immediate = {
+		event_target:cathay_hunted_exile = {
+			random_list = {
+				30 = { # Slain
+					modifier = { # Rulers are well guarded
+						factor = 0.5
+						is_ruler = yes
+					}
+					modifier = {
+						factor = 0.5
+						has_character_flag = cathay_sworn_vengeance
+					}
+					modifier = {
+						factor = 1.5
+						dragon_emperor_reigns_trigger = yes
+					}
+					any_player = {
+						limit = {
+							NOT = { character = PREV }
+							OR = {
+								AND = {
+									has_offmap_news_enabled = offmap_cathay
+									is_within_diplo_range = PREV
+								}
+								any_courtier = { character = PREVPREV }
+							}
+						}
+						narrative_event = { id = cathay_expansion.7 }
+					}
+					death = {
+						death_reason = death_murder
+						killer = ROOT
+					}
+				}
+				70 = { # Survived
+					add_character_modifier = {
+						name = hunted_by_cathay
+						years = 5
+					}
+					if = {
+						limit = { ai = no }
+						character_event = { id = cathay_expansion.8 }
+					}
+				}
+			}
+		}
+	}
+}
+
+# The Dragon Throne demands an exile back. ROOT = host, FROM = governor
+character_event = {
+	id = cathay_expansion.6
+	title = EVTNAME_cathay_expansion_6
+	desc = EVTDESC_cathay_expansion_6
+	picture = GFX_evt_chinese_bureaucrat
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:cathay_hunted_exile = {
+			is_alive = yes
+			host = { character = ROOT }
+		}
+	}
+
+	option = { # Hand them over
+		name = EVTOPTA_cathay_expansion_6
+		event_target:cathay_hunted_exile = {
+			leave_court_for_cathay_effect = yes
+		}
+		add_offmap_currency = {
+			offmap = offmap_cathay
+			value = 150
+		}
+		ai_chance = {
+			factor = 60
+			modifier = {
+				factor = 2
+				is_tributary = { type = offmap suzerain = e_cathay_west_governor }
+			}
+			modifier = {
+				factor = 0.2
+				event_target:cathay_hunted_exile = { dynasty = ROOT }
+			}
+			modifier = {
+				factor = 0
+				event_target:cathay_hunted_exile = {
+					OR = {
+						is_close_relative = ROOT
+						is_married = ROOT
+					}
+				}
+			}
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTB_cathay_expansion_6
+		prestige = 25
+		event_target:cathay_hunted_exile = {
+			opinion = {
+				who = ROOT
+				modifier = opinion_saved_me
+				years = 20
+			}
+		}
+		add_character_modifier = {
+			name = angered_cathay_modifier
+			years = 10
+		}
+		random = {
+			chance = 50
+			FROM = { character_event = { id = cathay_expansion.5 days = 30 } }
+		}
+		ai_chance = {
+			factor = 40
+		}
+	}
+}
+
+# News: an exile is slain by Cathay's assassins. ROOT = player, FROM = governor
+narrative_event = {
+	id = cathay_expansion.7
+	title = NEWS_FROM_CATHAY
+	desc = EVTDESC_cathay_expansion_7
+	picture = GFX_evt_china_rebel_general
+	portrait = event_target:cathay_hunted_exile
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTA_cathay_expansion_7
+	}
+}
+
+# The exile survives the jade assassins. ROOT = exile
+character_event = {
+	id = cathay_expansion.8
+	title = EVTNAME_cathay_expansion_8
+	desc = EVTDESC_cathay_expansion_8
+	picture = GFX_evt_china_rebel_general
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTA_cathay_expansion_8
+	}
+}
+
+###########################################
+# Cathay's wars at home
+###########################################
+
+# Chaos assaults the Great Bastion (End Times). Random event from on_offmap_yearly_pulse.
+character_event = {
+	id = cathay_war.1
+	hide_window = yes
+
+	has_dlc = "Jade Dragon"
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			NOR = {
+				has_status = cathay_mongol_invasion
+				has_status = cathay_jurchen_invasion
+				has_status = cathay_civil_war
+				has_status = cathay_chaos_invasion
+				has_status = cathay_ogre_war
+				has_status = cathay_skaven_war
+			}
+			OR = {
+				NOT = { has_offmap_tmp_flag = cathay_chaos_struck }
+				had_offmap_tmp_flag = { flag = cathay_chaos_struck years = 25 }
+			}
+			offmap_ruler = { NOT = { cathay_chaos_claimant_faith_trigger = yes } }
+		}
+		OR = {
+			is_doom_medium_trigger = yes
+			is_doom_high_trigger = yes
+			is_doom_very_high_trigger = yes
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 0.5
+			is_doom_medium_trigger = yes
+		}
+		modifier = {
+			factor = 1.5
+			is_doom_high_trigger = yes
+		}
+		modifier = {
+			factor = 4
+			is_doom_very_high_trigger = yes
+		}
+		modifier = {
+			factor = 1.5
+			warp_any_realm_ascendant_trigger = yes
+		}
+		modifier = {
+			factor = 2
+			warp_powers_united_trigger = yes
+		}
+		modifier = {
+			factor = 0.5
+			FROM = { has_status = cathay_golden_age }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			set_offmap_flag = no_status_news
+			set_status = cathay_chaos_invasion
+			set_offmap_tmp_flag = cathay_chaos_struck
+			clr_offmap_flag = no_status_news
+		}
+		any_player = {
+			limit = {
+				has_offmap_news_enabled = FROM
+				is_within_diplo_range = ROOT
+			}
+			narrative_event = { id = cathay_war.3 }
+		}
+	}
+}
+
+# The end of the Chaos invasion. Random event from on_offmap_yearly_pulse.
+character_event = {
+	id = cathay_war.2
+	hide_window = yes
+
+	has_dlc = "Jade Dragon"
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			has_status = cathay_chaos_invasion
+			had_offmap_tmp_flag = { flag = cathay_chaos_struck years = 3 }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 2
+			FROM = { had_offmap_tmp_flag = { flag = cathay_chaos_struck years = 6 } }
+		}
+		modifier = {
+			factor = 3
+			FROM = { had_offmap_tmp_flag = { flag = cathay_chaos_struck years = 10 } }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			cathay_war_clear_outcome_flags_effect = yes
+			set_offmap_flag = no_status_news
+			random_list = {
+				100 = { # The Great Bastion holds
+					modifier = {
+						factor = 2
+						dragon_emperor_reigns_trigger = yes
+					}
+					modifier = {
+						factor = 0.5
+						is_doom_very_high_trigger = yes
+					}
+					set_offmap_flag = cathay_war_outcome_bastion_held
+					set_status = cathay_unrest
+					set_offmap_flag = cathay_had_unrest
+				}
+				40 = { # The north is put to the torch
+					modifier = {
+						factor = 1.5
+						is_doom_very_high_trigger = yes
+					}
+					set_offmap_flag = cathay_war_outcome_north_ravaged
+					set_status = cathay_famine
+					set_offmap_flag = cathay_had_famine
+				}
+				4 = { # Chaos takes the Dragon Throne
+					trigger = {
+						is_doom_very_high_trigger = yes
+					}
+					modifier = {
+						factor = 2
+						warp_powers_united_trigger = yes
+					}
+					set_offmap_flag = cathay_war_outcome_chaos_throne
+					cathay_chaos_takes_throne_effect = yes
+					set_status = cathay_unrest
+					set_offmap_flag = cathay_had_unrest
+				}
+			}
+			clr_offmap_flag = no_status_news
+		}
+		any_player = {
+			limit = {
+				has_offmap_news_enabled = FROM
+				is_within_diplo_range = ROOT
+			}
+			narrative_event = { id = cathay_war.4 }
+		}
+	}
+}
+
+# News: a war breaks out in Cathay. ROOT = player
+narrative_event = {
+	id = cathay_war.3
+	title = NEWS_FROM_CATHAY
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+
+	desc = {
+		trigger = { offmap_cathay = { has_status = cathay_chaos_invasion } }
+		picture = GFX_evt_chaos_hordes
+		text = EVTDESC_cathay_war_3_CHAOS
+	}
+	desc = {
+		trigger = { offmap_cathay = { has_status = cathay_ogre_war } }
+		picture = GFX_evt_ogre_raiders
+		text = EVTDESC_cathay_war_3_OGRE
+	}
+	desc = {
+		trigger = { offmap_cathay = { has_status = cathay_skaven_war } }
+		picture = GFX_evt_skaven_assassin
+		text = EVTDESC_cathay_war_3_SKAVEN
+	}
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTA_cathay_war_3
+	}
+}
+
+# News: how a war in Cathay ended. ROOT = player
+narrative_event = {
+	id = cathay_war.4
+	title = NEWS_FROM_CATHAY
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+
+	desc = {
+		trigger = { offmap_cathay = { has_offmap_flag = cathay_war_outcome_bastion_held } }
+		picture = GFX_evt_cathay_dragon
+		text = EVTDESC_cathay_war_4_BASTION_HELD
+	}
+	desc = {
+		trigger = { offmap_cathay = { has_offmap_flag = cathay_war_outcome_north_ravaged } }
+		picture = GFX_evt_china_famine
+		text = EVTDESC_cathay_war_4_NORTH_RAVAGED
+	}
+	desc = {
+		trigger = { offmap_cathay = { has_offmap_flag = cathay_war_outcome_chaos_throne } }
+		picture = GFX_evt_chaos_everchosen
+		text = EVTDESC_cathay_war_4_CHAOS_THRONE
+	}
+	desc = {
+		trigger = { offmap_cathay = { has_offmap_flag = cathay_war_outcome_dragon_returns } }
+		picture = GFX_evt_cathay_rises
+		text = EVTDESC_cathay_war_4_DRAGON_RETURNS
+	}
+	desc = {
+		trigger = { offmap_cathay = { has_offmap_flag = cathay_war_outcome_ogres_repelled } }
+		picture = GFX_evt_china_stable
+		text = EVTDESC_cathay_war_4_OGRES_REPELLED
+	}
+	desc = {
+		trigger = { offmap_cathay = { has_offmap_flag = cathay_war_outcome_ogres_paid } }
+		picture = GFX_evt_ogre_feast
+		text = EVTDESC_cathay_war_4_OGRES_PAID
+	}
+	desc = {
+		trigger = { offmap_cathay = { has_offmap_flag = cathay_war_outcome_ogres_looted } }
+		picture = GFX_evt_ogre_raiders
+		text = EVTDESC_cathay_war_4_OGRES_LOOTED
+	}
+	desc = {
+		trigger = { offmap_cathay = { has_offmap_flag = cathay_war_outcome_skaven_purged } }
+		picture = GFX_evt_china_stable
+		text = EVTDESC_cathay_war_4_SKAVEN_PURGED
+	}
+	desc = {
+		trigger = { offmap_cathay = { has_offmap_flag = cathay_war_outcome_skaven_plague } }
+		picture = GFX_evt_china_devastating_plague
+		text = EVTDESC_cathay_war_4_SKAVEN_PLAGUE
+	}
+	desc = {
+		trigger = { offmap_cathay = { has_offmap_flag = cathay_war_outcome_skaven_theft } }
+		picture = GFX_evt_skaven_moulder
+		text = EVTDESC_cathay_war_4_SKAVEN_THEFT
+	}
+
+	is_triggered_only = yes
+
+	option = {
+		name = INTERESTING
+	}
+}
+
+# Ogre tribes raid out of the Mountains of Mourning. Random event from on_offmap_yearly_pulse.
+character_event = {
+	id = cathay_war.10
+	hide_window = yes
+
+	has_dlc = "Jade Dragon"
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			NOR = {
+				has_status = cathay_mongol_invasion
+				has_status = cathay_jurchen_invasion
+				has_status = cathay_civil_war
+				has_status = cathay_chaos_invasion
+				has_status = cathay_ogre_war
+				has_status = cathay_skaven_war
+			}
+			OR = {
+				NOT = { has_offmap_tmp_flag = cathay_ogres_struck }
+				had_offmap_tmp_flag = { flag = cathay_ogres_struck years = 15 }
+			}
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { # The Ogre Kingdoms are strong
+			factor = 1.5
+			any_independent_ruler = {
+				culture_group = ogre_group
+				count = 3
+			}
+		}
+		modifier = {
+			factor = 1.5
+			FROM = { has_status = cathay_unrest }
+		}
+		modifier = {
+			factor = 0.5
+			FROM = { has_status = cathay_golden_age }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			set_offmap_flag = no_status_news
+			set_status = cathay_ogre_war
+			set_offmap_tmp_flag = cathay_ogres_struck
+			clr_offmap_flag = no_status_news
+		}
+		any_player = {
+			limit = {
+				has_offmap_news_enabled = FROM
+				is_within_diplo_range = ROOT
+			}
+			narrative_event = { id = cathay_war.3 }
+		}
+	}
+}
+
+# The end of the ogre war. Random event from on_offmap_yearly_pulse.
+character_event = {
+	id = cathay_war.12
+	hide_window = yes
+
+	has_dlc = "Jade Dragon"
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			has_status = cathay_ogre_war
+			had_offmap_tmp_flag = { flag = cathay_ogres_struck years = 2 }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 3
+			FROM = { had_offmap_tmp_flag = { flag = cathay_ogres_struck years = 5 } }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			cathay_war_clear_outcome_flags_effect = yes
+			set_offmap_flag = no_status_news
+			random_list = {
+				100 = { # Driven back into the mountains
+					modifier = {
+						factor = 1.5
+						dragon_emperor_reigns_trigger = yes
+					}
+					set_offmap_flag = cathay_war_outcome_ogres_repelled
+					set_status = cathay_stable
+				}
+				60 = { # Bought off with silver, and some of it comes west
+					set_offmap_flag = cathay_war_outcome_ogres_paid
+					set_status = cathay_unrest
+					set_offmap_flag = cathay_had_unrest
+					any_independent_ruler = {
+						limit = { culture_group = ogre_group }
+						wealth = 100
+					}
+				}
+				20 = { # The western granaries are eaten bare
+					set_offmap_flag = cathay_war_outcome_ogres_looted
+					set_status = cathay_famine
+					set_offmap_flag = cathay_had_famine
+				}
+			}
+			clr_offmap_flag = no_status_news
+		}
+		any_player = {
+			limit = {
+				has_offmap_news_enabled = FROM
+				is_within_diplo_range = ROOT
+			}
+			narrative_event = { id = cathay_war.4 }
+		}
+	}
+}
+
+# The Skaven gnaw at Cathay from below. Random event from on_offmap_yearly_pulse.
+character_event = {
+	id = cathay_war.20
+	hide_window = yes
+
+	has_dlc = "Jade Dragon"
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			NOR = {
+				has_status = cathay_mongol_invasion
+				has_status = cathay_jurchen_invasion
+				has_status = cathay_civil_war
+				has_status = cathay_chaos_invasion
+				has_status = cathay_ogre_war
+				has_status = cathay_skaven_war
+			}
+			OR = {
+				NOT = { has_offmap_tmp_flag = cathay_skaven_struck }
+				had_offmap_tmp_flag = { flag = cathay_skaven_struck years = 20 }
+			}
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 1.5
+			OR = {
+				is_doom_high_trigger = yes
+				is_doom_very_high_trigger = yes
+			}
+		}
+		modifier = { # The Under-Empire is strong
+			factor = 1.5
+			any_independent_ruler = {
+				culture_group = skaven_group
+				count = 3
+			}
+		}
+		modifier = {
+			factor = 1.5
+			FROM = { has_status = cathay_plague }
+		}
+		modifier = {
+			factor = 0.5
+			FROM = { has_status = cathay_golden_age }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			set_offmap_flag = no_status_news
+			set_status = cathay_skaven_war
+			set_offmap_tmp_flag = cathay_skaven_struck
+			clr_offmap_flag = no_status_news
+		}
+		any_player = {
+			limit = {
+				has_offmap_news_enabled = FROM
+				is_within_diplo_range = ROOT
+			}
+			narrative_event = { id = cathay_war.3 }
+		}
+	}
+}
+
+# The end of the Skaven war. Random event from on_offmap_yearly_pulse.
+character_event = {
+	id = cathay_war.22
+	hide_window = yes
+
+	has_dlc = "Jade Dragon"
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			has_status = cathay_skaven_war
+			had_offmap_tmp_flag = { flag = cathay_skaven_struck years = 2 }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 3
+			FROM = { had_offmap_tmp_flag = { flag = cathay_skaven_struck years = 5 } }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			cathay_war_clear_outcome_flags_effect = yes
+			set_offmap_flag = no_status_news
+			random_list = {
+				100 = { # The tunnels are flooded and sealed
+					modifier = {
+						factor = 1.5
+						dragon_emperor_reigns_trigger = yes
+					}
+					set_offmap_flag = cathay_war_outcome_skaven_purged
+					set_status = cathay_stable
+				}
+				50 = { # The wells are poisoned
+					modifier = {
+						factor = 1.5
+						OR = {
+							is_doom_high_trigger = yes
+							is_doom_very_high_trigger = yes
+						}
+					}
+					set_offmap_flag = cathay_war_outcome_skaven_plague
+					set_status = cathay_plague
+					set_offmap_flag = cathay_had_plague
+				}
+				30 = { # Jade and warpstone vanish into the Under-Empire
+					set_offmap_flag = cathay_war_outcome_skaven_theft
+					set_status = cathay_unrest
+					set_offmap_flag = cathay_had_unrest
+					any_independent_ruler = {
+						limit = { culture_group = skaven_group }
+						wealth = 75
+					}
+				}
+			}
+			clr_offmap_flag = no_status_news
+		}
+		any_player = {
+			limit = {
+				has_offmap_news_enabled = FROM
+				is_within_diplo_range = ROOT
+			}
+			narrative_event = { id = cathay_war.4 }
+		}
+	}
+}
+
+# The Dragon Emperor comes back for his throne (hidden). Fired from on_offmap_yearly_pulse.
+character_event = {
+	id = cathay_war.30
+	hide_window = yes
+
+	has_dlc = "Jade Dragon"
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			offmap_ruler = { cathay_chaos_claimant_faith_trigger = yes }
+			NOT = { has_status = cathay_chaos_invasion }
+		}
+		had_global_flag = { flag = dragon_throne_fell years = 10 }
+		any_character = {
+			trait = creature_celdragon
+			has_character_flag = dragon_emperor_deposed
+		}
+	}
+
+	immediate = {
+		random_list = {
+			4 = {
+				modifier = {
+					factor = 3
+					NOT = { is_doom_very_high_trigger = yes }
+				}
+				modifier = {
+					factor = 2
+					OR = {
+						is_doom_low_trigger = yes
+						is_doom_very_low_trigger = yes
+					}
+				}
+				modifier = {
+					factor = 2
+					cathay_is_suffering_trigger = yes
+				}
+				random_character = {
+					limit = {
+						trait = creature_celdragon
+						has_character_flag = dragon_emperor_deposed
+					}
+					save_event_target_as = returning_dragon
+				}
+				FROM = {
+					cathay_war_clear_outcome_flags_effect = yes
+					set_offmap_flag = cathay_war_outcome_dragon_returns
+					offmap_ruler = { save_event_target_as = fallen_chaos_emperor }
+					set_offmap_flag = no_succession_news
+					set_offmap_holder = event_target:returning_dragon
+					set_offmap_flag = no_status_news
+					set_status = cathay_unrest
+					set_offmap_flag = cathay_had_unrest
+					clr_offmap_flag = no_status_news
+				}
+				event_target:returning_dragon = { clr_character_flag = dragon_emperor_deposed }
+				clr_global_flag = dragon_throne_fell
+				any_player = {
+					limit = {
+						has_offmap_news_enabled = FROM
+						is_within_diplo_range = ROOT
+					}
+					narrative_event = { id = cathay_war.4 }
+				}
+				event_target:fallen_chaos_emperor = {
+					death = {
+						death_reason = death_battle
+						killer = event_target:returning_dragon
+					}
+				}
+			}
+			96 = { }
+		}
+	}
+}

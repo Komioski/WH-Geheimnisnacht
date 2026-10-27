@@ -4,10 +4,11 @@
 # refactor; the shaman events came from events/BR_greenskin_magic_events.txt)
 # Faction: Greenskins
 #
-# Size                          greenskin.1 - greenskin.2
+# Size                          greenskin.1 - greenskin.6
 # Shamans                       greenskin.10 - greenskin.15
 # Camp life                     greenskin.20 - greenskin.22
 # Fungus brewing                greenskin.30 - greenskin.35
+# Squig herding                 greenskin.40 - greenskin.43
 #
 # Fired from common/on_actions/wh_on_actions.txt (on_adulthood, the pulses
 # and on_combat_pulse).
@@ -26,18 +27,16 @@ namespace = greenskin
 # greenskin.1 How big you grew
 # An orc or goblin coming of age gets a size trait from martial skill:
 # small below 10, average below 15, large below 25, huge from 25.
-# Fired at 16, with a five-year catch-up for greenskins created as adults.
-# Only for followers of Gork and Mork or the Spider God, which keeps the
-# five-year check cheap.
+# Fired at 16, and every five years through greenskin.5 and greenskin.6
+# for greenskins created as adults.
 # Scope: ROOT is the greenskin.
 character_event = {
 	id = greenskin.1
 	title = YOUR_SIZE
 	desc = EVTDESCgreenskin1
 	picture = GFX_evt_orcs
-	is_triggered_only = yes # on_adulthood, on_five_year_pulse
+	is_triggered_only = yes # on_adulthood, greenskin.5, greenskin.6
 
-	religion_group = greenskin_gods_group
 	min_age = 16
 
 	trigger = {
@@ -102,28 +101,73 @@ character_event = {
 
 	option = { # WAAAGH!
 		name = EVTOPTAgreenskin2
-		if = { limit = { trait = orc_small } remove_trait = orc_small add_trait = orc_average }
-		else_if = {
-			limit = { trait = orc_average }
-			remove_trait = orc_average
-			add_trait = orc_large
-		}
-		else_if = { limit = { trait = orc_large } remove_trait = orc_large add_trait = orc_huge }
-		else_if = {
-			limit = { trait = goblin_small }
-			remove_trait = goblin_small
-			add_trait = goblin_average
-		}
-		else_if = {
-			limit = { trait = goblin_average }
-			remove_trait = goblin_average
-			add_trait = goblin_large
-		}
-		else_if = {
-			limit = { trait = goblin_large }
-			remove_trait = goblin_large
-			add_trait = goblin_huge
-		}
+		greenskin_grow_effect = yes
+	}
+}
+
+# greenskin.3 Stomp da grot
+# A goblin ruler catches a smaller grot pinching his grub. Stomping him makes
+# the goblin one size bigger (and maybe cruel); letting him off does nothing.
+# Rare: about once in 12 years.
+# Scope: ROOT is the goblin ruler.
+character_event = {
+	id = greenskin.3
+	desc = EVTDESCgreenskin3
+	picture = GFX_evt_orcs
+	is_triggered_only = yes # on_bi_yearly_pulse, random list greenskin_grot_stomp
+
+	culture_group = goblin_group
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		is_landed = yes
+		OR = { trait = goblin_small trait = goblin_average trait = goblin_large }
+	}
+
+	option = { # STOMP!
+		name = EVTOPTAgreenskin3
+		greenskin_grow_effect = yes
+		random = { chance = 20 add_trait = cruel }
+	}
+
+	option = { # Git outta 'ere
+		name = EVTOPTBgreenskin3
+		prestige = -10
+	}
+}
+
+# greenskin.5 Size catch-up for orcs
+# Five-yearly check that sends adult orcs without a size trait to
+# greenskin.1. Split from the goblin check so each has a cheap culture
+# pre-trigger and orcs of any faith are covered.
+# Scope: ROOT is the orc.
+character_event = {
+	id = greenskin.5
+	hide_window = yes
+	is_triggered_only = yes # on_five_year_pulse
+
+	culture_group = orc_group
+	min_age = 16
+
+	immediate = {
+		character_event = { id = greenskin.1 }
+	}
+}
+
+# greenskin.6 Size catch-up for goblins
+# Same as greenskin.5, for goblins.
+# Scope: ROOT is the goblin.
+character_event = {
+	id = greenskin.6
+	hide_window = yes
+	is_triggered_only = yes # on_five_year_pulse
+
+	culture_group = goblin_group
+	min_age = 16
+
+	immediate = {
+		character_event = { id = greenskin.1 }
 	}
 }
 
@@ -647,5 +691,187 @@ character_event = {
 			40 = { add_artifact = scarlet_elf_cap_mushroom }
 			60 = { add_artifact = madcap_mushroom }
 		}
+	}
+}
+
+###############################################################################
+# Squig herding
+###############################################################################
+
+# greenskin.40 Squigs in da cave
+# A goblin ruler finds a squig nest in the caves under his hold. Herd them
+# (greenskin.41 in about a year), eat them (prestige, may turn gluttonous)
+# or leave them be. One chance per character; night goblins are three
+# times as likely to get it.
+# Scope: ROOT is the goblin ruler.
+character_event = {
+	id = greenskin.40
+	desc = EVTDESCgreenskin40
+	picture = GFX_evt_night_goblins
+	is_triggered_only = yes # on_decade_pulse, random list greenskins
+
+	culture_group = goblin_group
+	min_age = 20
+	only_rulers = yes
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		is_landed = yes
+		in_command = no
+		NOT = { has_character_flag = greenskin_squig_nest }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 3 culture = goblin_night }
+	}
+
+	immediate = {
+		set_character_flag = greenskin_squig_nest
+	}
+
+	option = { # Round 'em up!
+		name = EVTOPTAgreenskin40
+		set_character_flag = greenskin_squig_herding
+		add_character_modifier = { name = greenskin_squig_pen years = 2 }
+		character_event = { id = greenskin.41 days = 365 random = 90 }
+	}
+
+	option = { # Squig stew
+		name = EVTOPTBgreenskin40
+		prestige = 25
+		health = 0.5
+		random = { chance = 20 add_trait = gluttonous }
+	}
+
+	option = { # Dey bite. Leave 'em.
+		name = EVTOPTCgreenskin40
+		random = { chance = 10 add_trait = craven }
+	}
+}
+
+# greenskin.41 Da squig pen
+# The herd has grown and eaten two herders. Breed them bigger (stewardship
+# and martial help; success leads to greenskin.42, failure ends the chain
+# with a bitten ruler) or sell them to the boyz for teef.
+# Scope: ROOT is the goblin ruler.
+character_event = {
+	id = greenskin.41
+	desc = EVTDESCgreenskin41
+	picture = GFX_evt_squig_attack
+	is_triggered_only = yes # greenskin.40
+
+	has_character_flag = greenskin_squig_herding
+
+	option = { # Bigger squigs!
+		name = EVTOPTAgreenskin41
+		random_list = {
+			60 = { # They grow
+				modifier = { factor = 1.5 stewardship = 12 }
+				modifier = { factor = 1.5 martial = 12 }
+				custom_tooltip = { text = EVTOPTAgreenskin41_tt }
+				character_event = { id = greenskin.42 days = 365 random = 90 }
+			}
+			40 = { # They bite
+				clr_character_flag = greenskin_squig_herding
+				remove_character_modifier = greenskin_squig_pen
+				prestige = -25
+				add_trait = wounded
+			}
+		}
+	}
+
+	option = { # Sell 'em to da boyz
+		name = EVTOPTBgreenskin41
+		clr_character_flag = greenskin_squig_herding
+		remove_character_modifier = greenskin_squig_pen
+		scaled_wealth = { value = 0.25 min = 25 }
+		if = {
+			limit = { NOT = { has_artifact = squig } }
+			add_artifact = squig
+			check_mount_flags_effect = yes
+		}
+	}
+}
+
+# greenskin.42 Da great cave squig
+# One squig grew into a great cave squig. Ride it (martial and the brave
+# help: a great cave squig mount, a bounce into a wound, or maimed), or make
+# it boss of the herd (greenskin_squig_herder for ten years, and the herd
+# goes to war in greenskin.43 a few years later).
+# Scope: ROOT is the goblin ruler.
+character_event = {
+	id = greenskin.42
+	desc = EVTDESCgreenskin42
+	picture = GFX_evt_squig_attack
+	is_triggered_only = yes # greenskin.41
+
+	has_character_flag = greenskin_squig_herding
+
+	immediate = {
+		remove_character_modifier = greenskin_squig_pen
+	}
+
+	option = { # Oi'm ridin' it!
+		name = EVTOPTAgreenskin42
+		clr_character_flag = greenskin_squig_herding
+		random_list = {
+			50 = { # Tamed
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.5 trait = brave }
+				prestige = 100
+				if = {
+					limit = { NOT = { has_artifact = great_cave_squig } }
+					add_artifact = great_cave_squig
+					check_mount_flags_effect = yes
+				}
+				add_character_modifier = { name = greenskin_squig_rider years = 10 }
+			}
+			35 = { # Bounced off
+				prestige = 50
+				add_trait = wounded
+			}
+			15 = { # Chewed on
+				modifier = { factor = 0.5 martial = 12 }
+				prestige = 50
+				add_maimed_trait_effect = yes
+			}
+		}
+	}
+
+	option = { # Da herd boss
+		name = EVTOPTBgreenskin42
+		add_character_modifier = { name = greenskin_squig_herder years = 10 }
+		character_event = { id = greenskin.43 days = 1095 random = 730 }
+	}
+}
+
+# greenskin.43 Squigs to war
+# The herd boss has bred a whole herd. Loose it on the enemy (squig hoppers
+# for five years) or hold a big squig feast (prestige, may turn gluttonous).
+# Ends the chain.
+# Scope: ROOT is the goblin ruler.
+character_event = {
+	id = greenskin.43
+	desc = EVTDESCgreenskin43
+	picture = GFX_evt_night_goblins
+	is_triggered_only = yes # greenskin.42
+
+	has_character_flag = greenskin_squig_herding
+
+	immediate = {
+		clr_character_flag = greenskin_squig_herding
+	}
+
+	option = { # Let 'em loose!
+		name = EVTOPTAgreenskin43
+		add_character_modifier = { name = greenskin_squig_hoppers years = 5 }
+	}
+
+	option = { # SQUIG FEAST!
+		name = EVTOPTBgreenskin43
+		prestige = 100
+		random = { chance = 25 add_trait = gluttonous }
 	}
 }

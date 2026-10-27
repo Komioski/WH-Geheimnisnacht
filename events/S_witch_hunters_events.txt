@@ -23,6 +23,8 @@
 #   150-152  Hunting mages
 #   160-168  Recruits
 #   170-183  Missions: inquisitorial investigation
+#   185-187  Purge reports (letters during a province purge)
+#   190-201  Missions: hunts (mutant, cult cell, necromancer)
 #
 # Fired from: common/on_actions/00_on_actions_witch_hunters.txt and
 # wh_on_actions.txt (yearly pulse, on_death, society pulse, join requests),
@@ -1577,26 +1579,6 @@ character_event = {
 		}
 	}
 }
-
-# Disabled, kept for review (old witchhunter.39): a maintenance event that
-# cleared the wh_accused flag every two years. wh_accused is now a timed
-# character modifier, so this is not needed.
-#character_event = {
-#	id = witchhunter.39
-#	title = VAMPIRE_HUNTERS # Vampire Hunters
-#	desc = witchhunter39desc #HIDDEN
-#	picture = "GFX_evt_witch_hunters"
-#	hide_window = yes
-#	is_triggered_only = yes
-#	trigger = {
-#		has_character_modifier = wh_accused
-#		age = 1
-#	}
-#	option = {
-#		name = EVTOPT_WITCHHUNTER_34A #HIDDEN
-#		remove_character_flag = wh_accused
-#	}
-#}
 
 ###############################################################################
 # Chapter succession
@@ -4221,10 +4203,17 @@ letter_event = {
 					}
 				}
 			}
-			random_list = { #Flavor Tombola for later?
-				33 = { }
-				33 = { }
-				33 = { }
+			random_list = { # Reports from the purge (whunter.185-187)
+				30 = { letter_event = { id = whunter.185 days = 60 random = 120 } }
+				30 = { letter_event = { id = whunter.186 days = 60 random = 120 } }
+				30 = {
+					modifier = {
+						factor = 2
+						event_target:witch_hunter = { OR = { trait = cruel trait = impaler } }
+					}
+					letter_event = { id = whunter.187 days = 60 random = 120 }
+				}
+				10 = { }
 			}
 		}
 		ai_chance = { factor = 75 }
@@ -5285,18 +5274,25 @@ character_event = {
 			limit = { NOT = { character = ROOT } society_rank == 4 same_society_as = ROOT }
 			save_event_target_as = lodge_hero #Character for handing out missions...
 		}
+		if = { # No other rank 4 member: a rank 3 member hands out missions instead
+			limit = { NOT = { event_target:lodge_hero = { always = yes } } }
+			random_society_member = {
+				limit = { NOT = { character = ROOT } society_rank = 3 same_society_as = ROOT }
+				save_event_target_as = lodge_hero
+			}
+		}
 		if = {
 			limit = { is_landed = yes }
 			capital_scope = { save_event_target_as = home_capital } #For some distance checks...
 		}
 
 		### AVAILABLE MISSIONS: ###
-		# Raid and loot barony. ....................... WB.25501
-		# Lose Weak Focus.............................. WB.25504
-		# Duel <someone>. First blood. ................ WB.10500
-		# Duel <someone>. To the death! ............... whunter.171
-		# Wage war against someone! ................... WB.10512
-		# Recruit child into warrior lodge! ........... WB.10520
+		# Lose a weak focus (landed) ................. WB.25504
+		# Duel another member, first blood ........... WB.10500
+		# Investigate a suspect lord (rank 2+) ....... whunter.171
+		# Hunt the mutant ............................ whunter.190
+		# Root out a cult cell (rank 2+) ............. whunter.195
+		# The necromancer (rank 3+) .................. whunter.200
 
 		random_list = {
 			20 = {
@@ -5410,6 +5406,56 @@ character_event = {
 				event_target:lodge_hero = {
 					character_event = { id = whunter.171 } #Investigate a Heretic
 				}
+			}
+			30 = { # Hunt the mutant
+				trigger = {
+					age = 16
+					OR = {
+						top_liege = {
+							any_realm_character = { whunter_mutant_quarry_trigger = yes }
+						}
+						any_neighbor_independent_ruler = {
+							religion_group = old_world_group
+							NOT = { has_character_modifier = expelled_k_witch_hunters_order }
+							any_realm_character = { whunter_mutant_quarry_trigger = yes }
+						}
+					}
+				}
+				society_quest_event = { id = whunter.190 days = 7 random = 7 }
+			}
+			30 = { # Root out a cult cell
+				trigger = {
+					society_rank = 2
+					age = 16
+					OR = {
+						top_liege = {
+							any_realm_character = { whunter_cultist_quarry_trigger = yes }
+						}
+						any_neighbor_independent_ruler = {
+							religion_group = old_world_group
+							NOT = { has_character_modifier = expelled_k_witch_hunters_order }
+							any_realm_character = { whunter_cultist_quarry_trigger = yes }
+						}
+					}
+				}
+				society_quest_event = { id = whunter.195 days = 7 random = 7 }
+			}
+			20 = { # The necromancer
+				trigger = {
+					society_rank = 3
+					age = 16
+					OR = {
+						top_liege = {
+							any_realm_character = { whunter_necromancer_quarry_trigger = yes }
+						}
+						any_neighbor_independent_ruler = {
+							religion_group = old_world_group
+							NOT = { has_character_modifier = expelled_k_witch_hunters_order }
+							any_realm_character = { whunter_necromancer_quarry_trigger = yes }
+						}
+					}
+				}
+				society_quest_event = { id = whunter.200 days = 7 random = 7 }
 			}
 			75 = { # AI bypasses missions at times
 				trigger = { ai = yes }
@@ -7324,5 +7370,615 @@ letter_event = {
 				any_courtier = { character_event = { id = whunter.145 days = 5 random = 2 } }
 			}
 		}
+	}
+}
+
+###############################################################################
+# Purge reports
+# Letters from an agent purging a province (whunter.142, "cleanse the
+# province"). The chapter master decides small matters from afar.
+###############################################################################
+
+# whunter.185 The midwife
+# Villagers accuse their midwife of witchcraft. Burn her, spare her, or have
+# her examined.
+# Scope: ROOT is the chapter master, event_target:witch_hunter the agent,
+# event_target:target_province the province.
+letter_event = {
+	id = whunter.185
+	desc = EVTDESCwhunter185
+	border = GFX_event_letter_frame_religion
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:witch_hunter = { is_alive = yes }
+	}
+
+	option = { # Burn her
+		name = EVTOPTAwhunter185
+		piety = 10
+		change_society_currency = 25
+		event_target:witch_hunter = { random = { chance = 10 add_trait = cruel } }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 0.2 trait = kind }
+		}
+	}
+	option = { # Spare her
+		name = EVTOPTBwhunter185
+		piety = 5
+		event_target:target_province = {
+			owner = { opinion = { who = ROOT modifier = opinion_grateful years = 5 } }
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 2 trait = just }
+		}
+	}
+	option = { # Have her examined
+		name = EVTOPTCwhunter185
+		trigger = { learning = 10 }
+		random_list = {
+			50 = { # She is a hedge witch after all
+				custom_tooltip = { text = whunter_examined_witch_tt }
+				change_society_currency = 50
+				piety = 15
+			}
+			50 = { # Only a midwife
+				custom_tooltip = { text = whunter_examined_innocent_tt }
+				prestige = 15
+			}
+		}
+		ai_chance = { factor = 20 }
+	}
+}
+
+# whunter.186 A hidden shrine
+# The agent found a shrine to the Ruinous Powers. Destroy it, sell its silver,
+# or study its markings, at some risk to the reader.
+# Scope: as whunter.185.
+letter_event = {
+	id = whunter.186
+	desc = EVTDESCwhunter186
+	border = GFX_event_letter_frame_religion
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:witch_hunter = { is_alive = yes }
+	}
+
+	option = { # Destroy it
+		name = EVTOPTAwhunter186
+		piety = 25
+		ai_chance = { factor = 50 }
+	}
+	option = { # Melt down the silver
+		name = EVTOPTBwhunter186
+		wealth = 50
+		piety = -10
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 0 trait = zealous }
+		}
+	}
+	option = { # Study the markings
+		name = EVTOPTCwhunter186
+		trigger = { learning = 12 }
+		random_list = {
+			50 = { if = { limit = { NOT = { learning = 20 } } change_learning = 1 } }
+			25 = { }
+			25 = {
+				custom_tooltip = { text = whunter_studied_too_closely_tt }
+				add_character_modifier = { name = under_suspicion years = 2 }
+			}
+		}
+		ai_chance = { factor = 25 modifier = { factor = 0 trait = zealous } }
+	}
+}
+
+# whunter.187 The townsfolk turn
+# The purge has gone on too long and a mob gathers against the hunters. Hang
+# the ringleaders, or pay for the damage.
+# Scope: as whunter.185.
+letter_event = {
+	id = whunter.187
+	desc = EVTDESCwhunter187
+	border = GFX_event_letter_frame_religion
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:witch_hunter = { is_alive = yes }
+	}
+
+	option = { # Hang the ringleaders
+		name = EVTOPTAwhunter187
+		piety = 10
+		event_target:target_province = {
+			owner = { opinion = { who = ROOT modifier = opinion_meddling_hunters years = 3 } }
+		}
+		event_target:witch_hunter = { random = { chance = 25 whunter_hurt_effect = yes } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 2 trait = wroth }
+		}
+	}
+	option = { # Pay for the damage
+		name = EVTOPTBwhunter187
+		trigger = { wealth = 50 }
+		wealth = -50
+		prestige = 25
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 0.2 trait = greedy }
+		}
+	}
+}
+
+###############################################################################
+# Missions: hunts
+# Society quests from the mission tombola (whunter.170). The Order points a
+# member at a quarry near their liege's realm; some months later the hunter
+# catches up with it and chooses how to deal with it. Unlanded members can
+# take these too.
+###############################################################################
+
+# whunter.190 Hunt the mutant
+# A mutant hides among the people of the realm. The member is asked to hunt
+# it down.
+# Scope: ROOT is the member. Fired by whunter.170.
+society_quest_event = {
+	id = whunter.190
+	desc = EVTDESCwhunter190
+	is_triggered_only = yes
+	is_in_society = yes
+	only_capable = yes
+
+	trigger = {
+		has_any_quest = no
+		NOT = { has_character_modifier = quest_cooldown_timer }
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				top_liege = { any_realm_character = { whunter_mutant_quarry_trigger = yes } }
+			}
+			top_liege = {
+				random_realm_character = {
+					limit = { whunter_mutant_quarry_trigger = yes }
+					save_event_target_as = whunter_quarry
+				}
+			}
+		}
+		else = {
+			random_neighbor_independent_ruler = {
+				limit = {
+					religion_group = old_world_group
+					NOT = { has_character_modifier = expelled_k_witch_hunters_order }
+					any_realm_character = { whunter_mutant_quarry_trigger = yes }
+				}
+				random_realm_character = {
+					limit = { whunter_mutant_quarry_trigger = yes }
+					save_event_target_as = whunter_quarry
+				}
+			}
+		}
+	}
+
+	quest_target = event_target:whunter_quarry
+
+	option = {
+		name = ACCEPT
+		trigger = { event_target:whunter_quarry = { always = yes } }
+		event_target:whunter_quarry = {
+			show_scope_change = no
+			set_quest_target = { id = quest_whunter_mutant holder = ROOT }
+			add_character_modifier = { name = accused_recently duration = 360 hidden = yes }
+		}
+		save_event_target_as = witch_hunter
+		add_trait = travelling
+		character_event = { id = whunter.191 days = 60 random = 60 }
+	}
+	option = {
+		name = DECLINE
+		custom_tooltip = { text = decline_quest_tooltip }
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# whunter.191 The mutant's lair
+# The hunter has run the mutant to ground. Burn it, drag it before its liege
+# for judgement, or let the wretch go.
+# Scope: ROOT is the member, event_target:whunter_quarry the mutant.
+character_event = {
+	id = whunter.191
+	desc = EVTDESCwhunter191
+	picture = GFX_evt_witch_hunters
+	is_triggered_only = yes
+
+	trigger = {
+		has_quest = quest_whunter_mutant
+		event_target:whunter_quarry = { is_alive = yes prisoner = no }
+	}
+	fail_trigger_effect = { clr_quest = quest_whunter_mutant remove_trait = travelling }
+
+	immediate = {
+		clr_quest = quest_whunter_mutant
+		event_target:whunter_quarry = { show_portrait = yes }
+	}
+
+	option = { # Burn the abomination
+		name = EVTOPTAwhunter191
+		random_list = {
+			60 = {
+				modifier = { factor = 1.25 martial = 12 }
+				modifier = { factor = 1.25 martial = 16 }
+				modifier = { factor = 0.75 event_target:whunter_quarry = { martial = 12 } }
+				modifier = {
+					factor = 0.75
+					event_target:whunter_quarry = { has_massive_mutation_trigger = yes }
+				}
+				custom_tooltip = { text = success_tip }
+				event_target:whunter_quarry = { whunter_burn_at_stake_effect = yes }
+				change_society_currency = 150
+				whunter_mission_won_effect = yes
+			}
+			40 = {
+				modifier = { factor = 0.75 martial = 12 }
+				modifier = { factor = 0.75 trait = brave }
+				custom_tooltip = { text = failure_tip }
+				whunter_hurt_effect = yes
+				whunter_mission_lost_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+	option = { # Bring it before its liege
+		name = EVTOPTBwhunter191
+		trigger = { event_target:whunter_quarry = { independent = no } }
+		random_list = {
+			60 = {
+				modifier = { factor = 1.25 intrigue = 12 }
+				modifier = { factor = 1.25 martial = 12 }
+				modifier = { factor = 0.75 event_target:whunter_quarry = { intrigue = 12 } }
+				custom_tooltip = { text = success_tip }
+				event_target:whunter_quarry = { character_event = { id = whunter.192 } }
+				change_society_currency = 100
+				whunter_mission_won_effect = yes
+			}
+			40 = { custom_tooltip = { text = failure_tip } whunter_mission_lost_effect = yes }
+		}
+		ai_chance = { factor = 30 modifier = { factor = 2 trait = just } }
+	}
+	option = { # Let the wretch go
+		name = EVTOPTCwhunter191
+		trigger = { OR = { ai = no trait = kind } }
+		piety = -50
+		event_target:whunter_quarry = {
+			opinion = { who = ROOT modifier = opinion_grateful years = 10 }
+		}
+		whunter_mission_lost_effect = yes
+		ai_chance = { factor = 5 }
+	}
+}
+
+# whunter.192 Brought before the liege
+# Hands a quarry caught alive to its liege, who gives the verdict
+# (whunter.25: burn, imprison or spare).
+# Scope: ROOT is the quarry.
+character_event = {
+	id = whunter.192
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		add_character_modifier = { name = highly_suspect years = 5 }
+		liege = { character_event = { id = whunter.25 } }
+	}
+}
+
+# whunter.195 Root out a cult cell
+# Informants name a member of a Chaos cult. The member is asked to expose
+# the cell.
+# Scope: ROOT is the member. Fired by whunter.170.
+society_quest_event = {
+	id = whunter.195
+	desc = EVTDESCwhunter195
+	is_triggered_only = yes
+	is_in_society = yes
+	only_capable = yes
+
+	trigger = {
+		has_any_quest = no
+		NOT = { has_character_modifier = quest_cooldown_timer }
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				top_liege = { any_realm_character = { whunter_cultist_quarry_trigger = yes } }
+			}
+			top_liege = {
+				random_realm_character = {
+					limit = { whunter_cultist_quarry_trigger = yes }
+					save_event_target_as = whunter_quarry
+				}
+			}
+		}
+		else = {
+			random_neighbor_independent_ruler = {
+				limit = {
+					religion_group = old_world_group
+					NOT = { has_character_modifier = expelled_k_witch_hunters_order }
+					any_realm_character = { whunter_cultist_quarry_trigger = yes }
+				}
+				random_realm_character = {
+					limit = { whunter_cultist_quarry_trigger = yes }
+					save_event_target_as = whunter_quarry
+				}
+			}
+		}
+	}
+
+	quest_target = event_target:whunter_quarry
+
+	option = {
+		name = ACCEPT
+		trigger = { event_target:whunter_quarry = { always = yes } }
+		event_target:whunter_quarry = {
+			show_scope_change = no
+			set_quest_target = { id = quest_whunter_cult_cell holder = ROOT }
+			add_character_modifier = { name = accused_recently duration = 360 hidden = yes }
+		}
+		save_event_target_as = witch_hunter
+		add_trait = travelling
+		character_event = { id = whunter.196 days = 30 random = 60 }
+	}
+	option = {
+		name = DECLINE
+		custom_tooltip = { text = decline_quest_tooltip }
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# whunter.196 The cell gathers
+# The cult meets tonight. Storm the gathering, slip in among them, or report
+# the cultist to their liege. A failed infiltration leaves the hunter under
+# suspicion.
+# Scope: ROOT is the member, event_target:whunter_quarry the cultist.
+character_event = {
+	id = whunter.196
+	desc = EVTDESCwhunter196
+	picture = GFX_evt_witch_hunters
+	is_triggered_only = yes
+
+	trigger = {
+		has_quest = quest_whunter_cult_cell
+		event_target:whunter_quarry = { is_alive = yes prisoner = no }
+	}
+	fail_trigger_effect = { clr_quest = quest_whunter_cult_cell remove_trait = travelling }
+
+	immediate = {
+		clr_quest = quest_whunter_cult_cell
+		event_target:whunter_quarry = { show_portrait = yes }
+	}
+
+	option = { # Storm the gathering
+		name = EVTOPTAwhunter196
+		random_list = {
+			55 = {
+				modifier = { factor = 1.25 martial = 12 }
+				modifier = { factor = 1.25 martial = 16 }
+				modifier = { factor = 0.75 event_target:whunter_quarry = { intrigue = 15 } }
+				custom_tooltip = { text = success_tip }
+				event_target:whunter_quarry = {
+					set_discovered_society = yes
+					add_character_modifier = { name = known_satanist years = 10 }
+					if = { limit = { is_ruler = no } whunter_burn_at_stake_effect = yes }
+				}
+				change_society_currency = 200
+				whunter_mission_won_effect = yes
+			}
+			45 = {
+				modifier = { factor = 0.75 trait = brave }
+				custom_tooltip = { text = failure_tip }
+				whunter_hurt_effect = yes
+				whunter_mission_lost_effect = yes
+			}
+		}
+		ai_chance = { factor = 50 modifier = { factor = 2 trait = brave } }
+	}
+	option = { # Slip in among them
+		name = EVTOPTBwhunter196
+		random_list = {
+			45 = {
+				modifier = { factor = 1.5 intrigue = 12 }
+				modifier = { factor = 1.25 intrigue = 16 }
+				modifier = { factor = 1.25 trait = deceitful }
+				custom_tooltip = { text = great_success_tip }
+				event_target:whunter_quarry = {
+					set_discovered_society = yes
+					add_character_modifier = { name = known_satanist years = 10 }
+				}
+				change_society_currency = 250
+				whunter_mission_won_effect = yes
+				if = { limit = { NOT = { intrigue = 20 } } change_intrigue = 1 }
+			}
+			55 = {
+				modifier = { factor = 0.75 intrigue = 12 }
+				custom_tooltip = { text = whunter_framed_tt }
+				add_character_modifier = { name = under_suspicion years = 3 }
+				whunter_mission_lost_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = schemer }
+			modifier = { factor = 0.5 NOT = { intrigue = 10 } }
+		}
+	}
+	option = { # Report them to their liege
+		name = EVTOPTCwhunter196
+		trigger = { event_target:whunter_quarry = { independent = no } }
+		event_target:whunter_quarry = { character_event = { id = whunter.192 } }
+		change_society_currency = 75
+		whunter_mission_won_effect = yes
+		ai_chance = { factor = 20 }
+	}
+}
+
+# whunter.200 The necromancer
+# A necromancer or a hidden vampire stirs near the realm. Senior members are
+# asked to destroy it. The most dangerous hunt.
+# Scope: ROOT is the member. Fired by whunter.170.
+society_quest_event = {
+	id = whunter.200
+	desc = EVTDESCwhunter200
+	is_triggered_only = yes
+	is_in_society = yes
+	only_capable = yes
+
+	trigger = {
+		has_any_quest = no
+		NOT = { has_character_modifier = quest_cooldown_timer }
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				top_liege = { any_realm_character = { whunter_necromancer_quarry_trigger = yes } }
+			}
+			top_liege = {
+				random_realm_character = {
+					limit = { whunter_necromancer_quarry_trigger = yes }
+					save_event_target_as = whunter_quarry
+				}
+			}
+		}
+		else = {
+			random_neighbor_independent_ruler = {
+				limit = {
+					religion_group = old_world_group
+					NOT = { has_character_modifier = expelled_k_witch_hunters_order }
+					any_realm_character = { whunter_necromancer_quarry_trigger = yes }
+				}
+				random_realm_character = {
+					limit = { whunter_necromancer_quarry_trigger = yes }
+					save_event_target_as = whunter_quarry
+				}
+			}
+		}
+	}
+
+	quest_target = event_target:whunter_quarry
+
+	option = {
+		name = ACCEPT
+		trigger = { event_target:whunter_quarry = { always = yes } }
+		event_target:whunter_quarry = {
+			show_scope_change = no
+			set_quest_target = { id = quest_whunter_necromancer holder = ROOT }
+			add_character_modifier = { name = accused_recently duration = 360 hidden = yes }
+		}
+		add_trait = travelling
+		character_event = { id = whunter.201 days = 90 random = 90 }
+	}
+	option = {
+		name = DECLINE
+		custom_tooltip = { text = decline_quest_tooltip }
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# whunter.201 Into the crypt
+# The hunter finds the necromancer's lair. Stake and fire can kill the hunter
+# if it goes wrong; Sigmar's rites cost piety but are safer; or withdraw.
+# Scope: ROOT is the member, event_target:whunter_quarry the necromancer.
+character_event = {
+	id = whunter.201
+	desc = EVTDESCwhunter201
+	picture = GFX_evt_witch_hunters
+	is_triggered_only = yes
+
+	trigger = {
+		has_quest = quest_whunter_necromancer
+		event_target:whunter_quarry = { is_alive = yes prisoner = no }
+	}
+	fail_trigger_effect = { clr_quest = quest_whunter_necromancer remove_trait = travelling }
+
+	immediate = {
+		clr_quest = quest_whunter_necromancer
+		event_target:whunter_quarry = { show_portrait = yes }
+	}
+
+	option = { # Stake and fire
+		name = EVTOPTAwhunter201
+		random_list = {
+			50 = {
+				modifier = { factor = 1.25 martial = 12 }
+				modifier = { factor = 1.25 martial = 16 }
+				modifier = { factor = 1.25 learning = 15 }
+				modifier = {
+					factor = 0.6
+					event_target:whunter_quarry = { OR = { martial = 15 intrigue = 15 } }
+				}
+				custom_tooltip = { text = success_tip }
+				event_target:whunter_quarry = { whunter_burn_at_stake_effect = yes }
+				change_society_currency = 300
+				prestige = 100
+				whunter_mission_won_effect = yes
+			}
+			40 = {
+				custom_tooltip = { text = failure_tip }
+				whunter_hurt_effect = yes
+				whunter_mission_lost_effect = yes
+			}
+			10 = {
+				modifier = { factor = 0.5 martial = 16 }
+				custom_tooltip = { text = critical_failure_tip }
+				whunter_mission_lost_effect = yes
+				death = { death_reason = death_murder_unknown killer = event_target:whunter_quarry }
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.25 trait = craven }
+		}
+	}
+	option = { # Sigmar's rites
+		name = EVTOPTBwhunter201
+		trigger = { piety = 100 }
+		piety = -100
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 learning = 15 }
+				modifier = { factor = 1.25 trait = zealous }
+				custom_tooltip = { text = success_tip }
+				event_target:whunter_quarry = { whunter_burn_at_stake_effect = yes }
+				change_society_currency = 250
+				whunter_mission_won_effect = yes
+			}
+			50 = { custom_tooltip = { text = failure_tip } whunter_mission_lost_effect = yes }
+		}
+		ai_chance = { factor = 40 modifier = { factor = 2 trait = zealous } }
+	}
+	option = { # Withdraw
+		name = EVTOPTCwhunter201
+		whunter_mission_lost_effect = yes
+		ai_chance = { factor = 10 modifier = { factor = 3 trait = craven } }
 	}
 }

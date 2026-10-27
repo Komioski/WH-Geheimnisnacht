@@ -2,14 +2,15 @@
 # Beastmen: warherds, Morghur, herdstones, bray shamans and turnskins
 #
 # Namespace: beastmen
-# Faction: Beastmen (also Kurgan and Hung retinues, 70-73)
+# Faction: Beastmen
+# Also used by Kurgan and Hung hordes for their retinues (70-73).
 #
 # Contents
 #   1-3      Warherds rise
 #   5-10     Morghur, the Shadowgave
 #   12-15    Migration
-#   17-19    Death of a beastman ruler
-#   21-22    Challenges
+#   17-20    Death of a beastman ruler
+#   21-24    Challenges
 #   25-30    Marshal job actions (job events 122002-122007 keep numeric ids)
 #   32-35    Cleansing herdstones
 #   37-42    Births: bray shamans and turnskins
@@ -18,7 +19,10 @@
 #   61-67    Herdstone rites and prisoners
 #   70-73    Horde retinues
 #   75-77    Civilised lands rise
-#   80-81    Unused
+#   80       Unused (clan titles)
+#   81       Halfling ambush
+#   85-86    Morrslieb waxes
+#   88-91    Bray shaman omens
 #
 # Shared effects and triggers: common/scripted_effects/wh_beastmen_effects.txt
 # and common/scripted_triggers/wh_beastmen_triggers.txt.
@@ -52,6 +56,7 @@ character_event = {
 		factor = 1
 		modifier = { factor = 0.05 lower_tier_than = DUKE independent = yes }
 		modifier = { factor = 0.25 trait = creature_beastman }
+		modifier = { factor = 2 has_global_flag = morrslieb_full }
 		modifier = { factor = 0 trait = creature_beastman war = yes }
 		modifier = {
 			factor = 0.15
@@ -893,6 +898,8 @@ character_event = {
 ###############################################################################
 
 # beastmen.17 A beastman ruler dies
+# If someone killed the ruler, the killer takes the herd (beastmen.18).
+# Otherwise the heir may face a challenger (beastmen.20).
 # Scope: ROOT is the dead ruler. Fired by on_death.
 character_event = {
 	id = beastmen.17
@@ -902,14 +909,16 @@ character_event = {
 	is_triggered_only = yes
 
 	trigger = {
-		#higher_real_tier_than = COUNT #irrelevant
 		government = beastman_government
 		trait = creature_beastman
-		killer = { is_alive = yes }
 	}
 
 	immediate = {
-		killer = { character_event = { id = beastmen.18 } }
+		if = {
+			limit = { killer = { is_alive = yes } }
+			killer = { character_event = { id = beastmen.18 } }
+		}
+		else = { current_heir = { character_event = { id = beastmen.20 days = 14 random = 14 } } }
 	}
 }
 
@@ -977,6 +986,67 @@ character_event = {
 
 	option = {
 		name = EVTOPTAbeastmen19
+	}
+}
+
+# beastmen.20 The herd stirs
+# The old chieftain died in bed or in battle, not at a rival's hand. The
+# strongest of the herd may challenge the heir: a vassal if one is fit,
+# otherwise a courtier. Less likely when the heir has big horns or a strong arm.
+# Scope: ROOT is the new ruler, two weeks after inheriting.
+character_event = {
+	id = beastmen.20
+	hide_window = yes
+
+	only_rulers = yes
+	is_triggered_only = yes
+
+	trigger = {
+		government = beastman_government
+		trait = creature_beastman
+		age = 16
+		prisoner = no
+		has_regent = no
+		NOR = {
+			trait = incapable
+			trait = mut_crown_of_horns
+			has_character_flag = duel
+			has_character_flag = do_not_disturb
+			has_character_modifier = recent_duel_timer
+		}
+		OR = {
+			any_vassal = { beastmen_herd_challenger_trigger = yes }
+			any_courtier = { beastmen_herd_challenger_trigger = yes }
+		}
+	}
+
+	immediate = {
+		random_list = {
+			40 = {
+				modifier = { factor = 1.5 NOT = { age = 25 } }
+				modifier = { factor = 1.5 trait = horns_none }
+				modifier = { factor = 0.5 trait = horns_big }
+				modifier = { factor = 0.5 martial = 15 }
+				modifier = { factor = 0.75 prestige = 1000 }
+				modifier = { factor = 1.5 has_global_flag = morrslieb_full }
+				if = {
+					limit = { any_vassal = { beastmen_herd_challenger_trigger = yes } }
+					random_vassal = {
+						limit = { beastmen_herd_challenger_trigger = yes }
+						preferred_limit = { trait = horns_big }
+						character_event = { id = beastmen.23 }
+					}
+				}
+				else = {
+					random_courtier = {
+						limit = { beastmen_herd_challenger_trigger = yes }
+						preferred_limit = { trait = horns_big }
+						character_event = { id = beastmen.23 }
+					}
+				}
+			}
+			60 = { }
+		}
 	}
 }
 
@@ -1068,6 +1138,63 @@ character_event = {
 
 	option = {
 		name = EVTOPTAbeastmen22
+	}
+}
+
+# beastmen.23 The old chieftain is dead
+# A gor of the herd sees the new chieftain is untested. Challenge them for the
+# herd (a duel to the death, as with duel_beastman_decision) or bow.
+# Scope: ROOT is the challenger, FROM the new ruler. Fired by beastmen.20.
+character_event = {
+	id = beastmen.23
+	desc = EVTDESCbeastmen23
+	picture = GFX_evt_beastman_chief
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		beastmen_herd_challenger_trigger = yes
+		liege = { character = FROM }
+	}
+
+	option = {
+		name = EVTOPTAbeastmen23 # Challenge
+		beastmen_challenge_liege_effect = yes
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = ambitious }
+			modifier = { factor = 1.5 trait = wroth }
+			modifier = { factor = 1.5 trait = horns_big }
+			modifier = { factor = 1.5 martial = 15 }
+			modifier = { factor = 0.5 FROM = { trait = horns_big } }
+			modifier = { factor = 0.5 FROM = { martial = 15 } }
+			modifier = { factor = 0.25 opinion = { who = FROM value = 50 } }
+			modifier = { factor = 0.1 OR = { is_child_of = FROM is_friend = FROM } }
+		}
+	}
+	option = {
+		name = EVTOPTBbeastmen23 # Bow
+		prestige = -10
+		opinion = { who = FROM modifier = opinion_grateful months = 60 }
+		FROM = { character_event = { id = beastmen.24 } }
+		ai_chance = { factor = 50 }
+	}
+}
+
+# beastmen.24 The challenger bows
+# Scope: ROOT is the new ruler, FROM the gor who bowed.
+character_event = {
+	id = beastmen.24
+	desc = EVTDESCbeastmen24
+	picture = GFX_evt_beastman_chief
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAbeastmen24
+		prestige = 25
 	}
 }
 
@@ -1831,6 +1958,7 @@ character_event = {
 			30 = {
 				modifier = { factor = 1.75 mother_even_if_dead = { trait = bray_shaman } }
 				modifier = { factor = 2.75 father_even_if_dead = { trait = bray_shaman } }
+				modifier = { factor = 1.5 has_global_flag = morrslieb_full }
 				character_event = { id = beastmen.38 days = 120 random = 100 }
 			}
 			70 = { }
@@ -2392,40 +2520,17 @@ character_event = {
 		trait = creature_beastman
 		age = 16
 		prestige = 500
-		any_realm_province = {
-			any_neighbor_province = {
-				owner = { NOT = { trait = creature_beastman } NOT = { is_liege_or_above = ROOT } }
-			}
-		}
+		beastmen_has_prey_trigger = yes
 	}
 
 	weight_multiplier = {
 		factor = 1
 		modifier = { factor = 2.75 trait = morghur }
+		modifier = { factor = 1.5 has_global_flag = morrslieb_full }
 	}
 
 	immediate = {
-		random_realm_province = {
-			random_neighbor_province = {
-				limit = {
-					owner = {
-						NOT = { trait = creature_beastman }
-						NOT = { is_liege_or_above = ROOT }
-					}
-				}
-				dejure_liege_title = {
-					owner = {
-						ROOT = {
-							war = {
-								casus_belli = beastman_migration
-								target = PREV
-								thirdparty_title = PREVPREV
-							}
-						} #closesRoot
-					} #closesdejuretitle
-				} #closes owner
-			} #closesrandomneighbor
-		} #closesanyrealmprovince
+		beastmen_attack_prey_effect = yes
 	}
 }
 
@@ -3754,12 +3859,13 @@ character_event = {
 
 ###############################################################################
 # Unused
-# Nothing fires these events at the moment. Kept until a decision is made.
+# Nothing fires this event. Kept in case beastman rulers end up holding two
+# clan titles in play.
 ###############################################################################
 
 # beastmen.80 Too many clan titles
 # Deactivates one of two clan titles held by a beastman ruler. Meant for
-# on_inheritance but not hooked up.
+# on_inheritance but not hooked up (Komi, 2026-10-27: leave it unused).
 # Scope: ROOT is the ruler.
 character_event = {
 	id = beastmen.80
@@ -3779,17 +3885,36 @@ character_event = {
 	}
 }
 
-# beastmen.81 End of the line
-# A halfling assassin kills the ruler. Nothing fires it.
-# Scope: ROOT is the ruler.
+###############################################################################
+# Halfling ambush
+# The Moot's folk are small, but some of them are very angry.
+###############################################################################
+
+# beastmen.81 Small but deadly
+# A halfling with two daggers ambushes a beastman lord whose lands touch the
+# Moot. Fight (a martial gamble), bellow for the herd, or, for a bray shaman,
+# curse the wretch.
+# Scope: ROOT is the ruler. Fired by on_five_year_pulse (random list).
 character_event = {
 	id = beastmen.81
-	title = THE_END
+	title = EVTNAMEbeastmen81
 	desc = EVTDESCbeastmen81
 	picture = GFX_evt_halfling_assasin
 	border = GFX_event_normal_frame_war
 
+	only_rulers = yes
+	only_men = yes
+	capable_only = yes
+	prisoner = no
 	is_triggered_only = yes
+
+	trigger = {
+		trait = creature_beastman
+		age = 16
+		is_incapacitated_trigger = no
+		beastmen_near_moot_trigger = yes
+	}
+
 	immediate = {
 		create_character = {
 			random_traits = yes
@@ -3800,21 +3925,316 @@ character_event = {
 			age = 23
 			attributes = { martial = 7 }
 			trait = creature_halfling
-			trait = naive_appeaser
 			trait = kind
 			trait = zealous
+			trait = brave
 		}
-		new_character = { save_event_target_as = assasin_halfling }
+		new_character = { save_event_target_as = beastmen_halfling }
 	}
 
 	option = {
-		name = EVTOPTAbeastmen81
-		event_target:assasin_halfling = { show_portrait = yes }
-		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
-		else = { death = { death_reason = death_murder killer = event_target:assasin_halfling } }
-		ai_chance = { factor = 1 }
+		name = EVTOPTAbeastmen81 # Fight
+		event_target:beastmen_halfling = { show_portrait = yes }
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.25 trait = strong }
+				modifier = { factor = 1.25 trait = brave }
+				modifier = { factor = 1.25 trait = horns_big }
+				modifier = { factor = 1.25 trait = duelist }
+				modifier = { factor = 0.5 trait = weak }
+				modifier = { factor = 0.75 is_ill = yes }
+				custom_tooltip = { text = beastmen_halfling_slain_tt }
+				prestige = 50
+				event_target:beastmen_halfling = { beastmen_slay_effect = yes }
+			}
+			30 = {
+				modifier = { factor = 1.5 trait = slow }
+				custom_tooltip = { text = beastmen_halfling_wounds_tt }
+				add_trait = wounded
+				prestige = 10
+			}
+			10 = {
+				modifier = { factor = 0.5 martial = 15 }
+				modifier = { factor = 0.5 trait = tough }
+				modifier = { factor = 2 trait = craven }
+				custom_tooltip = { text = beastmen_halfling_kills_tt }
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = { death_reason = death_murder killer = event_target:beastmen_halfling }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.25 trait = craven }
+		}
 	}
+	option = {
+		name = EVTOPTBbeastmen81 # Call the herd
+		prestige = -25
+		random_courtier = {
+			limit = {
+				trait = creature_beastman
+				age = 16
+				NOT = { character = event_target:beastmen_halfling }
+			}
+			opinion = { who = ROOT modifier = opinion_disgusted months = 24 }
+		}
+		ai_chance = { factor = 30 modifier = { factor = 3 trait = craven } }
+	}
+	option = {
+		name = EVTOPTCbeastmen81 # Curse him
+		trigger = { trait = bray_shaman }
+		piety = 25
+		event_target:beastmen_halfling = { beastmen_slay_effect = yes }
+		ai_chance = { factor = 100 }
+	}
+
 	after = {
-		event_target:assasin_halfling = { banish = yes }
+		event_target:beastmen_halfling = { if = { limit = { is_alive = yes } banish = yes } }
+	}
+}
+
+###############################################################################
+# Morrslieb waxes
+# Once in a while the Chaos moon hangs full and green over the world for a
+# year. The flag morrslieb_full makes warherds, bray shamans, turnskins, herd
+# wars and lunacy more likely, and beastman lords get a year of frenzy.
+###############################################################################
+
+# beastmen.85 The Chaos moon
+# Clears last year's full moon, or rolls for a new one: about once in 25
+# years, more often as the doom rises. Players hear of it (beastmen.86).
+# Scope: province 1. Fired every year by doom.1.
+province_event = {
+	id = beastmen.85
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		province_id = 1
+	}
+
+	immediate = {
+		if = { limit = { has_global_flag = morrslieb_full } clr_global_flag = morrslieb_full }
+		else = {
+			random_list = {
+				4 = {
+					modifier = { factor = 0.5 is_doom_very_low_trigger = yes }
+					modifier = { factor = 1.5 is_doom_medium_trigger = yes }
+					modifier = { factor = 2 is_doom_high_trigger = yes }
+					modifier = { factor = 3 is_doom_very_high_trigger = yes }
+					set_global_flag = morrslieb_full
+					any_playable_ruler = {
+						limit = { trait = creature_beastman }
+						add_character_modifier = {
+							modifier = beastmen_morrslieb_frenzy
+							duration = 365
+						}
+					}
+					any_player = { character_event = { id = beastmen.86 } }
+				}
+				96 = { }
+			}
+		}
+	}
+}
+
+# beastmen.86 Morrslieb waxes
+# Scope: ROOT is a player.
+character_event = {
+	id = beastmen.86
+	title = EVTNAMEbeastmen86
+	desc = { text = EVTDESCbeastmen86 trigger = { trait = creature_beastman } }
+	desc = { text = EVTDESCbeastmen86b trigger = { NOT = { trait = creature_beastman } } }
+	picture = GFX_evt_beastmen_mist
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAbeastmen86
+		trigger = { trait = creature_beastman }
+	}
+	option = {
+		name = EVTOPTAbeastmen86b
+		trigger = { NOT = { trait = creature_beastman } }
+	}
+}
+
+###############################################################################
+# Bray shaman omens
+# A herd at peace has a bray shaman read the signs. The gods ask for blood,
+# the herdstone sings, or the omens are bad and need a sacrifice.
+###############################################################################
+
+# beastmen.88 The shaman reads the signs
+# Picks the omen and the shaman who reads it: a courtier, else a vassal, else
+# the ruler.
+# Scope: ROOT is the ruler. Fired by on_bi_yearly_pulse (random list).
+character_event = {
+	id = beastmen.88
+	hide_window = yes
+
+	only_playable = yes
+	only_men = yes
+	capable_only = yes
+	prisoner = no
+	is_triggered_only = yes
+
+	trigger = {
+		trait = creature_beastman
+		war = no
+		age = 16
+		beastmen_has_bray_shaman_trigger = yes
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.5 has_global_flag = morrslieb_full }
+	}
+
+	immediate = {
+		if = {
+			limit = { any_courtier = { trait = bray_shaman } }
+			random_courtier = {
+				limit = { trait = bray_shaman }
+				save_event_target_as = beastmen_shaman
+			}
+		}
+		else_if = {
+			limit = { any_vassal = { trait = bray_shaman } }
+			random_vassal = {
+				limit = { trait = bray_shaman }
+				save_event_target_as = beastmen_shaman
+			}
+		}
+		else = { save_event_target_as = beastmen_shaman }
+		random_list = {
+			40 = {
+				modifier = { factor = 2 religion = khorne }
+				modifier = { factor = 1.5 has_global_flag = morrslieb_full }
+				modifier = { factor = 0.5 NOT = { beastmen_has_prey_trigger = yes } }
+				character_event = { id = beastmen.89 }
+			}
+			35 = {
+				modifier = {
+					factor = 0
+					NOT = { capital_scope = { has_province_modifier = beastman_herdstone } }
+				}
+				character_event = { id = beastmen.90 }
+			}
+			25 = {
+				modifier = { factor = 0.5 has_global_flag = morrslieb_full }
+				character_event = { id = beastmen.91 }
+			}
+		}
+	}
+}
+
+# beastmen.89 The gods ask for blood
+# Attack a civilised neighbour, or take the omen's fury into the next fight.
+# Turning the gods down costs piety.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = beastmen.89
+	desc = EVTDESCbeastmen89
+	picture = GFX_evt_beastmen_brayshaman
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAbeastmen89 # War
+		trigger = { beastmen_has_prey_trigger = yes }
+		event_target:beastmen_shaman = { show_portrait = yes }
+		piety = 25
+		add_character_modifier = { modifier = beastmen_blood_omen duration = 730 }
+		beastmen_attack_prey_effect = yes
+		ai_chance = { factor = 70 modifier = { factor = 0.25 trait = content } }
+	}
+	option = {
+		name = EVTOPTBbeastmen89 # Remember the omen
+		event_target:beastmen_shaman = { show_portrait = yes }
+		add_character_modifier = { modifier = beastmen_blood_omen duration = 730 }
+		ai_chance = { factor = 25 }
+	}
+	option = {
+		name = EVTOPTCbeastmen89 # Refuse
+		piety = -50
+		if = {
+			limit = { NOT = { event_target:beastmen_shaman = { character = ROOT } } }
+			event_target:beastmen_shaman = {
+				opinion = { who = ROOT modifier = opinion_disgusted months = 36 }
+			}
+		}
+		ai_chance = { factor = 5 modifier = { factor = 4 trait = content } }
+	}
+}
+
+# beastmen.90 The herdstone sings
+# The capital's herdstone hums with power. Gather the herd for a great rite,
+# or feast.
+# Scope: ROOT is the ruler, whose capital has a herdstone.
+character_event = {
+	id = beastmen.90
+	desc = EVTDESCbeastmen90
+	picture = GFX_evt_beastmen_herdstone
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAbeastmen90 # Rite
+		trigger = { wealth = 50 }
+		event_target:beastmen_shaman = { show_portrait = yes }
+		wealth = -50
+		piety = 50
+		capital_scope = {
+			add_province_modifier = { name = beastmen_herdstone_singing duration = 1825 }
+		}
+		ai_chance = { factor = 60 }
+	}
+	option = {
+		name = EVTOPTBbeastmen90 # Feast
+		prestige = 50
+		ai_chance = { factor = 40 }
+	}
+}
+
+# beastmen.91 Bad signs
+# The entrails are black. The shaman asks for a sacrifice: a prisoner, gold,
+# or nothing, and the herd's spirit sinks for two years.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = beastmen.91
+	desc = EVTDESCbeastmen91
+	picture = GFX_evt_beastmen_brayshaman
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAbeastmen91 # A prisoner
+		trigger = { any_prisoner = { is_ruler = no } }
+		random_prisoner = {
+			limit = { is_ruler = no }
+			show_portrait = yes
+			beastmen_slay_effect = yes
+		}
+		piety = 50
+		ai_chance = { factor = 60 }
+	}
+	option = {
+		name = EVTOPTBbeastmen91 # Gold
+		trigger = { wealth = 100 }
+		wealth = -100
+		piety = 25
+		ai_chance = { factor = 30 }
+	}
+	option = {
+		name = EVTOPTCbeastmen91 # Ignore
+		event_target:beastmen_shaman = { show_portrait = yes }
+		add_character_modifier = { modifier = beastmen_ill_omen duration = 730 }
+		ai_chance = { factor = 10 }
 	}
 }

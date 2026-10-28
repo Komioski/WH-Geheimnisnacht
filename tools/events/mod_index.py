@@ -23,7 +23,7 @@ PRE_TRIGGERS = set('''only_playable only_rulers only_independent only_men only_w
     culture_group has_dlc is_part_of_plot war is_married is_female ai has_character_flag
     has_global_flag is_patrician is_in_society has_job_title friends rivals lacks_dlc
     is_sick is_pregnant age has_flag is_night'''.split())
-STRONG_PRE = set('''only_playable only_rulers only_independent religion religion_group
+STRONG_PRE = set('''only_playable only_rulers only_independent religion religion_group is_sick
     culture culture_group has_character_flag has_global_flag ai is_patrician
     is_in_society has_job_title has_flag'''.split())
 PULSES = set('''on_yearly_pulse on_bi_yearly_pulse on_five_year_pulse on_decade_pulse

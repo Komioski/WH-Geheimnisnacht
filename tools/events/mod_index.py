@@ -25,9 +25,12 @@ PRE_TRIGGERS = set('''only_playable only_rulers only_independent only_men only_w
     is_sick is_pregnant age has_flag is_night'''.split())
 STRONG_PRE = set('''only_playable only_rulers only_independent religion religion_group is_sick
     culture culture_group has_character_flag has_global_flag ai is_patrician
-    is_in_society has_job_title has_flag'''.split())
+    is_in_society has_job_title has_flag min_age_40_plus'''.split())
+# Hooks that fire for every character again and again. on_adolescence (once in
+# a lifetime) and on_startup (once per game load) are left out: a cheap trigger
+# there costs next to nothing.
 PULSES = set('''on_yearly_pulse on_bi_yearly_pulse on_five_year_pulse on_decade_pulse
-    on_yearly_childhood_pulse on_adolescence on_startup on_new_holder'''.split())
+    on_yearly_childhood_pulse on_new_holder'''.split())
 TAG = re.compile(r'^\s*#+\s*(Faction|Scope|Fired by|Calls|Notes?)\s*:\s*(.*)$', re.I)
 
 
@@ -44,6 +47,10 @@ class Event:
         self.has_mtth = pdx.get(body, 'mean_time_to_happen') is not None
         self.has_weight = pdx.get(body, 'weight_multiplier') is not None
         self.pre = [k for k, op, v, l in body if k in PRE_TRIGGERS]
+        # A high min_age also filters most characters out before the trigger
+        # runs (few characters live past 40), so it counts as a strong one.
+        if any(k == 'min_age' and str(v).isdigit() and int(v) >= 40 for k, op, v, l in body):
+            self.pre.append('min_age_40_plus')
         self.calls = pdx.event_calls(body)
         self.doc_title = ''
         self.doc_summary = ''

@@ -1,0 +1,324 @@
+###############################################################################
+# Lunacy scripted effects
+# Used by events/S_lunacy_events.txt (namespace lunacy) and by mutate.5 and
+# mutate.9 in events/wh_mutation_events.txt.
+###############################################################################
+
+# The court learns that its ruler has gone mad. Vassals and unlanded courtiers
+# of a faith that frowns on madness (lunacy_sane_faith_trigger) think less of
+# ROOT for ten years.
+# Scope: the lunatic (ROOT).
+lunacy_court_shocked_effect = {
+	hidden_tooltip = {
+		any_vassal = {
+			limit = { lunacy_sane_faith_trigger = yes }
+			opinion = { modifier = opinion_lunatic_w who = ROOT years = 10 }
+		}
+		any_courtier = {
+			limit = {
+				is_landed = no
+				lunacy_sane_faith_trigger = yes
+			}
+			opinion = { modifier = opinion_lunatic_w who = ROOT years = 10 }
+		}
+	}
+}
+
+# Moves the lunacy trait to the stage the lunatic_counter variable has
+# reached: twitchy from 5, maniac from 10, raving from 20. Fires the matching
+# notice (mutate.6-8) when the stage changes. Sets the lunacy_counter_active
+# flag, the pre-trigger of the five-yearly drift (mutate.9).
+# Scope: a character.
+lunacy_counter_check_effect = {
+	set_character_flag = lunacy_counter_active # lets mutate.9 find this character
+	if = {
+		limit = { check_variable = { which = "lunatic_counter" value = 20 } }
+		if = {
+			limit = { NOT = { trait = lunatic_3 } }
+			remove_trait = lunatic_1
+			remove_trait = lunatic_2
+			add_trait = lunatic_3
+			character_event = { id = mutate.6 days = 50 random = 150 } # Raving lunatic
+		}
+	}
+	else_if = {
+		limit = { check_variable = { which = "lunatic_counter" value = 10 } }
+		if = {
+			limit = { NOT = { trait = lunatic_2 } }
+			remove_trait = lunatic_1
+			remove_trait = lunatic_3
+			add_trait = lunatic_2
+			character_event = { id = mutate.7 days = 50 random = 150 } # Maniac
+		}
+	}
+	else_if = {
+		limit = { check_variable = { which = "lunatic_counter" value = 5 } }
+		if = {
+			limit = { NOT = { trait = lunatic_1 } }
+			remove_trait = lunatic_2
+			remove_trait = lunatic_3
+			add_trait = lunatic_1
+			character_event = { id = mutate.8 days = 50 random = 150 } # Twitchy
+		}
+	}
+}
+
+# Brings the lunatic_counter variable in line with the lunacy trait when the
+# trait was added or cured by an event that does not track the counter (vanilla
+# treatments, adolescence, religious events). Never moves a trait.
+# Scope: a character. Used by mutate.9 before the drift roll.
+lunacy_counter_sync_effect = {
+	set_character_flag = lunacy_counter_active
+	if = {
+		limit = {
+			trait = lunatic_3
+			NOT = { check_variable = { which = "lunatic_counter" value = 20 } }
+		}
+		set_variable = { which = "lunatic_counter" value = 20 }
+	}
+	else_if = {
+		limit = {
+			trait = lunatic_2
+			NOT = { check_variable = { which = "lunatic_counter" value = 10 } }
+		}
+		set_variable = { which = "lunatic_counter" value = 10 }
+	}
+	else_if = {
+		limit = {
+			trait = lunatic_1
+			NOT = { check_variable = { which = "lunatic_counter" value = 5 } }
+		}
+		set_variable = { which = "lunatic_counter" value = 5 }
+	}
+	else_if = {
+		limit = {
+			is_lunatic_trigger = no
+			check_variable = { which = "lunatic_counter" value = 5 }
+		}
+		set_variable = { which = "lunatic_counter" value = 4 }
+	}
+	# The counter never drops below zero, so recovery cannot bank sanity.
+	if = {
+		limit = { NOT = { check_variable = { which = "lunatic_counter" value = 0 } } }
+		set_variable = { which = "lunatic_counter" value = 0 }
+	}
+}
+
+# Moves the lunacy trait to the stage the lunatic_counter variable has reached,
+# up or down. Climbing a stage goes through lunacy_counter_check_effect and
+# shows its notice; falling back is silent, and a twitchy or cured character
+# loses any madness (lunacy_strip_madness_effect). Below 5 every lunacy trait
+# goes.
+# Scope: a character.
+lunacy_counter_settle_effect = {
+	if = {
+		limit = {
+			trait = lunatic_3
+			NOT = { check_variable = { which = "lunatic_counter" value = 20 } }
+		}
+		remove_trait = lunatic_3
+		if = {
+			limit = { check_variable = { which = "lunatic_counter" value = 10 } }
+			add_trait = lunatic_2
+		}
+		else_if = {
+			limit = { check_variable = { which = "lunatic_counter" value = 5 } }
+			add_trait = lunatic_1
+		}
+		lunacy_strip_madness_effect = yes
+	}
+	else_if = {
+		limit = {
+			trait = lunatic_2
+			NOT = { check_variable = { which = "lunatic_counter" value = 10 } }
+		}
+		remove_trait = lunatic_2
+		if = {
+			limit = { check_variable = { which = "lunatic_counter" value = 5 } }
+			add_trait = lunatic_1
+		}
+		lunacy_strip_madness_effect = yes
+	}
+	else_if = {
+		limit = {
+			trait = lunatic_1
+			NOT = { check_variable = { which = "lunatic_counter" value = 5 } }
+		}
+		remove_trait = lunatic_1
+		lunacy_strip_madness_effect = yes
+	}
+	else = {
+		lunacy_counter_check_effect = yes
+	}
+}
+
+# Removes the six mortal madnesses once nothing can sustain them: the
+# character is no longer a maniac or raving lunatic and wears no madness
+# artifact (the onset events need one of those).
+# Scope: a character.
+lunacy_strip_madness_effect = {
+	if = {
+		limit = {
+			lunacy_maniac_trigger = no
+			lunacy_raving_trigger = no
+		}
+		remove_character_modifier = blind_virtue
+		remove_character_modifier = despairing_laughter
+		remove_character_modifier = unfeeling
+		remove_character_modifier = fake_mage
+		remove_character_modifier = bloodthirsty
+		remove_character_modifier = god_delusion
+	}
+}
+
+# Gorging on blood or flesh: a temperate character may lose the trait, others
+# may turn gluttonous, and a glutton may grow fat.
+# Scope: a character.
+lunacy_gluttony_effect = {
+	if = {
+		limit = { trait = temperate }
+		random = { chance = 40 remove_trait = temperate }
+	}
+	else_if = {
+		limit = { trait = gluttonous }
+		if = {
+			limit = { NOT = { trait = is_fat } }
+			random = { chance = 25 add_trait = is_fat }
+		}
+	}
+	else = {
+		random = { chance = 30 add_trait = gluttonous }
+	}
+}
+
+# A night of excess: a chaste or celibate character may lose the trait, others
+# may turn lustful.
+# Scope: a character.
+lunacy_lust_effect = {
+	if = {
+		limit = {
+			OR = {
+				trait = chaste
+				trait = celibate
+			}
+		}
+		random = {
+			chance = 50
+			remove_trait = chaste
+			remove_trait = celibate
+		}
+	}
+	else_if = {
+		limit = { NOT = { trait = lustful } }
+		random = { chance = 50 add_trait = lustful }
+	}
+}
+
+# Dies by accident, unless the character cannot die (antideath_effect).
+# Scope: a character.
+lunacy_accident_death_effect = {
+	if = {
+		limit = { is_invincible_trigger = yes }
+		antideath_effect = yes
+	}
+	else = {
+		death = { death_reason = death_accident }
+	}
+}
+
+# An everchild turns their mortal mother into a vampire of their own bloodline.
+# Scope: ROOT is the vampire everchild, FROM the mother.
+lunacy_turn_mother_effect = {
+	FROM = {
+		clear_favour_effect = yes
+		clr_character_flag = hidden_cultist_tzeentch
+		clr_character_flag = hidden_cultist_nurgle
+		clr_character_flag = hidden_cultist_slaanesh
+		clr_character_flag = hidden_cultist_khorne
+		clr_character_flag = hidden_cultist_undivided
+		clear_secret_religion = yes
+	}
+	if = {
+		limit = {
+			OR = {
+				trait = vampire_lahmian_visible
+				trait = vampire_lahmian_hidden
+			}
+		}
+		FROM = {
+			add_trait = vampire_lahmian_visible
+			set_graphical_culture = lahmian_vampire
+		}
+	}
+	else_if = {
+		limit = {
+			OR = {
+				trait = vampire_strigoi_visible
+				trait = vampire_strigoi_hidden
+			}
+		}
+		FROM = {
+			add_trait = vampire_strigoi_visible
+			set_graphical_culture = strigoi_vampire
+		}
+	}
+	else_if = {
+		limit = {
+			OR = {
+				trait = vampire_blood_visible
+				trait = vampire_blood_hidden
+			}
+		}
+		FROM = {
+			add_trait = vampire_blood_visible
+			culture = blooddragons_culture
+			set_graphical_culture = generic_vampire
+		}
+	}
+	else_if = {
+		limit = {
+			OR = {
+				trait = vampire_necrarch_visible
+				trait = vampire_necrarch_hidden
+			}
+		}
+		FROM = {
+			add_trait = vampire_necrarch_visible
+			set_graphical_culture = generic_vampire
+		}
+	}
+	else_if = {
+		limit = {
+			OR = {
+				trait = vampire_jade_visible
+				trait = vampire_jade_hidden
+			}
+		}
+		FROM = {
+			add_trait = vampire_jade_visible
+			set_graphical_culture = generic_vampire
+		}
+	}
+	else_if = {
+		limit = {
+			OR = {
+				trait = vampire_mahtmasi_visible
+				trait = vampire_mahtmasi_hidden
+			}
+		}
+		FROM = {
+			add_trait = vampire_mahtmasi_visible
+			set_graphical_culture = generic_vampire
+		}
+	}
+	else = {
+		FROM = {
+			add_trait = vampire_carstein_visible
+			set_graphical_culture = generic_vampire
+		}
+	}
+	FROM = {
+		religion = vampiric
+		recalc_succession = yes
+	}
+}

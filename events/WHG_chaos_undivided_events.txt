@@ -1,6 +1,7 @@
 ###############################################################################
 # Chaos flavour events (this file also holds the Everchosen events, namespace
-# undivided, further down; they came from DR_chaos_undivided_events.txt)
+# undivided, further down; they came from DR_chaos_undivided_events.txt and,
+# for the path to the mantle, BR_chaos_events.txt)
 # Namespace: chaosfl (was "schaosfl" before the 2026 events refactor)
 # Faction: Chaos
 #
@@ -1051,6 +1052,7 @@ character_event = {
 #   10-11  the Everchosen falls
 #   20-22  surrender offer to Chaos and Norscan rulers
 #   25     the horde grows after its first conquest
+#   30-42  the path of the Everchosen (the altar, the four trials, the mark)
 #
 # Callers:
 #   undivided.1   on_decade_pulse (wh_on_actions), for the Sigmarite head
@@ -1060,10 +1062,11 @@ character_event = {
 #   undivided.11  on_five_year_pulse (wh_on_actions)
 #   undivided.20  everchosen_invasion on_add (cb_types_chaos)
 #   undivided.25  everchosen_invasion on_success (cb_types_chaos)
+#   undivided.30  seektobecomeeverchosen decision (wh_chaos_decisions)
+#   undivided.32  on_unit_entering_province (nb_on_actions)
 #
-# The player path to the mantle (seektobecomeeverchosen decision and the
-# claim_the_mantle_of_the_everchosen war) lives elsewhere; undivided.10 cleans
-# up after any Everchosen, player or AI.
+# undivided.30-42 are the path to the mantle for a living Chaos ruler; undivided.10
+# cleans up after any Everchosen, player or AI.
 ###############################################################################
 
 namespace = undivided
@@ -1797,5 +1800,574 @@ character_event = {
 			add_building = no_sheep_8
 			refill_holding_levy = yes
 		}
+	}
+}
+
+###############################################################################
+# 30-42 The path of the Everchosen
+# (came from events/BR_chaos_events.txt, namespace "chaos", in the 2026 events
+# refactor)
+#
+# A Chaos ruler with the favour of all four gods takes the
+# seektobecomeeverchosen decision (wh_chaos_decisions) and journeys to the Altar of Ultimate Darkness
+# in the far north of Naggaroth. With the default game rule the journey is a
+# 60-day pilgrimage; with the extended rule the seeker must lead an army into
+# the altar's province (1364) in person. There they face four duels to the
+# death against champions of the gods. A seeker who wins all four is marked as
+# the Everchosen, gets the Host of Chaos, four daemon hosts, and the call goes
+# out to every free Chaos ruler of Norsca and the Wastes.
+###############################################################################
+
+# 30 The Everchosen
+# The decision's opening event: set out for the altar, or not.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.30
+	title = EVERCHOSEN
+	desc = EVTDESCundivided30
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes # seektobecomeeverchosen decision
+	min_age = 16
+
+	option = {
+		name = I_SHALL_SEEK_OUT_THE_GODS
+		trigger = { has_game_rule = { name = warhammer_everchosen_quest value = default } }
+		set_character_flag = potential_everchosen
+		add_trait = on_pilgrimage
+		character_event = { id = undivided.31 days = 60 }
+	}
+	option = {
+		name = I_SHALL_SEEK_OUT_THE_GODS
+		trigger = { has_game_rule = { name = warhammer_everchosen_quest value = extended } }
+		custom_tooltip = { text = undivided_lead_army_to_altar_tt }
+		set_character_flag = potential_everchosen
+		# The AI cannot plan the march, so it makes the pilgrimage instead.
+		if = {
+			limit = { ai = yes }
+			add_trait = on_pilgrimage
+			character_event = { id = undivided.31 days = 60 }
+		}
+	}
+	option = {
+		name = NO_NOT_NOW
+		ai_chance = { factor = 0 }
+	}
+}
+
+# 31 The Altar of Ultimate Darkness (default rule)
+# The pilgrimage ends at the altar. Turning back ends the quest and the
+# pilgrimage.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.31
+	title = EVERCHOSEN
+	desc = EVTDESCundivided31
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+	}
+
+	option = {
+		name = EVTOPTAundivided31 # Enter the temple
+		character_event = { id = undivided.33 days = 5 }
+	}
+	option = {
+		name = NO_NOT_NOW
+		clr_character_flag = potential_everchosen
+		if = { limit = { trait = on_pilgrimage } remove_trait = on_pilgrimage }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# 32 The Altar of Ultimate Darkness (extended rule)
+# A seeker who leads an army into the altar's province reaches the temple.
+# Scope: ROOT = a commander entering province 1364.
+character_event = {
+	id = undivided.32
+	title = EVERCHOSEN
+	desc = EVTDESCundivided31
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes # on_unit_entering_province
+	has_character_flag = potential_everchosen
+
+	trigger = {
+		location = { province_id = 1364 } # The Altar of Ultimate Darkness
+	}
+
+	option = {
+		name = EVTOPTAundivided31 # Enter the temple
+		character_event = { id = undivided.33 days = 5 }
+	}
+	option = {
+		name = NO_NOT_NOW
+		clr_character_flag = potential_everchosen
+		ai_chance = { factor = 0 }
+	}
+}
+
+# 33 The first trial
+# A champion of one of the four gods. Waits while the seeker is still busy
+# with another duel.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.33
+	title = EVERCHOSEN
+	desc = EVTDESCundivided33
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.33 days = 21 }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = combatant_1
+		undivided_create_trial_champion_effect = yes
+		event_target:combatant_2 = {
+			upgrade_education_effect = yes
+			add_five_duel_experience_modifier = yes
+			add_five_duel_experience_modifier = yes
+			undivided_trial_champion_setup_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided33 # Charge
+		show_portrait = event_target:combatant_2
+		undivided_trial_duel_effect = yes
+		character_event = { id = undivided.34 days = 7 }
+	}
+}
+
+# 34 The second trial
+# A chosen warrior of Chaos Undivided.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.34
+	title = EVERCHOSEN
+	desc = EVTDESCundivided34
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.34 days = 21 }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = combatant_1
+		create_random_soldier = {
+			name = "Chaos Champion"
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 30
+			trait = creature_human
+		}
+		new_character = {
+			save_event_target_as = combatant_2
+			change_martial = 5
+			upgrade_education_effect = yes
+			add_five_duel_experience_modifier = yes
+			add_five_duel_experience_modifier = yes
+			add_trait = brave
+			add_trait = cruel
+			add_trait = chaos_knight
+			undivided_trial_champion_setup_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided33 # Charge
+		show_portrait = event_target:combatant_2
+		undivided_trial_duel_effect = yes
+		character_event = { id = undivided.35 days = 7 }
+	}
+}
+
+# 35 The third trial
+# Another champion of the four gods, more seasoned.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.35
+	title = EVERCHOSEN
+	desc = EVTDESCundivided35
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.35 days = 21 }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = combatant_1
+		undivided_create_trial_champion_effect = yes
+		event_target:combatant_2 = {
+			upgrade_education_effect = yes
+			add_five_duel_experience_modifier = yes
+			add_five_duel_experience_modifier = yes
+			add_five_duel_experience_modifier = yes
+			undivided_trial_champion_setup_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided33 # Charge
+		show_portrait = event_target:combatant_2
+		undivided_trial_duel_effect = yes
+		character_event = { id = undivided.36 days = 7 }
+	}
+}
+
+# 36 The last trial
+# The final champion. Victory leads to the mark (38).
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.36
+	title = EVERCHOSEN
+	desc = EVTDESCundivided36
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.36 days = 21 }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = combatant_1
+		undivided_create_trial_champion_effect = yes
+		event_target:combatant_2 = {
+			upgrade_education_effect = yes
+			add_five_duel_experience_modifier = yes
+			add_five_duel_experience_modifier = yes
+			add_five_duel_experience_modifier = yes
+			undivided_trial_champion_setup_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided33 # Charge
+		show_portrait = event_target:combatant_2
+		undivided_trial_duel_effect = yes
+		character_event = { id = undivided.38 days = 7 }
+	}
+}
+
+# 37 The champion fades
+# A trial champion vanishes once the duel is over, the seeker is dead, or
+# five months have passed.
+# Scope: ROOT = the champion, FROM = the seeker.
+character_event = {
+	id = undivided.37
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		OR = {
+			FROM = { is_alive = no }
+			NOT = { has_character_flag = duel }
+			had_character_flag = { flag = duel months >= 5 }
+		}
+	}
+	fail_trigger_effect = { repeat_event = { id = undivided.37 days = 30 } }
+
+	immediate = {
+		death = { death_reason = death_vanished }
+	}
+}
+
+# 38 Rise, Everchosen
+# The seeker kneels at the altar and receives the mark. If another Everchosen
+# rose while the seeker was on the road, the gods turn away instead (42).
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.38
+	title = EVERCHOSEN
+	desc = EVTDESCundivided38
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_global_flag = everchosen_exists }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			character_event = { id = undivided.42 }
+		}
+	}
+
+	immediate = {
+		clr_character_flag = potential_everchosen
+		set_global_flag = everchosen_exists
+		activate_title = { title = e_host_chaos status = yes }
+		if = { limit = { trait = on_pilgrimage } remove_trait = on_pilgrimage }
+	}
+
+	option = {
+		name = AT_LAST
+		add_trait = everchosen
+		add_trait = mark_chaos
+		create_everchosen_artifacts = yes
+		set_graphical_culture = everchosen_visual
+		set_character_flag = first_everchosen_war
+		set_character_flag = horde_invader
+		set_character_flag = existing_everchosen
+		e_host_chaos = { grant_title = ROOT make_primary_title = yes }
+		religion_scope = { set_religion_head = e_host_chaos }
+		narrative_event = { id = undivided.39 }
+		character_event = { id = undivided.40 days = 21 }
+	}
+}
+
+# 39 The Everchosen has risen
+# Every player hears that a ruler has taken the mark at the altar.
+# Scope: ROOT = the new Everchosen.
+narrative_event = {
+	id = undivided.39
+	title = EVTNAMEundivided1
+	desc = EVTDESCundivided39
+	picture = GFX_evt_chaos_everchosen
+	border = GFX_event_narrative_frame_war
+	major = yes
+	hide_new = yes
+	hide_from = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAundivided1 # Protect us
+		trigger = {
+			NOR = {
+				religion_group = chaos_gods_group
+				religion_group = greenskin_gods_group
+				religion_group = necromantic_group
+				religion_group = horned_rat_god_group
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBundivided1 # For Chaos
+		trigger = { religion_group = chaos_gods_group }
+	}
+	option = {
+		name = EVTOPTCundivided1 # Greenskins
+		trigger = { religion_group = greenskin_gods_group }
+	}
+	option = {
+		name = EVTOPTDundivided1 # Undead
+		trigger = { religion_group = necromantic_group }
+	}
+	option = {
+		name = EVTOPTEundivided1 # Skaven
+		trigger = { religion_group = horned_rat_god_group }
+	}
+}
+
+# 40 Daemons march at your side
+# The new Everchosen returns home with a Bloodletter, a Daemonette, a
+# Plaguebearer and a Flamer, each with a host of 20,700, and the free Chaos
+# rulers of Norsca and the Wastes are asked to join (41).
+# Scope: ROOT = the Everchosen.
+character_event = {
+	id = undivided.40
+	title = EVERCHOSEN
+	desc = EVTDESCundivided40
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = everchosen
+		has_landed_title = e_host_chaos
+	}
+
+	option = {
+		name = EVTOPTAundivided40 # Let all bow
+		prestige = 2500
+		piety = 2500
+		any_independent_ruler = {
+			limit = {
+				NOT = { character = ROOT }
+				religion_group = chaos_gods_group
+				capital_scope = { OR = { region = world_norsca region = world_chaos_wastes } }
+				NOR = {
+					trait = norscan_patron_ulric
+					trait = norscan_patron_ursun
+					religion = hashut
+				}
+			}
+			character_event = { id = undivided.41 days = 21 }
+		}
+		create_random_soldier = {
+			random_traits = no
+			dynasty = RANDOM
+			culture = bloodletter_khorne
+			religion = chaos
+			age = 30
+			attributes = { martial = 20 diplomacy = 4 stewardship = 5 intrigue = 4 learning = 3 }
+			health = 6
+			fertility = 0.7
+			trait = khorne_demon
+			trait = khorne_bloodletter
+			trait = brilliant_strategist
+			trait = wroth
+			trait = cruel
+			trait = proud
+			trait = zealous
+		}
+		undivided_spawn_daemon_host_effect = yes
+		create_random_soldier = {
+			random_traits = no
+			dynasty = RANDOM
+			culture = daemonette_slaanesh
+			religion = chaos
+			age = 30
+			attributes = { martial = 15 diplomacy = 4 stewardship = 5 intrigue = 10 learning = 3 }
+			health = 6
+			fertility = 0.7
+			trait = slaanesh_demon
+			trait = slaanesh_daemonette
+			trait = brilliant_strategist
+			trait = wroth
+			trait = cruel
+			trait = hedonist
+			trait = lustful
+			trait = zealous
+		}
+		undivided_spawn_daemon_host_effect = yes
+		create_random_soldier = {
+			random_traits = no
+			dynasty = RANDOM
+			culture = plaguebearer_nurgle
+			religion = chaos
+			age = 30
+			attributes = { martial = 15 diplomacy = 4 stewardship = 5 intrigue = 5 learning = 3 }
+			health = 6
+			fertility = 0.7
+			trait = nurgle_demon
+			trait = nurgle_plaguebearer
+			trait = brilliant_strategist
+			trait = wroth
+			trait = lunatic_3
+			trait = hedonist
+			trait = cruel
+			trait = zealous
+		}
+		undivided_spawn_daemon_host_effect = yes
+		create_random_soldier = {
+			random_traits = no
+			dynasty = RANDOM
+			culture = flamer_tzeentch
+			religion = chaos
+			age = 30
+			attributes = { martial = 15 diplomacy = 4 stewardship = 5 intrigue = 30 learning = 3 }
+			health = 6
+			fertility = 0.7
+			trait = tzeentch_demon
+			trait = tzeentch_flamer
+			trait = brilliant_strategist
+			trait = wroth
+			trait = genius
+			trait = mystic
+			trait = cruel
+			trait = zealous
+		}
+		undivided_spawn_daemon_host_effect = yes
+	}
+}
+
+# 41 The call of the Everchosen
+# A free Chaos ruler of Norsca or the Wastes may kneel to the new Everchosen.
+# Most do; the proud, the ambitious and the great kings may not.
+# Scope: ROOT = the ruler, FROM = the Everchosen.
+character_event = {
+	id = undivided.41
+	title = EVERCHOSEN
+	desc = EVTDESCundivided41
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+	only_independent = yes
+	min_age = 16
+
+	trigger = {
+		FROM = { trait = everchosen }
+	}
+
+	option = {
+		name = EVTOPTAundivided41 # March with the Everchosen
+		set_defacto_liege = FROM
+		ai_chance = { factor = 75 }
+	}
+	option = {
+		name = EVTOPTBundivided41 # Never
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 2 OR = { trait = proud trait = ambitious } }
+			modifier = { factor = 2 primary_title = { higher_tier_than = DUKE } }
+			modifier = { factor = 0.5 OR = { trait = zealous trait = craven } }
+		}
+	}
+}
+
+# 42 The gods have chosen another
+# Another Everchosen rose while the seeker was on the road. The quest ends.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.42
+	title = EVERCHOSEN
+	desc = EVTDESCundivided42
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = potential_everchosen
+		if = { limit = { trait = on_pilgrimage } remove_trait = on_pilgrimage }
+	}
+
+	option = {
+		name = EVTOPTAundivided42
 	}
 }

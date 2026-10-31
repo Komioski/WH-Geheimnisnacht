@@ -1,0 +1,1465 @@
+###############################################################################
+# Dawi Zharr: Hashut's furnaces, sorcerers, slaves and the arms trade
+# Namespace: dawizharr (was "DR_chaos_dwarf" and "DR_order_dwarf" in
+# DR_chaos_dwarfs_events.txt before the 2026 events refactor)
+# Faction: Chaos Dwarfs
+#
+# The Chaos Dwarfs of the Dark Lands feed slaves and captives to the brazen
+# furnaces of Hashut, the Father of Darkness, and he answers with gifts, curses
+# or silence. Their Sorcerer-Prophets rule through his fire until his curse
+# turns them to stone. Their raids fill the slave factories and levy pens of
+# each capital, and their forges sell war machines to Chaos and greenskin
+# warlords. The Dawi of the Karaks sell their own arms to the Old World through
+# the same trade chain.
+#
+# Sections:
+#   1-8    sacrifices to Hashut and the grand sacrifice
+#   10-19  Hashut answers a grand sacrifice
+#   20-23  Sorcerer-Prophets: ascension, the Sorcerer's Curse, bound K'daai
+#   30-37  slaves: raids, the slave buildings, selling captives
+#   40-45  the arms trade (Dawi Zharr and Dawi sellers)
+#
+# Callers:
+#   dawizharr.1   sacrifice_to_hashut decision (wh_chaos_dwarf_decisions)
+#   dawizharr.5   grand_sacrifice_hashut decision
+#   dawizharr.20  on_five_year_pulse random list dawizharr_ascension
+#   dawizharr.21  on_five_year_pulse random list dawizharr_curse, antideath_effect
+#   dawizharr.22-23  daemon summoning in WHG_daemon_events (daemon.45, daemon.144)
+#   dawizharr.30  on_siege_over_winner (wh_on_actions)
+#   dawizharr.31  on_yearly_pulse (wh_on_actions)
+#   dawizharr.33-34  on_decade_pulse random list dawizharr_decay
+#   dawizharr.36  chaos_dwarf_sell_into_slavery decision
+#   dawizharr.40  buy_from_chaos_dwarfs and buy_from_dwarfs decisions, chaoshorde.21
+#   dawizharr.45  sell_stuff_chaos_dwarfs decision
+#
+# Shared code:
+#   common/scripted_triggers/wh_dawizharr_triggers.txt
+#   common/scripted_effects/wh_dawizharr_effects.txt
+#   hashut_favor_* effects in common/scripted_effects/wh_scripted_effects.txt
+#   artifacts dawizharr_bloodhashut and dawizharr_greatshield
+#   (common/artifacts/20_artifacts_dawi_zharr.txt)
+# Localisation: localisation/00_WHG_chaos_dwarf_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = dawizharr
+
+###############################################################################
+# 1-8 Sacrifices to Hashut
+# A prisoner can be thrown into the furnace at any time (sacrifice_to_hashut
+# decision). Once every four years at least Hashut wants an offering: a
+# prisoner, a slave building's worth of slaves, or the ruler's standing with
+# vassals and priests (dawizharr.8). The grand sacrifice (dawizharr.5) costs
+# gold and draws an answer from Hashut (dawizharr.10-19).
+# The flag making_grand_sacrifice_hashut marks a grand rite in progress; the
+# answer events clear it.
+###############################################################################
+
+# dawizharr.1 Into the furnace
+# A prisoner is thrown into Hashut's furnace. A Dawi of the Ancestor Gods is the
+# prize offering, then a captive lord, then anyone else. Outside a grand rite
+# each offering adds a point of Hashut's favour; in a grand rite Hashut answers.
+# Scope: ROOT is the sacrificing ruler, FROM the offering.
+long_character_event = {
+	id = dawizharr.1
+	desc = {
+		trigger = { NOT = { has_character_flag = making_grand_sacrifice_hashut } }
+		text = EVTDESCdawizharr1
+	}
+	desc = {
+		trigger = { has_character_flag = making_grand_sacrifice_hashut }
+		text = EVTDESCdawizharr1b
+	}
+	picture = GFX_evt_altar_hashut
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = sacrificing_prisoner_hashut
+	}
+
+	option = { # A Dawi of the Ancestor Gods
+		name = EVTOPTAdawizharr1
+		trigger = { FROM = { trait = creature_dwarf } }
+		piety = 150
+		dawizharr_sacrifice_made_effect = yes
+		hidden_effect = { FROM = { character_event = { id = dawizharr.2 } } }
+		if = {
+			limit = { has_character_flag = making_grand_sacrifice_hashut }
+			piety = 100
+			dawizharr_answer_prized_effect = yes
+		}
+		else = { hashut_favor_trivial_bonus_effect = yes }
+	}
+	option = { # A captive lord
+		name = EVTOPTBdawizharr1
+		trigger = { FROM = { is_ruler = yes NOT = { trait = creature_dwarf } } }
+		piety = 100
+		dawizharr_sacrifice_made_effect = yes
+		hidden_effect = { FROM = { character_event = { id = dawizharr.2 } } }
+		if = {
+			limit = { has_character_flag = making_grand_sacrifice_hashut }
+			dawizharr_answer_fair_effect = yes
+		}
+		else = { hashut_favor_trivial_bonus_effect = yes }
+	}
+	option = { # Anyone else
+		name = EVTOPTCdawizharr1
+		trigger = { FROM = { is_ruler = no NOT = { trait = creature_dwarf } } }
+		piety = 50
+		dawizharr_sacrifice_made_effect = yes
+		hidden_effect = { FROM = { character_event = { id = dawizharr.2 } } }
+		if = {
+			limit = { has_character_flag = making_grand_sacrifice_hashut }
+			dawizharr_answer_poor_effect = yes
+		}
+		else = { hashut_favor_trivial_bonus_effect = yes }
+	}
+}
+
+# dawizharr.2 The offering burns
+# The offering dies in the molten metal. Its dynasty hates the sacrificer, and
+# killing close kin makes the sacrificer a kinslayer. The truly undying cheat
+# the furnace.
+# Scope: ROOT is the offering, FROM the sacrificing ruler.
+character_event = {
+	id = dawizharr.2
+	desc = EVTDESCdawizharr2
+	picture = GFX_evt_altar_hashut
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdawizharr2
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = {
+			any_dynasty_member = {
+				limit = { NOT = { character = FROM } }
+				opinion = { modifier = opinion_sacrificed_family who = FROM }
+			}
+			if = { limit = { is_close_relative = FROM } FROM = { add_trait = kinslayer } }
+			death = { death_reason = death_sacrificed killer = FROM }
+		}
+	}
+}
+
+# dawizharr.3 A prisoner is dragged to the furnace
+# Hidden step that turns a chosen prisoner into the FROM of dawizharr.1.
+# Scope: ROOT is the prisoner, FROM the sacrificing ruler.
+character_event = {
+	id = dawizharr.3
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { long_character_event = { id = dawizharr.1 } }
+	}
+}
+
+# dawizharr.5 The grand sacrifice
+# The acolytes ready the ziggurat's furnaces. The ruler offers the slaves of a
+# factory or of the levy pens (each costs a level of that building), or a
+# prisoner. The rite costs 200 gold and Hashut will not hear another for about
+# four years.
+# Scope: ROOT is the ruler. Fired by decision grand_sacrifice_hashut.
+long_character_event = {
+	id = dawizharr.5
+	desc = EVTDESCdawizharr5
+	picture = GFX_evt_hashut_rune
+
+	is_triggered_only = yes
+
+	option = { # Slaves from the factory
+		name = EVTOPTAdawizharr5
+		trigger = { dawizharr_factory_trigger = yes }
+		wealth = -200
+		add_character_modifier = { name = recently_asked_hashut duration = 1500 }
+		custom_tooltip = { text = dawizharr_factory_down_tt dawizharr_factory_down_effect = yes }
+		character_event = { id = dawizharr.6 }
+		ai_chance = { factor = 50 }
+	}
+	option = { # Slaves from the levy pens
+		name = EVTOPTBdawizharr5
+		trigger = { dawizharr_levy_trigger = yes }
+		wealth = -200
+		add_character_modifier = { name = recently_asked_hashut duration = 1500 }
+		custom_tooltip = { text = dawizharr_levy_down_tt dawizharr_levy_down_effect = yes }
+		character_event = { id = dawizharr.6 }
+		ai_chance = { factor = 50 }
+	}
+	option = { # A prisoner
+		name = EVTOPTCdawizharr5
+		trigger = { num_of_prisoners = 1 }
+		wealth = -200
+		add_character_modifier = { name = recently_asked_hashut duration = 1500 }
+		hidden_effect = {
+			random_courtier = {
+				limit = { prisoner = yes host = { character = ROOT } }
+				character_event = { id = dawizharr.3 }
+			}
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { # Call it off
+		name = EVTOPTDdawizharr5
+		piety = -100
+		clr_character_flag = making_grand_sacrifice_hashut
+		ai_chance = { factor = 0 }
+	}
+}
+
+# dawizharr.6 The slaves go into the fire
+# Bull Centaurs herd a mass of slaves into the furnace. Feeds Hashut and draws
+# his answer.
+# Scope: ROOT is the ruler. Fired by dawizharr.5.
+character_event = {
+	id = dawizharr.6
+	desc = EVTDESCdawizharr6
+	picture = GFX_evt_altar_hashut
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdawizharr6
+		dawizharr_sacrifice_made_effect = yes
+		dawizharr_answer_mass_effect = yes
+	}
+}
+
+# dawizharr.8 The furnaces are cold
+# Four years without an offering. The ruler can give up a level of a slave
+# building, drag a prisoner to the furnace, or let vassals and priests turn
+# against them (must_sacrifice_hashut, lifted by the next sacrifice).
+# Scope: ROOT is the ruler. Fired by dawizharr.31.
+character_event = {
+	id = dawizharr.8
+	desc = EVTDESCdawizharr8
+	picture = GFX_evt_altar_hashut
+
+	is_triggered_only = yes
+
+	trigger = {
+		dawizharr_sacrifice_due_trigger = yes
+	}
+
+	option = { # A prisoner
+		name = EVTOPTAdawizharr8
+		trigger = { num_of_prisoners = 1 }
+		hidden_effect = {
+			random_courtier = {
+				limit = { prisoner = yes host = { character = ROOT } }
+				character_event = { id = dawizharr.3 }
+			}
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { # Factory slaves
+		name = EVTOPTBdawizharr8
+		trigger = { dawizharr_factory_trigger = yes }
+		piety = 50
+		custom_tooltip = { text = dawizharr_factory_down_tt dawizharr_factory_down_effect = yes }
+		dawizharr_sacrifice_made_effect = yes
+		ai_chance = { factor = 20 }
+	}
+	option = { # Levy slaves
+		name = EVTOPTCdawizharr8
+		trigger = { dawizharr_levy_trigger = yes }
+		piety = 50
+		custom_tooltip = { text = dawizharr_levy_down_tt dawizharr_levy_down_effect = yes }
+		dawizharr_sacrifice_made_effect = yes
+		ai_chance = { factor = 20 }
+	}
+	option = { # Let them grumble
+		name = EVTOPTDdawizharr8
+		add_character_modifier = { name = must_sacrifice_hashut duration = -1 }
+		ai_chance = { factor = 10 modifier = { factor = 0 trait = zealous } }
+	}
+}
+
+###############################################################################
+# 10-19 Hashut answers
+# Rolled by the dawizharr_answer_<tier>_effect lists after a grand sacrifice.
+# Each answer moves Hashut's favour (the hashut_favor variable, which opens the
+# way to becoming a Sorcerer-Prophet) and clears making_grand_sacrifice_hashut.
+###############################################################################
+
+# dawizharr.10 Hashut offers gifts
+# The brazen idol speaks and offers a choice: K'daai to burn the ruler's foes,
+# a body like a Bull Centaur's, Hashut's fire on the land, or (for a sorcerer)
+# deeper mastery of the Winds.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = dawizharr.10
+	desc = EVTDESCdawizharr10
+	picture = GFX_evt_hashut_rune
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = making_grand_sacrifice_hashut
+		add_doom_progress_tiny_effect = yes
+		change_variable = { which = hashut_favor value = 4 }
+	}
+
+	option = { # K'daai host
+		name = EVTOPTAdawizharr10
+		capital_scope = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					home = PREV
+					owner = THIS
+					attrition = 0.5
+					cannot_inherit = yes
+					earmark = demonic_host
+					troops = { daemonic_host = { 350 350 } }
+				}
+				spawn_unit = {
+					province = PREV
+					home = PREV
+					owner = THIS
+					attrition = 0.5
+					cannot_inherit = yes
+					earmark = demonic_host
+					troops = { daemonic_host = { 250 250 } }
+				}
+			}
+		}
+	}
+	option = { # Strength
+		name = EVTOPTBdawizharr10
+		change_martial = 2
+		if = { limit = { trait = weak } remove_trait = weak add_trait = hardy }
+		else_if = { limit = { trait = fragile } remove_trait = fragile add_trait = hardy }
+		else_if = { limit = { trait = soft } remove_trait = soft add_trait = tough }
+		else_if = { limit = { trait = tough } remove_trait = tough add_trait = strong }
+		else_if = { limit = { trait = hardy } remove_trait = hardy add_trait = strong }
+		else_if = { limit = { NOT = { trait = strong } } add_trait = tough }
+	}
+	option = { # Fire on the land
+		name = EVTOPTCdawizharr10
+		trigger = { capital_scope = { NOT = { has_province_modifier = hashut_province_blessing } } }
+		capital_scope = {
+			add_province_modifier = { name = hashut_province_blessing duration = 1500 }
+		}
+	}
+	option = { # Mastery of the Winds
+		name = EVTOPTDdawizharr10
+		trigger = { trait = chaos_dwarf_sorcerer }
+		change_learning = 1
+		magic_lvl_increase_effect = yes
+		enable_magic_xp_effect = yes
+	}
+}
+
+# dawizharr.11 A K'daai rises from the furnace
+# A daemon of fire and iron climbs out of the molten pit and swears itself to
+# the ruler.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = dawizharr.11
+	desc = EVTDESCdawizharr11
+	picture = GFX_evt_kdaai
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = making_grand_sacrifice_hashut
+		add_doom_progress_tiny_effect = yes
+		change_variable = { which = hashut_favor value = 3 }
+	}
+
+	option = {
+		name = EVTOPTAdawizharr11
+		dawizharr_create_kdaai_effect = yes
+		prestige = 250
+	}
+}
+
+# dawizharr.12 Hashut sends a Great Taurus
+# A Great Taurus, one of Hashut's favoured beasts, lands outside the temple.
+# Never rolled for someone who already rides one.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = dawizharr.12
+	desc = EVTDESCdawizharr12
+	picture = GFX_evt_great_taurus
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = making_grand_sacrifice_hashut
+		add_doom_progress_tiny_effect = yes
+		change_variable = { which = hashut_favor value = 2 }
+	}
+
+	option = {
+		name = EVTOPTAdawizharr12
+		add_artifact = great_taurus_mount
+		prestige = 250
+	}
+}
+
+# dawizharr.13 Visions of glory
+# The molten metal shows the ruler wealth and power. One time in four, if the
+# ruler has none, a rune of Hashut's blood cools out of the metal
+# (dawizharr_bloodhashut).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = dawizharr.13
+	desc = {
+		trigger = { NOT = { has_character_flag = dawizharr_rune_gift } }
+		text = EVTDESCdawizharr13
+	}
+	desc = { trigger = { has_character_flag = dawizharr_rune_gift } text = EVTDESCdawizharr13b }
+	picture = GFX_evt_hashut_rune
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = making_grand_sacrifice_hashut
+		add_doom_progress_minor_effect = yes
+		change_variable = { which = hashut_favor value = 5 }
+		if = {
+			limit = { NOT = { has_artifact = dawizharr_bloodhashut } }
+			random = { chance = 25 set_character_flag = dawizharr_rune_gift }
+		}
+	}
+
+	option = {
+		name = EVTOPTAdawizharr13
+		piety = 350
+		if = {
+			limit = { has_character_flag = dawizharr_rune_gift }
+			add_artifact = dawizharr_bloodhashut
+			clr_character_flag = dawizharr_rune_gift
+		}
+	}
+}
+
+# dawizharr.14 His greatest child
+# Hashut's voice praises the ruler, who grows proud.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = dawizharr.14
+	desc = EVTDESCdawizharr14
+	picture = GFX_evt_hashut_rune
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = making_grand_sacrifice_hashut
+		add_doom_progress_tiny_effect = yes
+		hashut_favor_trivial_bonus_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdawizharr14
+		add_trait = proud
+		prestige = 50
+	}
+}
+
+# dawizharr.15 A crown of fire
+# Hashut sends visions that burn the ruler's mind (lunacy, mutate.5).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = dawizharr.15
+	desc = EVTDESCdawizharr15
+	picture = GFX_evt_hashut_rune
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = making_grand_sacrifice_hashut
+		add_doom_progress_tiny_effect = yes
+		hashut_favor_trivial_bonus_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdawizharr15
+		hidden_effect = { character_event = { id = mutate.5 } }
+	}
+}
+
+# dawizharr.16 A gush of molten metal
+# The furnace spits in the ruler's face. Never rolled for the already
+# disfigured.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = dawizharr.16
+	desc = EVTDESCdawizharr16
+	picture = GFX_evt_hashut_rune
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = making_grand_sacrifice_hashut
+		add_doom_progress_tiny_effect = yes
+		hashut_favor_trivial_penalty_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdawizharr16
+		add_trait = disfigured
+	}
+}
+
+# dawizharr.17 Silence
+# Hashut ignores the offering.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = dawizharr.17
+	desc = EVTDESCdawizharr17
+	picture = GFX_evt_hashut_rune
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = making_grand_sacrifice_hashut
+		hashut_favor_trivial_penalty_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdawizharr17
+		prestige = -150
+	}
+}
+
+# dawizharr.18 Bull Centaurs at the foot of the ziggurat
+# A regiment of Bull Centaurs waits outside the temple to serve the ruler.
+# (Restored from the old grand sacrifice results.)
+# Scope: ROOT is the ruler.
+character_event = {
+	id = dawizharr.18
+	desc = EVTDESCdawizharr18
+	picture = GFX_evt_bull_centaur
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = making_grand_sacrifice_hashut
+		add_doom_progress_tiny_effect = yes
+		hashut_favor_small_bonus_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdawizharr18
+		capital_scope = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					home = PREV
+					owner = THIS
+					attrition = 0
+					cannot_inherit = yes
+					troops = { knights = { 300 300 } }
+				}
+			}
+		}
+	}
+}
+
+# dawizharr.19 Hashut's wrath
+# A cloud of red smoke forces itself down the ruler's throat
+# (hashut_curse for about four years). (Restored from the old grand sacrifice
+# results.)
+# Scope: ROOT is the ruler.
+character_event = {
+	id = dawizharr.19
+	desc = EVTDESCdawizharr19
+	picture = GFX_evt_hashut
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = making_grand_sacrifice_hashut
+		hashut_favor_small_penalty_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdawizharr19
+		piety = -100
+		add_character_modifier = { name = hashut_curse duration = 1500 }
+	}
+}
+
+###############################################################################
+# 20-23 Sorcerer-Prophets
+# A cruel or proud Chaos Dwarf with 30 points of Hashut's favour may be granted
+# sorcery (dawizharr.20). Every sorcerer slowly turns to stone (dawizharr.21):
+# a step about every 170 years, and a step each time death should have taken
+# them (antideath_effect). The third step kills.
+###############################################################################
+
+# dawizharr.20 A Sorcerer-Prophet of Hashut
+# Hashut grants a devoted servant mastery of the Winds of Magic. About one
+# chance in four per five years, more for the pious.
+# Scope: ROOT is the character. on_five_year_pulse list dawizharr_ascension.
+character_event = {
+	id = dawizharr.20
+	desc = EVTDESCdawizharr20
+	picture = GFX_evt_chaos_dwarf_sorcerer
+
+	is_triggered_only = yes
+	capable_only = yes
+	min_age = 16
+	religion = hashut
+	culture_group = dwarf_chaos_group
+
+	trigger = {
+		trait = creature_chaos_dwarf
+		NOT = { trait = chaos_dwarf_sorcerer }
+		OR = { trait = proud trait = cruel trait = greedy trait = wroth }
+		check_variable = { which = hashut_favor value = 30 }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.33 piety = 750 }
+		modifier = { factor = 1.33 piety = 1500 }
+		modifier = { factor = 2 piety = 2500 }
+	}
+
+	option = {
+		name = EVTOPTAdawizharr20
+		add_doom_progress_minor_effect = yes
+		prestige = 750
+		piety = 450
+		add_trait = chaos_dwarf_sorcerer
+		magic_lvl_increase_effect = yes
+		enable_magic_xp_effect = yes
+	}
+}
+
+# dawizharr.21 The Sorcerer's Curse
+# The sorcerer's flesh turns to black stone: first hands and feet, then the
+# body (incapable), then the head, and the sorcerer joins the stone statues
+# along the roads to Zharr-Naggrund. Sorcery cannot save a sorcerer from this
+# last step.
+# Scope: ROOT is the sorcerer. on_five_year_pulse list dawizharr_curse;
+# antideath_effect.
+character_event = {
+	id = dawizharr.21
+	desc = {
+		trigger = {
+			NOR = { trait = chaos_dwarf_petrification_1 trait = chaos_dwarf_petrification_2 }
+		}
+		text = EVTDESCdawizharr21
+	}
+	desc = { trigger = { trait = chaos_dwarf_petrification_1 } text = EVTDESCdawizharr21b }
+	desc = { trigger = { trait = chaos_dwarf_petrification_2 } text = EVTDESCdawizharr21c }
+	picture = GFX_evt_stone_chaos_dwarf
+
+	is_triggered_only = yes
+	religion = hashut
+	culture_group = dwarf_chaos_group
+
+	trigger = {
+		OR = {
+			trait = chaos_dwarf_sorcerer
+			trait = chaos_dwarf_petrification_1
+			trait = chaos_dwarf_petrification_2
+		}
+	}
+
+	option = {
+		name = EVTOPTAdawizharr21
+		trigger = {
+			NOR = { trait = chaos_dwarf_petrification_1 trait = chaos_dwarf_petrification_2 }
+		}
+		add_trait = chaos_dwarf_petrification_1
+	}
+	option = {
+		name = EVTOPTBdawizharr21
+		trigger = { trait = chaos_dwarf_petrification_1 }
+		remove_trait = chaos_dwarf_petrification_1
+		add_trait = chaos_dwarf_petrification_2
+	}
+	option = {
+		name = EVTOPTCdawizharr21
+		trigger = { trait = chaos_dwarf_petrification_2 }
+		set_graphical_culture = dwarf_chaos_stoned
+		death = { death_reason = death_trait }
+	}
+}
+
+# dawizharr.22 A K'daai is bound
+# A daemon summoning ends with a K'daai Fireborn held in the circle.
+# Scope: ROOT is the one it serves. Fired by daemon.45 and daemon.144.
+character_event = {
+	id = dawizharr.22
+	desc = EVTDESCdawizharr22
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdawizharr22
+		dawizharr_create_kdaai_effect = yes
+		prestige = 500
+	}
+}
+
+# dawizharr.23 A K'daai bound for another
+# The sorcerer learns that the K'daai they summoned for their liege is bound.
+# Scope: ROOT is the sorcerer, FROM the liege. Fired by daemon.144.
+character_event = {
+	id = dawizharr.23
+	desc = EVTDESCdawizharr23
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdawizharr23
+		FROM = { opinion = { modifier = opinion_grateful who = ROOT years = 8 } }
+	}
+}
+
+###############################################################################
+# 30-37 Slaves
+# Each capital holding can hold a slave factory and a slave levy barracks
+# (levels 1-4, never built, only gained). Sieging an enemy capital in a slaver
+# raid war fills them (dawizharr.30). Slave buildings outside the capital are
+# herded to it (dawizharr.31-32). Slaves die off in the factories and pens
+# (dawizharr.33-34). Captives can be sold off (dawizharr.36-37).
+###############################################################################
+
+# dawizharr.30 Slave raid
+# A Chaos Dwarf takes an enemy capital in a chaos_dwarf_slaver_raid war. The
+# first such capital of the war fills a slave building at home; later ones
+# only bring captives and plunder. Or the captives go into Hashut's furnaces.
+# Up to five courtiers of the raided court are dragged off or burned.
+# Scope: ROOT is the raider, FROM the captured barony title.
+# on_siege_over_winner.
+character_event = {
+	id = dawizharr.30
+	desc = {
+		trigger = { NOT = { has_character_flag = chaos_dwarf_raided_a_province } }
+		text = EVTDESCdawizharr30
+	}
+	desc = {
+		trigger = { has_character_flag = chaos_dwarf_raided_a_province }
+		text = EVTDESCdawizharr30b
+	}
+	picture = GFX_evt_chaos_dwarf_warriors
+
+	is_triggered_only = yes
+	only_rulers = yes
+	religion = hashut
+	culture_group = dwarf_chaos_group
+
+	trigger = {
+		higher_tier_than = BARON
+		any_war = { attacker = { character = ROOT } using_cb = chaos_dwarf_slaver_raid }
+		FROM = {
+			is_capital = yes
+			holder_scope = { NOT = { religion = hashut } }
+			location = {
+				NOR = {
+					has_province_modifier = province_slave_raid_chaos_dwarf
+					has_province_modifier = province_devastated_chaos_dwarf
+					has_province_modifier = province_scourged
+				}
+			}
+		}
+	}
+
+	immediate = {
+		FROM = { location = { save_event_target_as = dawizharr_raided_province } }
+	}
+
+	option = { # To the factories
+		name = EVTOPTAdawizharr30
+		trigger = {
+			NOT = { has_character_flag = chaos_dwarf_raided_a_province }
+			capital_holding = {
+				OR = {
+					holding_type = castle
+					holding_type = city
+					holding_type = temple
+					holding_type = family_palace
+				}
+			}
+		}
+		set_character_flag = chaos_dwarf_raided_a_province
+		custom_tooltip = { text = dawizharr_factory_up_tt dawizharr_factory_up_effect = yes }
+		event_target:dawizharr_raided_province = {
+			add_province_modifier = { name = province_slave_raid_chaos_dwarf duration = 1825 }
+		}
+		custom_tooltip = {
+			text = dawizharr_captives_tt
+			FROM = { holder_scope = { dawizharr_take_captives_effect = yes } }
+		}
+		ai_chance = { factor = 33 }
+	}
+	option = { # To the levy pens
+		name = EVTOPTBdawizharr30
+		trigger = {
+			NOT = { has_character_flag = chaos_dwarf_raided_a_province }
+			capital_holding = {
+				OR = {
+					holding_type = castle
+					holding_type = city
+					holding_type = temple
+					holding_type = family_palace
+				}
+			}
+		}
+		set_character_flag = chaos_dwarf_raided_a_province
+		custom_tooltip = { text = dawizharr_levy_up_tt dawizharr_levy_up_effect = yes }
+		event_target:dawizharr_raided_province = {
+			add_province_modifier = { name = province_slave_raid_chaos_dwarf duration = 1825 }
+		}
+		custom_tooltip = {
+			text = dawizharr_captives_tt
+			FROM = { holder_scope = { dawizharr_take_captives_effect = yes } }
+		}
+		ai_chance = { factor = 33 }
+	}
+	option = { # Take what we can carry and burn the rest
+		name = EVTOPTCdawizharr30
+		trigger = {
+			OR = {
+				has_character_flag = chaos_dwarf_raided_a_province
+				capital_holding = {
+					NOR = {
+						holding_type = castle
+						holding_type = city
+						holding_type = temple
+						holding_type = family_palace
+					}
+				}
+			}
+		}
+		set_character_flag = chaos_dwarf_raided_a_province
+		prestige = 50
+		wealth = 50
+		event_target:dawizharr_raided_province = {
+			add_province_modifier = { name = province_scourged duration = 1825 }
+		}
+		custom_tooltip = {
+			text = dawizharr_captives_tt
+			FROM = { holder_scope = { dawizharr_take_captives_effect = yes } }
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { # Into the furnaces
+		name = EVTOPTDdawizharr30
+		piety = 300
+		hashut_favor_trivial_bonus_effect = yes
+		dawizharr_sacrifice_made_effect = yes
+		capital_scope = {
+			if = {
+				limit = { NOT = { has_province_modifier = slaves_sacrificed_hashut } }
+				add_province_modifier = { name = slaves_sacrificed_hashut duration = 1825 }
+			}
+		}
+		event_target:dawizharr_raided_province = {
+			add_province_modifier = { name = province_scourged duration = 1825 }
+		}
+		custom_tooltip = {
+			text = dawizharr_sacrificed_tt
+			FROM = { holder_scope = { dawizharr_burn_captives_effect = yes } }
+		}
+		ai_chance = {
+			factor = 33
+			modifier = {
+				factor = 0
+				NOR = { dawizharr_factory_trigger = yes dawizharr_levy_trigger = yes }
+			}
+			modifier = { factor = 100 has_character_modifier = must_sacrifice_hashut }
+			modifier = { factor = 10 trait = zealous }
+		}
+	}
+}
+
+# dawizharr.31 Yearly upkeep of a Chaos Dwarf realm
+# Hidden. Starts Hashut's four-year sacrifice clock for a new ruler, asks for
+# an overdue sacrifice (dawizharr.8) and herds slave buildings outside the
+# capital to it (dawizharr.32).
+# Scope: ROOT is the ruler. on_yearly_pulse.
+character_event = {
+	id = dawizharr.31
+	hide_window = yes
+
+	is_triggered_only = yes
+	only_rulers = yes
+	religion = hashut
+	culture_group = dwarf_chaos_group
+
+	trigger = {
+		OR = {
+			NOT = { has_character_flag = flag_sacrifice_made_hashut }
+			dawizharr_sacrifice_due_trigger = yes
+			any_demesne_title = {
+				tier = BARON
+				dawizharr_slave_holding_trigger = yes
+				NOT = { ROOT = { capital_holding = { title = PREVPREV } } }
+			}
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { has_character_flag = flag_sacrifice_made_hashut } }
+			set_character_flag = flag_sacrifice_made_hashut
+		}
+		else_if = {
+			limit = { dawizharr_sacrifice_due_trigger = yes }
+			character_event = { id = dawizharr.8 }
+		}
+		if = {
+			limit = {
+				any_demesne_title = {
+					tier = BARON
+					dawizharr_slave_holding_trigger = yes
+					NOT = { ROOT = { capital_holding = { title = PREVPREV } } }
+				}
+			}
+			character_event = { id = dawizharr.32 }
+		}
+	}
+}
+
+# dawizharr.32 The slaves are herded to the capital
+# Slave buildings stand only in the capital. Those elsewhere (after the capital
+# moved, or with a newly gained holding) are torn down, and each lost level
+# adds a level at the capital.
+# Scope: ROOT is the ruler. Fired by dawizharr.31.
+character_event = {
+	id = dawizharr.32
+	desc = EVTDESCdawizharr32
+	picture = GFX_evt_slaves
+
+	is_triggered_only = yes
+
+	immediate = {
+		dawizharr_gather_slaves_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdawizharr32
+	}
+}
+
+# dawizharr.33 The factory slaves die off
+# Smoke, accidents and hunger thin the factory slaves: the factory loses a
+# level (never below 1). About 1 in 26 per decade, far more often under a poor
+# steward.
+# Scope: ROOT is the ruler. on_decade_pulse list dawizharr_decay.
+character_event = {
+	id = dawizharr.33
+	desc = EVTDESCdawizharr33
+	picture = GFX_evt_slaves
+
+	is_triggered_only = yes
+	only_rulers = yes
+	religion = hashut
+	culture_group = dwarf_chaos_group
+
+	trigger = {
+		dawizharr_factory_2_trigger = yes
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 0.75 stewardship = 20 }
+		modifier = { factor = 2 NOT = { stewardship = 10 } }
+		modifier = { factor = 2 NOT = { stewardship = 5 } }
+	}
+
+	option = {
+		name = EVTOPTAdawizharr33
+		custom_tooltip = { text = dawizharr_factory_down_tt dawizharr_factory_down_effect = yes }
+	}
+}
+
+# dawizharr.34 The levy slaves die off
+# Brutal hobgoblin overseers and hunger thin the slave levy: it loses a level
+# (never below 1). Same odds as dawizharr.33.
+# Scope: ROOT is the ruler. on_decade_pulse list dawizharr_decay.
+character_event = {
+	id = dawizharr.34
+	desc = EVTDESCdawizharr34
+	picture = GFX_evt_slaves
+
+	is_triggered_only = yes
+	only_rulers = yes
+	religion = hashut
+	culture_group = dwarf_chaos_group
+
+	trigger = {
+		dawizharr_levy_2_trigger = yes
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 0.75 stewardship = 20 }
+		modifier = { factor = 2 NOT = { stewardship = 10 } }
+		modifier = { factor = 2 NOT = { stewardship = 5 } }
+	}
+
+	option = {
+		name = EVTOPTAdawizharr34
+		custom_tooltip = { text = dawizharr_levy_down_tt dawizharr_levy_down_effect = yes }
+	}
+}
+
+# dawizharr.35 Fresh slaves arrive
+# Slaves paid for an arms deal reach the capital: the ruler puts them in the
+# factory or the levy pens.
+# Scope: ROOT is the Chaos Dwarf seller. Fired by dawizharr.43.
+character_event = {
+	id = dawizharr.35
+	desc = EVTDESCdawizharr35
+	picture = GFX_evt_slaves
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdawizharr35
+		custom_tooltip = { text = dawizharr_factory_up_tt dawizharr_factory_up_effect = yes }
+	}
+	option = {
+		name = EVTOPTBdawizharr35
+		custom_tooltip = { text = dawizharr_levy_up_tt dawizharr_levy_up_effect = yes }
+	}
+}
+
+# dawizharr.36 Sold into slavery
+# A prisoner is sold in the slave markets. The price follows their best skill.
+# Scope: ROOT is the seller, FROM the prisoner. Fired by decision
+# chaos_dwarf_sell_into_slavery.
+character_event = {
+	id = dawizharr.36
+	desc = EVTDESCdawizharr36
+	picture = GFX_evt_slaves
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdawizharr36
+		clr_character_flag = selling_prisoner_slavery
+		if = {
+			limit = {
+				FROM = {
+					OR = {
+						martial = 30
+						stewardship = 30
+						intrigue = 30
+						learning = 30
+						diplomacy = 30
+					}
+				}
+			}
+			wealth = 500
+		}
+		else_if = {
+			limit = {
+				FROM = {
+					OR = {
+						martial = 20
+						stewardship = 20
+						intrigue = 20
+						learning = 20
+						diplomacy = 20
+					}
+				}
+			}
+			wealth = 250
+		}
+		else_if = {
+			limit = {
+				FROM = {
+					OR = {
+						martial = 10
+						stewardship = 10
+						intrigue = 10
+						learning = 10
+						diplomacy = 10
+					}
+				}
+			}
+			wealth = 100
+		}
+		else_if = {
+			limit = {
+				FROM = {
+					OR = { martial = 5 stewardship = 5 intrigue = 5 learning = 5 diplomacy = 5 }
+				}
+			}
+			wealth = 50
+		}
+		else = { wealth = 25 }
+		FROM = { character_event = { id = dawizharr.37 } }
+	}
+}
+
+# dawizharr.37 The slave's fate
+# The sold captive will be worked to death. Their kin hate the seller.
+# Scope: ROOT is the captive, FROM the seller.
+character_event = {
+	id = dawizharr.37
+	desc = EVTDESCdawizharr37
+	picture = GFX_evt_slaves
+
+	is_triggered_only = yes
+
+	immediate = {
+		any_dynasty_member = {
+			limit = { NOT = { character = FROM } NOT = { any_child = { character = ROOT } } }
+			opinion = { modifier = opinion_sold_slavery_family_member who = FROM years = 20 }
+		}
+		father = {
+			opinion = { modifier = opinion_sold_slavery_family_member who = FROM years = 999 }
+		}
+		mother = {
+			opinion = { modifier = opinion_sold_slavery_family_member who = FROM years = 999 }
+		}
+		any_spouse = {
+			opinion = { modifier = opinion_sold_slavery_family_member who = FROM years = 40 }
+		}
+		add_trait = sold_into_slavery
+	}
+
+	option = {
+		name = EVTOPTAdawizharr37
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = { death = { death_reason = death_slavery } }
+	}
+}
+
+###############################################################################
+# 40-45 The arms trade
+# A buyer orders arms or war machines from a Chaos Dwarf or Dawi hold, the
+# seller agrees, the buyer pays, and the goods arrive. The Dawi Zharr take
+# gold, slaves from the buyer's people or pits, or a prisoner; the Dawi take
+# only gold. The events alternate between buyer and seller, so in buyer events
+# FROM is the seller and in seller events FROM is the buyer.
+###############################################################################
+
+# dawizharr.40 What will you buy?
+# The buyer picks arms and armour or a battery of war machines (Hellcannons
+# from the Dawi Zharr, cannons and Organ Guns from the Dawi).
+# Scope: ROOT is the buyer, FROM the seller. Fired by decisions
+# buy_from_chaos_dwarfs, buy_from_dwarfs and by dawizharr.45 and chaoshorde.21.
+character_event = {
+	id = dawizharr.40
+	desc = {
+		trigger = { FROM = { NOT = { dawizharr_dawi_seller_trigger = yes } } }
+		text = EVTDESCdawizharr40
+	}
+	desc = {
+		trigger = { FROM = { dawizharr_dawi_seller_trigger = yes } }
+		text = EVTDESCdawizharr40b
+	}
+	picture = GFX_evt_zharr_naggrund
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdawizharr40
+		set_character_flag = arms_order_weapons
+		FROM = { character_event = { id = dawizharr.41 } }
+		ai_chance = { factor = 50 }
+	}
+	option = {
+		name = EVTOPTBdawizharr40
+		set_character_flag = arms_order_artillery
+		FROM = { character_event = { id = dawizharr.41 } }
+		ai_chance = { factor = 50 }
+	}
+	option = {
+		name = EVTOPTCdawizharr40
+		dawizharr_arms_clear_buyer_effect = yes
+		FROM = { clr_character_flag = selling_armaments }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# dawizharr.41 A buyer at the gates
+# The seller hears the order. The AI always sells.
+# Scope: ROOT is the seller, FROM the buyer.
+character_event = {
+	id = dawizharr.41
+	desc = {
+		trigger = { FROM = { has_character_flag = arms_order_weapons } }
+		text = EVTDESCdawizharr41
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = arms_order_artillery } }
+		text = EVTDESCdawizharr41b
+	}
+	picture = GFX_evt_zharr_naggrund
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdawizharr41
+		FROM = { character_event = { id = dawizharr.42 } }
+		ai_chance = { factor = 100 }
+	}
+	option = {
+		name = EVTOPTBdawizharr41
+		FROM = { dawizharr_arms_clear_buyer_effect = yes }
+		clr_character_flag = selling_armaments
+		ai_chance = { factor = 0 }
+	}
+}
+
+# dawizharr.42 The price
+# The buyer pays 150 gold, or (to the Dawi Zharr) chains up people of their
+# capital, hands over slaves from their pits or gives up a prisoner.
+# Scope: ROOT is the buyer, FROM the seller.
+character_event = {
+	id = dawizharr.42
+	desc = {
+		trigger = { FROM = { NOT = { dawizharr_dawi_seller_trigger = yes } } }
+		text = EVTDESCdawizharr42
+	}
+	desc = {
+		trigger = { FROM = { dawizharr_dawi_seller_trigger = yes } }
+		text = EVTDESCdawizharr42b
+	}
+	picture = GFX_evt_chaos_dwarfs
+
+	is_triggered_only = yes
+
+	option = { # Gold
+		name = EVTOPTAdawizharr42
+		trigger = { wealth = 150 }
+		set_character_flag = arms_pay_gold
+		wealth = -150
+		FROM = { character_event = { id = dawizharr.43 } }
+		ai_chance = { factor = 33 modifier = { factor = 3 wealth = 300 } }
+	}
+	option = { # The people of the capital
+		name = EVTOPTBdawizharr42
+		trigger = {
+			FROM = { NOT = { dawizharr_dawi_seller_trigger = yes } }
+			capital_scope = {
+				NOR = {
+					has_province_modifier = slaves_taken
+					has_province_modifier = province_slave_raid_chaos_dwarf
+				}
+			}
+		}
+		set_character_flag = arms_pay_people
+		capital_scope = { add_province_modifier = { name = slaves_taken duration = 1825 } }
+		FROM = { character_event = { id = dawizharr.43 } }
+		ai_chance = {
+			factor = 33
+			modifier = { factor = 1.5 trait = greedy }
+			modifier = { factor = 1.5 trait = cruel }
+			modifier = { factor = 0.25 trait = kind }
+		}
+	}
+	option = { # Slaves from the pits
+		name = EVTOPTCdawizharr42
+		trigger = {
+			FROM = { NOT = { dawizharr_dawi_seller_trigger = yes } }
+			OR = {
+				check_variable = { which = elfslaves value = 1 }
+				check_variable = { which = dwarfslaves value = 1 }
+				check_variable = { which = humanslaves value = 1 }
+			}
+		}
+		set_character_flag = arms_pay_pits
+		if = {
+			limit = { check_variable = { which = humanslaves value = 1 } }
+			change_variable = { which = humanslaves value = -1 }
+		}
+		else_if = {
+			limit = { check_variable = { which = elfslaves value = 1 } }
+			change_variable = { which = elfslaves value = -1 }
+		}
+		else = { change_variable = { which = dwarfslaves value = -1 } }
+		FROM = { character_event = { id = dawizharr.43 } }
+		ai_chance = {
+			factor = 33
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+	option = { # A prisoner
+		name = EVTOPTDdawizharr42
+		trigger = {
+			FROM = { NOT = { dawizharr_dawi_seller_trigger = yes } }
+			any_courtier = { prisoner = yes is_ruler = no host = { character = ROOT } }
+		}
+		set_character_flag = arms_pay_prisoner
+		custom_tooltip = {
+			text = dawizharr_pay_prisoner_tt
+			random_courtier = {
+				limit = { prisoner = yes is_ruler = no host = { character = ROOT } }
+				imprison = FROM
+				move_character = FROM
+			}
+		}
+		FROM = { character_event = { id = dawizharr.43 } }
+		ai_chance = {
+			factor = 33
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 0.5 trait = kind }
+		}
+	}
+	option = { # Too dear
+		name = EVTOPTEdawizharr42
+		dawizharr_arms_clear_buyer_effect = yes
+		FROM = { clr_character_flag = selling_armaments }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# dawizharr.43 Payment received
+# The seller takes the gold, the slaves (put to work, dawizharr.35) or the
+# prisoner, and ships the goods.
+# Scope: ROOT is the seller, FROM the buyer.
+character_event = {
+	id = dawizharr.43
+	desc = { trigger = { FROM = { has_character_flag = arms_pay_gold } } text = EVTDESCdawizharr43 }
+	desc = {
+		trigger = { FROM = { has_character_flag = arms_pay_people } }
+		text = EVTDESCdawizharr43b
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = arms_pay_pits } }
+		text = EVTDESCdawizharr43c
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = arms_pay_prisoner } }
+		text = EVTDESCdawizharr43d
+	}
+	picture = GFX_evt_chaos_dwarfs
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdawizharr43
+		clr_character_flag = selling_armaments
+		if = {
+			limit = { dawizharr_dawi_seller_trigger = yes }
+			add_character_modifier = { name = recently_sold_order_dwarfs duration = 1825 }
+		}
+		else = { add_character_modifier = { name = recently_sold_chaos_dwarfs duration = 1825 } }
+		if = { limit = { FROM = { has_character_flag = arms_pay_gold } } wealth = 150 }
+		else_if = {
+			limit = {
+				FROM = {
+					OR = { has_character_flag = arms_pay_people has_character_flag = arms_pay_pits }
+				}
+			}
+			character_event = { id = dawizharr.35 }
+		}
+		FROM = { character_event = { id = dawizharr.44 } }
+	}
+}
+
+# dawizharr.44 The goods arrive
+# War machines come with a guard regiment and wait at the capital; arms and
+# armour equip the capital's levies for ten years. A Dawi Zharr arms deal also
+# brings a Hellforged Greatshield for the buyer (dawizharr_greatshield).
+# Scope: ROOT is the buyer, FROM the seller.
+character_event = {
+	id = dawizharr.44
+	desc = {
+		trigger = {
+			has_character_flag = arms_order_artillery
+			FROM = { NOT = { dawizharr_dawi_seller_trigger = yes } }
+		}
+		text = EVTDESCdawizharr44
+	}
+	desc = {
+		trigger = {
+			has_character_flag = arms_order_weapons
+			FROM = { NOT = { dawizharr_dawi_seller_trigger = yes } }
+		}
+		text = EVTDESCdawizharr44b
+	}
+	desc = {
+		trigger = {
+			has_character_flag = arms_order_artillery
+			FROM = { dawizharr_dawi_seller_trigger = yes }
+		}
+		text = EVTDESCdawizharr44c
+	}
+	desc = {
+		trigger = {
+			has_character_flag = arms_order_weapons
+			FROM = { dawizharr_dawi_seller_trigger = yes }
+		}
+		text = EVTDESCdawizharr44d
+	}
+	picture = GFX_evt_chaos_dwarf_artillery_crew
+
+	is_triggered_only = yes
+
+	option = { # War machines
+		name = EVTOPTAdawizharr44
+		trigger = { has_character_flag = arms_order_artillery }
+		custom_tooltip = {
+			text = dawizharr_artillery_tt
+			capital_scope = {
+				ROOT = {
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						troops = { heavy_infantry = { 100 100 } artillery = { 50 50 } }
+					}
+				}
+			}
+		}
+		if = {
+			limit = { FROM = { dawizharr_dawi_seller_trigger = yes } }
+			add_character_modifier = { name = recently_brought_from_order_dwarfs duration = 3650 }
+		}
+		else = {
+			add_character_modifier = { name = recently_brought_from_chaos_dwarfs duration = 3650 }
+		}
+		dawizharr_arms_clear_buyer_effect = yes
+	}
+	option = { # Arms and armour
+		name = EVTOPTBdawizharr44
+		trigger = { has_character_flag = arms_order_weapons }
+		if = {
+			limit = { FROM = { dawizharr_dawi_seller_trigger = yes } }
+			add_character_modifier = { name = recently_brought_from_order_dwarfs duration = 3650 }
+			capital_scope = {
+				add_province_modifier = { name = order_dwarf_weapons duration = 3650 }
+			}
+		}
+		else = {
+			add_character_modifier = { name = recently_brought_from_chaos_dwarfs duration = 3650 }
+			capital_scope = {
+				add_province_modifier = { name = chaos_dwarf_weapons duration = 3650 }
+			}
+			if = {
+				limit = { NOT = { has_artifact = dawizharr_greatshield } }
+				add_artifact = dawizharr_greatshield
+			}
+		}
+		dawizharr_arms_clear_buyer_effect = yes
+	}
+}
+
+# dawizharr.45 A Chaos Dwarf offers wares
+# Hidden step for the sell_stuff_chaos_dwarfs decision: hands the deal to the
+# buyer as if they had asked.
+# Scope: ROOT is the seller, FROM the buyer.
+character_event = {
+	id = dawizharr.45
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { set_character_flag = buying_chaos_dwarfs character_event = { id = dawizharr.40 } }
+	}
+}

@@ -1,0 +1,6731 @@
+###############################################################################
+# Daemon and Chaos Wastes events
+# Namespace: daemon (was "schaos" before the 2026 events refactor)
+# Faction: Chaos
+#
+# The madness of the Chaos Wastes, daemons summoned into prisoners or called
+# from the Warp, the bound daemons that live at court with their masters, the
+# witch hunters who hunt them, daemonic possession and exorcism, offerings to
+# the four gods, and a few Chaos helpers.
+#
+# Chaos Wastes                          daemon.1 - daemon.16
+# Summoning a daemon into a prisoner    daemon.20 - daemon.40
+# Summoning a daemon                    daemon.45 - daemon.50
+# Daemons at court                      daemon.55 - daemon.61
+# Witch hunters and daemons             daemon.65 - daemon.74
+# Daemon familiars                      daemon.80 - daemon.90
+# Possession                            daemon.100 - daemon.122
+# Exorcism                              daemon.125 - daemon.132
+# Khorne's mages, commissioned summons  daemon.140 - daemon.149
+# Offerings to Khorne                   daemon.200 - daemon.208
+# Offerings to Nurgle                   daemon.210 - daemon.218
+# Offerings to Slaanesh                 daemon.220 - daemon.228
+# Offerings to Tzeentch                 daemon.230 - daemon.238
+# Other Chaos events                    daemon.250 - daemon.257
+# Chaos sorcery                         daemon.260 - daemon.262
+#
+# Fired from common/on_actions/wh_on_actions.txt: yearly lists daemon_feud,
+# daemon_betrayal and whunter_events; daemon.100, 132 and 257 every two years
+# and the bi-yearly list chaos; daemon.61 and 140 every five years and the
+# five-year lists chaos and daemon_sorcery; the decade list chaos; on_siege_pulse, on_combat_pulse,
+# on_adulthood and on_death. Decisions in wh_chaos_decisions.txt,
+# wh_magic_decisions.txt, employment_decisions.txt and
+# wh_cult_societies_decisions.txt start the summonings, exorcisms and
+# offerings; WHG_chaos_cult_events.txt reuses the prisoner summoning.
+# Scripted triggers: common/scripted_triggers/wh_daemon_triggers.txt
+# Scripted effects: common/scripted_effects/wh_daemon_effects.txt
+# Loc: localisation/00_WHG_daemon_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = daemon
+
+###############################################################################
+# Chaos Wastes
+###############################################################################
+
+# daemon.1 Becoming a Chaos horde
+# A ruler takes the Chaos horde decision: their realm becomes a nomadic horde.
+# Holdings outside Zanbaijin and the holy sites are razed, and their worth
+# comes back as population and wealth.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = daemon.1
+	title = EVTTITLEdaemon1
+	desc = EVTDESCdaemon1
+	picture = GFX_evt_chaos_hordes
+	is_triggered_only = yes
+
+	immediate = {
+		set_variable = { which = popToAddCount value = 1000 }
+		set_variable = { which = moneyToAddCount value = 0 }
+		any_realm_province = {
+			any_province_holding = {
+				if = {
+					limit = { holding_type = tribal }
+					ROOT = { change_variable = { which = moneyToAddCount value = 10 } }
+				}
+				else = { ROOT = { change_variable = { which = moneyToAddCount value = 30 } } }
+				ROOT = { change_variable = { which = popToAddCount value = 1000 } }
+			}
+		}
+	}
+	#CALCULATE POPULATION AND ADD BUILDINGS
+	option = {
+		name = EVTOPTAdaemon1
+		set_government_type = chaos_horde_government
+		custom_tooltip = {
+			text = convert_to_chaos_nomad
+			any_realm_province = {
+				any_province_holding = { convert_holdings_buildings_to_nomad_equiv = yes }
+			}
+			any_realm_province = {
+				limit = {
+					NOR = {
+						county = {
+							#The main city of the wastes
+							title = c_zanbaijin
+						}
+						OR = {
+							any_province_holding = { is_holy_site = chaos }
+							any_province_holding = { is_holy_site = tzeentch }
+							any_province_holding = { is_holy_site = nurgle }
+							any_province_holding = { is_holy_site = slaanesh }
+							any_province_holding = { is_holy_site = khorne }
+							any_province_holding = { is_holy_site = norscan_gods }
+						}
+					}
+				}
+				population = 1000
+				any_province_holding = {
+					if = { limit = { NOT = { holding_type = nomad } } destroy_settlement = THIS }
+				}
+			}
+		}
+		population = popToAddCount
+		wealth = moneyToAddCount
+		hidden_tooltip = {
+			capital_holding = {
+				add_building = no_cattle_pens_1
+				add_building = no_ox_wagon_1
+				add_building = no_cattle_pens_2
+				add_building = no_ox_wagon_2
+			}
+			set_variable = { which = popToAddCount value = 0 }
+			set_variable = { which = moneyToAddCount value = 0 }
+		}
+		clr_character_flag = converted_to_chaos_horde
+	}
+	#NEVERMIND
+	option = {
+		name = EVTOPTBdaemon1
+		trigger = { ai = no }
+		clr_character_flag = converted_to_chaos_horde
+	}
+}
+
+# daemon.2 The ground eats a building
+# The earth of the Chaos Wastes opens a mouth and eats a building in one of
+# the ruler's provinces there.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = daemon.2
+	desc = EVTDESCdaemon2
+	picture = GFX_evt_chaos_hordes
+	is_triggered_only = yes # on_decade_pulse, random list chaos
+
+	only_rulers = yes
+
+	trigger = {
+		NOT = { culture_group = daemonic_group }
+		any_realm_province = { region = world_chaos_wastes }
+	}
+
+	immediate = {
+		random_realm_province = {
+			limit = { region = world_chaos_wastes }
+			save_event_target_as = daemon_wastes_province
+			destroy_random_building = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemon2
+	}
+}
+
+# daemon.3 A Kurgan war band
+# A Chaos-worshipping human ruler at war, with a tribal or nomadic capital in
+# the Wastes, is joined by a band of Kurgan warriors. More likely with piety
+# and prestige.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = daemon.3
+	desc = EVTDESCdaemon3
+	picture = GFX_evt_chaos_hordes
+	is_triggered_only = yes # on_bi_yearly_pulse, random list chaos
+
+	only_rulers = yes
+	religion_group = chaos_gods_group
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		war = yes
+		piety = 200
+		trait = creature_human
+		NOT = { trait = infirm }
+		capital_scope = { region = world_chaos_wastes OR = { is_tribal = yes is_nomadic = yes } }
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 1.25 piety = 500 }
+		modifier = { factor = 1.25 piety = 1000 }
+		modifier = { factor = 1.25 prestige = 750 }
+		modifier = { factor = 1.25 prestige = 1500 }
+	}
+
+	option = {
+		name = EVTOPTAdaemon3
+		location = {
+			ROOT = {
+				spawn_unit = {
+					cannot_inherit = yes
+					province = PREV
+					owner = ROOT
+					troops = { light_infantry = { 250 250 } heavy_infantry = { 200 200 } }
+				}
+			}
+		}
+	}
+}
+
+# daemon.4 The walking eye
+# A Chaos ruler in the Wastes wakes to a giant eye on legs staring at them. A
+# small step towards madness, and a gift to Tzeentch.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = daemon.4
+	desc = EVTDESCdaemon4
+	picture = GFX_evt_chaos_hordes
+	only_rulers = yes
+	religion_group = chaos_gods_group
+
+	is_triggered_only = yes # on_five_year_pulse, random list chaos
+
+	trigger = {
+		location = { region = world_chaos_wastes }
+	}
+
+	option = {
+		name = EVTOPTAdaemon4
+		hidden_tooltip = {
+			if = {
+				limit = { lunacy_can_go_mad_trigger = yes }
+				change_variable = { which = "lunatic_counter" value = 2 }
+				character_event = { id = mutate.5 }
+			}
+			daemon_favour_tzeentch_effect = yes
+		}
+	}
+}
+
+# daemon.5 Gravity turns
+# Near the great rift, things start to fall upwards in one of the ruler's
+# provinces in the Wastes (reversed_gravity for ten years).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = daemon.5
+	desc = EVTDESCdaemon5
+	picture = GFX_evt_chaos_hordes
+	is_triggered_only = yes # on_decade_pulse, random list chaos
+
+	only_rulers = yes
+
+	trigger = {
+		NOT = { culture_group = daemonic_group }
+		any_realm_province = {
+			region = world_chaos_wastes
+			NOT = { has_province_modifier = reversed_gravity }
+		}
+	}
+
+	immediate = {
+		random_realm_province = {
+			limit = {
+				region = world_chaos_wastes
+				NOT = { has_province_modifier = reversed_gravity }
+			}
+			save_event_target_as = daemon_wastes_province
+			add_province_modifier = { name = reversed_gravity duration = 3600 }
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemon5
+	}
+}
+
+# daemon.6 A warp rift opens
+# When doom is high, a rift opens at a Chaos ruler's capital in the Wastes and
+# its neighbours. Their god, or all four for Chaos Undivided, drink from it.
+# The rift strikes (daemon.8) until it closes (daemon.7).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = daemon.6
+	desc = EVTDESCdaemon6
+	picture = GFX_evt_chaos_hordes
+	is_triggered_only = yes # on_decade_pulse, random list chaos
+
+	only_rulers = yes
+	religion_group = chaos_gods_group
+
+	trigger = {
+		is_doom_high_trigger = yes
+		capital_scope = {
+			region = world_chaos_wastes
+			NOR = {
+				has_province_modifier = warphole_epicentre
+				any_neighbor_province = {
+					has_province_modifier = warphole_epicentre
+					any_neighbor_province = { has_province_modifier = warphole_epicentre }
+				}
+			}
+		}
+	}
+
+	immediate = {
+		capital_scope = { save_event_target_as = daemon_wastes_province }
+		if = {
+			limit = { religion = tzeentch }
+			add_offmap_currency = { offmap = tzeentch_warp amount = 500 }
+		}
+		else_if = {
+			limit = { religion = slaanesh }
+			add_offmap_currency = { offmap = slaanesh_warp amount = 500 }
+		}
+		else_if = {
+			limit = { religion = khorne }
+			add_offmap_currency = { offmap = khorne_warp amount = 500 }
+		}
+		else_if = {
+			limit = { religion = nurgle }
+			add_offmap_currency = { offmap = nurgle_warp amount = 500 }
+		}
+		else = {
+			# Chaos Undivided: every god drinks from the rift
+			add_offmap_currency = { offmap = tzeentch_warp amount = 150 }
+			add_offmap_currency = { offmap = slaanesh_warp amount = 150 }
+			add_offmap_currency = { offmap = khorne_warp amount = 150 }
+			add_offmap_currency = { offmap = nurgle_warp amount = 150 }
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemon6
+		hidden_tooltip = {
+			capital_scope = {
+				add_province_modifier = { name = warphole_epicentre duration = -1 }
+				province_event = { id = daemon.8 days = 25 random = 40 } # the eye strikes
+				province_event = { id = daemon.7 days = 250 random = 900 } # the rift closes
+				any_neighbor_province = {
+					add_province_modifier = { name = warphole_epicentre duration = -1 }
+					province_event = { id = daemon.8 days = 25 random = 40 }
+					province_event = { id = daemon.7 days = 250 random = 900 }
+				}
+			}
+		}
+	}
+}
+
+# daemon.7 The warp rift closes
+# A rift opened by daemon.6 closes, some years later.
+# Scope: ROOT is the province.
+province_event = {
+	id = daemon.7
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_province_modifier = warphole_epicentre
+	}
+
+	immediate = {
+		remove_province_modifier = warphole_epicentre
+	}
+}
+
+# daemon.8 The rift strikes
+# The rift wrecks a building in its province, and four times in ten strikes
+# again a few weeks later.
+# Scope: ROOT is the province.
+province_event = {
+	id = daemon.8
+	desc = EVTDESCdaemon8
+	picture = GFX_evt_chaos_hordes
+	notification = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_province_modifier = warphole_epicentre
+	}
+
+	immediate = {
+		random_list = {
+			60 = { }
+			40 = { province_event = { id = daemon.8 days = 10 random = 40 } }
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemon8
+		destroy_random_building = yes
+	}
+}
+
+# daemon.9 A boil in the earth bursts
+# A ruler in the Wastes is caught in a burst of plague gas: they and their
+# court fall sick, and Nurgle is pleased.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = daemon.9
+	desc = EVTDESCdaemon9
+	picture = GFX_evt_chaos_hordes
+	only_rulers = yes
+
+	is_triggered_only = yes # on_five_year_pulse, random list chaos
+
+	trigger = {
+		location = { region = world_chaos_wastes }
+	}
+
+	option = {
+		name = EVTOPTAdaemon9
+		hidden_tooltip = {
+			daemon_favour_nurgle_effect = yes
+			character_event = { id = mutate.5 }
+			random_list = {
+				20 = { add_trait = has_nurgles_rot nurgle_blessing_check_effect = yes }
+				20 = { add_trait = has_tuberculosis nurgle_blessing_check_effect = yes }
+				20 = { add_trait = has_typhus nurgle_blessing_check_effect = yes }
+				20 = { add_trait = has_bubonic_plague nurgle_blessing_check_effect = yes }
+				20 = { add_trait = leper nurgle_blessing_check_effect = yes }
+			}
+			add_symptom_effect = yes
+			any_courtier = { limit = { is_ruler = no } add_symptom_effect = yes }
+		}
+	}
+}
+
+# daemon.10 A garden of delights
+# An unearthly garden grows around a Chaos ruler in the Wastes. They and their
+# court pick up a vice, and Slaanesh is pleased.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = daemon.10
+	desc = EVTDESCdaemon10
+	picture = GFX_evt_chaos_hordes
+	only_rulers = yes
+	religion_group = chaos_gods_group
+
+	is_triggered_only = yes # on_five_year_pulse, random list chaos
+
+	trigger = {
+		location = { region = world_chaos_wastes }
+	}
+
+	option = {
+		name = EVTOPTAdaemon10
+		hidden_tooltip = {
+			daemon_favour_slaanesh_effect = yes
+			character_event = { id = mutate.5 }
+			random_list = {
+				25 = { add_trait = lustful }
+				25 = { add_trait = gluttonous }
+				25 = { add_trait = drunkard }
+				25 = { add_trait = slothful }
+			}
+			any_courtier = {
+				limit = { is_ruler = no }
+				random_list = {
+					25 = { add_trait = lustful }
+					25 = { add_trait = gluttonous }
+					25 = { add_trait = drunkard }
+					25 = { add_trait = slothful }
+				}
+			}
+		}
+	}
+}
+
+# daemon.11 The rivers run red
+# The waters turn to blood around a Chaos ruler in the Wastes. They and their
+# court are stirred to wrath, cruelty or courage, and Khorne is pleased.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = daemon.11
+	desc = EVTDESCdaemon11
+	picture = GFX_evt_chaos_hordes
+	only_rulers = yes
+	religion_group = chaos_gods_group
+
+	is_triggered_only = yes # on_five_year_pulse, random list chaos
+
+	trigger = {
+		location = { region = world_chaos_wastes }
+	}
+
+	option = {
+		name = EVTOPTAdaemon11
+		hidden_tooltip = {
+			daemon_favour_khorne_effect = yes
+			character_event = { id = mutate.5 }
+			random_list = {
+				25 = { add_trait = wroth }
+				25 = { add_trait = cruel }
+				25 = { add_trait = ambitious }
+				25 = { add_trait = brave }
+			}
+			any_courtier = {
+				limit = { is_ruler = no }
+				random_list = {
+					25 = { add_trait = wroth }
+					25 = { add_trait = cruel }
+					25 = { add_trait = ambitious }
+					25 = { add_trait = brave }
+				}
+			}
+		}
+	}
+}
+
+# daemon.12 Living shadows
+# Shadows plot against their owners around a ruler in the Wastes, who picks up
+# a scheming trait.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = daemon.12
+	desc = EVTDESCdaemon12
+	picture = GFX_evt_chaos_hordes
+	is_triggered_only = yes # on_five_year_pulse, random list chaos
+
+	only_rulers = yes
+
+	trigger = {
+		location = { region = world_chaos_wastes }
+	}
+
+	option = {
+		name = EVTOPTAdaemon12
+		hidden_tooltip = {
+			random_list = {
+				25 = { add_trait = paranoid }
+				25 = { add_trait = deceitful }
+				25 = { add_trait = ambitious }
+				25 = { add_trait = greedy }
+			}
+		}
+	}
+}
+
+# daemon.13 A storm of flying fingers
+# Flying fingers fall on a siege in the Wastes, thinning both armies. Chaos
+# worshippers, and above all champions, are seldom troubled.
+# Scope: ROOT is the besieging ruler.
+character_event = {
+	id = daemon.13
+	desc = EVTDESCdaemon13
+	notification = yes
+	only_rulers = yes
+	picture = GFX_evt_chaos_attack
+
+	is_triggered_only = yes # on_siege_pulse
+
+	trigger = {
+		location = { region = world_chaos_wastes }
+		siege = { is_attacker = yes }
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 1.2 NOT = { religion_group = chaos_gods_group } }
+		modifier = { factor = 0.05 religion_group = chaos_gods_group }
+		modifier = { factor = 0.01 is_chaos_champion_chosen_or_prince_trigger = yes }
+	}
+
+	immediate = {
+		siege = { troops = -0.05 }
+		siege = { enemy = { morale = -0.1 troops = -0.05 } }
+	}
+
+	option = {
+		name = EVTOPTAdaemon13
+	}
+}
+
+# daemon.14 A daemon horde
+# Wandering daemons fall on a siege in the Wastes and kill a quarter of both
+# armies. Rare for Chaos worshippers.
+# Scope: ROOT is the besieging ruler.
+character_event = {
+	id = daemon.14
+	desc = EVTDESCdaemon14
+	notification = yes
+	only_rulers = yes
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes # on_siege_pulse
+
+	trigger = {
+		location = { region = world_chaos_wastes }
+		siege = { is_attacker = yes }
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 1.5 NOT = { religion_group = chaos_gods_group } }
+		modifier = { factor = 0.10 religion_group = chaos_gods_group }
+		modifier = { factor = 0.02 is_chaos_champion_chosen_or_prince_trigger = yes }
+	}
+
+	immediate = {
+		siege = { troops = -0.25 }
+		siege = { enemy = { troops = -0.25 } }
+	}
+
+	option = {
+		name = EVTOPTAdaemon14
+	}
+}
+
+# daemon.15 A giant tentacle
+# A tentacle of flowers swallows half of both armies at a siege in the Wastes.
+# Rare for Chaos worshippers.
+# Scope: ROOT is the besieging ruler.
+character_event = {
+	id = daemon.15
+	desc = EVTDESCdaemon15
+	notification = yes
+	only_rulers = yes
+	picture = GFX_evt_nurgle_war
+
+	is_triggered_only = yes # on_siege_pulse
+
+	trigger = {
+		location = { region = world_chaos_wastes }
+		siege = { is_attacker = yes }
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 1.2 NOT = { religion_group = chaos_gods_group } }
+		modifier = { factor = 0.05 religion_group = chaos_gods_group }
+		modifier = { factor = 0.01 is_chaos_champion_chosen_or_prince_trigger = yes }
+	}
+
+	immediate = {
+		siege = { troops = -0.5 }
+		siege = { enemy = { troops = -0.5 } }
+	}
+
+	option = {
+		name = EVTOPTAdaemon15
+	}
+}
+
+# daemon.16 Visions of Chaos
+# Visions break the besiegers' minds: the army loses men and the commander
+# takes a step towards madness, one time in five clawing out their own eyes.
+# Never for Chaos champions.
+# Scope: ROOT is the besieging ruler.
+character_event = {
+	id = daemon.16
+	desc = EVTDESCdaemon16
+	picture = GFX_evt_chaos_hordes
+	notification = yes
+	is_triggered_only = yes # on_siege_pulse
+
+	only_rulers = yes
+
+	trigger = {
+		location = { region = world_chaos_wastes }
+		siege = { is_attacker = yes }
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 1.2 NOT = { religion_group = chaos_gods_group } }
+		modifier = { factor = 0.05 religion_group = chaos_gods_group }
+		modifier = { factor = 0 is_chaos_champion_chosen_or_prince_trigger = yes }
+	}
+
+	immediate = {
+		siege = { troops = -0.15 }
+		siege = { enemy = { morale = -0.1 troops = -0.05 } }
+	}
+
+	option = {
+		name = EVTOPTAdaemon16
+		if = {
+			limit = { lunacy_can_go_mad_trigger = yes }
+			hidden_tooltip = {
+				change_variable = { which = "lunatic_counter" value = 1 }
+				character_event = { id = mutate.5 }
+			}
+			random = { chance = 20 add_trait = blinded }
+		}
+	}
+}
+
+###############################################################################
+# Summoning a daemon into a prisoner
+###############################################################################
+
+# daemon.20 Summoning a daemon into a prisoner
+# A cultist or sorcerer binds a prisoner in a circle and calls a daemon of one
+# god into them. Cult or lore decides which gods answer. The summoner's power
+# and the prisoner's own magic decide whether the daemon is bound, escapes, or
+# the prisoner breaks free or bursts.
+# Scope: ROOT is the summoner, FROM the prisoner.
+character_event = {
+	id = daemon.20
+	desc = EVTDESCdaemon20
+	picture = GFX_evt_demon_summoning
+	only_rulers = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon20
+		trigger = {
+			OR = {
+				society_member_of = cult_of_tzeentch
+				society_member_of = cult_of_undivided
+				trait = lore_tzeentch
+				trait = lore_shadows
+				trait = lore_dark_magic
+			}
+		}
+		random_list = {
+			#success, summoned tzeentch daemon
+			60 = {
+				modifier = { factor = 0.75 trait = hedge_wizard }
+				modifier = { factor = 1.25 trait = champion_tzeentch }
+				modifier = { factor = 1.5 trait = chosen_tzeentch }
+				modifier = { factor = 1.75 trait = prince_tzeentch }
+				modifier = { factor = 1.5 trait = lore_dark_magic }
+				modifier = { factor = 1.5 has_character_modifier = magic_power_3 }
+				modifier = { factor = 1.75 has_character_modifier = magic_power_4 }
+				modifier = { factor = 0.95 FROM = { has_character_modifier = magic_power_1 } }
+				modifier = { factor = 0.75 FROM = { has_character_modifier = magic_power_2 } }
+				modifier = { factor = 0.5 FROM = { has_character_modifier = magic_power_3 } }
+				modifier = { factor = 0.25 FROM = { has_character_modifier = magic_power_4 } }
+				FROM = { character_event = { id = daemon.27 } }
+			}
+			#failure, prisoner escapes
+			20 = {
+				modifier = { factor = 0.85 trait = hedge_wizard }
+				modifier = { factor = 1.25 FROM = { has_character_modifier = magic_power_1 } }
+				modifier = { factor = 1.5 FROM = { has_character_modifier = magic_power_2 } }
+				modifier = { factor = 2 FROM = { has_character_modifier = magic_power_3 } }
+				modifier = { factor = 3.5 FROM = { has_character_modifier = magic_power_4 } }
+				modifier = { factor = 2 FROM = { trait = malekith } }
+				modifier = { factor = 2 FROM = { trait = phoenix_king } }
+				modifier = { factor = 2 FROM = { trait = lore_dark_magic } }
+				modifier = { factor = 2 FROM = { trait = lore_high_magic } }
+				modifier = { factor = 4 FROM = { trait = creature_slann } }
+				FROM = { character_event = { id = daemon.21 } }
+			}
+			#failure, prisoner explodes
+			20 = {
+				modifier = {
+					factor = 0
+					FROM = {
+						OR = {
+							has_character_modifier = magic_power_1
+							has_character_modifier = magic_power_2
+							has_character_modifier = magic_power_3
+							has_character_modifier = magic_power_4
+						}
+					}
+				}
+				FROM = { character_event = { id = daemon.23 } }
+			}
+			#failure, tzeentch daemon escapes
+			20 = { FROM = { character_event = { id = daemon.25 } } }
+		}
+	}
+	option = {
+		name = EVTOPTBdaemon20
+		trigger = {
+			OR = {
+				society_member_of = cult_of_nurgle
+				society_member_of = cult_of_undivided
+				trait = lore_nurgle
+				trait = chaos_dwarf_sorcerer
+				trait = lore_dark_magic
+			}
+		}
+		random_list = {
+			#success, summoned nurgle daemon
+			60 = {
+				modifier = { factor = 0.75 trait = hedge_wizard }
+				modifier = { factor = 1.25 trait = champion_nurgle }
+				modifier = { factor = 1.5 trait = chosen_nurgle }
+				modifier = { factor = 1.75 trait = prince_nurgle }
+				modifier = { factor = 1.5 trait = lore_dark_magic }
+				modifier = { factor = 1.5 has_character_modifier = magic_power_3 }
+				modifier = { factor = 1.75 has_character_modifier = magic_power_4 }
+				modifier = { factor = 0.95 FROM = { has_character_modifier = magic_power_1 } }
+				modifier = { factor = 0.75 FROM = { has_character_modifier = magic_power_2 } }
+				modifier = { factor = 0.5 FROM = { has_character_modifier = magic_power_3 } }
+				modifier = { factor = 0.25 FROM = { has_character_modifier = magic_power_4 } }
+				FROM = { character_event = { id = daemon.31 } }
+			}
+			#failure, prisoner escapes
+			20 = {
+				modifier = { factor = 0.75 trait = hedge_wizard }
+				modifier = { factor = 1.25 FROM = { has_character_modifier = magic_power_1 } }
+				modifier = { factor = 1.5 FROM = { has_character_modifier = magic_power_2 } }
+				modifier = { factor = 2 FROM = { has_character_modifier = magic_power_3 } }
+				modifier = { factor = 3.5 FROM = { has_character_modifier = magic_power_4 } }
+				modifier = { factor = 2 FROM = { trait = malekith } }
+				modifier = { factor = 2 FROM = { trait = phoenix_king } }
+				modifier = { factor = 2 FROM = { trait = lore_dark_magic } }
+				modifier = { factor = 2 FROM = { trait = lore_high_magic } }
+				modifier = { factor = 4 FROM = { trait = creature_slann } }
+				FROM = { character_event = { id = daemon.21 } }
+			}
+			#failure, prisoner explodes
+			20 = {
+				modifier = {
+					factor = 0
+					FROM = {
+						OR = {
+							has_character_modifier = magic_power_1
+							has_character_modifier = magic_power_2
+							has_character_modifier = magic_power_3
+							has_character_modifier = magic_power_4
+						}
+					}
+				}
+				FROM = { character_event = { id = daemon.23 } }
+			}
+			#failure, nurgle daemon escapes
+			20 = { FROM = { character_event = { id = daemon.29 } } }
+		}
+	}
+	option = {
+		name = EVTOPTCdaemon20
+		trigger = {
+			OR = {
+				society_member_of = cult_of_slaanesh
+				society_member_of = cult_of_undivided
+				trait = lore_slaanesh
+				trait = lore_shadows
+				trait = lore_tzeentch
+				trait = lore_dark_magic
+			}
+		}
+		random_list = {
+			#success, summoned slaanesh daemon
+			60 = {
+				modifier = { factor = 0.75 trait = hedge_wizard }
+				modifier = { factor = 1.25 trait = champion_slaanesh }
+				modifier = { factor = 1.5 trait = chosen_slaanesh }
+				modifier = { factor = 1.75 trait = prince_slaanesh }
+				modifier = { factor = 1.5 trait = lore_dark_magic }
+				modifier = { factor = 1.5 has_character_modifier = magic_power_3 }
+				modifier = { factor = 1.75 has_character_modifier = magic_power_4 }
+				modifier = { factor = 0.95 FROM = { has_character_modifier = magic_power_1 } }
+				modifier = { factor = 0.75 FROM = { has_character_modifier = magic_power_2 } }
+				modifier = { factor = 0.5 FROM = { has_character_modifier = magic_power_3 } }
+				modifier = { factor = 0.25 FROM = { has_character_modifier = magic_power_4 } }
+				FROM = { character_event = { id = daemon.35 } }
+			}
+			#failure, prisoner escapes
+			20 = {
+				modifier = { factor = 0.75 trait = hedge_wizard }
+				modifier = { factor = 1.25 FROM = { has_character_modifier = magic_power_1 } }
+				modifier = { factor = 1.5 FROM = { has_character_modifier = magic_power_2 } }
+				modifier = { factor = 2 FROM = { has_character_modifier = magic_power_3 } }
+				modifier = { factor = 3.5 FROM = { has_character_modifier = magic_power_4 } }
+				modifier = { factor = 2 FROM = { trait = malekith } }
+				modifier = { factor = 2 FROM = { trait = phoenix_king } }
+				modifier = { factor = 2 FROM = { trait = lore_dark_magic } }
+				modifier = { factor = 2 FROM = { trait = lore_high_magic } }
+				modifier = { factor = 4 FROM = { trait = creature_slann } }
+				FROM = { character_event = { id = daemon.21 } }
+			}
+			#failure, prisoner explodes
+			20 = {
+				modifier = {
+					factor = 0
+					FROM = {
+						OR = {
+							has_character_modifier = magic_power_1
+							has_character_modifier = magic_power_2
+							has_character_modifier = magic_power_3
+							has_character_modifier = magic_power_4
+						}
+					}
+				}
+				FROM = { character_event = { id = daemon.23 } }
+			}
+			#failure, slaanesh daemon escapes
+			20 = { FROM = { character_event = { id = daemon.33 } } }
+		}
+	}
+	option = {
+		name = EVTOPTDdaemon20
+		trigger = {
+			OR = {
+				society_member_of = cult_of_khorne
+				society_member_of = cult_of_undivided
+				trait = lore_dark_magic
+				trait = lore_tzeentch
+				trait = lore_slaanesh
+				trait = chaos_dwarf_sorcerer
+			}
+		}
+		random_list = {
+			#success, summoned khorne daemon
+			60 = {
+				modifier = { factor = 0.75 trait = hedge_wizard }
+				modifier = { factor = 1.25 trait = champion_khorne }
+				modifier = { factor = 1.5 trait = chosen_khorne }
+				modifier = { factor = 1.75 trait = prince_khorne }
+				modifier = { factor = 1.5 trait = lore_dark_magic }
+				modifier = { factor = 1.5 has_character_modifier = magic_power_3 }
+				modifier = { factor = 1.75 has_character_modifier = magic_power_4 }
+				modifier = { factor = 0.95 FROM = { has_character_modifier = magic_power_1 } }
+				modifier = { factor = 0.75 FROM = { has_character_modifier = magic_power_2 } }
+				modifier = { factor = 0.5 FROM = { has_character_modifier = magic_power_3 } }
+				modifier = { factor = 0.25 FROM = { has_character_modifier = magic_power_4 } }
+				FROM = { character_event = { id = daemon.39 } }
+			}
+			#failure, prisoner escapes
+			20 = {
+				modifier = { factor = 0.75 trait = hedge_wizard }
+				modifier = { factor = 1.25 FROM = { has_character_modifier = magic_power_1 } }
+				modifier = { factor = 1.5 FROM = { has_character_modifier = magic_power_2 } }
+				modifier = { factor = 2 FROM = { has_character_modifier = magic_power_3 } }
+				modifier = { factor = 3.5 FROM = { has_character_modifier = magic_power_4 } }
+				modifier = { factor = 2 FROM = { trait = malekith } }
+				modifier = { factor = 2 FROM = { trait = phoenix_king } }
+				modifier = { factor = 2 FROM = { trait = lore_dark_magic } }
+				modifier = { factor = 2 FROM = { trait = lore_high_magic } }
+				modifier = { factor = 4 FROM = { trait = creature_slann } }
+				FROM = { character_event = { id = daemon.21 } }
+			}
+			#failure, prisoner explodes
+			20 = {
+				modifier = {
+					factor = 0
+					FROM = {
+						OR = {
+							has_character_modifier = magic_power_1
+							has_character_modifier = magic_power_2
+							has_character_modifier = magic_power_3
+							has_character_modifier = magic_power_4
+						}
+					}
+				}
+				FROM = { character_event = { id = daemon.23 } }
+			}
+			#failure, khorne daemon escapes
+			20 = { FROM = { character_event = { id = daemon.37 } } }
+		}
+	}
+}
+
+# daemon.21 The prisoner breaks free
+# The prisoner breaks the circle and flees to a ruler of their own faith.
+# Scope: ROOT is the prisoner, FROM the summoner.
+character_event = {
+	id = daemon.21
+	desc = EVTDESCdaemon21
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon21
+		prisoner = no
+		random_independent_ruler = {
+			limit = { religion_group = ROOT }
+			ROOT = { move_character = PREV }
+		}
+		FROM = { character_event = { id = daemon.22 } }
+	}
+}
+
+# daemon.22 The prisoner escaped
+# Tells the summoner the prisoner got away; a Chaos cult quest on them fails.
+# Scope: ROOT is the summoner, FROM the prisoner.
+character_event = {
+	id = daemon.22
+	desc = EVTDESCdaemon22
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon22
+		daemon_summon_failed_effect = yes
+	}
+}
+
+# daemon.23 The prisoner bursts
+# The prisoner's body cannot hold the daemon and bursts. Their kin and the
+# summoner's Old World and elven vassals are outraged.
+# Scope: ROOT is the prisoner, FROM the summoner.
+character_event = {
+	id = daemon.23
+	desc = EVTDESCdaemon23
+	picture = GFX_evt_demon_summoning
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon23
+		FROM = { character_event = { id = daemon.24 } }
+		hidden_tooltip = { daemon_victim_outrage_effect = yes }
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = { death = { death_reason = death_execution killer = FROM } }
+	}
+}
+
+# daemon.24 The prisoner burst
+# Tells the summoner the vessel failed; a Chaos cult quest on them fails.
+# Scope: ROOT is the summoner, FROM the prisoner.
+character_event = {
+	id = daemon.24
+	desc = EVTDESCdaemon24
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon24
+		daemon_summon_failed_effect = yes
+	}
+}
+
+# daemon.25 A Flamer breaks loose
+# A Flamer of Tzeentch takes the prisoner's body and escapes to a Chaos ruler.
+# Scope: ROOT is the prisoner, FROM the summoner.
+character_event = {
+	id = daemon.25
+	desc = EVTDESCdaemon25
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon25
+		hidden_tooltip = { daemon_victim_outrage_effect = yes }
+		abdicate = yes
+		hidden_tooltip = { create_flamer_effect = yes set_character_flag = special_marshal }
+		FROM = { character_event = { id = daemon.26 } }
+		random_independent_ruler = {
+			limit = { religion_group = ROOT }
+			ROOT = { move_character = PREV }
+		}
+	}
+}
+
+# daemon.26 The Flamer broke loose
+# Tells the summoner the Flamer escaped; a Chaos cult quest on the prisoner
+# fails.
+# Scope: ROOT is the summoner, FROM the prisoner.
+character_event = {
+	id = daemon.26
+	desc = EVTDESCdaemon26
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon26
+		daemon_summon_failed_effect = yes
+	}
+}
+
+# daemon.27 A Flamer is bound
+# A Flamer of Tzeentch takes the prisoner's body and joins the summoner's
+# court. Adds a little doom.
+# Scope: ROOT is the prisoner, FROM the summoner.
+character_event = {
+	id = daemon.27
+	desc = EVTDESCdaemon27
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon27
+		hidden_tooltip = { daemon_victim_outrage_effect = yes }
+		abdicate = yes
+		move_character = FROM
+		hidden_tooltip = {
+			add_doom_progress_tiny_effect = yes
+			create_flamer_effect = yes
+			set_character_flag = special_marshal
+		}
+		FROM = { character_event = { id = daemon.28 } }
+	}
+}
+
+# daemon.28 The Flamer serves
+# The summoner gains the Flamer as a bound friend and prestige; a Chaos cult
+# possession quest on the prisoner is fulfilled.
+# Scope: ROOT is the summoner, FROM the daemon.
+character_event = {
+	id = daemon.28
+	desc = EVTDESCdaemon28
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon28
+		daemon_summon_bound_effect = yes
+	}
+}
+
+# daemon.29 A Plaguebearer breaks loose
+# A Plaguebearer of Nurgle takes the prisoner's body and escapes.
+# Scope: ROOT is the prisoner, FROM the summoner.
+character_event = {
+	id = daemon.29
+	desc = EVTDESCdaemon29
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon29
+		hidden_tooltip = { daemon_victim_outrage_effect = yes }
+		abdicate = yes
+		hidden_tooltip = { create_plaguebearer_effect = yes set_character_flag = special_marshal }
+		FROM = { character_event = { id = daemon.30 } }
+		random_independent_ruler = {
+			limit = { religion_group = ROOT }
+			ROOT = { move_character = PREV }
+		}
+	}
+}
+
+# daemon.30 The Plaguebearer broke loose
+# Tells the summoner the Plaguebearer escaped.
+# Scope: ROOT is the summoner, FROM the prisoner.
+character_event = {
+	id = daemon.30
+	desc = EVTDESCdaemon30
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon30
+		daemon_summon_failed_effect = yes
+	}
+}
+
+# daemon.31 A Plaguebearer is bound
+# A Plaguebearer of Nurgle takes the prisoner's body and joins the summoner's
+# court.
+# Scope: ROOT is the prisoner, FROM the summoner.
+character_event = {
+	id = daemon.31
+	desc = EVTDESCdaemon31
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon31
+		hidden_tooltip = { daemon_victim_outrage_effect = yes }
+		abdicate = yes
+		move_character = FROM
+		hidden_tooltip = {
+			add_doom_progress_tiny_effect = yes
+			create_plaguebearer_effect = yes
+			set_character_flag = special_marshal
+		}
+		FROM = { character_event = { id = daemon.32 } }
+	}
+}
+
+# daemon.32 The Plaguebearer serves
+# The summoner gains the Plaguebearer as a bound friend.
+# Scope: ROOT is the summoner, FROM the daemon.
+character_event = {
+	id = daemon.32
+	desc = EVTDESCdaemon32
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon32
+		daemon_summon_bound_effect = yes
+	}
+}
+
+# daemon.33 A Daemonette breaks loose
+# A Daemonette of Slaanesh takes the prisoner's body and escapes.
+# Scope: ROOT is the prisoner, FROM the summoner.
+character_event = {
+	id = daemon.33
+	desc = EVTDESCdaemon33
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon33
+		hidden_tooltip = { daemon_victim_outrage_effect = yes }
+		abdicate = yes
+		hidden_tooltip = { create_daemonette_effect = yes set_character_flag = special_marshal }
+		FROM = { character_event = { id = daemon.34 } }
+		random_independent_ruler = {
+			limit = { religion_group = ROOT }
+			ROOT = { move_character = PREV }
+		}
+	}
+}
+
+# daemon.34 The Daemonette broke loose
+# Tells the summoner the Daemonette escaped.
+# Scope: ROOT is the summoner, FROM the prisoner.
+character_event = {
+	id = daemon.34
+	desc = EVTDESCdaemon34
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon34
+		daemon_summon_failed_effect = yes
+	}
+}
+
+# daemon.35 A Daemonette is bound
+# A Daemonette of Slaanesh takes the prisoner's body and joins the summoner's
+# court.
+# Scope: ROOT is the prisoner, FROM the summoner.
+character_event = {
+	id = daemon.35
+	desc = EVTDESCdaemon35
+	picture = GFX_evt_demon_summoning
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon35
+		hidden_tooltip = { daemon_victim_outrage_effect = yes }
+		abdicate = yes
+		move_character = FROM
+		hidden_tooltip = {
+			add_doom_progress_tiny_effect = yes
+			create_daemonette_effect = yes
+			set_character_flag = special_marshal
+		}
+		FROM = { character_event = { id = daemon.36 } }
+	}
+}
+
+# daemon.36 The Daemonette serves
+# The summoner gains the Daemonette as a bound friend.
+# Scope: ROOT is the summoner, FROM the daemon.
+character_event = {
+	id = daemon.36
+	desc = EVTDESCdaemon36
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon36
+		daemon_summon_bound_effect = yes
+	}
+}
+
+# daemon.37 A Bloodletter breaks loose
+# A Bloodletter of Khorne takes the prisoner's body and escapes.
+# Scope: ROOT is the prisoner, FROM the summoner.
+character_event = {
+	id = daemon.37
+	desc = EVTDESCdaemon37
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon37
+		hidden_tooltip = { daemon_victim_outrage_effect = yes }
+		abdicate = yes
+		hidden_tooltip = { create_bloodletter_effect = yes set_character_flag = special_marshal }
+		FROM = { character_event = { id = daemon.38 } }
+		random_independent_ruler = {
+			limit = { religion_group = ROOT }
+			ROOT = { move_character = PREV }
+		}
+	}
+}
+
+# daemon.38 The Bloodletter broke loose
+# Tells the summoner the Bloodletter escaped.
+# Scope: ROOT is the summoner, FROM the prisoner.
+character_event = {
+	id = daemon.38
+	desc = EVTDESCdaemon38
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon38
+		daemon_summon_failed_effect = yes
+	}
+}
+
+# daemon.39 A Bloodletter is bound
+# A Bloodletter of Khorne takes the prisoner's body and joins the summoner's
+# court.
+# Scope: ROOT is the prisoner, FROM the summoner.
+character_event = {
+	id = daemon.39
+	desc = EVTDESCdaemon39
+	picture = GFX_evt_demon_summoning
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon39
+		hidden_tooltip = { daemon_victim_outrage_effect = yes }
+		abdicate = yes
+		move_character = FROM
+		hidden_tooltip = {
+			add_doom_progress_tiny_effect = yes
+			create_bloodletter_effect = yes
+			set_character_flag = special_marshal
+		}
+		FROM = { character_event = { id = daemon.40 } }
+	}
+}
+
+# daemon.40 The Bloodletter serves
+# The summoner gains the Bloodletter as a bound friend.
+# Scope: ROOT is the summoner, FROM the daemon.
+character_event = {
+	id = daemon.40
+	desc = EVTDESCdaemon40
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon40
+		daemon_summon_bound_effect = yes
+	}
+}
+
+###############################################################################
+# Summoning a daemon
+###############################################################################
+
+# daemon.45 Calling a daemon
+# A sorcerer opens a short-lived gate to the Warp and calls a daemon of a god
+# their lore allows; Chaos Dwarf sorcerers may call a K'daai of Hashut. Half
+# the time the circle holds. Otherwise the Warp takes the sorcerer, though
+# Chaos champions and chosen are less often taken and daemons and the
+# Everchosen never.
+# Scope: ROOT is the sorcerer.
+character_event = {
+	id = daemon.45
+	desc = EVTDESCdaemon45
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon45
+		trigger = { OR = { trait = lore_tzeentch trait = lore_shadows trait = lore_dark_magic } }
+		random_list = {
+			#success, summoned tzeentch daemon
+			50 = {
+				modifier = { factor = 0.95 NOT = { learning = 20 } }
+				modifier = { factor = 0.85 NOT = { learning = 15 } }
+				modifier = { factor = 0.75 NOT = { learning = 10 } }
+				modifier = { factor = 0.25 NOT = { learning = 5 } }
+				modifier = { factor = 1.5 trait = lore_dark_magic }
+				modifier = { factor = 1.5 trait = asur_mage }
+				modifier = { factor = 1.5 trait = druchii_mage }
+				modifier = { factor = 1.5 trait = druchii_sorceress }
+				modifier = { factor = 0.25 has_character_modifier = magic_power_1 }
+				modifier = { factor = 0.5 has_character_modifier = magic_power_2 }
+				modifier = { factor = 1.5 has_character_modifier = magic_power_3 }
+				modifier = { factor = 1.75 has_character_modifier = magic_power_4 }
+				modifier = { factor = 1.25 trait = champion_tzeentch }
+				modifier = { factor = 1.5 trait = chosen_tzeentch }
+				modifier = { factor = 1.75 trait = prince_tzeentch }
+				modifier = { factor = 0.75 trait = hedge_wizard }
+				character_event = { id = daemon.47 }
+			}
+			#failure, daemon drags you to the Warp
+			50 = {
+				modifier = { factor = 0.8 is_cultist_trigger = yes }
+				modifier = { factor = 0.5 is_chaos_champion_trigger = yes }
+				modifier = { factor = 0.25 is_chaos_chosen_trigger = yes }
+				modifier = { factor = 0 is_daemon_trigger = yes }
+				modifier = { factor = 0 trait = everchosen }
+				character_event = { id = daemon.46 }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBdaemon45
+		trigger = {
+			OR = { trait = lore_nurgle trait = chaos_dwarf_sorcerer trait = lore_dark_magic }
+		}
+		random_list = {
+			#success, summoned nurgle daemon
+			50 = {
+				modifier = { factor = 0.95 NOT = { learning = 20 } }
+				modifier = { factor = 0.85 NOT = { learning = 15 } }
+				modifier = { factor = 0.75 NOT = { learning = 10 } }
+				modifier = { factor = 0.25 NOT = { learning = 5 } }
+				modifier = { factor = 1.5 trait = lore_dark_magic }
+				modifier = { factor = 1.5 trait = asur_mage }
+				modifier = { factor = 1.5 trait = druchii_mage }
+				modifier = { factor = 1.5 trait = druchii_sorceress }
+				modifier = { factor = 0.25 has_character_modifier = magic_power_1 }
+				modifier = { factor = 0.5 has_character_modifier = magic_power_2 }
+				modifier = { factor = 1.5 has_character_modifier = magic_power_3 }
+				modifier = { factor = 1.75 has_character_modifier = magic_power_4 }
+				modifier = { factor = 1.25 trait = champion_nurgle }
+				modifier = { factor = 1.5 trait = chosen_nurgle }
+				modifier = { factor = 1.75 trait = prince_nurgle }
+				modifier = { factor = 0.75 trait = hedge_wizard }
+				character_event = { id = daemon.48 }
+			}
+			#failure, daemon drags you to the Warp
+			50 = {
+				modifier = { factor = 0.8 is_cultist_trigger = yes }
+				modifier = { factor = 0.5 is_chaos_champion_trigger = yes }
+				modifier = { factor = 0.25 is_chaos_chosen_trigger = yes }
+				modifier = { factor = 0 is_daemon_trigger = yes }
+				modifier = { factor = 0 trait = everchosen }
+				character_event = { id = daemon.46 }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTCdaemon45
+		trigger = { OR = { trait = lore_slaanesh trait = lore_shadows trait = lore_dark_magic } }
+		random_list = {
+			#success, summoned slaanesh daemon
+			50 = {
+				modifier = { factor = 0.95 NOT = { learning = 20 } }
+				modifier = { factor = 0.85 NOT = { learning = 15 } }
+				modifier = { factor = 0.75 NOT = { learning = 10 } }
+				modifier = { factor = 0.25 NOT = { learning = 5 } }
+				modifier = { factor = 1.5 trait = lore_dark_magic }
+				modifier = { factor = 1.5 trait = asur_mage }
+				modifier = { factor = 1.5 trait = druchii_mage }
+				modifier = { factor = 1.5 trait = druchii_sorceress }
+				modifier = { factor = 0.25 has_character_modifier = magic_power_1 }
+				modifier = { factor = 0.5 has_character_modifier = magic_power_2 }
+				modifier = { factor = 1.5 has_character_modifier = magic_power_3 }
+				modifier = { factor = 1.75 has_character_modifier = magic_power_4 }
+				modifier = { factor = 1.25 trait = champion_slaanesh }
+				modifier = { factor = 1.5 trait = chosen_slaanesh }
+				modifier = { factor = 1.75 trait = prince_slaanesh }
+				modifier = { factor = 0.75 trait = hedge_wizard }
+				character_event = { id = daemon.49 }
+			}
+			#failure, daemon drags you to the Warp
+			50 = {
+				modifier = { factor = 0.8 is_cultist_trigger = yes }
+				modifier = { factor = 0.5 is_chaos_champion_trigger = yes }
+				modifier = { factor = 0.25 is_chaos_chosen_trigger = yes }
+				modifier = { factor = 0 is_daemon_trigger = yes }
+				modifier = { factor = 0 trait = everchosen }
+				character_event = { id = daemon.46 }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTDdaemon45
+		trigger = { OR = { trait = lore_dark_magic trait = chaos_dwarf_sorcerer } }
+		random_list = {
+			#success, summoned khorne daemon
+			50 = {
+				modifier = { factor = 0.95 NOT = { learning = 20 } }
+				modifier = { factor = 0.85 NOT = { learning = 15 } }
+				modifier = { factor = 0.75 NOT = { learning = 10 } }
+				modifier = { factor = 0.25 NOT = { learning = 5 } }
+				modifier = { factor = 1.5 trait = lore_dark_magic }
+				modifier = { factor = 1.5 trait = asur_mage }
+				modifier = { factor = 1.5 trait = druchii_mage }
+				modifier = { factor = 1.5 trait = druchii_sorceress }
+				modifier = { factor = 0.25 has_character_modifier = magic_power_1 }
+				modifier = { factor = 0.5 has_character_modifier = magic_power_2 }
+				modifier = { factor = 1.5 has_character_modifier = magic_power_3 }
+				modifier = { factor = 1.75 has_character_modifier = magic_power_4 }
+				modifier = { factor = 1.25 trait = champion_khorne }
+				modifier = { factor = 1.5 trait = chosen_khorne }
+				modifier = { factor = 1.75 trait = prince_khorne }
+				modifier = { factor = 0.75 trait = hedge_wizard }
+				character_event = { id = daemon.50 }
+			}
+			#failure, daemon drags you to the Warp
+			50 = {
+				modifier = { factor = 0.8 is_cultist_trigger = yes }
+				modifier = { factor = 0.5 is_chaos_champion_trigger = yes }
+				modifier = { factor = 0.25 is_chaos_chosen_trigger = yes }
+				modifier = { factor = 0 is_daemon_trigger = yes }
+				modifier = { factor = 0 trait = everchosen }
+				character_event = { id = daemon.46 }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTEdaemon45
+		trigger = { trait = chaos_dwarf_sorcerer }
+		random_list = {
+			#success, summoned a K'daai of Hashut
+			50 = {
+				modifier = { factor = 0.95 NOT = { learning = 20 } }
+				modifier = { factor = 0.85 NOT = { learning = 15 } }
+				modifier = { factor = 0.75 NOT = { learning = 10 } }
+				modifier = { factor = 0.25 NOT = { learning = 5 } }
+				modifier = { factor = 1.5 trait = lore_dark_magic }
+				modifier = { factor = 1.5 trait = asur_mage }
+				modifier = { factor = 1.5 trait = druchii_mage }
+				modifier = { factor = 1.5 trait = chaos_dwarf_sorcerer }
+				modifier = { factor = 1.5 trait = druchii_sorceress }
+				modifier = { factor = 0.25 has_character_modifier = magic_power_1 }
+				modifier = { factor = 0.5 has_character_modifier = magic_power_2 }
+				modifier = { factor = 1.5 has_character_modifier = magic_power_3 }
+				modifier = { factor = 1.75 has_character_modifier = magic_power_4 }
+				modifier = { factor = 0.75 trait = hedge_wizard }
+				character_event = { id = dawizharr.22 }
+			}
+			#failure, daemon drags you to the Warp
+			50 = {
+				modifier = { factor = 0.8 is_cultist_trigger = yes }
+				modifier = { factor = 0.5 is_chaos_champion_trigger = yes }
+				modifier = { factor = 0.25 is_chaos_chosen_trigger = yes }
+				modifier = { factor = 0 is_daemon_trigger = yes }
+				modifier = { factor = 0 trait = everchosen }
+				character_event = { id = daemon.46 }
+			}
+		}
+	}
+}
+
+# daemon.46 Taken by the Warp
+# The circle breaks and daemons drag the sorcerer into the Warp.
+# Scope: ROOT is the sorcerer.
+character_event = {
+	id = daemon.46
+	desc = EVTDESCdaemon46
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon46
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = { death = { death_reason = death_accident } }
+	}
+}
+
+# daemon.47 A Flamer answers
+# A Flamer of Tzeentch takes form and serves the sorcerer.
+# Scope: ROOT is the sorcerer.
+character_event = {
+	id = daemon.47
+	desc = EVTDESCdaemon47
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon47
+		create_character = {
+			random_traits = yes
+			religion = tzeentch
+			culture = flamer_tzeentch
+			female = no
+			age = 999
+			flag = ai_flag_refuse_conversion
+			flag = special_marshal
+			attributes = { diplomacy = 2 martial = 13 stewardship = 2 intrigue = 30 learning = 18 }
+		}
+		new_character = {
+			add_trait = tzeentch_demon
+			add_trait = tzeentch_flamer
+			add_trait = ambitious
+			add_trait = proud
+			add_trait = greedy
+			health = 25
+			add_friend = ROOT
+			set_character_flag = inheriting_demon
+		}
+		set_character_flag = daemon_summoner
+		prestige = 500
+	}
+}
+
+# daemon.48 A Plaguebearer answers
+# A Plaguebearer of Nurgle, thick with every pox, takes form and serves the
+# sorcerer.
+# Scope: ROOT is the sorcerer.
+character_event = {
+	id = daemon.48
+	desc = EVTDESCdaemon48
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon48
+		create_character = {
+			random_traits = yes
+			religion = nurgle
+			culture = plaguebearer_nurgle
+			female = no
+			age = 577
+			set_graphical_culture = plaguebearer_nurgle
+			flag = ai_flag_refuse_conversion
+			flag = special_marshal
+			attributes = { diplomacy = 8 martial = 3 stewardship = 32 intrigue = 10 learning = 12 }
+		}
+		new_character = {
+			add_trait = content
+			add_trait = humble
+			add_trait = charitable
+			add_trait = has_nurgles_rot
+			add_trait = leper
+			add_trait = nurgle_demon
+			add_trait = nurgle_plaguebearer
+			add_trait = ill
+			health = 25
+			random_list = {
+				25 = { add_trait = has_tuberculosis }
+				25 = { add_trait = has_typhoid_fever }
+				25 = { add_trait = has_bubonic_plague }
+				25 = { add_trait = has_measles }
+			}
+			random_list = {
+				25 = { add_trait = has_small_pox }
+				25 = { add_trait = syphilitic }
+				25 = { add_trait = pneumonic }
+				25 = { add_trait = has_typhus }
+			}
+			random_list = {
+				25 = { add_trait = dysentery }
+				25 = { add_trait = rabies }
+				25 = { add_trait = cancer }
+				25 = { add_trait = scurvy }
+			}
+			add_friend = ROOT
+			nurgle_blessing_check_effect = yes
+			set_character_flag = inheriting_demon
+		}
+		set_character_flag = daemon_summoner
+		prestige = 500
+	}
+}
+
+# daemon.49 A Daemonette answers
+# A Daemonette of Slaanesh takes form and serves the sorcerer.
+# Scope: ROOT is the sorcerer.
+character_event = {
+	id = daemon.49
+	desc = EVTDESCdaemon49
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon49
+		create_character = {
+			random_traits = yes
+			religion = slaanesh
+			culture = daemonette_slaanesh
+			female = no
+			age = 366
+			flag = ai_flag_refuse_conversion
+			flag = special_marshal
+			attributes = { diplomacy = 20 martial = 18 stewardship = 2 intrigue = 25 learning = 9 }
+		}
+		new_character = {
+			add_trait = cruel
+			add_trait = deceitful
+			add_trait = slaanesh_demon
+			add_trait = slaanesh_daemonette
+			health = 25
+			random_list = {
+				34 = { add_trait = lustful }
+				33 = { add_trait = greedy }
+				33 = { add_trait = gluttonous }
+			}
+			random_list = {
+				34 = { add_trait = slothful }
+				33 = { add_trait = proud }
+				33 = { add_trait = hedonist }
+			}
+			add_friend = ROOT
+			set_character_flag = inheriting_demon
+		}
+		set_character_flag = daemon_summoner
+		prestige = 500
+	}
+}
+
+# daemon.50 A Bloodletter answers
+# A Bloodletter of Khorne takes form and serves the sorcerer.
+# Scope: ROOT is the sorcerer.
+character_event = {
+	id = daemon.50
+	desc = EVTDESCdaemon50
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon50
+		create_character = {
+			random_traits = yes
+			religion = khorne
+			culture = bloodletter_khorne
+			female = no
+			age = 588
+			flag = ai_flag_refuse_conversion
+			flag = special_marshal
+			attributes = { diplomacy = 10 martial = 28 stewardship = 2 intrigue = 8 learning = 9 }
+		}
+		new_character = {
+			add_trait = wroth
+			add_trait = honest
+			add_trait = khorne_demon
+			add_trait = khorne_bloodletter
+			health = 25
+			random_list = {
+				25 = { add_trait = ambitious }
+				25 = { add_trait = gregarious }
+				25 = { add_trait = diligent }
+				25 = { add_trait = proud }
+			}
+			add_friend = ROOT
+			set_character_flag = inheriting_demon
+		}
+		set_character_flag = daemon_summoner
+		prestige = 500
+	}
+}
+
+###############################################################################
+# Daemons at court
+###############################################################################
+
+# daemon.55 Hated rivals
+# A daemon will not share a court with a daemon of a rival god (or a K'daai of
+# Hashut) and kills it.
+# Scope: ROOT is the daemon.
+character_event = {
+	id = daemon.55
+	desc = EVTDESCdaemon55
+	picture = GFX_evt_chaos_hordes
+	is_triggered_only = yes # on_yearly_pulse, random list daemon_feud
+
+	culture_group = daemonic_group
+	religion_group = chaos_gods_group
+	prisoner = no
+
+	trigger = {
+		host = { any_courtier = { daemon_rival_of_root_trigger = yes } }
+	}
+
+	option = {
+		name = EVTOPTAdaemon55
+		host = {
+			random_courtier = {
+				limit = { daemon_rival_of_root_trigger = yes }
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_murder killer = ROOT } }
+			}
+		}
+	}
+}
+
+# daemon.56 The pack turns
+# A summoner with two or more bound daemons may lose control of them. Weak or
+# dull minds, the mad and the trusting are at risk; mighty wizards, elves and
+# Tzeentch's favoured hold them. The bigger the pack, the likelier.
+# Scope: ROOT is the summoner.
+character_event = {
+	id = daemon.56
+	hide_window = yes
+	is_triggered_only = yes # on_yearly_pulse, random list daemon_betrayal
+
+	has_character_flag = daemon_summoner
+	prisoner = no
+
+	trigger = {
+		any_friend = { daemon_bound_trigger = yes count = 2 }
+	}
+
+	weight_multiplier = {
+		days = 1
+		# A mind that can bind daemons can also hold them
+		modifier = {
+			factor = 2
+			NOR = {
+				has_character_modifier = magic_power_1
+				has_character_modifier = magic_power_2
+				has_character_modifier = magic_power_3
+				has_character_modifier = magic_power_4
+				trait = magic_potential_4
+				has_character_flag = magic_potential_flag_4
+			}
+		}
+		modifier = { factor = 2 has_character_modifier = magic_power_1 }
+		modifier = { factor = 0.25 has_character_modifier = magic_power_3 }
+		modifier = { factor = 0.15 has_character_modifier = magic_power_4 }
+		modifier = { factor = 0.5 trait = magic_potential_4 }
+		modifier = { factor = 1.33 trait = hedge_wizard }
+		modifier = { factor = 0.5 trait = genius }
+		modifier = { factor = 0.66 trait = brilliant }
+		modifier = { factor = 0.66 trait = quick }
+		modifier = { factor = 0.6 trait = bright }
+		modifier = { factor = 2 trait = dim }
+		modifier = { factor = 2 trait = dumb }
+		modifier = { factor = 2 trait = slow }
+		modifier = { factor = 1.33 trait = idiot }
+		modifier = { factor = 1.33 trait = imbecile }
+		modifier = { factor = 2 trait = trusting }
+		modifier = { factor = 0.5 trait = paranoid }
+		modifier = { factor = 1.33 trait = lunatic_1 }
+		modifier = { factor = 1.5 trait = lunatic_2 }
+		modifier = { factor = 2 trait = lunatic_3 }
+		modifier = { factor = 1.33 has_minor_mutation_trigger = yes }
+		modifier = { factor = 1.5 has_major_mutation_trigger = yes }
+		modifier = { factor = 2 has_massive_mutation_trigger = yes }
+		# Elves, the ancient and Tzeentch's own are hard to betray
+		modifier = { factor = 0.33 trait = creature_elf }
+		modifier = { factor = 0.1 trait = malekith }
+		modifier = { factor = 0.1 trait = immortal }
+		modifier = { factor = 0.6 trait = champion_tzeentch }
+		modifier = { factor = 0.4 trait = chosen_tzeentch }
+		modifier = { factor = 0.2 trait = prince_tzeentch }
+		# The bigger the pack, the bolder it grows
+		modifier = { factor = 4 any_friend = { daemon_bound_trigger = yes count = 3 } }
+		modifier = { factor = 4 any_friend = { daemon_bound_trigger = yes count = 4 } }
+		modifier = { factor = 4 any_friend = { daemon_bound_trigger = yes count = 5 } }
+	}
+
+	immediate = {
+		random_friend = {
+			limit = { daemon_bound_trigger = yes }
+			save_event_target_as = daemon_betrayer
+		}
+		character_event = { id = daemon.57 }
+	}
+}
+
+# daemon.57 Dragged into the Warp
+# The summoner's own daemons drag them into the Warp.
+# Scope: ROOT is the summoner.
+character_event = {
+	id = daemon.57
+	desc = EVTDESCdaemon57
+	picture = GFX_evt_chaos_hordes
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon57
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = { death = { death_reason = death_murder killer = event_target:daemon_betrayer } }
+	}
+}
+
+# daemon.58 The host returns to the Warp
+# When a cultist who summoned a daemonic host (the chaos_cult_uprising
+# decision) dies, the host's daemon commanders vanish with them.
+# Scope: ROOT is the dead cultist.
+character_event = {
+	id = daemon.58
+	hide_window = yes
+	is_triggered_only = yes # on_death
+
+	trigger = {
+		has_character_flag = cultist_uprising_leader
+	}
+
+	immediate = {
+		any_friend = {
+			limit = { has_character_flag = host_demon_commander }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_missing } }
+		}
+	}
+}
+
+# daemon.59 Masterless daemons
+# When a summoner dies, their bound daemons go to an heir of their dynasty
+# (daemon.60), or vanish if there is none.
+# Scope: ROOT is the dead summoner.
+character_event = {
+	id = daemon.59
+	hide_window = yes
+	is_triggered_only = yes # on_death
+
+	trigger = {
+		any_friend = { daemon_bound_trigger = yes }
+	}
+
+	immediate = {
+		if = {
+			limit = { is_ruler = yes current_heir = { dynasty = ROOT } }
+			current_heir = { save_event_target_as = daemon_heir }
+			any_friend = {
+				limit = { daemon_bound_trigger = yes }
+				set_character_flag = inheriting_demon
+				event_target:daemon_heir = { add_friend = PREV PREV = { move_character = THIS } }
+			}
+			event_target:daemon_heir = { character_event = { id = daemon.60 days = 1 } }
+		}
+		else = {
+			any_friend = {
+				limit = { daemon_bound_trigger = yes }
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_missing } }
+			}
+		}
+	}
+}
+
+# daemon.60 A daemon comes to you
+# A bound daemon offers its service: an inherited familiar, or a masterless
+# one (daemon.61). Accepting costs the pious dearly; refusing sends it back.
+# Scope: ROOT is the new master.
+character_event = {
+	id = daemon.60
+	desc = {
+		text = EVTDESCdaemon60
+		trigger = { any_friend = { has_character_flag = inheriting_demon trait = khorne_demon } }
+	}
+	desc = {
+		text = EVTDESCdaemon60b
+		trigger = { any_friend = { has_character_flag = inheriting_demon trait = nurgle_demon } }
+	}
+	desc = {
+		text = EVTDESCdaemon60c
+		trigger = { any_friend = { has_character_flag = inheriting_demon trait = slaanesh_demon } }
+	}
+	desc = {
+		text = EVTDESCdaemon60d
+		trigger = { any_friend = { has_character_flag = inheriting_demon trait = tzeentch_demon } }
+	}
+	desc = {
+		text = EVTDESCdaemon60e
+		trigger = { any_friend = { has_character_flag = inheriting_demon trait = hashut_kdaai } }
+	}
+	desc = {
+		text = EVTDESCdaemon60f
+		trigger = {
+			NOT = {
+				any_friend = {
+					has_character_flag = inheriting_demon
+					OR = {
+						trait = khorne_demon
+						trait = nurgle_demon
+						trait = slaanesh_demon
+						trait = tzeentch_demon
+						trait = hashut_kdaai
+					}
+				}
+			}
+		}
+	}
+	picture = GFX_evt_chaos_hordes
+	is_triggered_only = yes
+
+	# Accept its service
+	option = {
+		name = EVTOPTAdaemon60
+		if = {
+			limit = { NOT = { religion_group = chaos_gods_group } is_cultist_trigger = no }
+			piety = -500
+		}
+		set_character_flag = daemon_summoner
+		any_friend = {
+			limit = { has_character_flag = inheriting_demon }
+			clr_character_flag = inheriting_demon
+		}
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 0
+				NOT = { religion_group = chaos_gods_group }
+				is_cultist_trigger = no
+			}
+			modifier = { factor = 0.01 any_friend = { daemon_bound_trigger = yes count = 3 } }
+		}
+	}
+	# Send it back to the Warp
+	option = {
+		name = EVTOPTBdaemon60
+		if = { limit = { religion_group = chaos_gods_group } piety = -150 }
+		any_friend = {
+			limit = { has_character_flag = inheriting_demon }
+			clr_character_flag = inheriting_demon
+			remove_friend = ROOT
+			banish = yes
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0.1 religion_group = chaos_gods_group }
+			modifier = { factor = 10 any_friend = { daemon_bound_trigger = yes count = 3 } }
+		}
+	}
+}
+
+# daemon.61 A masterless daemon
+# Every five years a bound daemon with no master offers itself to its host,
+# unless the host is a daemon or a greenskin.
+# Scope: ROOT is the daemon.
+character_event = {
+	id = daemon.61
+	hide_window = yes
+	is_triggered_only = yes # on_five_year_pulse
+
+	religion_group = chaos_gods_group
+	culture_group = daemonic_group
+	prisoner = no
+
+	trigger = {
+		is_ruler = no
+		NOT = { num_of_friends = 1 }
+		daemon_bound_trigger = yes
+		host = {
+			NOT = { character = ROOT }
+			is_daemon_trigger = no
+			NOT = { religion_group = greenskin_gods_group }
+		}
+	}
+
+	immediate = {
+		set_character_flag = inheriting_demon
+		host = { add_friend = ROOT character_event = { id = daemon.60 days = 1 } }
+	}
+}
+
+###############################################################################
+# Witch hunters and daemons
+###############################################################################
+
+# daemon.65 A daemon at court
+# A witch hunter on a court hunt senses a bound daemon among their liege's
+# courtiers and asks the liege to act. Easier when the daemon is not hiding.
+# Order mission hunts are left to whunter.10.
+# Scope: ROOT is the witch hunter.
+character_event = {
+	id = daemon.65
+	title = DEMON_HUNT
+	desc = EVTDESCdaemon65
+	picture = "GFX_evt_demon_fighting"
+	is_triggered_only = yes # on_yearly_pulse, random list whunter_events
+
+	has_character_flag = whunter_on_hunt
+	religion_group = old_world_group
+
+	trigger = {
+		prisoner = no
+		is_adult = yes
+		trait = on_witch_hunt
+		NOT = { trait = incapable }
+		NOT = { has_character_flag = mission_hunt }
+		top_liege = { NOT = { has_character_modifier = expelled_k_witch_hunters_order } }
+		liege = { NOT = { character = ROOT } any_courtier = { daemon_hunt_quarry_trigger = yes } }
+	}
+
+	weight_multiplier = {
+		days = 1
+		# A daemon that hides in plain sight is easier to sniff out
+		modifier = {
+			factor = 2
+			liege = {
+				any_courtier = { daemon_hunt_quarry_trigger = yes NOT = { trait = in_hiding } }
+			}
+		}
+		modifier = { factor = 1.25 learning = 15 }
+		modifier = { factor = 1.25 trait = zealous }
+	}
+
+	option = {
+		name = EVTOPTAdaemon65
+		save_event_target_as = daemon_hunter
+		liege = {
+			random_courtier = {
+				limit = { daemon_hunt_quarry_trigger = yes }
+				save_event_target_as = daemon_quarry
+			}
+			character_event = { id = daemon.66 }
+		}
+	}
+}
+
+# daemon.66 The liege is told
+# The liege lets the witch hunter spring a trap on the daemon (daemon.67), or
+# turns a blind eye, which draws suspicion on a cultist.
+# Scope: ROOT is the liege, FROM the witch hunter.
+character_event = {
+	id = daemon.66
+	title = DEMON_HUNT
+	desc = EVTDESCdaemon66
+	picture = "GFX_evt_demon_fighting"
+	is_triggered_only = yes
+
+	# Destroy it
+	option = {
+		name = EVTOPTAdaemon66
+		event_target:daemon_hunter = { character_event = { id = daemon.67 } }
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 0
+				OR = { is_cultist_trigger = yes religion_group = chaos_gods_group }
+			}
+		}
+	}
+	# Leave it be
+	option = {
+		name = EVTOPTBdaemon66
+		increase_visibility_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 0
+				is_cultist_trigger = no
+				NOT = { religion_group = chaos_gods_group }
+			}
+		}
+	}
+}
+
+# daemon.67 The trap is sprung
+# The witch hunter faces the daemon. Learning, theology, zeal and witch hunter
+# relics help. If the daemon wins, the hunter dies and the daemon flees,
+# breaking its bond with its master.
+# Scope: ROOT is the witch hunter, FROM the liege.
+character_event = {
+	id = daemon.67
+	title = DEMON_HUNT
+	desc = EVTDESCdaemon67
+	picture = "GFX_evt_demon_fighting"
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon67
+		random_list = {
+			# The daemon is destroyed
+			45 = {
+				modifier = { factor = 1.25 learning = 15 }
+				modifier = { factor = 1.25 learning = 20 }
+				modifier = { factor = 1.25 learning = 25 }
+				modifier = { factor = 1.25 martial = 15 }
+				modifier = { factor = 1.25 trait = zealous }
+				modifier = { factor = 1.5 trait = scholarly_theologian }
+				modifier = { factor = 1.75 trait = mastermind_theologian }
+				modifier = { factor = 1.25 has_artifact = twin_tailed_comet_pendant }
+				modifier = { factor = 1.25 has_artifact = deus_sigmar_copy }
+				modifier = { factor = 0.75 trait = dim }
+				modifier = { factor = 0.5 trait = dumb }
+				modifier = { factor = 0.5 trait = slow }
+				modifier = { factor = 0.25 trait = idiot }
+				modifier = { factor = 0.25 trait = imbecile }
+				modifier = { factor = 0.75 trait = wounded }
+				modifier = { factor = 0.5 trait = maimed }
+				event_target:daemon_quarry = { character_event = { id = daemon.70 } }
+			}
+			# The daemon kills the witch hunter and flees
+			55 = {
+				FROM = { character_event = { id = daemon.68 } }
+				event_target:daemon_quarry = {
+					random_friend = {
+						limit = { daemon_bound_trigger = no }
+						remove_friend = PREV
+						character_event = { id = daemon.69 }
+					}
+					banish = yes
+				}
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = { death_reason = death_murder killer = event_target:daemon_quarry }
+				}
+			}
+		}
+	}
+}
+
+# daemon.68 The witch hunter is dead
+# Tells the liege the daemon killed the witch hunter and escaped.
+# Scope: ROOT is the liege, FROM the witch hunter.
+character_event = {
+	id = daemon.68
+	title = DEMON_HUNT
+	desc = EVTDESCdaemon68
+	picture = "GFX_evt_demon_fighting"
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon68
+	}
+}
+
+# daemon.69 Your familiar fled
+# Tells the summoner their daemon killed a witch hunter but had to flee,
+# breaking the bond.
+# Scope: ROOT is the summoner, FROM the witch hunter.
+character_event = {
+	id = daemon.69
+	title = DEMON_HUNT
+	desc = EVTDESCdaemon69
+	picture = "GFX_evt_demon_fighting"
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon69
+	}
+}
+
+# daemon.70 The daemon is destroyed
+# The witch hunters banish the daemon. The hunter gains piety, as for an upheld
+# accusation, and may be given witch hunter gear. The daemon's master is told
+# (daemon.71).
+# Scope: ROOT is the daemon, FROM the witch hunter.
+character_event = {
+	id = daemon.70
+	title = DEMON_HUNT
+	desc = EVTDESCdaemon70
+	picture = "GFX_evt_demon_fighting"
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon70
+		event_target:daemon_hunter = {
+			piety = 150
+			whunter_accusation_upheld_effect = yes
+			random = { chance = 20 whunter_reward_artifact_effect = yes }
+		}
+		if = {
+			limit = { any_friend = { daemon_bound_trigger = no } }
+			random_friend = {
+				limit = { daemon_bound_trigger = no }
+				save_event_target_as = daemon_master
+				character_event = { id = daemon.71 }
+			}
+		}
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = { death = { death_reason = death_execution killer = event_target:daemon_hunter } }
+	}
+}
+
+# daemon.71 Your familiar is destroyed
+# Tells the summoner their daemon was destroyed. The hunter starts looking for
+# the master (daemon.72).
+# Scope: ROOT is the summoner, FROM the daemon.
+character_event = {
+	id = daemon.71
+	title = DEMON_HUNT
+	desc = EVTDESCdaemon71
+	picture = "GFX_evt_demon_fighting"
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon71
+		hidden_tooltip = {
+			event_target:daemon_hunter = {
+				character_event = { id = daemon.72 days = 30 random = 30 }
+			}
+		}
+	}
+}
+
+# daemon.72 Following the trail
+# A month or two later the witch hunter tries to find who the daemon served.
+# Chaos worshippers and mighty wizards are easy to trace, clever schemers
+# harder.
+# Scope: ROOT is the witch hunter, FROM the summoner.
+character_event = {
+	id = daemon.72
+	title = DEMON_HUNT
+	desc = EVTDESCdaemon72
+	picture = "GFX_evt_demon_fighting"
+	is_triggered_only = yes
+
+	trigger = {
+		prisoner = no
+		NOT = { trait = incapable }
+		event_target:daemon_master = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAdaemon72
+		hidden_tooltip = {
+			random_list = {
+				# The trail leads to the summoner
+				60 = {
+					modifier = { factor = 1.25 learning = 15 }
+					modifier = { factor = 1.25 learning = 20 }
+					modifier = { factor = 1.25 learning = 25 }
+					modifier = { factor = 1.5 trait = scholarly_theologian }
+					modifier = { factor = 1.75 trait = mastermind_theologian }
+					modifier = { factor = 0.75 trait = dim }
+					modifier = { factor = 0.5 trait = dumb }
+					modifier = { factor = 0.5 trait = slow }
+					modifier = { factor = 0.25 trait = idiot }
+					modifier = { factor = 0.25 trait = imbecile }
+					modifier = {
+						factor = 10
+						event_target:daemon_master = { religion_group = chaos_gods_group }
+					}
+					modifier = {
+						factor = 1.25
+						event_target:daemon_master = { has_character_modifier = magic_power_1 }
+					}
+					modifier = {
+						factor = 1.25
+						event_target:daemon_master = { has_character_modifier = magic_power_2 }
+					}
+					modifier = {
+						factor = 1.5
+						event_target:daemon_master = { has_character_modifier = magic_power_3 }
+					}
+					modifier = {
+						factor = 1.75
+						event_target:daemon_master = { has_character_modifier = magic_power_4 }
+					}
+					modifier = { factor = 0.75 event_target:daemon_master = { intrigue = 15 } }
+					modifier = { factor = 0.75 event_target:daemon_master = { intrigue = 20 } }
+					event_target:daemon_master = { character_event = { id = daemon.73 } }
+				}
+				# The trail goes cold
+				40 = { }
+			}
+		}
+	}
+}
+
+# daemon.73 Confronted
+# The witch hunter accuses the summoner. A vassal appeals to their liege; an
+# independent ruler banishes or jails the hunter, at the risk of exposure.
+# Scope: ROOT is the summoner, FROM the witch hunter.
+character_event = {
+	id = daemon.73
+	title = DEMON_HUNT
+	desc = EVTDESCdaemon73
+	picture = "GFX_evt_demon_fighting"
+	is_triggered_only = yes
+
+	# Appeal to the liege
+	option = {
+		name = EVTOPTAdaemon73
+		trigger = { independent = no }
+		liege = { character_event = { id = daemon.74 } }
+	}
+	# Banish the witch hunter
+	option = {
+		name = EVTOPTBdaemon73
+		trigger = { independent = yes }
+		increase_visibility_effect = yes
+		event_target:daemon_hunter = {
+			remove_trait = on_witch_hunt
+			clr_character_flag = whunter_on_hunt
+			banish = yes
+		}
+	}
+	# Imprison the witch hunter
+	option = {
+		name = EVTOPTCdaemon73
+		trigger = { independent = yes }
+		increase_visibility_effect = yes
+		event_target:daemon_hunter = {
+			remove_trait = on_witch_hunt
+			clr_character_flag = whunter_on_hunt
+		}
+		imprison = event_target:daemon_hunter
+	}
+}
+
+# daemon.74 Consorting with daemons
+# The liege judges the summoner: burn them (whunter.17), jail them
+# (whunter.18) or dismiss the charge (whunter.19). An upheld charge rewards
+# the witch hunter.
+# Scope: ROOT is the liege, FROM the summoner.
+character_event = {
+	id = daemon.74
+	title = DEMON_HUNT
+	desc = EVTDESCdaemon74
+	picture = "GFX_evt_demon_fighting"
+	is_triggered_only = yes
+
+	# Burn them
+	option = {
+		name = EVTOPTAdaemon74
+		trigger = {
+			OR = {
+				ai = no
+				trait = zealous
+				trait = paranoid
+				trait = arbitrary
+				trait = cruel
+				NOT = { opinion = { who = FROM value = 1 } }
+			}
+		}
+		decrease_visibility_effect = yes
+		event_target:daemon_hunter = { whunter_accusation_upheld_effect = yes }
+		FROM = { character_event = { id = whunter.17 } }
+	}
+	# Dismiss the charge
+	option = {
+		name = EVTOPTBdaemon74
+		trigger = { opinion = { who = FROM value = 80 } }
+		increase_visibility_effect = yes
+		FROM = { character_event = { id = whunter.19 } }
+	}
+	# Imprison them
+	option = {
+		name = EVTOPTCdaemon74
+		decrease_visibility_effect = yes
+		event_target:daemon_hunter = { whunter_accusation_upheld_effect = yes }
+		FROM = { character_event = { id = whunter.18 } }
+	}
+}
+
+###############################################################################
+# Daemon familiars
+###############################################################################
+
+# daemon.80 Gifts from Grandfather Nurgle
+# A Plaguebearer brings a disease to its master or, without a mortal master,
+# to someone at its host's court.
+# Scope: ROOT is the Plaguebearer.
+character_event = {
+	id = daemon.80
+	hide_window = yes
+	is_triggered_only = yes # on_five_year_pulse, random list chaos
+
+	culture_group = daemonic_group
+	religion = nurgle
+	prisoner = no
+
+	trigger = {
+		trait = nurgle_plaguebearer
+		OR = {
+			any_friend = { health_mortal_body_trigger = yes }
+			host = {
+				any_courtier = { NOT = { character = ROOT } health_mortal_body_trigger = yes }
+			}
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { any_friend = { health_mortal_body_trigger = yes } }
+			random_friend = {
+				limit = { health_mortal_body_trigger = yes }
+				character_event = { id = daemon.81 }
+			}
+		}
+		else = {
+			host = {
+				random_courtier = {
+					limit = { NOT = { character = ROOT } health_mortal_body_trigger = yes }
+					character_event = { id = daemon.81 }
+				}
+			}
+		}
+	}
+}
+
+# daemon.81 Nurgle's gift
+# The character catches one of Nurgle's diseases they do not have yet, and so
+# does their host. Also used by the plague-bearer mutation.
+# Scope: ROOT is the character.
+character_event = {
+	id = daemon.81
+	desc = EVTDESCdaemon81
+	picture = "GFX_evt_nurgle"
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon81
+		random_list = {
+			10 = {
+				add_trait = has_nurgles_rot
+				nurgle_blessing_check_effect = yes
+				modifier = { factor = 0 trait = has_nurgles_rot }
+			}
+			9 = {
+				host = { add_trait = leper }
+				add_trait = leper
+				nurgle_blessing_check_effect = yes
+				modifier = { factor = 0 trait = leper }
+			}
+			8 = {
+				host = { add_trait = ill }
+				add_trait = ill
+				nurgle_blessing_check_effect = yes
+				modifier = { factor = 0 trait = ill }
+			}
+			7 = {
+				host = { add_trait = syphilitic }
+				add_trait = syphilitic
+				nurgle_blessing_check_effect = yes
+				modifier = { factor = 0 trait = syphilitic }
+			}
+			7 = {
+				host = { add_trait = has_tuberculosis }
+				add_trait = has_tuberculosis
+				nurgle_blessing_check_effect = yes
+				modifier = { factor = 0 trait = has_tuberculosis }
+			}
+			7 = {
+				host = { add_trait = has_typhoid_fever }
+				add_trait = has_typhoid_fever
+				nurgle_blessing_check_effect = yes
+				modifier = { factor = 0 trait = has_typhoid_fever }
+			}
+			7 = {
+				host = { add_trait = has_typhus }
+				add_trait = has_typhus
+				nurgle_blessing_check_effect = yes
+				modifier = { factor = 0 trait = has_typhus }
+			}
+			7 = {
+				host = { add_trait = has_bubonic_plague }
+				add_trait = has_bubonic_plague
+				nurgle_blessing_check_effect = yes
+				modifier = { factor = 0 trait = has_bubonic_plague }
+			}
+
+			7 = {
+				host = { add_trait = has_measles }
+				add_trait = has_measles
+				nurgle_blessing_check_effect = yes
+				modifier = { factor = 0 trait = has_measles }
+			}
+			7 = {
+				host = { add_trait = has_small_pox }
+				add_trait = has_small_pox
+				nurgle_blessing_check_effect = yes
+				modifier = { factor = 0 trait = has_small_pox }
+			}
+			7 = {
+				host = { add_trait = has_creeping_buboes }
+				add_trait = has_creeping_buboes
+				nurgle_blessing_check_effect = yes
+				modifier = { factor = 0 trait = has_creeping_buboes }
+			}
+
+			5 = {
+				host = { add_trait = pneumonic }
+				add_trait = pneumonic
+				nurgle_blessing_check_effect = yes
+				modifier = { factor = 0 trait = pneumonic }
+			}
+			5 = {
+				host = { add_trait = has_bone_auge }
+				add_trait = has_bone_auge
+				nurgle_blessing_check_effect = yes
+				modifier = { factor = 0 trait = has_bone_auge }
+			}
+		}
+	}
+}
+
+# daemon.82 The Bloodletter wants a fight
+# A Bloodletter challenges its adult human master to a duel (daemon.83).
+# Scope: ROOT is the Bloodletter.
+character_event = {
+	id = daemon.82
+	hide_window = yes
+	is_triggered_only = yes # on_five_year_pulse, random list chaos
+
+	culture_group = daemonic_group
+	religion = khorne
+	prisoner = no
+
+	trigger = {
+		trait = khorne_bloodletter
+		any_friend = { is_living_human_trigger = yes is_adult = yes prisoner = no }
+	}
+
+	immediate = {
+		random_friend = {
+			limit = { is_living_human_trigger = yes is_adult = yes prisoner = no }
+			character_event = { id = daemon.83 }
+		}
+	}
+}
+
+# daemon.83 A Bloodletter's challenge
+# The master may fight: they may learn from it (daemon.84), be wounded, maimed
+# or torn apart (85, 86), or, if they worship Khorne, grow stronger (87).
+# Refusing costs piety.
+# Scope: ROOT is the master, FROM the Bloodletter.
+character_event = {
+	id = daemon.83
+	desc = EVTDESCdaemon83
+	picture = "GFX_evt_khorne"
+	is_triggered_only = yes
+
+	capable_only = yes
+
+	# Fight
+	option = {
+		name = EVTOPTAdaemon83
+		hidden_tooltip = {
+			random_list = {
+				# A good fight: the summoner learns
+				35 = { change_martial = 1 character_event = { id = daemon.84 } }
+				# Wounded
+				25 = {
+					modifier = { factor = 1.75 FROM = { combat_rating = 5 } }
+					modifier = { factor = 1.75 FROM = { combat_rating = 20 } }
+					modifier = { factor = 1.75 FROM = { combat_rating = 50 } }
+					modifier = { factor = 1.75 FROM = { combat_rating = 100 } }
+					modifier = { factor = 0.75 combat_rating = 5 }
+					modifier = { factor = 0.75 combat_rating = 20 }
+					modifier = { factor = 0.75 combat_rating = 50 }
+					modifier = { factor = 0.75 combat_rating = 100 }
+					modifier = { factor = 1.75 is_ill = yes }
+					modifier = { factor = 1.5 trait = wounded }
+					modifier = { factor = 1.75 trait = maimed }
+					modifier = { factor = 0.65 trait = strong }
+					modifier = { factor = 0.75 trait = tough }
+					modifier = { factor = 0.85 trait = hardy }
+					modifier = { factor = 1.5 trait = soft }
+					modifier = { factor = 1.75 trait = fragile }
+					modifier = { factor = 1.75 trait = weak }
+					add_trait = wounded
+					character_event = { id = daemon.85 }
+				}
+				# Maimed
+				15 = {
+					modifier = { factor = 1.75 FROM = { combat_rating = 5 } }
+					modifier = { factor = 1.75 FROM = { combat_rating = 20 } }
+					modifier = { factor = 1.75 FROM = { combat_rating = 50 } }
+					modifier = { factor = 1.75 FROM = { combat_rating = 100 } }
+					modifier = { factor = 0.75 combat_rating = 5 }
+					modifier = { factor = 0.75 combat_rating = 20 }
+					modifier = { factor = 0.75 combat_rating = 50 }
+					modifier = { factor = 0.75 combat_rating = 100 }
+					modifier = { factor = 1.75 is_ill = yes }
+					modifier = { factor = 1.5 trait = wounded }
+					modifier = { factor = 1.75 trait = maimed }
+					modifier = { factor = 0.65 trait = strong }
+					modifier = { factor = 0.75 trait = tough }
+					modifier = { factor = 0.85 trait = hardy }
+					modifier = { factor = 1.5 trait = soft }
+					modifier = { factor = 1.75 trait = fragile }
+					modifier = { factor = 1.75 trait = weak }
+					add_trait = maimed
+					character_event = { id = daemon.85 }
+				}
+				# Torn apart
+				15 = {
+					modifier = { factor = 1.75 FROM = { combat_rating = 5 } }
+					modifier = { factor = 1.75 FROM = { combat_rating = 20 } }
+					modifier = { factor = 1.75 FROM = { combat_rating = 50 } }
+					modifier = { factor = 1.75 FROM = { combat_rating = 100 } }
+					modifier = { factor = 0.75 combat_rating = 5 }
+					modifier = { factor = 0.75 combat_rating = 20 }
+					modifier = { factor = 0.75 combat_rating = 50 }
+					modifier = { factor = 0.75 combat_rating = 100 }
+					modifier = { factor = 1.75 is_ill = yes }
+					modifier = { factor = 1.5 trait = wounded }
+					modifier = { factor = 1.75 trait = maimed }
+					modifier = { factor = 0.65 trait = strong }
+					modifier = { factor = 0.75 trait = tough }
+					modifier = { factor = 0.85 trait = hardy }
+					modifier = { factor = 1.5 trait = soft }
+					modifier = { factor = 1.75 trait = fragile }
+					modifier = { factor = 1.75 trait = weak }
+					add_trait = incapable
+					character_event = { id = daemon.86 }
+				}
+				# Khorne takes notice: a step stronger, and a touch of his mark
+				10 = {
+					modifier = { factor = 0 is_ill = yes }
+					modifier = { factor = 0 NOR = { religion = chaos religion = khorne } }
+					modifier = { factor = 0 trait = strong }
+					if = { limit = { trait = tough } remove_trait = tough add_trait = strong }
+					else_if = { limit = { trait = hardy } remove_trait = hardy add_trait = tough }
+					else_if = { limit = { trait = soft } remove_trait = soft }
+					else_if = {
+						limit = { trait = fragile }
+						remove_trait = fragile
+						add_trait = soft
+					}
+					else_if = { limit = { trait = weak } remove_trait = weak add_trait = fragile }
+					else = { add_trait = hardy }
+					character_event = { id = daemon.87 }
+					mutation_toughness_test_effect = yes
+				}
+			}
+		}
+	}
+	# Refuse
+	option = {
+		name = EVTOPTBdaemon83
+		piety = -75
+	}
+}
+
+# daemon.84 A good fight
+# The master wins and gains Martial.
+# Scope: ROOT is the master.
+character_event = {
+	id = daemon.84
+	desc = EVTDESCdaemon84
+	picture = "GFX_evt_khorne"
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon84
+		piety = 100
+	}
+}
+
+# daemon.85 Bloodied
+# The master is wounded or maimed.
+# Scope: ROOT is the master.
+character_event = {
+	id = daemon.85
+	desc = EVTDESCdaemon85
+	picture = "GFX_evt_khorne"
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon85
+		piety = -25
+	}
+}
+
+# daemon.86 Torn apart
+# The master is left incapable.
+# Scope: ROOT is the master.
+character_event = {
+	id = daemon.86
+	desc = EVTDESCdaemon86
+	picture = "GFX_evt_khorne"
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon86
+		piety = -25
+	}
+}
+
+# daemon.87 Khorne's strength
+# Khorne notices the fight and grants the master strength, with a chance of a
+# mutation.
+# Scope: ROOT is the master.
+character_event = {
+	id = daemon.87
+	desc = EVTDESCdaemon87
+	picture = "GFX_evt_khorne"
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon87
+		piety = 250
+	}
+}
+
+# daemon.88 The Daemonette is lonely
+# A Daemonette tempts its adult mortal master (daemon.89).
+# Scope: ROOT is the Daemonette.
+character_event = {
+	id = daemon.88
+	hide_window = yes
+	is_triggered_only = yes # on_five_year_pulse, random list chaos
+
+	culture_group = daemonic_group
+	religion = slaanesh
+	prisoner = no
+
+	trigger = {
+		trait = slaanesh_daemonette
+		any_friend = { health_mortal_body_trigger = yes is_adult = yes prisoner = no }
+	}
+
+	immediate = {
+		random_friend = {
+			limit = { health_mortal_body_trigger = yes is_adult = yes prisoner = no }
+			character_event = { id = daemon.89 }
+		}
+	}
+}
+
+# daemon.89 An invitation
+# The master can give in to the Daemonette (daemon.90, and a step towards
+# madness) or refuse at a cost in piety.
+# Scope: ROOT is the master, FROM the Daemonette.
+character_event = {
+	id = daemon.89
+	desc = EVTDESCdaemon89
+	picture = "GFX_evt_slaanesh"
+
+	is_triggered_only = yes
+
+	#Yes
+	option = {
+		name = EVTOPTAdaemon89
+		hidden_tooltip = {
+			character_event = { id = daemon.90 }
+			character_event = { id = mutate.5 days = 10 }
+		}
+	}
+	#No
+	option = {
+		name = EVTOPTBdaemon89
+		piety = -75
+	}
+}
+
+# daemon.90 The Daemonette's kiss
+# Each kiss seems to promise Diplomacy or Intrigue, but Slaanesh rigs the
+# game: six times in ten it takes health instead, and it can kill. The master
+# can ask for more until they stop or die.
+# Scope: ROOT is the master.
+character_event = {
+	id = daemon.90
+	desc = EVTDESCdaemon90
+	picture = "GFX_evt_slaanesh"
+	is_triggered_only = yes
+
+	# More
+	option = {
+		name = EVTOPTAdaemon90
+		# The tooltip promises a gift; Slaanesh rigs the game below
+		random_list = {
+			33 = { change_diplomacy = 1 set_character_flag = slaanesh_cheating_dipl }
+			33 = { change_intrigue = 1 set_character_flag = slaanesh_cheating_intr }
+			34 = { }
+		}
+		hidden_tooltip = {
+			if = {
+				limit = { has_character_flag = slaanesh_cheating_dipl }
+				change_diplomacy = -1
+				clr_character_flag = slaanesh_cheating_dipl
+			}
+			if = {
+				limit = { has_character_flag = slaanesh_cheating_intr }
+				change_intrigue = -1
+				clr_character_flag = slaanesh_cheating_intr
+			}
+			random_list = {
+				20 = { change_diplomacy = 1 character_event = { id = daemon.90 } }
+				20 = { change_intrigue = 1 character_event = { id = daemon.90 } }
+				# Each kiss takes a little life
+				60 = {
+					health = -1
+					if = {
+						limit = {
+							NOT = { health = 1 }
+							NOR = { has_artifact = carstein_ring trait = khemri_tomb_king }
+						}
+						if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+						else = { death = { death_reason = death_murder_unknown } }
+					}
+					else = { character_event = { id = daemon.90 } }
+				}
+			}
+		}
+		ai_chance = { factor = 1 }
+	}
+	# Enough
+	option = {
+		name = EVTOPTBdaemon90
+		piety = -75
+		ai_chance = { factor = 2 }
+	}
+}
+
+###############################################################################
+# Possession
+###############################################################################
+
+# daemon.100 The daemon stirs
+# Every two years a possessed ruler's daemon picks its god (if it has not yet),
+# pushes them towards madness and grows or loses its grip. A week or two later
+# its will shows (daemon.101). Undead hosts are left to daemon.132.
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.100
+	desc = EVTDESCdaemon100
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes # on_bi_yearly_pulse
+
+	only_playable = yes
+
+	trigger = {
+		trait = possessed
+		NOT = { trait = creature_nehekharan }
+		is_vampire_trigger = no
+	}
+
+	option = {
+		name = EVTOPTAdaemon100
+		hidden_tooltip = {
+			if = {
+				limit = {
+					NOR = {
+						has_character_flag = possessed_by_tzeentchian
+						has_character_flag = possessed_by_nurglite
+						has_character_flag = possessed_by_khornate
+						has_character_flag = possessed_by_slaaneshi
+					}
+				}
+				random_list = {
+					25 = { set_character_flag = possessed_by_tzeentchian }
+					25 = { set_character_flag = possessed_by_nurglite }
+					25 = { set_character_flag = possessed_by_khornate }
+					25 = { set_character_flag = possessed_by_slaaneshi }
+				}
+			}
+			character_event = { id = mutate.5 }
+			character_event = { id = daemon.101 days = 8 random = 12 }
+			random_list = {
+				40 = {
+					change_variable = { which = "possession_counter" value = 5 }
+					modifier = { factor = 1.75 trait = imbecile }
+					modifier = { factor = 1.95 trait = idiot }
+					modifier = { factor = 1.75 trait = slow }
+					modifier = { factor = 1.5 trait = dumb }
+					modifier = { factor = 1.25 trait = dim }
+					modifier = { factor = 0.85 trait = bright }
+					modifier = { factor = 0.75 trait = smart }
+					modifier = { factor = 0.65 trait = quick }
+					modifier = { factor = 0.5 trait = brilliant }
+					modifier = { factor = 0.45 trait = genius }
+					modifier = { factor = 1.25 trait = magic_potential_4 }
+					modifier = { factor = 1.25 has_character_flag = magic_potential_flag_4 }
+					modifier = { factor = 0.95 has_character_modifier = magic_power_1 }
+					modifier = { factor = 0.85 has_character_modifier = magic_power_2 }
+					modifier = { factor = 0.75 has_character_modifier = magic_power_3 }
+					modifier = { factor = 0.65 has_character_modifier = magic_power_4 }
+					modifier = { factor = 0.95 learning = 15 }
+					modifier = { factor = 0.85 learning = 20 }
+					modifier = { factor = 0.75 learning = 25 }
+					modifier = { factor = 0.65 learning = 30 }
+					modifier = { factor = 0.75 trait = hedge_wizard }
+				}
+				30 = { change_variable = { which = "possession_counter" value = -5 } }
+				20 = { change_variable = { which = "possession_counter" value = -7 } }
+				10 = {
+					change_variable = { which = "possession_counter" value = -10 }
+					modifier = { factor = 1.5 learning = 25 }
+					modifier = { factor = 1.5 trait = genius }
+					modifier = { factor = 1.5 has_character_modifier = magic_power_4 }
+				}
+			}
+		}
+	}
+}
+
+# daemon.101 What the daemon wants
+# Below 5 the possession ends (health.8). From 5 to 49 the daemon's god makes
+# the host act on its urges (daemon.103-122), and at 50 it takes the body over
+# (daemon.102).
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.101
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { check_variable = { which = "possession_counter" value = 5 } } }
+			character_event = { id = health.8 }
+		}
+		else_if = {
+			limit = {
+				check_variable = { which = "possession_counter" value = 5 }
+				NOT = { check_variable = { which = "possession_counter" value = 50 } }
+			}
+			random_list = {
+				#khornate makes you angry
+				6 = {
+					character_event = { id = daemon.103 }
+					modifier = { factor = 0 NOT = { has_character_flag = possessed_by_khornate } }
+				}
+				#khornate makes you kill people
+				6 = {
+					character_event = { id = daemon.104 }
+					modifier = { factor = 0 NOT = { has_character_flag = possessed_by_khornate } }
+				}
+				#khornate makes your realm a feudal elective
+				6 = {
+					character_event = { id = daemon.105 }
+					modifier = { factor = 0 NOT = { has_character_flag = possessed_by_khornate } }
+					modifier = { factor = 0 is_ruler = no }
+				}
+				#slaaneshi makes you lustful
+				6 = {
+					character_event = { id = daemon.107 }
+					modifier = { factor = 0 NOT = { has_character_flag = possessed_by_slaaneshi } }
+				}
+				#slaaneshi makes you rape people
+				6 = {
+					character_event = { id = daemon.108 }
+					modifier = { factor = 0 NOT = { has_character_flag = possessed_by_slaaneshi } }
+				}
+				#slaaneshi makes you gluttonous
+				6 = {
+					character_event = { id = daemon.109 }
+					modifier = { factor = 0 NOT = { has_character_flag = possessed_by_slaaneshi } }
+				}
+				#slaaneshi makes you drunkard
+				6 = {
+					character_event = { id = daemon.110 }
+					modifier = { factor = 0 NOT = { has_character_flag = possessed_by_slaaneshi } }
+				}
+				#slaaneshi make your realm full agnatic/enatic
+				6 = {
+					character_event = { id = daemon.111 }
+					modifier = { factor = 0 NOT = { has_character_flag = possessed_by_slaaneshi } }
+					modifier = { factor = 0 is_ruler = no }
+				}
+				#nurglite makes you ill
+				6 = {
+					character_event = { id = daemon.113 }
+					modifier = { factor = 0 NOT = { has_character_flag = possessed_by_nurglite } }
+				}
+				#nurglite gives you measles
+				6 = {
+					character_event = { id = daemon.114 }
+					modifier = { factor = 0 NOT = { has_character_flag = possessed_by_nurglite } }
+				}
+				#nurglite gives you typhoid
+				6 = {
+					character_event = { id = daemon.115 }
+					modifier = { factor = 0 NOT = { has_character_flag = possessed_by_nurglite } }
+				}
+				#tzeentchian makes you paranoid
+				6 = {
+					character_event = { id = daemon.116 }
+					modifier = {
+						factor = 0
+						NOT = { has_character_flag = possessed_by_tzeentchian }
+					}
+				}
+				#tzeentchian makes your realm elective gavelkind
+				6 = {
+					character_event = { id = daemon.117 }
+					modifier = {
+						factor = 0
+						NOT = { has_character_flag = possessed_by_tzeentchian }
+					}
+					modifier = { factor = 0 is_ruler = no }
+				}
+				#tzeentchian makes your realm no crown authority
+				6 = {
+					character_event = { id = daemon.119 }
+					modifier = {
+						factor = 0
+						NOT = { has_character_flag = possessed_by_tzeentchian }
+					}
+					modifier = { factor = 0 is_ruler = no }
+				}
+				#tzeentchian makes your realm ultimogeniture
+				6 = {
+					character_event = { id = daemon.121 }
+					modifier = {
+						factor = 0
+						NOT = { has_character_flag = possessed_by_tzeentchian }
+					}
+					modifier = { factor = 0 is_ruler = no }
+				}
+				#nothing happens
+				10 = { }
+			}
+		}
+		#the daemon takes over
+		else_if = {
+			limit = { check_variable = { which = "possession_counter" value = 50 } }
+			character_event = { id = daemon.102 }
+		}
+	}
+}
+
+# daemon.102 The daemon takes over
+# The daemon consumes its host, who abdicates and becomes a daemon of its god.
+# Adds a little doom.
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.102
+	desc = { text = EVTDESCdaemon102 trigger = { has_character_flag = possessed_by_khornate } }
+	desc = { text = EVTDESCdaemon102b trigger = { has_character_flag = possessed_by_nurglite } }
+	desc = { text = EVTDESCdaemon102c trigger = { has_character_flag = possessed_by_slaaneshi } }
+	desc = { text = EVTDESCdaemon102d trigger = { has_character_flag = possessed_by_tzeentchian } }
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon102
+		trigger = { has_character_flag = possessed_by_khornate }
+		daemon_possession_end_effect = yes
+		abdicate = yes
+		banish = yes
+		hidden_tooltip = { create_bloodletter_effect = yes }
+	}
+	option = {
+		name = EVTOPTBdaemon102
+		trigger = { has_character_flag = possessed_by_nurglite }
+		daemon_possession_end_effect = yes
+		abdicate = yes
+		banish = yes
+		hidden_tooltip = { create_plaguebearer_effect = yes }
+	}
+	option = {
+		name = EVTOPTCdaemon102
+		trigger = { has_character_flag = possessed_by_slaaneshi }
+		daemon_possession_end_effect = yes
+		abdicate = yes
+		banish = yes
+		hidden_tooltip = { create_daemonette_effect = yes }
+	}
+	option = {
+		name = EVTOPTDdaemon102
+		trigger = { has_character_flag = possessed_by_tzeentchian }
+		daemon_possession_end_effect = yes
+		abdicate = yes
+		banish = yes
+		hidden_tooltip = { create_flamer_effect = yes }
+	}
+}
+
+# daemon.103 Wrath (Khorne)
+# The host becomes wrathful.
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.103
+	desc = EVTDESCdaemon103
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	option = {
+		name = EVTOPTAdaemon103
+		add_trait = wroth
+		hidden_tooltip = { daemon_possession_small_effect = yes }
+	}
+}
+
+# daemon.104 Murder (Khorne)
+# The host kills an adult courtier in a rage. The court and vassals are
+# horrified.
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.104
+	desc = EVTDESCdaemon104
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+		any_courtier = { daemon_possessed_victim_trigger = yes }
+	}
+
+	option = {
+		name = EVTOPTAdaemon104
+		random_courtier = {
+			limit = { daemon_possessed_victim_trigger = yes }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_murder killer = ROOT } }
+		}
+		any_vassal = { opinion = { modifier = opinion_possessed_w who = ROOT years = 5 } }
+		any_courtier = { opinion = { modifier = opinion_possessed_w who = ROOT years = 5 } }
+		hidden_tooltip = { daemon_possession_big_effect = yes }
+	}
+}
+
+# daemon.105 Only the strong rule (Khorne)
+# The host's titles become feudal elective, and their vassals are made to
+# follow (daemon.106).
+# Scope: ROOT is the possessed ruler.
+character_event = {
+	id = daemon.105
+	desc = EVTDESCdaemon105
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	option = {
+		name = EVTOPTAdaemon105
+		any_demesne_title = { add_law = succ_feudal_elective }
+		any_vassal = {
+			opinion = { modifier = opinion_possessed_w who = ROOT years = 5 }
+			character_event = { id = daemon.106 }
+		}
+		any_courtier = { opinion = { modifier = opinion_possessed_w who = ROOT years = 5 } }
+		hidden_tooltip = { daemon_possession_big_effect = yes }
+	}
+}
+
+# daemon.106 Feudal elective decreed
+# A vassal of a possessed ruler adopts feudal elective succession.
+# Scope: ROOT is the vassal, FROM the ruler.
+character_event = {
+	id = daemon.106
+	desc = EVTDESCdaemon106
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon106
+		any_demesne_title = { add_law = succ_feudal_elective }
+	}
+}
+
+# daemon.107 Lust (Slaanesh)
+# The host becomes lustful.
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.107
+	desc = EVTDESCdaemon107
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	option = {
+		name = EVTOPTAdaemon107
+		add_trait = lustful
+		hidden_tooltip = { daemon_possession_small_effect = yes }
+	}
+}
+
+# daemon.108 An assault (Slaanesh)
+# Overcome by the daemon's desire, the host rapes an adult courtier, who is
+# left wounded and hates them. The court and vassals are horrified.
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.108
+	desc = EVTDESCdaemon108
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+		any_courtier = { daemon_possessed_victim_trigger = yes }
+	}
+
+	option = {
+		name = EVTOPTAdaemon108
+		random_courtier = {
+			limit = { daemon_possessed_victim_trigger = yes }
+			add_trait = wounded
+			opinion = { modifier = opinion_possessed_w who = ROOT years = 100 }
+		}
+		any_vassal = { opinion = { modifier = opinion_possessed_w who = ROOT years = 5 } }
+		any_courtier = { opinion = { modifier = opinion_possessed_w who = ROOT years = 5 } }
+		hidden_tooltip = { daemon_possession_big_effect = yes }
+	}
+}
+
+# daemon.109 Gluttony (Slaanesh)
+# The host becomes gluttonous.
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.109
+	desc = EVTDESCdaemon109
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	option = {
+		name = EVTOPTAdaemon109
+		add_trait = gluttonous
+		hidden_tooltip = { daemon_possession_small_effect = yes }
+	}
+}
+
+# daemon.110 Drink (Slaanesh)
+# The host becomes a drunkard.
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.110
+	desc = EVTDESCdaemon110
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	option = {
+		name = EVTOPTAdaemon110
+		add_trait = drunkard
+		hidden_tooltip = { daemon_possession_small_effect = yes }
+	}
+}
+
+# daemon.111 One sex at court (Slaanesh)
+# The daemon wants only the sex it craves around it: the host's titles become
+# agnatic or enatic (daemon_craves_men_trigger), and vassals follow
+# (daemon.112).
+# Scope: ROOT is the possessed ruler.
+character_event = {
+	id = daemon.111
+	desc = { text = EVTDESCdaemon111 trigger = { daemon_craves_men_trigger = yes } }
+	desc = { text = EVTDESCdaemon111b trigger = { daemon_craves_men_trigger = no } }
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	option = {
+		name = EVTOPTAdaemon111
+		if = {
+			limit = { daemon_craves_men_trigger = yes }
+			any_demesne_title = { add_law = agnatic_succession }
+		}
+		else = { any_demesne_title = { add_law = enatic_succession } }
+		any_vassal = {
+			opinion = { modifier = opinion_possessed_w who = ROOT years = 5 }
+			character_event = { id = daemon.112 }
+		}
+		any_courtier = { opinion = { modifier = opinion_possessed_w who = ROOT years = 5 } }
+		hidden_tooltip = { daemon_possession_big_effect = yes }
+	}
+}
+
+# daemon.112 Agnatic or enatic decreed
+# A vassal of a possessed ruler adopts the same law.
+# Scope: ROOT is the vassal, FROM the ruler.
+character_event = {
+	id = daemon.112
+	desc = { text = EVTDESCdaemon112 trigger = { FROM = { daemon_craves_men_trigger = yes } } }
+	desc = { text = EVTDESCdaemon112b trigger = { FROM = { daemon_craves_men_trigger = no } } }
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon112
+		if = {
+			limit = { FROM = { daemon_craves_men_trigger = yes } }
+			any_demesne_title = { add_law = agnatic_succession }
+		}
+		else = { any_demesne_title = { add_law = enatic_succession } }
+	}
+}
+
+# daemon.113 Sickness (Nurgle)
+# The host falls ill.
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.113
+	desc = EVTDESCdaemon113
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	option = {
+		name = EVTOPTAdaemon113
+		add_symptom_effect = yes
+		nurgle_blessing_check_effect = yes
+		hidden_tooltip = { daemon_possession_medium_effect = yes }
+	}
+}
+
+# daemon.114 Boils (Nurgle)
+# The host breaks out in boils (has_measles).
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.114
+	desc = EVTDESCdaemon114
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	option = {
+		name = EVTOPTAdaemon114
+		add_trait = has_measles
+		nurgle_blessing_check_effect = yes
+		hidden_tooltip = { daemon_possession_medium_effect = yes }
+	}
+}
+
+# daemon.115 Fever (Nurgle)
+# The host catches a burning fever (has_typhoid_fever).
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.115
+	desc = EVTDESCdaemon115
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	option = {
+		name = EVTOPTAdaemon115
+		add_trait = has_typhoid_fever
+		nurgle_blessing_check_effect = yes
+		hidden_tooltip = { daemon_possession_medium_effect = yes }
+	}
+}
+
+# daemon.116 Paranoia (Tzeentch)
+# The host becomes paranoid as the daemon reshapes their flesh, and may mutate.
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.116
+	desc = EVTDESCdaemon116
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	option = {
+		name = EVTOPTAdaemon116
+		add_trait = paranoid
+		random_list = {
+			45 = {
+				custom_tooltip = { text = mutations_test_tt mutation_toughness_test_effect = yes }
+			}
+			55 = { }
+		}
+		hidden_tooltip = { daemon_possession_medium_effect = yes }
+	}
+}
+
+# daemon.117 All shall share (Tzeentch)
+# The host's titles become elective gavelkind, and vassals follow
+# (daemon.118).
+# Scope: ROOT is the possessed ruler.
+character_event = {
+	id = daemon.117
+	desc = EVTDESCdaemon117
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	option = {
+		name = EVTOPTAdaemon117
+		any_demesne_title = { add_law = succ_elective_gavelkind }
+		any_vassal = {
+			opinion = { modifier = opinion_possessed_w who = ROOT years = 5 }
+			character_event = { id = daemon.118 }
+		}
+		any_courtier = { opinion = { modifier = opinion_possessed_w who = ROOT years = 5 } }
+		hidden_tooltip = { daemon_possession_big_effect = yes }
+	}
+}
+
+# daemon.118 Elective gavelkind decreed
+# A vassal of a possessed ruler adopts elective gavelkind.
+# Scope: ROOT is the vassal, FROM the ruler.
+character_event = {
+	id = daemon.118
+	desc = EVTDESCdaemon118
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon118
+		any_demesne_title = { add_law = succ_elective_gavelkind }
+	}
+}
+
+# daemon.119 No more control (Tzeentch)
+# The host's titles drop to no crown authority, and vassals follow
+# (daemon.120).
+# Scope: ROOT is the possessed ruler.
+character_event = {
+	id = daemon.119
+	desc = EVTDESCdaemon119
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	option = {
+		name = EVTOPTAdaemon119
+		any_demesne_title = { add_law = crown_authority_0 }
+		any_vassal = {
+			opinion = { modifier = opinion_possessed_w who = ROOT years = 5 }
+			character_event = { id = daemon.120 }
+		}
+		any_courtier = { opinion = { modifier = opinion_possessed_w who = ROOT years = 5 } }
+		hidden_tooltip = { daemon_possession_big_effect = yes }
+	}
+}
+
+# daemon.120 Crown authority abolished
+# A vassal of a possessed ruler drops crown authority.
+# Scope: ROOT is the vassal, FROM the ruler.
+character_event = {
+	id = daemon.120
+	desc = EVTDESCdaemon120
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon120
+		any_demesne_title = { add_law = crown_authority_0 }
+	}
+}
+
+# daemon.121 The youngest inherits (Tzeentch)
+# The host's titles become ultimogeniture, and vassals follow (daemon.122).
+# Scope: ROOT is the possessed ruler.
+character_event = {
+	id = daemon.121
+	desc = EVTDESCdaemon121
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = possessed
+	}
+
+	option = {
+		name = EVTOPTAdaemon121
+		any_demesne_title = { add_law = succ_ultimogeniture }
+		any_vassal = {
+			opinion = { modifier = opinion_possessed_w who = ROOT years = 5 }
+			character_event = { id = daemon.122 }
+		}
+		any_courtier = { opinion = { modifier = opinion_possessed_w who = ROOT years = 5 } }
+		hidden_tooltip = { daemon_possession_big_effect = yes }
+	}
+}
+
+# daemon.122 Ultimogeniture decreed
+# A vassal of a possessed ruler adopts ultimogeniture.
+# Scope: ROOT is the vassal, FROM the ruler.
+character_event = {
+	id = daemon.122
+	desc = EVTDESCdaemon122
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon122
+		any_demesne_title = { add_law = succ_ultimogeniture }
+	}
+}
+
+###############################################################################
+# Exorcism
+###############################################################################
+
+# daemon.125 Exorcised
+# A wizard of High or Light magic drives the daemon out. The host is wounded
+# but free, and grateful.
+# Scope: ROOT is the possessed character; FROMFROM, saved as daemon_exorcist,
+# is the wizard.
+character_event = {
+	id = daemon.125
+	desc = EVTDESCdaemon125
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes
+
+	immediate = {
+		FROMFROM = { save_event_target_as = daemon_exorcist }
+	}
+
+	option = {
+		name = EVTOPTAdaemon125
+		add_trait = wounded
+		daemon_possession_end_effect = yes
+		hidden_tooltip = {
+			event_target:daemon_exorcist = { character_event = { id = daemon.126 } }
+			opinion = { modifier = opinion_grateful who = event_target:daemon_exorcist years = 15 }
+		}
+	}
+}
+
+# daemon.126 The daemon is gone
+# The wizard sees the daemon leave and gains piety.
+# Scope: ROOT is the wizard, FROM the host.
+character_event = {
+	id = daemon.126
+	desc = EVTDESCdaemon126
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon126
+		piety = 100
+	}
+}
+
+# daemon.127 A false exorcism
+# The daemon only pretends to leave. Weeks later it returns (daemon.128).
+# Scope: ROOT is the possessed character; daemon_exorcist is the wizard.
+character_event = {
+	id = daemon.127
+	desc = EVTDESCdaemon127
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes
+
+	immediate = {
+		FROMFROM = { save_event_target_as = daemon_exorcist }
+	}
+
+	# The daemon only pretends to leave
+	option = {
+		name = EVTOPTAdaemon127
+		add_trait = wounded
+		remove_trait = possessed
+		hidden_tooltip = {
+			event_target:daemon_exorcist = { character_event = { id = daemon.126 } }
+			character_event = { id = daemon.128 days = 20 random = 45 }
+			opinion = { modifier = opinion_grateful who = event_target:daemon_exorcist years = 15 }
+		}
+	}
+}
+
+# daemon.128 It is back
+# The possession returns and the daemon acts at once (daemon.101). The wizard
+# learns of the failure (daemon.129).
+# Scope: ROOT is the possessed character.
+character_event = {
+	id = daemon.128
+	desc = EVTDESCdaemon128
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon128
+		add_trait = possessed
+		hidden_tooltip = {
+			character_event = { id = daemon.101 }
+			event_target:daemon_exorcist = { character_event = { id = daemon.129 } }
+			remove_opinion = { modifier = opinion_grateful who = event_target:daemon_exorcist }
+		}
+	}
+}
+
+# daemon.129 The exorcism failed
+# The wizard loses piety.
+# Scope: ROOT is the wizard, FROM the host.
+character_event = {
+	id = daemon.129
+	desc = EVTDESCdaemon129
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon129
+		piety = -200
+	}
+}
+
+# daemon.130 A deadly exorcism
+# The daemon tears the host's soul away as it leaves, and the host dies.
+# Scope: ROOT is the possessed character; daemon_exorcist is the wizard.
+character_event = {
+	id = daemon.130
+	desc = EVTDESCdaemon130
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes
+
+	immediate = {
+		FROMFROM = { save_event_target_as = daemon_exorcist }
+	}
+
+	option = {
+		name = EVTOPTAdaemon130
+		daemon_possession_end_effect = yes
+		hidden_tooltip = {
+			event_target:daemon_exorcist = { character_event = { id = daemon.131 } }
+		}
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes add_trait = wounded }
+		else = { death = { death_reason = death_accident } }
+	}
+}
+
+# daemon.131 The host is dead
+# The wizard loses piety for the death.
+# Scope: ROOT is the wizard, FROM the host.
+character_event = {
+	id = daemon.131
+	desc = EVTDESCdaemon131
+	picture = GFX_evt_esorcism
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon131
+		piety = -200
+	}
+}
+
+# daemon.132 No soul left to eat
+# A daemon cannot keep hold of an undead body: a possessed Tomb King or
+# vampire shakes it off. Checked every two years.
+# Scope: ROOT is the undead character.
+character_event = {
+	id = daemon.132
+	desc = EVTDESCdaemon132
+	picture = GFX_evt_esorcism
+	is_triggered_only = yes # on_bi_yearly_pulse
+
+	only_playable = yes
+
+	trigger = {
+		trait = possessed
+		OR = { trait = creature_nehekharan is_vampire_trigger = yes }
+	}
+
+	option = {
+		name = EVTOPTAdaemon132
+		daemon_possession_end_effect = yes
+	}
+}
+
+###############################################################################
+# Khorne's mages and commissioned summonings
+###############################################################################
+
+# daemon.140 A mage among Khorne's faithful
+# Khorne despises sorcery. A Khorne worshipper with magic is haunted by the
+# Blood God's scorn (daemon.141). Checked at adulthood and every five years.
+# Scope: ROOT is the mage.
+long_character_event = {
+	id = daemon.140
+	desc = EVTDESCdaemon140
+	picture = GFX_evt_khorne
+	is_triggered_only = yes # on_five_year_pulse, on_adulthood
+
+	religion = khorne
+
+	trigger = {
+		OR = {
+			has_character_modifier = magic_power_1
+			has_character_modifier = magic_power_2
+			has_character_modifier = magic_power_3
+			has_character_modifier = magic_power_4
+			trait = magic_potential_1
+			trait = magic_potential_2
+			trait = magic_potential_3
+			trait = magic_potential_4
+			has_character_flag = magic_potential_flag_1
+			has_character_flag = magic_potential_flag_2
+			has_character_flag = magic_potential_flag_3
+			has_character_flag = magic_potential_flag_4
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemon140
+		piety = -50
+		hidden_tooltip = { long_character_event = { id = daemon.141 } }
+	}
+}
+
+# daemon.141 Tzeentch whispers
+# The mage turns to Tzeentch, taking his lore and faith, or begs Khorne to
+# burn the magic out of them.
+# Scope: ROOT is the mage.
+long_character_event = {
+	id = daemon.141
+	desc = EVTDESCdaemon141
+	picture = GFX_evt_khorne
+
+	is_triggered_only = yes
+	#Convert to Tzeentch
+	option = {
+		name = EVTOPTAdaemon141
+		if = {
+			limit = { OR = { trait = lore_nurgle trait = lore_slaanesh } }
+			remove_trait = lore_nurgle
+			remove_trait = lore_slaanesh
+			add_trait = lore_tzeentch
+		}
+		piety = -450
+		religion = tzeentch
+	}
+	#Repress Magic
+	option = {
+		name = EVTOPTBdaemon141
+		piety = -150
+		hidden_tooltip = {
+			remove_character_modifier = magic_power_1
+			remove_character_modifier = magic_power_2
+			remove_character_modifier = magic_power_3
+			remove_character_modifier = magic_power_4
+			clr_character_flag = magic_potential_flag_1
+			clr_character_flag = magic_potential_flag_2
+			clr_character_flag = magic_potential_flag_3
+			clr_character_flag = magic_potential_flag_4
+			clr_character_flag = recessive_mage
+			remove_trait = magic_potential_1
+			remove_trait = magic_potential_2
+			remove_trait = magic_potential_3
+			remove_trait = magic_potential_4
+		}
+	}
+}
+
+# daemon.142 A summoning is asked
+# A liege asks their court sorcerer to summon a daemon for them (decision).
+# The sorcerer agrees or refuses; the AI agrees more often with a liked liege.
+# Scope: ROOT is the sorcerer, FROM the liege.
+character_event = {
+	id = daemon.142
+	desc = EVTDESCdaemon142
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	#receive event and decide what to do
+	option = {
+		name = EVTOPTAdaemon142
+		hidden_tooltip = {
+			random = { chance = 20 mutations_table = yes }
+			add_character_modifier = { name = magic_cooldown_summoning duration = 300 hidden = yes }
+			FROM = { character_event = { id = daemon.144 } }
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.25 ROOT = { opinion = { who = FROM value = 20 } } }
+			modifier = { factor = 1.25 ROOT = { opinion = { who = FROM value = 40 } } }
+			modifier = { factor = 1.5 ROOT = { opinion = { who = FROM value = 60 } } }
+			modifier = { factor = 1.5 ROOT = { opinion = { who = FROM value = 80 } } }
+			modifier = { factor = 1.75 ROOT = { opinion = { who = FROM value = 100 } } }
+		}
+	}
+	#No
+	option = {
+		name = EVTOPTBdaemon142
+		hidden_tooltip = { FROM = { character_event = { id = daemon.143 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.75 NOT = { opinion = { who = FROM value = 0 } } }
+			modifier = { factor = 1.85 NOT = { religion = FROM } }
+			modifier = { factor = 1.75 trait = hedge_wizard }
+			modifier = { factor = 0.75 religion = tzeentch }
+			modifier = { factor = 0.85 has_character_modifier = magic_power_3 }
+			modifier = { factor = 0.75 has_character_modifier = magic_power_4 }
+			modifier = { factor = 1.25 trait = paranoid }
+			modifier = { factor = 0.75 trait = lunatic_1 }
+			modifier = { factor = 0.5 trait = lunatic_2 }
+			modifier = { factor = 0.1 trait = lunatic_3 }
+			modifier = { factor = 1.25 any_friend = { is_daemon_race_trigger = yes } }
+		}
+	}
+}
+
+# daemon.143 The sorcerer refuses
+# Tells the liege the sorcerer will not do it.
+# Scope: ROOT is the liege, FROM the sorcerer.
+character_event = {
+	id = daemon.143
+	desc = EVTDESCdaemon143
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon143
+	}
+}
+
+# daemon.144 Which daemon?
+# The liege picks the daemon from those the sorcerer's lore allows. Half the
+# time it serves the liege (daemon.47-50, or a K'daai from dawizharr.22);
+# otherwise both are dragged into the Warp.
+# Scope: ROOT is the liege, FROM the sorcerer.
+character_event = {
+	id = daemon.144
+	desc = EVTDESCdaemon144
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon45
+		trigger = {
+			FROM = { OR = { trait = lore_tzeentch trait = lore_shadows trait = lore_dark_magic } }
+		}
+		random_list = {
+			#success, summoned tzeentch daemon
+			50 = {
+				modifier = { factor = 0.95 FROM = { NOT = { learning = 20 } } }
+				modifier = { factor = 0.85 FROM = { NOT = { learning = 15 } } }
+				modifier = { factor = 0.75 FROM = { NOT = { learning = 10 } } }
+				modifier = { factor = 0.25 FROM = { NOT = { learning = 5 } } }
+				modifier = { factor = 1.5 FROM = { trait = lore_dark_magic } }
+				modifier = { factor = 1.5 FROM = { trait = asur_mage } }
+				modifier = { factor = 1.5 FROM = { trait = druchii_mage } }
+				modifier = { factor = 1.5 FROM = { trait = druchii_sorceress } }
+				modifier = { factor = 0.25 FROM = { has_character_modifier = magic_power_1 } }
+				modifier = { factor = 0.5 FROM = { has_character_modifier = magic_power_2 } }
+				modifier = { factor = 1.5 FROM = { has_character_modifier = magic_power_3 } }
+				modifier = { factor = 1.75 FROM = { has_character_modifier = magic_power_4 } }
+				modifier = { factor = 0.75 FROM = { trait = hedge_wizard } }
+				character_event = { id = daemon.47 }
+				FROM = { character_event = { id = daemon.146 } }
+			}
+			#failure, daemon drags you and the mage into the Warp
+			50 = {
+				character_event = { id = daemon.145 }
+				FROM = { character_event = { id = daemon.46 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBdaemon45
+		trigger = {
+			FROM = {
+				OR = { trait = lore_nurgle trait = chaos_dwarf_sorcerer trait = lore_dark_magic }
+			}
+		}
+		random_list = {
+			#success, summoned nurgle daemon
+			50 = {
+				modifier = { factor = 0.95 FROM = { NOT = { learning = 20 } } }
+				modifier = { factor = 0.85 FROM = { NOT = { learning = 15 } } }
+				modifier = { factor = 0.75 FROM = { NOT = { learning = 10 } } }
+				modifier = { factor = 0.25 FROM = { NOT = { learning = 5 } } }
+				modifier = { factor = 1.5 FROM = { trait = lore_dark_magic } }
+				modifier = { factor = 1.5 FROM = { trait = asur_mage } }
+				modifier = { factor = 1.5 FROM = { trait = druchii_mage } }
+				modifier = { factor = 1.5 FROM = { trait = druchii_sorceress } }
+				modifier = { factor = 0.25 FROM = { has_character_modifier = magic_power_1 } }
+				modifier = { factor = 0.5 FROM = { has_character_modifier = magic_power_2 } }
+				modifier = { factor = 1.5 FROM = { has_character_modifier = magic_power_3 } }
+				modifier = { factor = 1.75 FROM = { has_character_modifier = magic_power_4 } }
+				modifier = { factor = 0.75 FROM = { trait = hedge_wizard } }
+				character_event = { id = daemon.48 }
+				FROM = { character_event = { id = daemon.147 } }
+			}
+			#failure, daemon drags you to the Warp
+			50 = {
+				character_event = { id = daemon.145 }
+				FROM = { character_event = { id = daemon.46 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTCdaemon45
+		trigger = {
+			FROM = { OR = { trait = lore_slaanesh trait = lore_shadows trait = lore_dark_magic } }
+		}
+		random_list = {
+			#success, summoned slaanesh daemon
+			50 = {
+				modifier = { factor = 0.95 FROM = { NOT = { learning = 20 } } }
+				modifier = { factor = 0.85 FROM = { NOT = { learning = 15 } } }
+				modifier = { factor = 0.75 FROM = { NOT = { learning = 10 } } }
+				modifier = { factor = 0.25 FROM = { NOT = { learning = 5 } } }
+				modifier = { factor = 1.5 FROM = { trait = lore_dark_magic } }
+				modifier = { factor = 1.5 FROM = { trait = asur_mage } }
+				modifier = { factor = 1.5 FROM = { trait = druchii_mage } }
+				modifier = { factor = 1.5 FROM = { trait = druchii_sorceress } }
+				modifier = { factor = 0.25 FROM = { has_character_modifier = magic_power_1 } }
+				modifier = { factor = 0.5 FROM = { has_character_modifier = magic_power_2 } }
+				modifier = { factor = 1.5 FROM = { has_character_modifier = magic_power_3 } }
+				modifier = { factor = 1.75 FROM = { has_character_modifier = magic_power_4 } }
+				modifier = { factor = 0.75 FROM = { trait = hedge_wizard } }
+				character_event = { id = daemon.49 }
+				FROM = { character_event = { id = daemon.148 } }
+			}
+			#failure, daemon drags you to the Warp
+			50 = {
+				character_event = { id = daemon.145 }
+				FROM = { character_event = { id = daemon.46 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTDdaemon45
+		trigger = { FROM = { OR = { trait = lore_dark_magic trait = chaos_dwarf_sorcerer } } }
+		random_list = {
+			#success, summoned khorne daemon
+			50 = {
+				modifier = { factor = 0.95 FROM = { NOT = { learning = 20 } } }
+				modifier = { factor = 0.85 FROM = { NOT = { learning = 15 } } }
+				modifier = { factor = 0.75 FROM = { NOT = { learning = 10 } } }
+				modifier = { factor = 0.25 FROM = { NOT = { learning = 5 } } }
+				modifier = { factor = 1.5 FROM = { trait = lore_dark_magic } }
+				modifier = { factor = 1.5 FROM = { trait = asur_mage } }
+				modifier = { factor = 1.5 FROM = { trait = druchii_mage } }
+				modifier = { factor = 1.5 FROM = { trait = druchii_sorceress } }
+				modifier = { factor = 0.25 FROM = { has_character_modifier = magic_power_1 } }
+				modifier = { factor = 0.5 FROM = { has_character_modifier = magic_power_2 } }
+				modifier = { factor = 1.5 FROM = { has_character_modifier = magic_power_3 } }
+				modifier = { factor = 1.75 FROM = { has_character_modifier = magic_power_4 } }
+				modifier = { factor = 0.75 FROM = { trait = hedge_wizard } }
+				character_event = { id = daemon.50 }
+				FROM = { character_event = { id = daemon.149 } }
+			}
+			#failure, daemon drags you to the Warp
+			50 = {
+				character_event = { id = daemon.145 }
+				FROM = { character_event = { id = daemon.46 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTEdaemon45
+		trigger = { FROM = { trait = chaos_dwarf_sorcerer } }
+		random_list = {
+			#success, summoned khorne daemon
+			50 = {
+				modifier = { factor = 0.95 FROM = { NOT = { learning = 20 } } }
+				modifier = { factor = 0.85 FROM = { NOT = { learning = 15 } } }
+				modifier = { factor = 0.75 FROM = { NOT = { learning = 10 } } }
+				modifier = { factor = 0.25 FROM = { NOT = { learning = 5 } } }
+				modifier = { factor = 1.5 FROM = { trait = lore_dark_magic } }
+				modifier = { factor = 1.5 FROM = { trait = asur_mage } }
+				modifier = { factor = 1.5 FROM = { trait = chaos_dwarf_sorcerer } }
+				modifier = { factor = 1.5 FROM = { trait = druchii_mage } }
+				modifier = { factor = 1.5 FROM = { trait = druchii_sorceress } }
+				modifier = { factor = 0.25 FROM = { has_character_modifier = magic_power_1 } }
+				modifier = { factor = 0.5 FROM = { has_character_modifier = magic_power_2 } }
+				modifier = { factor = 1.5 FROM = { has_character_modifier = magic_power_3 } }
+				modifier = { factor = 1.75 FROM = { has_character_modifier = magic_power_4 } }
+				modifier = { factor = 0.75 FROM = { trait = hedge_wizard } }
+				character_event = { id = dawizharr.22 }
+				FROM = { character_event = { id = dawizharr.23 } }
+			}
+			#failure, daemon drags you to the Warp
+			50 = {
+				character_event = { id = daemon.145 }
+				FROM = { character_event = { id = daemon.46 } }
+			}
+		}
+	}
+}
+
+# daemon.145 Dragged in with the sorcerer
+# The summoning fails and the liege is dragged into the Warp.
+# Scope: ROOT is the liege.
+character_event = {
+	id = daemon.145
+	desc = EVTDESCdaemon145
+	picture = GFX_evt_demon_summoning
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon145
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = { death = { death_reason = death_accident } }
+	}
+}
+
+# daemon.146 A Flamer bound for your liege
+# Tells the sorcerer the summoning worked; the liege is grateful.
+# Scope: ROOT is the sorcerer, FROM the liege.
+character_event = {
+	id = daemon.146
+	desc = EVTDESCdaemon146
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon146
+		FROM = { opinion = { modifier = opinion_grateful who = ROOT years = 9 } }
+	}
+}
+
+# daemon.147 A Plaguebearer bound for your liege
+# As daemon.146, for a Plaguebearer.
+# Scope: ROOT is the sorcerer, FROM the liege.
+character_event = {
+	id = daemon.147
+	desc = EVTDESCdaemon147
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon147
+		FROM = { opinion = { modifier = opinion_grateful who = ROOT years = 7 } }
+	}
+}
+
+# daemon.148 A Daemonette bound for your liege
+# As daemon.146, for a Daemonette.
+# Scope: ROOT is the sorcerer, FROM the liege.
+character_event = {
+	id = daemon.148
+	desc = EVTDESCdaemon148
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon148
+		FROM = { opinion = { modifier = opinion_grateful who = ROOT years = 6 } }
+	}
+}
+
+# daemon.149 A Bloodletter bound for your liege
+# As daemon.146, for a Bloodletter.
+# Scope: ROOT is the sorcerer, FROM the liege.
+character_event = {
+	id = daemon.149
+	desc = EVTDESCdaemon149
+	picture = GFX_evt_demon_summoning
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon149
+		FROM = { opinion = { modifier = opinion_grateful who = ROOT years = 8 } }
+	}
+}
+
+###############################################################################
+# Offering to Khorne
+###############################################################################
+
+# daemon.200 Offering to Khorne
+# A Khorne worshipper burns piety and wealth on a pyre (decision). The bigger
+# the offering, the likelier a great reward and the less likely madness or
+# silence.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.200
+	desc = EVTDESCdaemon200
+	picture = GFX_evt_khorne
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon200
+		trigger = { piety = 1250 wealth = 1000 }
+		piety = -1250
+		wealth = -1000
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (army, strength, health)
+				9 = { character_event = { id = daemon.201 } }
+				#Khorne sends a daemon familiar
+				10 = {
+					modifier = { factor = 0.5 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.202 }
+				}
+				#Khorne makes you berserker
+				15 = {
+					modifier = { factor = 0 trait = khorne_berserker }
+					character_event = { id = daemon.203 }
+				}
+				#Khorne gives favour (more than usual)
+				25 = { character_event = { id = daemon.204 } }
+				#Khorne makes you wroth
+				25 = {
+					modifier = { factor = 0 trait = wroth }
+					character_event = { id = daemon.205 }
+				}
+				#Khorne makes you insane
+				5 = { character_event = { id = daemon.206 } }
+				#Khorne sends a mutation
+				5 = { character_event = { id = daemon.207 } }
+				#Khorne doesn't answer
+				1 = { character_event = { id = daemon.208 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBdaemon200
+		trigger = { piety = 1000 wealth = 750 }
+		piety = -1000
+		wealth = -750
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (army, strength, health)
+				5 = { character_event = { id = daemon.201 } }
+				#Khorne sends a daemon familiar
+				10 = {
+					modifier = { factor = 0.5 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.202 }
+				}
+				#Khorne makes you berserker
+				10 = {
+					modifier = { factor = 0 trait = khorne_berserker }
+					character_event = { id = daemon.203 }
+				}
+				#Khorne gives favour (more than usual)
+				20 = { character_event = { id = daemon.204 } }
+				#Khorne makes you wroth
+				25 = {
+					modifier = { factor = 0 trait = wroth }
+					character_event = { id = daemon.205 }
+				}
+				#Khorne makes you insane
+				10 = { character_event = { id = daemon.206 } }
+				#Khorne sends a mutation
+				10 = { character_event = { id = daemon.207 } }
+				#Khorne doesn't answer
+				5 = { character_event = { id = daemon.208 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTCdaemon200
+		trigger = { piety = 750 wealth = 500 }
+		piety = -750
+		wealth = -500
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (army, strength, health)
+				1 = { character_event = { id = daemon.201 } }
+				#Khorne sends a daemon familiar
+				4 = {
+					modifier = { factor = 0.5 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.202 }
+				}
+				#Khorne makes you berserker
+				10 = {
+					modifier = { factor = 0 trait = khorne_berserker }
+					character_event = { id = daemon.203 }
+				}
+				#Khorne gives favour (more than usual)
+				15 = { character_event = { id = daemon.204 } }
+				#Khorne makes you wroth
+				25 = {
+					modifier = { factor = 0 trait = wroth }
+					character_event = { id = daemon.205 }
+				}
+				#Khorne makes you insane
+				15 = { character_event = { id = daemon.206 } }
+				#Khorne sends a mutation
+				10 = { character_event = { id = daemon.207 } }
+				#Khorne doesn't answer
+				15 = { character_event = { id = daemon.208 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTDdaemon200
+		trigger = { piety = 500 wealth = 250 }
+		piety = -500
+		wealth = -250
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (army, strength, health)
+				1 = { character_event = { id = daemon.201 } }
+				#Khorne sends a daemon familiar
+				4 = {
+					modifier = { factor = 0 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.202 }
+				}
+				#Khorne makes you berserker
+				5 = {
+					modifier = { factor = 0 trait = khorne_berserker }
+					character_event = { id = daemon.203 }
+				}
+				#Khorne gives favour (more than usual)
+				10 = { character_event = { id = daemon.204 } }
+				#Khorne makes you wroth
+				15 = {
+					modifier = { factor = 0 trait = wroth }
+					character_event = { id = daemon.205 }
+				}
+				#Khorne makes you insane
+				20 = { character_event = { id = daemon.206 } }
+				#Khorne sends a mutation
+				20 = { character_event = { id = daemon.207 } }
+				#Khorne doesn't answer
+				25 = { character_event = { id = daemon.208 } }
+			}
+		}
+	}
+}
+
+# daemon.201 Khorne grants a wish
+# Choose a daemonic host, a stronger body or health.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.201
+	desc = EVTDESCdaemon201
+	picture = GFX_evt_khorne
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+		daemon_favour_khorne_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon201
+		capital_scope = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					home = PREV
+					owner = THIS
+					attrition = 0.5
+					cannot_inherit = yes
+					earmark = demonic_host
+					troops = { daemonic_host = { 350 350 } }
+				}
+				spawn_unit = {
+					province = PREV
+					home = PREV
+					owner = THIS
+					attrition = 0.5
+					cannot_inherit = yes
+					earmark = demonic_host
+					troops = { daemonic_host = { 250 250 } }
+				}
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBdaemon201
+		change_martial = 2
+		if = { limit = { trait = tough } remove_trait = tough add_trait = strong }
+		if = { limit = { trait = hardy } remove_trait = hardy add_trait = strong }
+		if = {
+			limit = {
+				NOR = {
+					trait = strong
+					trait = tough
+					trait = hardy
+					trait = soft
+					trait = fragile
+					trait = weak
+				}
+			}
+			add_trait = tough
+		}
+		if = { limit = { trait = soft } remove_trait = soft add_trait = tough }
+		if = { limit = { trait = fragile } remove_trait = fragile add_trait = hardy }
+		if = { limit = { trait = weak } remove_trait = weak add_trait = hardy }
+	}
+	option = {
+		name = EVTOPTCdaemon201
+		health = 8
+	}
+}
+
+# daemon.202 Khorne sends a Bloodletter
+# A Bloodletter joins the worshipper as a bound friend.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.202
+	desc = EVTDESCdaemon202
+	picture = GFX_evt_khorne
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+		daemon_favour_khorne_effect = yes
+	}
+	option = {
+		name = EVTOPTAdaemon202
+		create_character = {
+			random_traits = yes
+			religion = khorne
+			culture = bloodletter_khorne
+			female = no
+			age = 588
+			flag = special_marshal
+			trait = wroth
+			trait = honest
+			trait = khorne_demon
+			trait = khorne_bloodletter
+			attributes = { diplomacy = 10 martial = 20 stewardship = 2 intrigue = 12 learning = 9 }
+		}
+		new_character = { create_bloodletter_effect = yes add_friend = ROOT }
+		set_character_flag = daemon_summoner
+		prestige = 500
+	}
+}
+
+# daemon.203 Khorne's berserker rage
+# The worshipper becomes a berserker of Khorne.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.203
+	desc = EVTDESCdaemon203
+	picture = GFX_evt_khorne
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_khorne_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon203
+		add_trait = khorne_berserker
+		prestige = 250
+	}
+}
+
+# daemon.204 Khorne's favour
+# Piety, and half the time the Collar of Khorne if they lack one.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.204
+	desc = EVTDESCdaemon204
+	picture = GFX_evt_khorne
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_khorne_effect = yes
+		add_offmap_currency = { offmap = khorne_warp amount = 250 }
+	}
+
+	option = {
+		name = EVTOPTAdaemon204
+		piety = 350
+		if = {
+			limit = { NOT = { has_artifact = chaos_artifact_khorne_collar } }
+			random = { chance = 50 add_artifact = chaos_artifact_khorne_collar }
+		}
+	}
+}
+
+# daemon.205 Khorne's wrath
+# The worshipper becomes wrathful.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.205
+	desc = EVTDESCdaemon205
+	picture = GFX_evt_khorne
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_khorne_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon205
+		add_trait = wroth
+		prestige = 50
+	}
+}
+
+# daemon.206 Khorne's madness
+# The worshipper takes a step towards madness.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.206
+	desc = EVTDESCdaemon206
+	picture = GFX_evt_khorne
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_khorne_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon206
+		hidden_tooltip = { character_event = { id = mutate.5 } } #lunacy
+	}
+}
+
+# daemon.207 Khorne's mark
+# The worshipper may mutate.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.207
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_khorne_effect = yes
+		custom_tooltip = { text = mutations_test_tt mutation_toughness_test_effect = yes }
+	}
+}
+
+# daemon.208 Khorne is silent
+# The offering is ignored; Khorne's power and the worshipper's prestige drop.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.208
+	desc = EVTDESCdaemon208
+	picture = GFX_evt_khorne
+	is_triggered_only = yes
+
+	immediate = {
+		add_offmap_currency = { offmap = khorne_warp amount = -250 }
+	}
+	option = {
+		name = EVTOPTAdaemon208
+		prestige = -50
+	}
+}
+
+###############################################################################
+# Offering to Nurgle
+###############################################################################
+
+# daemon.210 Offering to Nurgle
+# A Nurgle worshipper burns piety and wealth on a pyre (decision). The bigger
+# the offering, the likelier a great reward.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.210
+	desc = EVTDESCdaemon210
+	picture = GFX_evt_nurgle
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon210
+		trigger = { piety = 1250 wealth = 1000 }
+		piety = -1250
+		wealth = -1000
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (magic, love, presents)
+				9 = {
+					modifier = {
+						factor = 1.75
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					character_event = { id = daemon.211 }
+				}
+				#Nurgle sends a daemon familiar
+				10 = {
+					modifier = { factor = 0.5 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.212 }
+				}
+				#Nurgle makes you kind
+				15 = {
+					modifier = { factor = 0 trait = kind trait = content }
+					character_event = { id = daemon.213 }
+				}
+				#Nurgle gives favour (more than usual)
+				25 = { character_event = { id = daemon.214 } }
+				#Nurgle makes you charitable
+				25 = {
+					modifier = { factor = 0 trait = charitable }
+					character_event = { id = daemon.215 }
+				}
+				#Nurgle makes you insane
+				5 = { character_event = { id = daemon.216 } }
+				#Nurgle sends a mutation
+				5 = { character_event = { id = daemon.217 } }
+				#Nurgle doesn't answer
+				1 = { character_event = { id = daemon.218 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBdaemon210
+		trigger = { piety = 1000 wealth = 750 }
+		piety = -1000
+		wealth = -750
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (magic, love, presents)
+				5 = {
+					modifier = {
+						factor = 1.75
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					character_event = { id = daemon.211 }
+				}
+				#Nurgle sends a daemon familiar
+				10 = {
+					modifier = { factor = 0.5 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.212 }
+				}
+				#Nurgle makes you kind
+				10 = {
+					modifier = { factor = 0 trait = kind trait = content }
+					character_event = { id = daemon.213 }
+				}
+				#Nurgle gives favour (more than usual)
+				20 = { character_event = { id = daemon.214 } }
+				#Nurgle makes you charitable
+				25 = {
+					modifier = { factor = 0 trait = charitable }
+					character_event = { id = daemon.215 }
+				}
+				#Nurgle makes you insane
+				10 = { character_event = { id = daemon.216 } }
+				#Nurgle sends a mutation
+				10 = { character_event = { id = daemon.217 } }
+				#Nurgle doesn't answer
+				5 = { character_event = { id = daemon.218 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTCdaemon210
+		trigger = { piety = 750 wealth = 500 }
+		piety = -750
+		wealth = -500
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (magic, love, presents)
+				1 = {
+					modifier = {
+						factor = 1.75
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					character_event = { id = daemon.211 }
+				}
+				#Nurgle sends a daemon familiar
+				4 = {
+					modifier = { factor = 0.5 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.212 }
+				}
+				#Nurgle makes you kind
+				10 = {
+					modifier = { factor = 0 trait = kind trait = content }
+					character_event = { id = daemon.213 }
+				}
+				#Nurgle gives favour (more than usual)
+				15 = { character_event = { id = daemon.214 } }
+				#Nurgle makes you charitable
+				25 = {
+					modifier = { factor = 0 trait = charitable }
+					character_event = { id = daemon.215 }
+				}
+				#Nurgle makes you insane
+				15 = { character_event = { id = daemon.216 } }
+				#Nurgle sends a mutation
+				10 = { character_event = { id = daemon.217 } }
+				#Nurgle doesn't answer
+				15 = { character_event = { id = daemon.218 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTDdaemon210
+		trigger = { piety = 500 wealth = 250 }
+		piety = -500
+		wealth = -250
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (magic, love, presents)
+				1 = {
+					modifier = {
+						factor = 1.75
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					character_event = { id = daemon.211 }
+				}
+				#Nurgle sends a daemon familiar
+				4 = {
+					modifier = { factor = 0.5 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.212 }
+				}
+				#Nurgle makes you kind
+				5 = {
+					modifier = { factor = 0 trait = kind trait = content }
+					character_event = { id = daemon.213 }
+				}
+				#Nurgle gives favour (more than usual)
+				10 = { character_event = { id = daemon.214 } }
+				#Nurgle makes you charitable
+				15 = {
+					modifier = { factor = 0 trait = charitable }
+					character_event = { id = daemon.215 }
+				}
+				#Nurgle makes you insane
+				20 = { character_event = { id = daemon.216 } }
+				#Nurgle sends a mutation
+				20 = { character_event = { id = daemon.217 } }
+				#Nurgle doesn't answer
+				25 = { character_event = { id = daemon.218 } }
+			}
+		}
+	}
+}
+
+# daemon.211 Nurgle grants a wish
+# Choose the lore of Nurgle, the love of one's vassals, or to share Nurgle's
+# rot with them.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.211
+	desc = EVTDESCdaemon211
+	picture = GFX_evt_nurgle
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+		daemon_favour_nurgle_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon211
+		trigger = {
+			NOR = {
+				trait = hedge_wizard
+				trait = mage_apprentice
+				has_character_modifier = magic_power_1
+				has_character_modifier = magic_power_2
+				has_character_modifier = magic_power_3
+				has_character_modifier = magic_power_4
+			}
+		}
+		add_trait = lore_nurgle
+		if = {
+			limit = { has_character_flag = magic_potential_flag_1 }
+			clr_character_flag = magic_potential_flag_1
+			add_trait = magic_potential_1
+		}
+		if = {
+			limit = { has_character_flag = magic_potential_flag_2 }
+			clr_character_flag = magic_potential_flag_2
+			add_trait = magic_potential_2
+		}
+		if = {
+			limit = { has_character_flag = magic_potential_flag_3 }
+			clr_character_flag = magic_potential_flag_3
+			add_trait = magic_potential_3
+		}
+		if = {
+			limit = { has_character_flag = magic_potential_flag_4 }
+			clr_character_flag = magic_potential_flag_4
+			add_trait = magic_potential_4
+		}
+		if = {
+			limit = {
+				NOR = {
+					trait = magic_potential_1
+					trait = magic_potential_2
+					trait = magic_potential_3
+					trait = magic_potential_4
+					has_character_flag = magic_potential_flag_1
+					has_character_flag = magic_potential_flag_2
+					has_character_flag = magic_potential_flag_3
+					has_character_flag = magic_potential_flag_4
+				}
+			}
+			add_trait = magic_potential_2
+		}
+		magic_power_random_effect = yes
+		enable_magic_xp_effect = yes
+	}
+	option = {
+		name = EVTOPTBdaemon211
+		change_stewardship = 1
+		any_vassal = {
+			random = { chance = 75 opinion = { modifier = opinion_loving_liege who = ROOT } }
+		}
+	}
+	option = {
+		name = EVTOPTCdaemon211
+		any_vassal = {
+			random = { chance = 50 add_trait = has_nurgles_rot nurgle_blessing_check_effect = yes }
+		}
+	}
+}
+
+# daemon.212 Nurgle sends a Plaguebearer
+# A Plaguebearer joins the worshipper as a bound friend.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.212
+	desc = EVTDESCdaemon212
+	picture = GFX_evt_nurgle
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+		daemon_favour_nurgle_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon212
+		create_character = {
+			random_traits = yes
+			religion = nurgle
+			culture = plaguebearer_nurgle
+			female = no
+			age = 477
+			flag = special_marshal
+			trait = humble
+			trait = charitable
+			trait = nurgle_demon
+			trait = nurgle_plaguebearer
+			attributes = { diplomacy = 20 martial = 8 stewardship = 22 intrigue = 10 learning = 12 }
+		}
+		new_character = { create_plaguebearer_effect = yes add_friend = ROOT }
+		set_character_flag = daemon_summoner
+		prestige = 500
+	}
+}
+
+# daemon.213 Nurgle's kindness
+# The worshipper becomes kind and content.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.213
+	desc = EVTDESCdaemon213
+	picture = GFX_evt_nurgle
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_nurgle_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon213
+		add_trait = kind
+		add_trait = content
+		prestige = 250
+	}
+}
+
+# daemon.214 Nurgle's favour
+# Piety, and half the time a Festering Skull if they lack one.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.214
+	desc = EVTDESCdaemon214
+	picture = GFX_evt_nurgle
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_minor_effect = yes
+		daemon_favour_nurgle_effect = yes
+		add_offmap_currency = { offmap = nurgle_warp amount = 250 }
+	}
+
+	option = {
+		name = EVTOPTAdaemon214
+		piety = 350
+		if = {
+			limit = { NOT = { has_artifact = festering_skull } }
+			random = { chance = 50 add_artifact = festering_skull }
+		}
+	}
+}
+
+# daemon.215 Nurgle's generosity
+# The worshipper becomes charitable.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.215
+	desc = EVTDESCdaemon215
+	picture = GFX_evt_nurgle
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_nurgle_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon215
+		add_trait = charitable
+		prestige = 50
+	}
+}
+
+# daemon.216 Nurgle's madness
+# The worshipper takes a step towards madness.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.216
+	desc = EVTDESCdaemon216
+	picture = GFX_evt_nurgle
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_nurgle_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon216
+		hidden_tooltip = { character_event = { id = mutate.5 } } #lunacy
+	}
+}
+
+# daemon.217 Nurgle's mark
+# The worshipper may mutate.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.217
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_nurgle_effect = yes
+		custom_tooltip = { text = mutations_test_tt mutation_toughness_test_effect = yes }
+	}
+}
+
+# daemon.218 Nurgle is silent
+# The offering is ignored.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.218
+	desc = EVTDESCdaemon218
+	picture = GFX_evt_nurgle
+	is_triggered_only = yes
+
+	immediate = {
+		add_offmap_currency = { offmap = nurgle_warp amount = -250 }
+	}
+
+	option = {
+		name = EVTOPTAdaemon218
+		prestige = -50
+	}
+}
+
+###############################################################################
+# Offering to Slaanesh
+###############################################################################
+
+# daemon.220 Offering to Slaanesh
+# A Slaanesh worshipper burns piety and wealth on a pyre (decision). The
+# bigger the offering, the likelier a great reward.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.220
+	desc = EVTDESCdaemon220
+	picture = GFX_evt_slaanesh
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon220
+		trigger = { piety = 1250 wealth = 1000 }
+		piety = -1250
+		wealth = -1000
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (magic, beauty, healing)
+				9 = {
+					modifier = {
+						factor = 1.75
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					character_event = { id = daemon.221 }
+				}
+				#Slaanesh sends a daemon familiar
+				10 = {
+					modifier = { factor = 0 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.222 }
+				}
+				#Slaanesh sends a steed
+				15 = {
+					modifier = { factor = 0 has_artifact = slaanesh_steed }
+					character_event = { id = daemon.223 }
+				}
+				#Slaanesh gives favour (more than usual)
+				25 = { character_event = { id = daemon.224 } }
+				#Slaanesh makes you lustful
+				25 = {
+					modifier = { factor = 0 trait = lustful }
+					character_event = { id = daemon.225 }
+				}
+				#Slaanesh makes you insane
+				5 = { character_event = { id = daemon.226 } }
+				#Slaanesh sends a mutation
+				5 = { character_event = { id = daemon.227 } }
+				#Slaanesh doesn't answer
+				1 = { character_event = { id = daemon.228 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBdaemon220
+		trigger = { piety = 1000 wealth = 750 }
+		piety = -1000
+		wealth = -750
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (magic, beauty, healing)
+				5 = {
+					modifier = {
+						factor = 1.75
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					character_event = { id = daemon.221 }
+				}
+				#Slaanesh sends a daemon familiar
+				10 = {
+					modifier = { factor = 0 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.222 }
+				}
+				#Slaanesh sends a steed
+				10 = {
+					modifier = { factor = 0 has_artifact = slaanesh_steed }
+					character_event = { id = daemon.223 }
+				}
+				#Slaanesh gives favour (more than usual)
+				20 = { character_event = { id = daemon.224 } }
+				#Slaanesh makes you lustful
+				25 = {
+					modifier = { factor = 0 trait = lustful }
+					character_event = { id = daemon.225 }
+				}
+				#Slaanesh makes you insane
+				10 = { character_event = { id = daemon.226 } }
+				#Slaanesh sends a mutation
+				10 = { character_event = { id = daemon.227 } }
+				#Slaanesh doesn't answer
+				5 = { character_event = { id = daemon.228 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTCdaemon220
+		trigger = { piety = 750 wealth = 500 }
+		piety = -750
+		wealth = -500
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (magic, beauty, healing)
+				1 = {
+					modifier = {
+						factor = 1.75
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					character_event = { id = daemon.221 }
+				}
+				#Slaanesh sends a daemon familiar
+				4 = {
+					modifier = { factor = 0 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.222 }
+				}
+				#Slaanesh sends a steed
+				10 = {
+					modifier = { factor = 0 has_artifact = slaanesh_steed }
+					character_event = { id = daemon.223 }
+				}
+				#Slaanesh gives favour (more than usual)
+				15 = { character_event = { id = daemon.224 } }
+				#Slaanesh makes you lustful
+				25 = {
+					modifier = { factor = 0 trait = lustful }
+					character_event = { id = daemon.225 }
+				}
+				#Slaanesh makes you insane
+				15 = { character_event = { id = daemon.226 } }
+				#Slaanesh sends a mutation
+				10 = { character_event = { id = daemon.227 } }
+				#Slaanesh doesn't answer
+				15 = { character_event = { id = daemon.228 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTDdaemon220
+		trigger = { piety = 500 wealth = 250 }
+		piety = -500
+		wealth = -250
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (magic, beauty, healing)
+				1 = {
+					modifier = {
+						factor = 1.75
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					character_event = { id = daemon.221 }
+				}
+				#Slaanesh sends a daemon familiar
+				4 = {
+					modifier = { factor = 0 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.222 }
+				}
+				#Slaanesh sends a steed
+				5 = {
+					modifier = { factor = 0 has_artifact = slaanesh_steed }
+					character_event = { id = daemon.223 }
+				}
+				#Slaanesh gives favour (more than usual)
+				10 = { character_event = { id = daemon.224 } }
+				#Slaanesh makes you lustful
+				15 = {
+					modifier = { factor = 0 trait = lustful }
+					character_event = { id = daemon.225 }
+				}
+				#Slaanesh makes you insane
+				20 = { character_event = { id = daemon.226 } }
+				#Slaanesh sends a mutation
+				20 = { character_event = { id = daemon.227 } }
+				#Slaanesh doesn't answer
+				25 = { character_event = { id = daemon.228 } }
+			}
+		}
+	}
+}
+
+# daemon.221 Slaanesh grants a wish
+# Choose the lore of Slaanesh, beauty, or a body made whole.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.221
+	desc = EVTDESCdaemon221
+	picture = GFX_evt_slaanesh
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+		daemon_favour_slaanesh_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon221
+		trigger = {
+			NOR = {
+				trait = hedge_wizard
+				trait = mage_apprentice
+				has_character_modifier = magic_power_1
+				has_character_modifier = magic_power_2
+				has_character_modifier = magic_power_3
+				has_character_modifier = magic_power_4
+			}
+		}
+		add_trait = lore_slaanesh
+		if = {
+			limit = { has_character_flag = magic_potential_flag_1 }
+			clr_character_flag = magic_potential_flag_1
+			add_trait = magic_potential_1
+		}
+		if = {
+			limit = { has_character_flag = magic_potential_flag_2 }
+			clr_character_flag = magic_potential_flag_2
+			add_trait = magic_potential_2
+		}
+		if = {
+			limit = { has_character_flag = magic_potential_flag_3 }
+			clr_character_flag = magic_potential_flag_3
+			add_trait = magic_potential_3
+		}
+		if = {
+			limit = { has_character_flag = magic_potential_flag_4 }
+			clr_character_flag = magic_potential_flag_4
+			add_trait = magic_potential_4
+		}
+		if = {
+			limit = {
+				NOR = {
+					trait = magic_potential_1
+					trait = magic_potential_2
+					trait = magic_potential_3
+					trait = magic_potential_4
+					has_character_flag = magic_potential_flag_1
+					has_character_flag = magic_potential_flag_2
+					has_character_flag = magic_potential_flag_3
+					has_character_flag = magic_potential_flag_4
+				}
+			}
+			add_trait = magic_potential_2
+		}
+		magic_power_random_effect = yes
+		enable_magic_xp_effect = yes
+	}
+	option = {
+		name = EVTOPTBdaemon221
+		change_intrigue = 1
+		if = { limit = { trait = pretty } remove_trait = pretty add_trait = beautiful }
+		if = { limit = { trait = fair } remove_trait = fair add_trait = beautiful }
+		if = {
+			limit = {
+				NOR = {
+					trait = beautiful
+					trait = pretty
+					trait = fair
+					trait = plain
+					trait = ugly
+					trait = unsightly
+				}
+			}
+			add_trait = pretty
+		}
+		if = { limit = { trait = plain } remove_trait = plain add_trait = pretty }
+		if = { limit = { trait = ugly } remove_trait = ugly add_trait = fair }
+		if = { limit = { trait = unsightly } remove_trait = unsightly add_trait = fair }
+	}
+	option = {
+		name = EVTOPTCdaemon221
+		health = 5
+		if = { limit = { trait = wounded } remove_trait = wounded }
+		if = { limit = { trait = maimed } remove_trait = maimed }
+		if = { limit = { trait = blinded } remove_trait = blinded }
+		if = { limit = { trait = eunuch } remove_trait = eunuch }
+		if = { limit = { trait = incapable } remove_trait = incapable }
+		if = { limit = { trait = disfigured } remove_trait = disfigured }
+	}
+}
+
+# daemon.222 Slaanesh sends a Daemonette
+# A Daemonette joins the worshipper as a bound friend.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.222
+	desc = EVTDESCdaemon222
+	picture = GFX_evt_slaanesh
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+		daemon_favour_slaanesh_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon222
+		create_character = {
+			random_traits = yes
+			religion = slaanesh
+			culture = daemonette_slaanesh
+			female = no
+			age = 366
+			flag = special_marshal
+			trait = cruel
+			trait = deceitful
+			trait = slaanesh_demon
+			trait = slaanesh_daemonette
+			attributes = { diplomacy = 20 martial = 18 stewardship = 7 intrigue = 23 learning = 9 }
+		}
+		new_character = { create_daemonette_effect = yes add_friend = ROOT }
+		set_character_flag = daemon_summoner
+		prestige = 500
+	}
+}
+
+# daemon.223 A Steed of Slaanesh
+# One of Slaanesh's daemonic steeds comes to the worshipper.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.223
+	desc = EVTDESCdaemon223
+	picture = GFX_evt_slaanesh
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_slaanesh_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon223
+		add_artifact = slaanesh_steed
+		prestige = 250
+	}
+}
+
+# daemon.224 Slaanesh's favour
+# Piety, and half the time an incense burner of Slaanesh if they lack one.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.224
+	desc = EVTDESCdaemon224
+	picture = GFX_evt_slaanesh
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_minor_effect = yes
+		daemon_favour_slaanesh_effect = yes
+		add_offmap_currency = { offmap = slaanesh_warp amount = 250 }
+	}
+
+	option = {
+		name = EVTOPTAdaemon224
+		piety = 350
+		if = {
+			limit = { NOT = { has_artifact = slaanesh_incense_burner } }
+			random = { chance = 50 add_artifact = slaanesh_incense_burner }
+		}
+	}
+}
+
+# daemon.225 Slaanesh's lust
+# The worshipper becomes lustful.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.225
+	desc = EVTDESCdaemon225
+	picture = GFX_evt_slaanesh
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_slaanesh_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon225
+		add_trait = lustful
+		prestige = 50
+	}
+}
+
+# daemon.226 Slaanesh's madness
+# The worshipper takes a step towards madness.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.226
+	desc = EVTDESCdaemon226
+	picture = GFX_evt_slaanesh
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_slaanesh_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon226
+		hidden_tooltip = { character_event = { id = mutate.5 } } #lunacy
+	}
+}
+
+# daemon.227 Slaanesh's mark
+# The worshipper may mutate.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.227
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_slaanesh_effect = yes
+		custom_tooltip = { text = mutations_test_tt mutation_toughness_test_effect = yes }
+	}
+}
+
+# daemon.228 Slaanesh is silent
+# The offering is ignored.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.228
+	desc = EVTDESCdaemon228
+	picture = GFX_evt_slaanesh
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_offmap_currency = { offmap = slaanesh_warp amount = -250 }
+	}
+
+	option = {
+		name = EVTOPTAdaemon228
+		prestige = -50
+	}
+}
+
+###############################################################################
+# Offering to Tzeentch
+###############################################################################
+
+# daemon.230 Offering to Tzeentch
+# A Tzeentch worshipper burns piety and wealth on a pyre (decision). The
+# bigger the offering, the likelier a great reward.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.230
+	desc = EVTDESCdaemon230
+	picture = GFX_evt_tzeentch
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon230
+		trigger = { piety = 1250 wealth = 1000 }
+		piety = -1250
+		wealth = -1000
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (magic, intellect, more power)
+				9 = {
+					modifier = {
+						factor = 1.75
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					character_event = { id = daemon.231 }
+				}
+				#Tzeentch sends a daemon familiar
+				10 = {
+					modifier = { factor = 0 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.232 }
+				}
+				#Tzeentch gifts magic
+				15 = {
+					modifier = {
+						factor = 1.5
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					modifier = {
+						factor = 0
+						OR = {
+							trait = hedge_wizard
+							trait = mage_apprentice
+							has_character_modifier = magic_power_1
+							has_character_modifier = magic_power_2
+							has_character_modifier = magic_power_3
+							has_character_modifier = magic_power_4
+						}
+					}
+					character_event = { id = daemon.233 }
+				}
+				#Tzeentch gives favour (more than usual)
+				25 = { character_event = { id = daemon.234 } }
+				#Tzeentch makes you deceitful
+				25 = {
+					modifier = { factor = 0 trait = ambitious }
+					character_event = { id = daemon.235 }
+				}
+				#Tzeentch makes you insane
+				5 = { character_event = { id = daemon.236 } }
+				#Tzeentch sends a mutation
+				5 = { character_event = { id = daemon.237 } }
+				#Tzeentch doesn't answer
+				1 = { character_event = { id = daemon.238 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBdaemon230
+		trigger = { piety = 1000 wealth = 750 }
+		piety = -1000
+		wealth = -750
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (magic, intellect, more power)
+				5 = {
+					modifier = {
+						factor = 1.75
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					character_event = { id = daemon.231 }
+				}
+				#Tzeentch sends a daemon familiar
+				10 = {
+					modifier = { factor = 0 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.232 }
+				}
+				#Tzeentch gifts magic
+				10 = {
+					modifier = {
+						factor = 1.5
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					modifier = {
+						factor = 0
+						OR = {
+							trait = hedge_wizard
+							trait = mage_apprentice
+							has_character_modifier = magic_power_1
+							has_character_modifier = magic_power_2
+							has_character_modifier = magic_power_3
+							has_character_modifier = magic_power_4
+						}
+					}
+					character_event = { id = daemon.233 }
+				}
+				#Tzeentch gives favour (more than usual)
+				20 = { character_event = { id = daemon.234 } }
+				#Tzeentch makes you deceitful
+				25 = {
+					modifier = { factor = 0 trait = ambitious }
+					character_event = { id = daemon.235 }
+				}
+				#Tzeentch makes you insane
+				10 = { character_event = { id = daemon.236 } }
+				#Tzeentch sends a mutation
+				10 = { character_event = { id = daemon.237 } }
+				#Tzeentch doesn't answer
+				5 = { character_event = { id = daemon.238 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTCdaemon230
+		trigger = { piety = 750 wealth = 500 }
+		piety = -750
+		wealth = -500
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (magic, intellect, more power)
+				1 = {
+					modifier = {
+						factor = 1.75
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					character_event = { id = daemon.231 }
+				}
+				#Tzeentch sends a daemon familiar
+				4 = {
+					modifier = { factor = 0 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.232 }
+				}
+				#Tzeentch gifts magic
+				10 = {
+					modifier = {
+						factor = 1.5
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					modifier = {
+						factor = 0
+						OR = {
+							trait = hedge_wizard
+							trait = mage_apprentice
+							has_character_modifier = magic_power_1
+							has_character_modifier = magic_power_2
+							has_character_modifier = magic_power_3
+							has_character_modifier = magic_power_4
+						}
+					}
+					character_event = { id = daemon.233 }
+				}
+				#Tzeentch gives favour (more than usual)
+				15 = { character_event = { id = daemon.234 } }
+				#Tzeentch makes you deceitful
+				25 = {
+					modifier = { factor = 0 trait = ambitious }
+					character_event = { id = daemon.235 }
+				}
+				#Tzeentch makes you insane
+				15 = { character_event = { id = daemon.236 } }
+				#Tzeentch sends a mutation
+				10 = { character_event = { id = daemon.237 } }
+				#Tzeentch doesn't answer
+				15 = { character_event = { id = daemon.238 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTDdaemon230
+		trigger = { piety = 500 wealth = 250 }
+		piety = -500
+		wealth = -250
+		hidden_tooltip = {
+			random_list = {
+				#Prize of your chosing (magic, intellect, more power)
+				1 = {
+					modifier = {
+						factor = 1.75
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					character_event = { id = daemon.231 }
+				}
+				#Tzeentch sends a daemon familiar
+				4 = {
+					modifier = { factor = 0 any_friend = { is_daemon_race_trigger = yes } }
+					character_event = { id = daemon.232 }
+				}
+				#Tzeentch gifts magic
+				5 = {
+					modifier = {
+						factor = 1.5
+						OR = {
+							trait = magic_potential_1
+							trait = magic_potential_2
+							trait = magic_potential_3
+							trait = magic_potential_4
+							has_character_flag = magic_potential_flag_1
+							has_character_flag = magic_potential_flag_2
+							has_character_flag = magic_potential_flag_3
+							has_character_flag = magic_potential_flag_4
+						}
+					}
+					modifier = {
+						factor = 0
+						OR = {
+							trait = hedge_wizard
+							trait = mage_apprentice
+							has_character_modifier = magic_power_1
+							has_character_modifier = magic_power_2
+							has_character_modifier = magic_power_3
+							has_character_modifier = magic_power_4
+						}
+					}
+					character_event = { id = daemon.233 }
+				}
+				#Tzeentch gives favour (more than usual)
+				10 = { character_event = { id = daemon.234 } }
+				#Tzeentch makes you deceitful
+				15 = {
+					modifier = { factor = 0 trait = ambitious }
+					character_event = { id = daemon.235 }
+				}
+				#Tzeentch makes you insane
+				20 = { character_event = { id = daemon.236 } }
+				#Tzeentch sends a mutation
+				20 = { character_event = { id = daemon.237 } }
+				#Tzeentch doesn't answer
+				25 = { character_event = { id = daemon.238 } }
+			}
+		}
+	}
+}
+
+# daemon.231 Tzeentch grants a wish
+# Choose the lore of Tzeentch, a sharper mind, or greater magical power.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.231
+	desc = EVTDESCdaemon231
+	picture = GFX_evt_tzeentch
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+		daemon_favour_tzeentch_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon231
+		trigger = {
+			NOR = {
+				trait = hedge_wizard
+				trait = mage_apprentice
+				has_character_modifier = magic_power_1
+				has_character_modifier = magic_power_2
+				has_character_modifier = magic_power_3
+				has_character_modifier = magic_power_4
+			}
+		}
+		add_trait = lore_tzeentch
+		if = {
+			limit = { has_character_flag = magic_potential_flag_1 }
+			clr_character_flag = magic_potential_flag_1
+			add_trait = magic_potential_1
+		}
+		if = {
+			limit = { has_character_flag = magic_potential_flag_2 }
+			clr_character_flag = magic_potential_flag_2
+			add_trait = magic_potential_2
+		}
+		if = {
+			limit = { has_character_flag = magic_potential_flag_3 }
+			clr_character_flag = magic_potential_flag_3
+			add_trait = magic_potential_3
+		}
+		if = {
+			limit = { has_character_flag = magic_potential_flag_4 }
+			clr_character_flag = magic_potential_flag_4
+			add_trait = magic_potential_4
+		}
+		if = {
+			limit = {
+				NOR = {
+					trait = magic_potential_1
+					trait = magic_potential_2
+					trait = magic_potential_3
+					trait = magic_potential_4
+					has_character_flag = magic_potential_flag_1
+					has_character_flag = magic_potential_flag_2
+					has_character_flag = magic_potential_flag_3
+					has_character_flag = magic_potential_flag_4
+				}
+			}
+			add_trait = magic_potential_2
+		}
+		magic_lvl_increase_effect = yes
+		enable_magic_xp_effect = yes
+	}
+	option = {
+		name = EVTOPTBdaemon231
+		change_intrigue = 1
+		if = { limit = { trait = brilliant } remove_trait = brilliant add_trait = genius }
+		if = { limit = { trait = quick } remove_trait = quick add_trait = genius }
+		if = { limit = { trait = smart } remove_trait = smart add_trait = genius }
+		if = { limit = { trait = bright } remove_trait = bright add_trait = brilliant }
+		if = {
+			limit = {
+				NOR = {
+					trait = genius
+					trait = brilliant
+					trait = quick
+					trait = smart
+					trait = bright
+					trait = dim
+					trait = dumb
+					trait = slow
+					trait = idiot
+					trait = imbecile
+				}
+			}
+			add_trait = brilliant
+		}
+		if = { limit = { trait = dim } remove_trait = dim add_trait = quick }
+		if = { limit = { trait = dumb } remove_trait = dumb add_trait = quick }
+		if = { limit = { trait = slow } remove_trait = slow add_trait = quick }
+		if = { limit = { trait = idiot } remove_trait = idiot add_trait = quick }
+		if = { limit = { trait = imbecile } remove_trait = imbecile add_trait = bright }
+	}
+	option = {
+		name = EVTOPTCdaemon231
+		change_learning = 1
+		magic_power_random_effect = yes
+		enable_magic_xp_effect = yes
+	}
+}
+
+# daemon.232 Tzeentch sends a Flamer
+# A Flamer joins the worshipper as a bound friend.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.232
+	desc = EVTDESCdaemon232
+	picture = GFX_evt_tzeentch
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+		daemon_favour_tzeentch_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon232
+		create_character = {
+			random_traits = yes
+			religion = tzeentch
+			culture = flamer_tzeentch
+			female = no
+			age = 999
+			flag = special_marshal
+			trait = tzeentch_demon
+			trait = tzeentch_flamer
+			trait = ambitious
+			trait = proud
+			attributes = { diplomacy = 2 martial = 13 stewardship = 2 intrigue = 26 learning = 21 }
+		}
+		new_character = { create_flamer_effect = yes add_friend = ROOT }
+		set_character_flag = daemon_summoner
+		prestige = 500
+	}
+}
+
+# daemon.233 Tzeentch's sorcery
+# The worshipper is gifted the lore of Tzeentch and magical power.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.233
+	desc = EVTDESCdaemon233
+	picture = GFX_evt_tzeentch
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_tzeentch_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon233
+		add_trait = lore_tzeentch
+		if = {
+			limit = { has_character_flag = magic_potential_flag_1 }
+			clr_character_flag = magic_potential_flag_1
+			add_trait = magic_potential_1
+		}
+		if = {
+			limit = { has_character_flag = magic_potential_flag_2 }
+			clr_character_flag = magic_potential_flag_2
+			add_trait = magic_potential_2
+		}
+		if = {
+			limit = { has_character_flag = magic_potential_flag_3 }
+			clr_character_flag = magic_potential_flag_3
+			add_trait = magic_potential_3
+		}
+		if = {
+			limit = { has_character_flag = magic_potential_flag_4 }
+			clr_character_flag = magic_potential_flag_4
+			add_trait = magic_potential_4
+		}
+		if = {
+			limit = {
+				NOR = {
+					trait = magic_potential_1
+					trait = magic_potential_2
+					trait = magic_potential_3
+					trait = magic_potential_4
+					has_character_flag = magic_potential_flag_1
+					has_character_flag = magic_potential_flag_2
+					has_character_flag = magic_potential_flag_3
+					has_character_flag = magic_potential_flag_4
+				}
+			}
+			add_trait = magic_potential_2
+		}
+		magic_power_random_effect = yes
+		enable_magic_xp_effect = yes
+		prestige = 250
+	}
+}
+
+# daemon.234 Tzeentch's favour
+# Piety, and half the time a helm of Tzeentch's eyes if they lack one.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.234
+	desc = EVTDESCdaemon234
+	picture = GFX_evt_tzeentch
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_doom_progress_minor_effect = yes
+		daemon_favour_tzeentch_effect = yes
+		add_offmap_currency = { offmap = tzeentch_warp amount = 250 }
+	}
+
+	option = {
+		name = EVTOPTAdaemon234
+		piety = 350
+		if = {
+			limit = { NOT = { has_artifact = chaos_artifact_tzeentch_eyes_helm } }
+			random = { chance = 50 add_artifact = chaos_artifact_tzeentch_eyes_helm }
+		}
+	}
+}
+
+# daemon.235 Tzeentch's ambition
+# The worshipper becomes ambitious.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.235
+	desc = EVTDESCdaemon235
+	picture = GFX_evt_tzeentch
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_tzeentch_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon235
+		add_trait = ambitious
+		prestige = 50
+	}
+}
+
+# daemon.236 Tzeentch's madness
+# The worshipper takes a step towards madness.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.236
+	desc = EVTDESCdaemon236
+	picture = GFX_evt_tzeentch
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_tzeentch_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAdaemon236
+		hidden_tooltip = { character_event = { id = mutate.5 } } #lunacy
+	}
+}
+
+# daemon.237 Tzeentch's mark
+# The worshipper may mutate.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.237
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		daemon_favour_tzeentch_effect = yes
+		custom_tooltip = { text = mutations_test_tt mutation_toughness_test_effect = yes }
+	}
+}
+
+# daemon.238 Tzeentch is silent
+# The offering is ignored.
+# Scope: ROOT is the worshipper.
+character_event = {
+	id = daemon.238
+	desc = EVTDESCdaemon238
+	picture = "GFX_evt_tzeentch"
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_offmap_currency = { offmap = tzeentch_warp amount = -250 }
+	}
+
+	option = {
+		name = EVTOPTAdaemon238
+		prestige = -50
+	}
+}
+
+###############################################################################
+# Other Chaos events
+###############################################################################
+
+# daemon.250 The gods' gaze in battle
+# A Chaos-worshipping human or elf in command in the Wastes wins the gods'
+# notice: prestige, piety, and power for their god (for Chaos Undivided, the
+# god their nature suits best). Likelier for unlanded warriors, the pious and
+# those who fit their god.
+# Scope: ROOT is the commander.
+character_event = {
+	id = daemon.250
+	desc = EVTDESCdaemon250
+	picture = "GFX_evt_chosen_kurgan"
+	religion_group = chaos_gods_group
+	capable_only = yes
+
+	is_triggered_only = yes # on_combat_pulse
+
+	trigger = {
+		piety = 50
+		OR = { trait = creature_human trait = creature_elf }
+		NOT = { has_nickname = nick_the_forsaken }
+		location = { region = world_chaos_wastes }
+		in_command = yes
+	}
+
+	weight_multiplier = {
+		days = 1
+
+		modifier = { factor = 5 is_ruler = no }
+		modifier = { factor = 2 piety = 500 }
+		modifier = { factor = 0.5 ai = no }
+		#KHORNE
+		modifier = { factor = 1.95 trait = strong OR = { religion = khorne religion = chaos } }
+		modifier = { factor = 1.75 trait = tough OR = { religion = khorne religion = chaos } }
+		modifier = { factor = 1.5 trait = hardy OR = { religion = khorne religion = chaos } }
+		modifier = { factor = 0.75 trait = soft OR = { religion = khorne religion = chaos } }
+		modifier = { factor = 0.65 trait = fragile OR = { religion = khorne religion = chaos } }
+		modifier = { factor = 0.5 trait = weak OR = { religion = khorne religion = chaos } }
+		modifier = { factor = 1.75 trait = duelist OR = { religion = khorne religion = chaos } }
+		modifier = {
+			factor = 2
+			trait = khorne_berserker
+			OR = { religion = khorne religion = chaos }
+		}
+		modifier = { factor = 1.5 trait = brave OR = { religion = khorne religion = chaos } }
+		#NURGLE
+		modifier = { factor = 1.75 trait = kind OR = { religion = nurgle religion = chaos } }
+		modifier = { factor = 1.75 trait = charitable OR = { religion = nurgle religion = chaos } }
+		modifier = { factor = 1.75 trait = content OR = { religion = nurgle religion = chaos } }
+		modifier = { factor = 1.5 trait = humble OR = { religion = nurgle religion = chaos } }
+		#SLAANESH
+		modifier = { factor = 1.5 trait = lustful OR = { religion = slaanesh religion = chaos } }
+		modifier = { factor = 1.5 trait = cruel OR = { religion = slaanesh religion = chaos } }
+		modifier = { factor = 1.5 trait = gluttonous OR = { religion = slaanesh religion = chaos } }
+		modifier = { factor = 1.5 trait = greedy OR = { religion = slaanesh religion = chaos } }
+		modifier = { factor = 1.75 trait = beautiful OR = { religion = slaanesh religion = chaos } }
+		modifier = { factor = 1.5 trait = pretty OR = { religion = slaanesh religion = chaos } }
+		modifier = { factor = 1.25 trait = fair OR = { religion = slaanesh religion = chaos } }
+		modifier = { factor = 0.5 trait = plain OR = { religion = slaanesh religion = chaos } }
+		modifier = { factor = 1.5 trait = ugly OR = { religion = slaanesh religion = chaos } }
+		modifier = { factor = 1.75 trait = unsightly OR = { religion = slaanesh religion = chaos } }
+		modifier = { factor = 1.95 trait = monstrous OR = { religion = slaanesh religion = chaos } }
+		modifier = { factor = 1.5 trait = disfigured OR = { religion = slaanesh religion = chaos } }
+		#TZEENTCH
+		modifier = { factor = 1.75 trait = ambitious OR = { religion = tzeentch religion = chaos } }
+		modifier = { factor = 1.5 trait = deceitful OR = { religion = tzeentch religion = chaos } }
+		modifier = { factor = 1.75 trait = genius OR = { religion = tzeentch religion = chaos } }
+		modifier = { factor = 1.65 trait = brilliant OR = { religion = tzeentch religion = chaos } }
+		modifier = { factor = 1.5 trait = quick OR = { religion = tzeentch religion = chaos } }
+		modifier = { factor = 1.45 trait = smart OR = { religion = tzeentch religion = chaos } }
+		modifier = { factor = 1.35 trait = bright OR = { religion = tzeentch religion = chaos } }
+		modifier = { factor = 0.95 trait = dim OR = { religion = tzeentch religion = chaos } }
+		modifier = { factor = 0.85 trait = dumb OR = { religion = tzeentch religion = chaos } }
+		modifier = { factor = 0.75 trait = slow OR = { religion = tzeentch religion = chaos } }
+		modifier = { factor = 0.65 trait = idiot OR = { religion = tzeentch religion = chaos } }
+		modifier = { factor = 0.5 trait = imbecile OR = { religion = tzeentch religion = chaos } }
+		modifier = {
+			factor = 2.5
+			any_war = {
+				attacker = { OR = { top_liege = { character = ROOT } character = ROOT } }
+				using_cb = unholy_raid
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemon250
+		prestige = 150
+		piety = 150
+		hidden_tooltip = {
+			if = {
+				limit = { religion = chaos }
+				random_list = {
+					#Khorne
+					25 = {
+						modifier = {
+							factor = 10
+							OR = {
+								trait = strong
+								trait = tough
+								trait = hardy
+								trait = duelist
+								trait = brave
+								trait = khorne_berserker
+							}
+						}
+						add_offmap_currency = { offmap = khorne_warp amount = 250 }
+					}
+					#Nurgle
+					25 = {
+						modifier = {
+							factor = 10
+							OR = {
+								trait = kind
+								trait = charitable
+								trait = humble
+								trait = content
+								is_ill = yes
+							}
+						}
+						add_offmap_currency = { offmap = nurgle_warp amount = 250 }
+					}
+					#Tzeentch
+					25 = {
+						modifier = {
+							factor = 10
+							OR = {
+								trait = ambitious
+								trait = deceitful
+								trait = genius
+								trait = quick
+							}
+						}
+						add_offmap_currency = { offmap = tzeentch_warp amount = 250 }
+					}
+					#Slaanesh
+					25 = {
+						modifier = {
+							factor = 10
+							OR = {
+								trait = lustful
+								trait = cruel
+								trait = gluttonous
+								trait = greedy
+								trait = beautiful
+								trait = pretty
+								trait = fair
+							}
+						}
+						add_offmap_currency = { offmap = slaanesh_warp amount = 250 }
+					}
+				}
+			}
+			if = {
+				limit = { religion = tzeentch }
+				add_offmap_currency = { offmap = tzeentch_warp amount = 250 }
+			}
+			if = {
+				limit = { religion = slaanesh }
+				add_offmap_currency = { offmap = slaanesh_warp amount = 250 }
+			}
+			if = {
+				limit = { religion = khorne }
+				add_offmap_currency = { offmap = khorne_warp amount = 250 }
+			}
+			if = {
+				limit = { religion = nurgle }
+				add_offmap_currency = { offmap = nurgle_warp amount = 250 }
+			}
+		}
+	}
+}
+
+# daemon.251 Feeding on a soul
+# A daemon devours a prisoner's soul (decision). Vassals and courtiers of its
+# faith are cowed.
+# Scope: ROOT is the daemon, FROM the prisoner.
+character_event = {
+	id = daemon.251
+	desc = EVTDESCdaemon251
+	picture = "GFX_evt_demon_fighting"
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon251
+		any_vassal = {
+			limit = {
+				NOT = { trait = cruel }
+				religion = ROOT
+				FROM = { is_vassal_or_below_of = ROOT higher_tier_than = BARON }
+			}
+			opinion = { modifier = opinion_scared_into_submission who = ROOT }
+		}
+		any_courtier = {
+			limit = { NOT = { trait = cruel } religion = ROOT }
+			opinion = { modifier = opinion_scared_into_submission who = ROOT }
+		}
+	}
+}
+
+# daemon.252 Your soul is devoured
+# The prisoner's soul is eaten.
+# Scope: ROOT is the prisoner.
+character_event = {
+	id = daemon.252
+	desc = EVTDESCdaemon252
+	picture = "GFX_evt_demon_fighting"
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon252
+	}
+}
+
+# daemon.253 Daemonic reinforcements
+# A daemon prince calls a host of 2500 daemons from the Warp (decision). It
+# returns to the Warp in one to three years (daemon.254).
+# Scope: ROOT is the daemon prince.
+character_event = {
+	id = daemon.253
+	desc = EVTDESCdaemon253
+	picture = "GFX_evt_daemons"
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon253
+		hidden_tooltip = {
+			ROOT = { character_event = { id = daemon.254 days = 365 random = 730 } }
+		}
+		location = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					owner = ROOT
+					earmark = summoned_daemon_host
+					troops = { daemonic_host = { 2500 2500 } }
+					cannot_inherit = yes
+					attrition = 0.5
+				}
+			} #endroot
+		} #endlocation
+	}
+}
+
+# daemon.254 The host disbands
+# The summoned host returns to the Warp.
+# Scope: ROOT is the daemon prince.
+character_event = {
+	id = daemon.254
+	desc = EVTDESCdaemon254
+	notification = yes
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	immediate = {
+		disband_event_forces = summoned_daemon_host
+	}
+
+	option = { }
+}
+
+# daemon.255 An adventurer with a daemonic host
+# Unused: would give an AI adventurer a landless duchy, armies and a daemonic
+# host to claim a duchy with.
+# Scope: ROOT is the adventurer.
+character_event = {
+	id = daemon.255
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		liege = {
+			capital_scope = {
+				location = {
+					owner = {
+						top_liege = {
+							ROOT = {
+								set_defacto_liege = ROOT
+								create_title = {
+									tier = DUKE
+									landless = yes
+									temporary = yes
+									culture = ROOT
+									name = "CLAIMANT_ADVENTURE"
+									holder = ROOT
+								}
+
+								set_character_flag = duchy_adventurer
+
+								spawn_unit = {
+									province = PREVPREVPREVPREV
+									home = PREVPREVPREVPREV
+									owner = THIS
+									match_character = PREV
+									match_mult = 0.33
+									match_min = 500
+									match_max = 10000
+									attrition = 0.25
+								}
+								spawn_unit = {
+									province = PREVPREVPREVPREV
+									home = PREVPREVPREVPREV
+									owner = THIS
+									match_character = PREV
+									match_mult = 0.33
+									match_min = 500
+									match_max = 10000
+									attrition = 0.25
+								}
+								spawn_unit = {
+									province = PREVPREVPREVPREV
+									home = PREVPREVPREVPREV
+									owner = THIS
+									match_character = PREV
+									match_mult = 0.33
+									match_min = 500
+									match_max = 10000
+									attrition = 0.25
+								}
+								spawn_unit = {
+									province = PREVPREVPREVPREV
+									home = PREVPREVPREVPREV
+									owner = THIS
+									match_character = PREV
+									match_mult = 0.33
+									match_min = 500
+									match_max = 10000
+									attrition = 0.25
+								}
+								spawn_unit = {
+									province = PREVPREVPREVPREV
+									home = PREVPREVPREVPREV
+									owner = THIS
+									match_character = PREV
+									match_mult = 0.33
+									match_min = 500
+									match_max = 10000
+									attrition = 0.25
+								}
+								spawn_unit = {
+									province = PREVPREVPREVPREV
+									home = PREVPREVPREVPREV
+									owner = THIS
+									match_character = PREV
+									match_mult = 0.33
+									match_min = 500
+									match_max = 10000
+									attrition = 0.25
+								}
+								spawn_unit = {
+									province = PREVPREVPREVPREV
+									home = PREVPREVPREVPREV
+									owner = THIS
+									attrition = 0.25
+									cannot_inherit = yes
+									earmark = demonic_host
+									troops = { daemonic_host = { 10000 10000 } }
+								}
+								war = {
+									target = PREV
+									casus_belli = duchy_adventure
+									thirdparty_title = PREVPREVPREV
+									tier = DUKE
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# daemon.256 Becoming a beastman warherd
+# A ruler takes the warherd decision: their realm becomes a beastman warherd
+# and settled holdings outside Zanbaijin and the holy sites are razed.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = daemon.256
+	title = EVTTITLEdaemon256
+	desc = EVTDESCdaemon256
+	picture = GFX_evt_beastmen_mist
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_variable = { which = popToAddCount value = 1000 }
+		set_variable = { which = moneyToAddCount value = 0 }
+		any_realm_province = {
+			any_province_holding = {
+				if = {
+					limit = { holding_type = tribal }
+					ROOT = { change_variable = { which = moneyToAddCount value = 10 } }
+				}
+				else = { ROOT = { change_variable = { which = moneyToAddCount value = 30 } } }
+				ROOT = { change_variable = { which = popToAddCount value = 1000 } }
+			}
+		}
+	}
+	#Convert Holdings and Government
+	option = {
+		name = EVTOPTAdaemon256
+		set_government_type = beastman_government
+		custom_tooltip = {
+			text = convert_to_warherd
+			any_realm_province = {
+				limit = {
+					NOR = {
+						county = {
+							#The main city of the wastes
+							title = c_zanbaijin
+						}
+						OR = {
+							any_province_holding = { is_holy_site = chaos }
+							any_province_holding = { is_holy_site = tzeentch }
+							any_province_holding = { is_holy_site = nurgle }
+							any_province_holding = { is_holy_site = slaanesh }
+							any_province_holding = { is_holy_site = khorne }
+							any_province_holding = { is_holy_site = norscan_gods }
+						}
+					}
+				}
+				population = 1000
+				any_province_holding = {
+					if = { limit = { NOT = { holding_type = nomad } } destroy_settlement = THIS }
+				}
+			}
+		}
+		population = popToAddCount
+		wealth = moneyToAddCount
+		hidden_tooltip = {
+			capital_holding = { add_building = no_beastman_herdstone }
+			set_variable = { which = popToAddCount value = 0 }
+			set_variable = { which = moneyToAddCount value = 0 }
+		}
+		clr_character_flag = converted_to_warherd
+	}
+	#Nevermind
+	option = {
+		name = EVTOPTBdaemon256
+		trigger = { ai = no }
+		clr_character_flag = converted_to_warherd
+	}
+}
+
+# daemon.257 The gods will not let their champion rest
+# Every two years a ruling Everchosen or Chaos champion, chosen or prince
+# loses incapacity.
+# Scope: ROOT is the champion.
+character_event = {
+	id = daemon.257
+	desc = EVTDESCdaemon257
+	picture = "GFX_evt_nurgle"
+	is_triggered_only = yes # on_bi_yearly_pulse
+
+	only_playable = yes
+
+	trigger = {
+		trait = incapable
+		OR = { trait = everchosen is_chaos_champion_chosen_or_prince_trigger = yes }
+	}
+
+	immediate = {
+		remove_trait = incapable
+	}
+
+	option = {
+		name = EXCELLENT
+	}
+}
+
+###############################################################################
+# 260-262 Chaos sorcery
+# (came from events/BR_chaos_magic_events.txt, namespace "chaosmagic", in the
+# 2026 events refactor; the awakening was never fired before)
+###############################################################################
+
+# 260 The gift of sorcery
+# A gifted ruler who worships the Dark Gods, but not Khorne, who despises
+# sorcerers, may pay 100 gold to build a laboratory and take up the Dark Arts.
+# Their magic potential awakens and they learn the lore of their god (an
+# Undivided worshipper gets the lore of Tzeentch, Nurgle or Slaanesh). Their
+# parents and their Chaos top liege hear of it.
+# Scope: ROOT = the ruler.
+character_event = {
+	id = daemon.260
+	title = MAGIC
+	desc = EVTDESCdaemon260
+	picture = GFX_evt_mage_lore_tzeentch
+
+	is_triggered_only = yes # five-year list daemon_sorcery
+	only_rulers = yes
+	min_age = 16
+	religion_group = chaos_gods_group
+
+	trigger = {
+		is_landed = yes
+		open_follower_of_any_chaos_gods = yes
+		follower_of_khorne = no
+		piety = 1500
+		wealth = 100
+		NOR = {
+			trait = hedge_wizard
+			trait = creature_beastman
+			trait = lore_tzeentch
+			trait = lore_nurgle
+			trait = lore_slaanesh
+			has_character_modifier = magic_power_1
+			has_character_modifier = magic_power_2
+			has_character_modifier = magic_power_3
+			has_character_modifier = magic_power_4
+			has_character_flag = refused_dark
+		}
+		OR = {
+			trait = genius
+			trait = elusive_shadow
+			trait = brilliant
+			trait = bright
+			trait = magic_potential_1
+			trait = magic_potential_2
+			trait = magic_potential_3
+			trait = magic_potential_4
+			has_character_flag = magic_potential_flag_1
+			has_character_flag = magic_potential_flag_2
+			has_character_flag = magic_potential_flag_3
+			has_character_flag = magic_potential_flag_4
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemon260 # Build a lab
+		wealth = -100
+		if = {
+			limit = { has_character_flag = magic_potential_flag_4 }
+			add_trait = magic_potential_4
+		}
+		else_if = {
+			limit = { has_character_flag = magic_potential_flag_3 }
+			add_trait = magic_potential_3
+		}
+		else_if = {
+			limit = { has_character_flag = magic_potential_flag_2 }
+			add_trait = magic_potential_2
+		}
+		else_if = {
+			limit = { has_character_flag = magic_potential_flag_1 }
+			add_trait = magic_potential_1
+		}
+		clr_character_flag = magic_potential_flag_1
+		clr_character_flag = magic_potential_flag_2
+		clr_character_flag = magic_potential_flag_3
+		clr_character_flag = magic_potential_flag_4
+		if = { limit = { open_follower_of_tzeentch = yes } add_trait = lore_tzeentch }
+		else_if = { limit = { open_follower_of_nurgle = yes } add_trait = lore_nurgle }
+		else_if = { limit = { open_follower_of_slaanesh = yes } add_trait = lore_slaanesh }
+		else = {
+			random_list = {
+				34 = { add_trait = lore_tzeentch }
+				33 = { add_trait = lore_nurgle }
+				33 = { add_trait = lore_slaanesh }
+			}
+		}
+		magic_power_random_effect = yes
+		enable_magic_xp_effect = yes
+		top_liege = {
+			if = {
+				limit = {
+					NOT = { character = ROOT }
+					religion_group = chaos_gods_group
+					NOT = { has_character_flag = chaosmagic2 }
+				}
+				character_event = { id = daemon.262 days = 7 }
+			}
+		}
+		father = { character_event = { id = daemon.261 } }
+		mother = { character_event = { id = daemon.261 } }
+	}
+	option = {
+		name = EVTOPTBdaemon260 # Refuse
+		trigger = { ai = no }
+		set_character_flag = refused_dark
+	}
+}
+
+# 261 A sorcerer in the family
+# Scope: ROOT = a parent, FROM = the new sorcerer.
+character_event = {
+	id = daemon.261
+	title = MAGIC
+	desc = EVTDESCdaemon261
+	picture = GFX_evt_tzeentch
+
+	is_triggered_only = yes
+	min_age = 16
+
+	option = {
+		name = EVTOPTAdaemon261
+		prestige = 200
+	}
+}
+
+# 262 A sorcerer among the vassals
+# The Chaos top liege hears of it, and may ask not to hear of it again.
+# Scope: ROOT = the top liege, FROM = the new sorcerer.
+character_event = {
+	id = daemon.262
+	title = MAGIC
+	desc = EVTDESCdaemon262
+	picture = GFX_evt_tzeentch
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemon262 # Pleased
+	}
+	option = {
+		name = EVTOPTBdaemon262 # Do not bother me
+		set_character_flag = chaosmagic2
+	}
+}

@@ -1,0 +1,2373 @@
+###############################################################################
+# Chaos flavour events (this file also holds the Everchosen events, namespace
+# undivided, further down; they came from DR_chaos_undivided_events.txt and,
+# for the path to the mantle, BR_chaos_events.txt)
+# Namespace: chaosfl (was "schaosfl" before the 2026 events refactor)
+# Faction: Chaos
+#
+# Gifts and trials of the Chaos gods outside the cults: Khorne's blood
+# tournament, where a lord's warriors fight to the death until one champion
+# remains; the price Tzeentch asks for a daemon host; the diseases a servant
+# of Nurgle bestows; the ascension of a daemon prince; and the doom that
+# lifts when a chosen of Chaos dies.
+#
+# Khorne's blood tournament      chaosfl.1 - chaosfl.23
+# Tzeentch's price               chaosfl.30 - chaosfl.31
+# Nurgle's gifts                 chaosfl.40 - chaosfl.44
+# Daemon princes                 chaosfl.50
+# Doom                           chaosfl.60
+#
+# Decisions in wh_chaos_decisions.txt start the tournament (chaosfl.1 and
+# chaosfl.2), Tzeentch's sacrifice (chaosfl.30 or 31), Nurgle's gift
+# (chaosfl.40) and every daemon prince ascension (chaosfl.50).
+# send_duel_result_tournament_effect in wh_scripted_effects.txt fires the bout
+# results (chaosfl.12). common/on_actions/wh_on_actions.txt on_death fires
+# chaosfl.60.
+# Scripted effects: wh_chaosfl_effects.txt
+# Artifacts: common/artifacts/27_artifacts_chaosfl.txt
+# Loc: localisation/00_WHG_chaos_undivided_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = chaosfl
+
+###############################################################################
+# Khorne's blood tournament
+###############################################################################
+
+# chaosfl.1 The challenge is issued
+# The host's call goes out; the tournament starts in 10 to 20 days
+# (chaosfl.5).
+# Scope: ROOT is the host.
+character_event = {
+	id = chaosfl.1
+	desc = EVTDESCchaosfl1
+	picture = GFX_evt_chaos_march
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl1
+		hidden_effect = { long_character_event = { id = chaosfl.5 days = 10 random = 10 } }
+	}
+}
+
+# chaosfl.2 The challenge
+# A Khornate vassal or courtier is called to fight. Accepting pleases Khorne
+# and tells the host (chaosfl.3); refusing angers him (chaosfl.4).
+# Scope: ROOT is the invited warrior, FROM the host.
+letter_event = {
+	id = chaosfl.2
+	desc = EVTDESCchaosfl2
+
+	is_triggered_only = yes
+
+	option = { # I'll rip your heart out
+		name = EVTOPTAchaosfl2
+		add_offmap_currency = { offmap = khorne_warp value = 75 }
+		set_character_flag = khornetournament_participant
+		hidden_effect = { FROM = { letter_event = { id = chaosfl.3 days = 1 random = 1 } } }
+		ai_chance = { factor = 70 }
+	}
+	option = { # Not worthy of my blade
+		name = EVTOPTBchaosfl2
+		add_offmap_currency = { offmap = khorne_warp value = -50 }
+		hidden_effect = { FROM = { letter_event = { id = chaosfl.4 days = 1 random = 1 } } }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 0.5 trait = ambitious }
+			modifier = { factor = 0.5 trait = brave }
+			modifier = { factor = 0.75 trait = wroth }
+			modifier = { factor = 0.75 trait = proud }
+			modifier = { factor = 2 trait = wounded }
+			modifier = { factor = 2.5 trait = maimed }
+			modifier = { factor = 2.5 trait = blinded }
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 0.5 trait = champion_khorne }
+			modifier = { factor = 0.15 trait = chosen_khorne }
+			modifier = { factor = 0 trait = prince_khorne }
+			modifier = { # Few have answered yet: harder to say no
+				factor = 0.25
+				NOT = { FROM = { check_variable = { which = "khtournament_player" value = 3 } } }
+			}
+		}
+	}
+}
+
+# chaosfl.3 A challenger answers
+# Counts the warrior in.
+# Scope: ROOT is the host, FROM the warrior.
+letter_event = {
+	id = chaosfl.3
+	desc = EVTDESCchaosfl3
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl3
+		hidden_effect = { change_variable = { which = "khtournament_player" value = 1 } }
+	}
+}
+
+# chaosfl.4 A coward's answer
+# Notification.
+# Scope: ROOT is the host, FROM the warrior.
+letter_event = {
+	id = chaosfl.4
+	desc = EVTDESCchaosfl4
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl4
+	}
+}
+
+# chaosfl.5 The plain of skulls
+# With at least three challengers the tournament begins: everyone is called
+# (chaosfl.6) and the host fights first (chaosfl.7). With fewer it is called
+# off, at a cost in prestige and Khorne's favour (chaosfl.16).
+# Scope: ROOT is the host.
+long_character_event = {
+	id = chaosfl.5
+	picture = GFX_evt_chaos_champions
+
+	desc = {
+		trigger = { check_variable = { which = "khtournament_player" value = 3 } }
+		text = EVTDESCchaosfl5
+	}
+	desc = {
+		trigger = { NOT = { check_variable = { which = "khtournament_player" value = 3 } } }
+		text = EVTDESCchaosfl5b
+	}
+
+	is_triggered_only = yes
+
+	option = { # Blood and skulls!
+		name = EVTOPTAchaosfl5
+		trigger = { check_variable = { which = "khtournament_player" value = 3 } }
+		add_trait = questing
+		add_offmap_currency = { offmap = khorne_warp value = 50 }
+		hidden_effect = {
+			set_variable = { which = "khtournament_player" value = 0 }
+			any_realm_character = {
+				limit = {
+					NOT = { has_character_flag = kh_tournament_host }
+					has_character_flag = khornetournament_participant
+				}
+				long_character_event = { id = chaosfl.6 }
+			}
+			character_event = { id = chaosfl.7 }
+		}
+	}
+	option = { # A waste of time
+		name = EVTOPTBchaosfl5
+		trigger = { NOT = { check_variable = { which = "khtournament_player" value = 3 } } }
+		prestige = -250
+		add_offmap_currency = { offmap = khorne_warp value = -25 }
+		hidden_effect = {
+			set_variable = { which = "khtournament_player" value = 0 }
+			character_event = { id = chaosfl.17 }
+			any_realm_character = {
+				limit = {
+					NOT = { has_character_flag = kh_tournament_host }
+					has_character_flag = khornetournament_participant
+				}
+				character_event = { id = chaosfl.16 days = 7 random = 10 }
+			}
+		}
+	}
+}
+
+# chaosfl.6 The call to the pit
+# Notification for each challenger.
+# Scope: ROOT is the challenger, FROM the host.
+long_character_event = {
+	id = chaosfl.6
+	desc = EVTDESCchaosfl6
+	picture = GFX_evt_chaos_champions
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl6
+		add_trait = questing
+	}
+}
+
+# chaosfl.7 The first bout
+# The host opens the killing against a random challenger (chaosfl.8).
+# Scope: ROOT is the host.
+character_event = {
+	id = chaosfl.7
+	desc = EVTDESCchaosfl7
+	picture = GFX_evt_chaos_champions
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl7
+		hidden_effect = {
+			random_realm_character = {
+				limit = {
+					NOT = { character = ROOT }
+					has_character_flag = khornetournament_participant
+					NOT = { has_character_flag = brawling_loser }
+				}
+				character_event = { id = chaosfl.8 }
+			}
+		}
+	}
+}
+
+# chaosfl.8 Your turn to fight
+# The challenger walks out (chaosfl.9 for the opponent).
+# Scope: ROOT is the challenger, FROM the opponent.
+character_event = {
+	id = chaosfl.8
+	desc = EVTDESCchaosfl8
+	picture = GFX_evt_chaos_champions
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl8
+		hidden_effect = { FROM = { character_event = { id = chaosfl.9 } } }
+	}
+}
+
+# chaosfl.9 The opponent walks out
+# The opponent meets the challenger; the bout follows (chaosfl.10).
+# Scope: ROOT is the opponent, FROM the challenger.
+character_event = {
+	id = chaosfl.9
+	desc = EVTDESCchaosfl9
+	picture = GFX_evt_chaos_champions
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl9
+		hidden_effect = { FROM = { character_event = { id = chaosfl.10 } } }
+	}
+}
+
+# chaosfl.10 The bout
+# Hidden. Sets up the duel (the opponent is combatant_1, the challenger
+# combatant_2), with no draws, and picks one of eleven fight descriptions
+# for the result events.
+# Scope: ROOT is the challenger, FROM the opponent.
+character_event = {
+	id = chaosfl.10
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		save_event_target_as = combatant_2
+		set_character_flag = flag_duel_no_draws
+		random_list = {
+			15 = { set_character_flag = kh_fight_1 FROM = { set_character_flag = kh_fight_1 } }
+			15 = { set_character_flag = kh_fight_2 FROM = { set_character_flag = kh_fight_2 } }
+			15 = { set_character_flag = kh_fight_3 FROM = { set_character_flag = kh_fight_3 } }
+			15 = { set_character_flag = kh_fight_4 FROM = { set_character_flag = kh_fight_4 } }
+			15 = { set_character_flag = kh_fight_5 FROM = { set_character_flag = kh_fight_5 } }
+			15 = { set_character_flag = kh_fight_6 FROM = { set_character_flag = kh_fight_6 } }
+			10 = { set_character_flag = kh_fight_7 FROM = { set_character_flag = kh_fight_7 } }
+			10 = { set_character_flag = kh_fight_8 FROM = { set_character_flag = kh_fight_8 } }
+			10 = { set_character_flag = kh_fight_9 FROM = { set_character_flag = kh_fight_9 } }
+			10 = { set_character_flag = kh_fight_10 FROM = { set_character_flag = kh_fight_10 } }
+			10 = { set_character_flag = kh_fight_11 FROM = { set_character_flag = kh_fight_11 } }
+		}
+		FROM = {
+			save_event_target_as = combatant_1
+			set_character_flag = flag_duel_no_draws
+			character_event = { id = chaosfl.11 }
+		}
+	}
+}
+
+# chaosfl.11 The duel is decided
+# Hidden. Runs the standard duel scoring; send_duel_result_tournament_effect
+# then sends the winner chaosfl.12.
+# Scope: ROOT is combatant_1.
+character_event = {
+	id = chaosfl.11
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_dueling_weapon_effect = yes
+		event_target:combatant_2 = { set_dueling_weapon_effect = yes }
+		set_potential_injury_flag_effect = yes
+		evaluate_duel_result_score_effect = yes
+		evaluate_extra_duel_result_score_effect = yes
+		send_duel_result_tournament_effect = yes
+	}
+}
+
+# chaosfl.12 Victory in the pit
+# The winner tells of the fight (one of eleven, from either side) and may
+# carry a wound. The loser gets chaosfl.13.
+# Scope: ROOT is the winner.
+long_character_event = {
+	id = chaosfl.12
+	picture = GFX_evt_chaos_champions
+
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { character = ROOT has_character_flag = kh_fight_1 }
+		}
+		text = EVTDESCchaosfl12
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { character = ROOT has_character_flag = kh_fight_2 }
+		}
+		text = EVTDESCchaosfl12b
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { character = ROOT has_character_flag = kh_fight_3 }
+		}
+		text = EVTDESCchaosfl12c
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_2 = { character = ROOT has_character_flag = kh_fight_1 }
+		}
+		text = EVTDESCchaosfl12d
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_2 = { character = ROOT has_character_flag = kh_fight_2 }
+		}
+		text = EVTDESCchaosfl12e
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_2 = { character = ROOT has_character_flag = kh_fight_3 }
+		}
+		text = EVTDESCchaosfl12f
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { character = ROOT has_character_flag = kh_fight_4 }
+		}
+		text = EVTDESCchaosfl12g
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { character = ROOT has_character_flag = kh_fight_5 }
+		}
+		text = EVTDESCchaosfl12h
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { character = ROOT has_character_flag = kh_fight_6 }
+		}
+		text = EVTDESCchaosfl12i
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { character = ROOT has_character_flag = kh_fight_7 }
+		}
+		text = EVTDESCchaosfl12j
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_2 = { character = ROOT has_character_flag = kh_fight_4 }
+		}
+		text = EVTDESCchaosfl12k
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_2 = { character = ROOT has_character_flag = kh_fight_5 }
+		}
+		text = EVTDESCchaosfl12l
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_2 = { character = ROOT has_character_flag = kh_fight_6 }
+		}
+		text = EVTDESCchaosfl12m
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_2 = { character = ROOT has_character_flag = kh_fight_7 }
+		}
+		text = EVTDESCchaosfl12n
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { character = ROOT has_character_flag = kh_fight_8 }
+		}
+		text = EVTDESCchaosfl12o
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { character = ROOT has_character_flag = kh_fight_9 }
+		}
+		text = EVTDESCchaosfl12p
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { character = ROOT has_character_flag = kh_fight_10 }
+		}
+		text = EVTDESCchaosfl12q
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { character = ROOT has_character_flag = kh_fight_11 }
+		}
+		text = EVTDESCchaosfl12r
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_2 = { character = ROOT has_character_flag = kh_fight_8 }
+		}
+		text = EVTDESCchaosfl12s
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_2 = { character = ROOT has_character_flag = kh_fight_9 }
+		}
+		text = EVTDESCchaosfl12t
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_2 = { character = ROOT has_character_flag = kh_fight_10 }
+		}
+		text = EVTDESCchaosfl12u
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_2 = { character = ROOT has_character_flag = kh_fight_11 }
+		}
+		text = EVTDESCchaosfl12v
+	}
+
+	is_triggered_only = yes
+
+	immediate = {
+		random = { chance = 5 add_trait = wounded }
+	}
+
+	option = {
+		name = EVTOPTAchaosfl12
+		prestige = 25
+		hidden_effect = {
+			if = {
+				limit = { event_target:combatant_1 = { character = ROOT } }
+				event_target:combatant_2 = { long_character_event = { id = chaosfl.13 } }
+			}
+			else = { event_target:combatant_1 = { long_character_event = { id = chaosfl.13 } } }
+		}
+	}
+}
+
+# chaosfl.13 Death in the pit
+# The loser's last moments: they die by the winner's hand (unless
+# invincible). The winner then faces the next challenger (chaosfl.14) or, if
+# none is left, is crowned champion (chaosfl.15).
+# Scope: ROOT is the loser, FROM the winner.
+long_character_event = {
+	id = chaosfl.13
+	picture = GFX_evt_chaos_champions
+
+	desc = { trigger = { FROM = { has_character_flag = kh_fight_1 } } text = EVTDESCchaosfl13 }
+	desc = { trigger = { FROM = { has_character_flag = kh_fight_2 } } text = EVTDESCchaosfl13b }
+	desc = { trigger = { FROM = { has_character_flag = kh_fight_3 } } text = EVTDESCchaosfl13c }
+	desc = { trigger = { FROM = { has_character_flag = kh_fight_4 } } text = EVTDESCchaosfl13d }
+	desc = { trigger = { FROM = { has_character_flag = kh_fight_5 } } text = EVTDESCchaosfl13e }
+	desc = { trigger = { FROM = { has_character_flag = kh_fight_6 } } text = EVTDESCchaosfl13f }
+	desc = { trigger = { FROM = { has_character_flag = kh_fight_7 } } text = EVTDESCchaosfl13g }
+	desc = { trigger = { FROM = { has_character_flag = kh_fight_8 } } text = EVTDESCchaosfl13h }
+	desc = { trigger = { FROM = { has_character_flag = kh_fight_9 } } text = EVTDESCchaosfl13i }
+	desc = { trigger = { FROM = { has_character_flag = kh_fight_10 } } text = EVTDESCchaosfl13j }
+	desc = { trigger = { FROM = { has_character_flag = kh_fight_11 } } text = EVTDESCchaosfl13k }
+
+	is_triggered_only = yes
+
+	immediate = {
+		random = { chance = 50 add_trait = wounded }
+		random = { chance = 5 add_trait = maimed }
+	}
+
+	option = {
+		name = EVTOPTAchaosfl13
+		add_offmap_currency = { offmap = khorne_warp value = -50 }
+		clr_character_flag = khornetournament_participant
+		set_character_flag = brawling_loser
+
+		hidden_effect = {
+			chaosfl_clear_fight_flags_effect = yes
+			FROM = { chaosfl_clear_fight_flags_effect = yes }
+			clear_event_target = combatant_1
+			clear_event_target = combatant_2
+
+			# Anyone left to fight? Checked before the loser dies.
+			if = {
+				limit = {
+					FROM = {
+						top_liege = {
+							any_realm_character = {
+								has_character_flag = khornetournament_participant
+								NOT = { has_character_flag = brawling_loser }
+								NOT = { character = ROOT }
+								NOT = { character = FROM }
+							}
+						}
+					}
+				}
+				FROM = { character_event = { id = chaosfl.14 } }
+			}
+			else = { FROM = { long_character_event = { id = chaosfl.15 } } }
+
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_duel killer = FROM } }
+		}
+	}
+}
+
+# chaosfl.14 Who's next?
+# The winner dedicates the blood to Khorne and calls out the next challenger
+# (chaosfl.8).
+# Scope: ROOT is the winner.
+character_event = {
+	id = chaosfl.14
+	desc = EVTDESCchaosfl14
+	picture = GFX_evt_chaos_champions
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl14
+		add_offmap_currency = { offmap = khorne_warp value = 75 }
+		hidden_effect = {
+			top_liege = {
+				random_realm_character = {
+					limit = {
+						has_character_flag = khornetournament_participant
+						NOT = { character = ROOT }
+						NOT = { has_character_flag = brawling_loser }
+					}
+					character_event = { id = chaosfl.8 }
+				}
+			}
+		}
+	}
+}
+
+# chaosfl.15 Champion of the Blood God
+# The last warrior standing: Khorne's favour, gold, prestige and piety, a
+# warband for a ruler, half the time the Skull-Torc of the Pit, and a chance
+# of a lasting blessing (chaosfl.20 to 23).
+# Scope: ROOT is the champion.
+long_character_event = {
+	id = chaosfl.15
+	picture = GFX_evt_chaos_champions
+
+	desc = {
+		trigger = { NOT = { has_character_flag = kh_tournament_host } }
+		text = EVTDESCchaosfl15
+	}
+	desc = { trigger = { has_character_flag = kh_tournament_host } text = EVTDESCchaosfl15b }
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl15
+		add_offmap_currency = { offmap = khorne_warp value = 500 }
+		wealth = 45
+		prestige = 750
+		piety = 250
+		random = { chance = 50 add_artifact = khorne_pit_torc }
+		hidden_effect = {
+			if = {
+				limit = { is_ruler = yes }
+				location = {
+					ROOT = {
+						spawn_unit = {
+							province = PREV
+							owner = ROOT
+							cannot_inherit = yes
+							troops = { light_infantry = { 500 500 } heavy_infantry = { 200 200 } }
+						}
+					}
+				}
+			}
+			random = { chance = 50 remove_trait = content }
+			random_list = {
+				15 = { character_event = { id = chaosfl.20 days = 6 random = 6 } } # Brave
+				6 = { character_event = { id = chaosfl.21 days = 6 random = 6 } } # Stronger
+				6 = { character_event = { id = chaosfl.22 days = 6 random = 6 } } # Wroth
+				1 = { character_event = { id = chaosfl.23 days = 1 random = 2 } } # Khorne's favour
+				72 = { } # Nothing
+			}
+		}
+	}
+}
+
+# chaosfl.16 Called off
+# Too few challengers came. Notification for the challengers who did, who
+# lose Khorne's favour; cleanup follows (chaosfl.17).
+# Scope: ROOT is the challenger, FROM the host.
+character_event = {
+	id = chaosfl.16
+	desc = EVTDESCchaosfl16
+	picture = GFX_evt_chaos_champions
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl16
+		add_offmap_currency = { offmap = khorne_warp value = -100 }
+		hidden_effect = { character_event = { id = chaosfl.17 } }
+	}
+}
+
+# chaosfl.17 Home from the plain
+# Clears the tournament flags. Also sent to the host and every invited
+# warrior 30 days after the call (from the decision).
+# Scope: ROOT is the host or a warrior.
+character_event = {
+	id = chaosfl.17
+	desc = EVTDESCchaosfl17
+	picture = GFX_evt_chaos_march
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl17
+		remove_trait = questing
+		hidden_effect = {
+			set_variable = { which = "khtournament_player" value = 0 }
+			diplomatic_immunity = no
+			clr_character_flag = do_not_disturb
+			clr_character_flag = khornetournament_participant
+			clr_character_flag = kh_tournament_host
+			clr_character_flag = brawling_loser
+			chaosfl_clear_fight_flags_effect = yes
+		}
+	}
+}
+
+# chaosfl.20 Fearless
+# The champion becomes brave, or sharper in war if already brave.
+# Scope: ROOT is the champion.
+character_event = {
+	id = chaosfl.20
+	desc = EVTDESCchaosfl20
+	picture = GFX_evt_chaos_champions
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl20
+		if = { limit = { trait = brave } change_martial = 1 }
+		else = { add_trait = brave }
+	}
+}
+
+# chaosfl.21 Hardened by blood
+# The champion's body grows one step stronger (weak, fragile, soft, none,
+# hardy, tough, strong), or sharper in war if already strong.
+# Scope: ROOT is the champion.
+character_event = {
+	id = chaosfl.21
+	desc = EVTDESCchaosfl21
+	picture = GFX_evt_chaos_champions
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl21
+		if = { limit = { trait = strong } change_martial = 1 }
+		else_if = { limit = { trait = tough } remove_trait = tough add_trait = strong }
+		else_if = { limit = { trait = hardy } remove_trait = hardy add_trait = tough }
+		else_if = { limit = { trait = soft } remove_trait = soft }
+		else_if = { limit = { trait = fragile } remove_trait = fragile add_trait = soft }
+		else_if = { limit = { trait = weak } remove_trait = weak add_trait = fragile }
+		else = { add_trait = hardy }
+	}
+}
+
+# chaosfl.22 The red rage
+# The champion becomes wroth, or sharper in war if already wroth.
+# Scope: ROOT is the champion.
+character_event = {
+	id = chaosfl.22
+	desc = EVTDESCchaosfl22
+	picture = GFX_evt_chaos_champions
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl22
+		if = { limit = { trait = wroth } change_martial = 1 }
+		else = { add_trait = wroth }
+	}
+}
+
+# chaosfl.23 Khorne watches
+# Rare: +2 martial and +1 health.
+# Scope: ROOT is the champion.
+character_event = {
+	id = chaosfl.23
+	desc = EVTDESCchaosfl23
+	picture = GFX_evt_chaos_champions
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl23
+		change_martial = 2
+		health = 1
+	}
+}
+
+###############################################################################
+# Tzeentch's price
+###############################################################################
+
+# chaosfl.30 Betrayed by the Architect
+# The ruler slew nine of their own at the altar of Tzeentch, and the Changer
+# of Ways gave nothing back but a mutation.
+# Scope: ROOT is the sacrificer.
+character_event = {
+	id = chaosfl.30
+	desc = EVTDESCchaosfl30
+	picture = GFX_evt_tzeentch_sorcerer
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl30
+		change_variable = { which = "tzeentch_favor" value = -1 }
+		hidden_effect = {
+			mutations_table = yes
+			character_event = { id = mutate.5 days = 2 random = 4 }
+		}
+	}
+}
+
+# chaosfl.31 A host from the blood
+# The sacrifice is accepted: piety, prestige, Tzeentch's favour, a Tzeentch
+# mutation and a daemonic host of 3,000. A ruler with no daemon friend also
+# gains a Flamer as familiar and commander.
+# Scope: ROOT is the sacrificer.
+character_event = {
+	id = chaosfl.31
+	desc = EVTDESCchaosfl31
+	picture = GFX_evt_tzeentch_sorcerer
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl31
+		piety = 400
+		prestige = 400
+		change_variable = { which = "tzeentch_favor" value = 10 }
+		hidden_effect = {
+			mutations_table_tzeentch = yes
+			if = {
+				limit = { NOT = { any_friend = { is_daemon_race_trigger = yes } } }
+				create_random_soldier = {
+					random_traits = no
+					dynasty = RANDOM
+					culture = flamer_tzeentch
+					religion = tzeentch
+					age = 999
+					attributes = {
+						martial = 15
+						diplomacy = 4
+						stewardship = 5
+						intrigue = 30
+						learning = 3
+					}
+					health = 6
+					fertility = 0.7
+					trait = brilliant_strategist
+					trait = wroth
+					trait = genius
+					trait = mystic
+					trait = cruel
+					trait = zealous
+					trait = tzeentch_demon
+					trait = tzeentch_flamer
+				}
+				new_character = {
+					set_character_flag = host_demon_commander
+					add_friend = ROOT # Familiar
+				}
+			}
+			location = {
+				ROOT = {
+					spawn_unit = {
+						province = PREV
+						cannot_inherit = yes
+						troops = { daemonic_host = { 3000 3000 } }
+					}
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# Nurgle's gifts
+###############################################################################
+
+# chaosfl.40 A gift for a friend
+# A servant of Nurgle picks a disease for the target; the greater the
+# servant, the more gifts they can choose from (chaosfl.41 to 44).
+# Scope: ROOT is the giver, FROM the target.
+character_event = {
+	id = chaosfl.40
+	desc = EVTDESCchaosfl40
+	picture = GFX_evt_nurgle_sorcerer
+
+	is_triggered_only = yes
+
+	option = { # Leprosy
+		name = EVTOPTAchaosfl40
+		trigger = { trait = prince_nurgle }
+		piety = 25
+		hidden_effect = { FROM = { character_event = { id = chaosfl.41 days = 2 random = 4 } } }
+	}
+	option = { # Consumption
+		name = EVTOPTBchaosfl40
+		trigger = { OR = { trait = chosen_nurgle trait = prince_nurgle } }
+		piety = 25
+		hidden_effect = { FROM = { character_event = { id = chaosfl.42 days = 2 random = 4 } } }
+	}
+	option = { # The creeping fever
+		name = EVTOPTCchaosfl40
+		trigger = {
+			OR = {
+				trait = champion_nurgle
+				trait = chosen_nurgle
+				trait = prince_nurgle
+				trait = lore_nurgle
+			}
+		}
+		piety = 25
+		hidden_effect = { FROM = { character_event = { id = chaosfl.43 days = 2 random = 4 } } }
+	}
+	option = { # Nurgle's rot
+		name = EVTOPTDchaosfl40
+		trigger = {
+			OR = {
+				trait = champion_nurgle
+				trait = chosen_nurgle
+				trait = prince_nurgle
+				trait = has_nurgles_rot
+				trait = lore_nurgle
+			}
+		}
+		piety = 25
+		hidden_effect = { FROM = { character_event = { id = chaosfl.44 days = 2 random = 4 } } }
+	}
+}
+
+# chaosfl.41 The numbing touch
+# The target catches leprosy.
+# Scope: ROOT is the target, FROM the giver.
+character_event = {
+	id = chaosfl.41
+	desc = EVTDESCchaosfl41
+	picture = GFX_evt_nurgle_sorcerer
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl41
+		add_trait = leper
+		nurgle_blessing_check_effect = yes
+	}
+}
+
+# chaosfl.42 The warm cough
+# The target catches consumption.
+# Scope: ROOT is the target, FROM the giver.
+character_event = {
+	id = chaosfl.42
+	desc = EVTDESCchaosfl42
+	picture = GFX_evt_nurgle_sorcerer
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl42
+		add_trait = pneumonic
+		nurgle_blessing_check_effect = yes
+	}
+}
+
+# chaosfl.43 Buboes
+# The target catches the creeping fever.
+# Scope: ROOT is the target, FROM the giver.
+character_event = {
+	id = chaosfl.43
+	desc = EVTDESCchaosfl43
+	picture = GFX_evt_nurgle_sorcerer
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl43
+		add_trait = has_cancer
+		nurgle_blessing_check_effect = yes
+	}
+}
+
+# chaosfl.44 Nurgle's kiss
+# The target catches Nurgle's rot.
+# Scope: ROOT is the target, FROM the giver.
+character_event = {
+	id = chaosfl.44
+	desc = EVTDESCchaosfl44
+	picture = GFX_evt_nurgle_sorcerer
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl44
+		add_trait = has_nurgles_rot
+		nurgle_blessing_check_effect = yes
+	}
+}
+
+###############################################################################
+# Daemon princes
+###############################################################################
+
+# chaosfl.50 The ultimate gift
+# A champion ascends to daemon princehood: a daemon prince bloodline and
+# three daemonic hosts of 1,000 (which reinforce for the AI).
+# Scope: ROOT is the new daemon prince.
+character_event = {
+	id = chaosfl.50
+	desc = EVTDESCchaosfl50
+	picture = GFX_evt_chaos_champions
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl50
+		create_bloodline = { type = daemon_prince_bloodline }
+		hidden_effect = {
+			location = {
+				ROOT = {
+					if = {
+						limit = { ai = yes }
+						spawn_unit = {
+							province = PREV
+							reinforces = yes
+							troops = { daemonic_host = { 1000 1000 } }
+						}
+						spawn_unit = {
+							province = PREV
+							reinforces = yes
+							troops = { daemonic_host = { 1000 1000 } }
+						}
+						spawn_unit = {
+							province = PREV
+							reinforces = yes
+							troops = { daemonic_host = { 1000 1000 } }
+						}
+					}
+					else = {
+						spawn_unit = {
+							province = PREV
+							reinforces = no
+							troops = { daemonic_host = { 1000 1000 } }
+						}
+						spawn_unit = {
+							province = PREV
+							reinforces = no
+							troops = { daemonic_host = { 1000 1000 } }
+						}
+						spawn_unit = {
+							province = PREV
+							reinforces = no
+							troops = { daemonic_host = { 1000 1000 } }
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# Doom
+###############################################################################
+
+# chaosfl.60 A chosen of Chaos falls
+# Hidden. When a champion, chosen or daemon prince of Chaos dies, the doom
+# recedes: a little for a champion, more for a chosen, most for a prince.
+# Fired from on_death.
+# Scope: ROOT is the dead character.
+character_event = {
+	id = chaosfl.60
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		OR = {
+			is_daemon_prince_trigger = yes
+			is_chaos_chosen_trigger = yes
+			is_chaos_champion_trigger = yes
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { is_daemon_prince_trigger = yes }
+			reduce_doom_progress_massive_effect = yes
+		}
+		else_if = {
+			limit = { is_chaos_chosen_trigger = yes }
+			reduce_doom_progress_medium_effect = yes
+		}
+		else = { reduce_doom_progress_minor_effect = yes }
+	}
+}
+
+###############################################################################
+# Chaos Undivided: the Everchosen
+# Namespace: undivided (was "DR_chaosundivided" before the 2026 events refactor)
+# Faction: Chaos
+#
+# When doom runs very high, a champion of all four Dark Gods rises in the
+# Chaos Wastes and rides south at the head of a vast horde. When the
+# Everchosen falls, the horde breaks apart and doom resets.
+#
+# Sections:
+#   1-6    the Everchosen rises (narrative event, courtiers, host, population)
+#   10-11  the Everchosen falls
+#   20-22  surrender offer to Chaos and Norscan rulers
+#   25     the horde grows after its first conquest
+#   30-42  the path of the Everchosen (the altar, the four trials, the mark)
+#
+# Callers:
+#   undivided.1   on_decade_pulse (wh_on_actions), for the Sigmarite head
+#   undivided.6   on_new_holder, on_new_holder_inheritance and
+#                 on_new_holder_usurpation (00_on_actions)
+#   undivided.10  on_death (wh_on_actions)
+#   undivided.11  on_five_year_pulse (wh_on_actions)
+#   undivided.20  everchosen_invasion on_add (cb_types_chaos)
+#   undivided.25  everchosen_invasion on_success (cb_types_chaos)
+#   undivided.30  seektobecomeeverchosen decision (wh_chaos_decisions)
+#   undivided.32  on_unit_entering_province (nb_on_actions)
+#
+# undivided.30-42 are the path to the mantle for a living Chaos ruler; undivided.10
+# cleans up after any Everchosen, player or AI.
+###############################################################################
+
+namespace = undivided
+
+###############################################################################
+# 1-6 The Everchosen rises
+###############################################################################
+
+# 1 The Everchosen
+# After 150 years of play, with doom very high and no Everchosen alive or
+# recently fallen, the Dark Gods anoint a champion. An AI nomad ruler of the
+# Wastes takes the mantle if one is strong enough; otherwise one is created
+# (Asavar Kul from year 289, Archaon from year 511, a random Kurgan or Hung
+# warlord otherwise) and declares war on a kingdom of the Wastes. Every player
+# sees the news.
+# Scope: ROOT = the Sigmarite religious head (always around to carry the
+# decade pulse).
+narrative_event = {
+	id = undivided.1
+	title = EVTNAMEundivided1
+	desc = EVTDESCundivided1
+	picture = GFX_evt_chaos_everchosen
+	border = GFX_event_narrative_frame_war
+	major = yes
+	hide_new = yes
+	hide_from = yes
+
+	is_triggered_only = yes
+	only_playable = yes
+	religion = sigmarite
+	min_age = 16
+
+	trigger = {
+		controls_religion = yes
+		total_years_played = 150
+		NOT = { has_global_flag = everchosen_exists }
+		NOT = { has_global_flag = everchosen_died }
+		NOT = { has_global_flag = self_declared_black_crusade }
+		is_doom_very_high_trigger = yes
+	}
+
+	immediate = {
+		set_global_flag = everchosen_exists
+		activate_title = { title = e_host_chaos status = yes }
+
+		if = {
+			limit = { any_independent_ruler = { undivided_ai_everchosen_candidate_trigger = yes } }
+			random_independent_ruler = {
+				limit = { undivided_ai_everchosen_candidate_trigger = yes }
+				any_demesne_title = { limit = { tier = EMPEROR } set_title_flag = to_be_destroyed }
+				e_host_chaos = { grant_title = PREV }
+				religion_scope = { set_religion_head = e_host_chaos }
+				add_trait = everchosen
+				add_trait = mark_chaos
+				create_everchosen_artifacts = yes
+				set_graphical_culture = everchosen_visual
+				any_demesne_title = {
+					limit = { has_title_flag = to_be_destroyed }
+					activate_title = { title = THIS status = no }
+					destroy_landed_title = THIS
+				}
+				wealth = 5000
+				prestige = 5000
+				set_character_flag = horde_invader
+				set_character_flag = existing_everchosen
+				set_character_flag = first_everchosen_war
+				character_event = { id = undivided.3 } # The host
+				character_event = { id = undivided.4 days = 1 } # The horde's people
+			}
+		}
+		else = {
+			# Asavar Kul, the Everchosen of the Great War against Chaos
+			if = {
+				limit = {
+					total_years_played = 289
+					NOT = { total_years_played = 511 }
+					NOT = { has_global_flag = asavar_spawned }
+				}
+				create_character = {
+					name = "Asavar"
+					dynasty = 67025
+					dna = "ihlhkaeddnm"
+					age = 60
+					attributes = { martial = 10 diplomacy = 8 intrigue = 8 stewardship = 9 }
+					health = 6
+					fertility = 0.7
+					religion = chaos
+					culture = kul
+					trait = creature_human
+					trait = brilliant_strategist
+					trait = strong
+					trait = brave
+					trait = ambitious
+					trait = cruel
+					trait = cavalry_leader
+					trait = everchosen
+					trait = mark_chaos
+				}
+				new_character = { save_event_target_as = everchosen }
+				set_global_flag = asavar_spawned
+			}
+			# Archaon, Lord of the End Times
+			else_if = {
+				limit = { total_years_played = 511 NOT = { has_global_flag = archaon_spawned } }
+				create_character = {
+					name = "Archaon"
+					dynasty = 9003
+					dna = "knccdbgbieh"
+					age = 131
+					attributes = { martial = 10 diplomacy = 8 intrigue = 8 stewardship = 9 }
+					health = 6
+					fertility = 0.7
+					religion = chaos
+					culture = nordlander
+					trait = creature_human
+					trait = brilliant_strategist
+					trait = strong
+					trait = diligent
+					trait = ambitious
+					trait = zealous
+					trait = everchosen
+					trait = mark_chaos
+				}
+				new_character = { save_event_target_as = everchosen }
+				set_global_flag = archaon_spawned
+			}
+			# A warlord of the Kurgan or the Hung
+			else = {
+				create_character = {
+					random_traits = yes
+					dynasty = culture
+					religion = chaos
+					culture = aghol
+					female = no
+					age = 24
+					attributes = { martial = 12 }
+					trait = creature_human
+					trait = brilliant_strategist
+					trait = strong
+					trait = ambitious
+					trait = diligent
+					trait = brave
+					trait = everchosen
+					trait = mark_chaos
+				}
+				new_character = {
+					random_list = {
+						5 = { culture = chi_an }
+						5 = { culture = kuj }
+						5 = { culture = man_chu }
+						5 = { culture = mung }
+						5 = { culture = tong }
+						5 = { culture = tu_ka }
+						5 = { culture = wei_tu }
+						5 = { culture = wo }
+						5 = { culture = yin }
+						5 = { culture = aghol }
+						5 = { culture = dolgan }
+						5 = { culture = gharhar }
+						5 = { culture = hastling }
+						5 = { culture = khazag }
+						5 = { culture = kul }
+						5 = { culture = kvellig }
+						5 = { culture = tahmak }
+						5 = { culture = tokmar }
+						5 = { culture = yusak }
+					}
+					save_event_target_as = everchosen
+					random = {
+						chance = 20
+						random_lore_mage_effect = yes
+						add_trait = magic_potential_4
+					}
+				}
+			}
+
+			event_target:everchosen = {
+				random_province = {
+					limit = {
+						region = world_chaos_wastes
+						NOT = { any_province_holding = { holding_type = nomad } }
+					}
+					county = { usurp_title = { target = event_target:everchosen } }
+				}
+				e_host_chaos = { grant_title = event_target:everchosen }
+				religion_scope = { set_religion_head = e_host_chaos }
+				set_defacto_liege = THIS
+				set_government_type = chaos_horde_government
+				capital_holding = {
+					add_building = no_harbor_4
+					add_building = no_fishing_village_4
+					add_building = no_camp_fortifications_8
+					add_building = no_ox_wagon_8
+					add_building = no_cattle_pens_8
+					add_building = no_meat_preserver_8
+					add_building = no_sheep_8
+					add_building = no_felt_crafter_8
+					add_building = no_ger_crafter_8
+				}
+				wealth = 5000
+				prestige = 5000
+				set_character_flag = horde_invader
+				set_character_flag = first_everchosen_war
+				create_everchosen_artifacts = yes
+				set_graphical_culture = everchosen_visual
+				character_event = { id = undivided.2 } # Courtiers
+				character_event = { id = undivided.3 } # The host
+				character_event = { id = undivided.4 days = 1 } # The horde's people
+
+				# Ride on the capital of a kingdom of the Wastes that the
+				# Everchosen does not already rule.
+				random_list = {
+					25 = { # Zanbaijin
+						modifier = {
+							factor = 0
+							NOT = { 405 = { undivided_invasion_target_trigger = yes } }
+						}
+						405 = { save_event_target_as = undivided_invasion_province }
+					}
+					25 = { # Dragoynovo
+						modifier = {
+							factor = 0
+							NOT = { 409 = { undivided_invasion_target_trigger = yes } }
+						}
+						409 = { save_event_target_as = undivided_invasion_province }
+					}
+					25 = { # Jakki
+						modifier = {
+							factor = 0
+							NOT = { 398 = { undivided_invasion_target_trigger = yes } }
+						}
+						398 = { save_event_target_as = undivided_invasion_province }
+					}
+					25 = { # Tohkar
+						modifier = {
+							factor = 0
+							NOT = { 1245 = { undivided_invasion_target_trigger = yes } }
+						}
+						1245 = { save_event_target_as = undivided_invasion_province }
+					}
+				}
+				event_target:undivided_invasion_province = {
+					kingdom = { save_event_target_as = undivided_invasion_kingdom }
+					owner = { top_liege = { save_event_target_as = undivided_invasion_target } }
+				}
+				if = {
+					limit = {
+						event_target:undivided_invasion_target = { always = yes }
+						event_target:undivided_invasion_kingdom = { always = yes }
+					}
+					war = {
+						casus_belli = everchosen_invasion
+						target = event_target:undivided_invasion_target
+						thirdparty_title = event_target:undivided_invasion_kingdom
+					}
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided1 # Protect us
+		trigger = {
+			NOR = {
+				religion_group = chaos_gods_group
+				religion_group = greenskin_gods_group
+				religion_group = necromantic_group
+				religion_group = horned_rat_god_group
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBundivided1 # For Chaos
+		trigger = { religion_group = chaos_gods_group }
+	}
+	option = {
+		name = EVTOPTCundivided1 # Greenskins
+		trigger = { religion_group = greenskin_gods_group }
+	}
+	option = {
+		name = EVTOPTDundivided1 # Undead
+		trigger = { religion_group = necromantic_group }
+	}
+	option = {
+		name = EVTOPTEundivided1 # Skaven
+		trigger = { religion_group = horned_rat_god_group }
+	}
+}
+
+# 2 The Everchosen's court
+# A created Everchosen arrives with a court of sixteen: young men and women
+# of the horde and four seasoned war leaders.
+# Scope: ROOT = the new Everchosen.
+character_event = {
+	id = undivided.2
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 16
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 18
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 18
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 20
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 25
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 26
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 28
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = yes
+			age = 16
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = yes
+			age = 17
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = yes
+			age = 18
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = yes
+			age = 18
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = yes
+			age = 20
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 24
+			attributes = { martial = 12 }
+			trait = brilliant_strategist
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 27
+			attributes = { martial = 12 }
+			trait = brilliant_strategist
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 44
+			attributes = { martial = 12 }
+			trait = brilliant_strategist
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 51
+			attributes = { martial = 12 }
+			trait = brilliant_strategist
+		}
+	}
+}
+
+# 3 The host of the Everchosen
+# Fifteen hosts of 5,500 marauders, horsemen and chosen knights, plus two
+# rolls of a coin for three more each (82,500 to 115,500 men). They vanish
+# when the Everchosen dies (undivided.10).
+# Scope: ROOT = the Everchosen.
+character_event = {
+	id = undivided.3
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		while = { count = 15 undivided_spawn_host_effect = yes }
+		random = { chance = 50 while = { count = 3 undivided_spawn_host_effect = yes } }
+		random = { chance = 50 while = { count = 3 undivided_spawn_host_effect = yes } }
+	}
+}
+
+# 4 The horde's people
+# The tribes follow their champion: 120,000 people and a 30-year hidden
+# modifier that marks the horde as invading. Starts the yearly growth (5).
+# Scope: ROOT = the Everchosen.
+character_event = {
+	id = undivided.4
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		population = 120000
+		add_character_modifier = {
+			modifier = invading_population_halt
+			duration = 10950
+			hidden = yes
+		}
+		character_event = { id = undivided.5 days = 365 }
+	}
+}
+
+# 5 The horde swells
+# Each year, while the horde is still a nomad horde on the march, more tribes
+# join it: 80,000 people a year while it is below its population cap and
+# under 350,000. The loop ends when the invading modifier runs out or the
+# Everchosen settles.
+# Scope: ROOT = the Everchosen.
+character_event = {
+	id = undivided.5
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = {
+				OR = {
+					NOR = { government = nomadic_government government = chaos_horde_government }
+					NOT = { has_character_modifier = invading_population_halt }
+				}
+			}
+			remove_character_modifier = invading_population_halt
+		}
+		else = {
+			if = {
+				limit = { NOT = { population_factor = 1 } NOT = { population = 350000 } }
+				population = 80000
+			}
+			repeat_event = { id = undivided.5 days = 365 }
+		}
+	}
+}
+
+# 6 Landless no longer
+# Clears the temporary landless status of an Everchosen's primary title once
+# the Everchosen gains a county.
+# Scope: ROOT = the new holder, FROM = the title gained.
+character_event = {
+	id = undivided.6
+	hide_window = yes
+	is_triggered_only = yes
+	only_playable = yes
+	religion_group = chaos_gods_group
+
+	trigger = {
+		trait = everchosen
+		FROM = { tier = COUNT }
+		primary_title = { has_title_flag = temporary_landless_title is_landless_type_title = yes }
+	}
+
+	immediate = {
+		any_demesne_title = {
+			limit = { has_title_flag = temporary_landless_title }
+			set_title_landless = { title = THIS status = no }
+		}
+	}
+}
+
+###############################################################################
+# 10-11 The Everchosen falls
+###############################################################################
+
+# 10 The Everchosen falls
+# The host disbands, the Host of Chaos is destroyed along with any other
+# empire the Everchosen held, its vassals go free, the artifacts of the
+# Everchosen are lost and doom resets. Every player sees the news.
+# Scope: ROOT = the dead Everchosen.
+narrative_event = {
+	id = undivided.10
+	title = EVTNAMEundivided10
+	desc = EVTDESCundivided10
+	picture = GFX_evt_mongols
+	border = GFX_event_narrative_frame_war
+	major = yes
+	hide_new = yes
+	hide_from = yes
+
+	is_triggered_only = yes
+	religion_group = chaos_gods_group
+
+	trigger = {
+		trait = everchosen
+	}
+
+	immediate = {
+		disband_event_forces = everchosen_troops
+		e_host_chaos = { any_vassal = { set_defacto_liege = THIS } }
+		activate_title = { title = e_host_chaos status = no }
+		e_host_chaos = { unsafe_destroy_landed_title = THIS }
+		religion_scope = { set_religion_head = none }
+		any_demesne_title = { limit = { tier = EMPEROR } unsafe_destroy_landed_title = THIS }
+		clr_global_flag = everchosen_exists
+		set_global_flag = everchosen_died
+		unsafe_destroy_artifact = armor_of_morkar
+		unsafe_destroy_artifact = crown_of_domination
+		unsafe_destroy_artifact = eye_of_sheerian
+		unsafe_destroy_artifact = slayer_of_kings
+		unsafe_destroy_artifact = steed_of_the_apocalypse_mount
+		reduce_doom_progress_reset_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAundivided10 # Victory
+		trigger = { NOT = { religion_group = chaos_gods_group } }
+	}
+	option = {
+		name = EVTOPTBundivided10 # Failure
+		trigger = { religion_group = chaos_gods_group }
+	}
+}
+
+# 11 A new champion may rise
+# Fifty years after an Everchosen falls, the Dark Gods may anoint another.
+# Scope: ROOT = the Sigmarite religious head.
+character_event = {
+	id = undivided.11
+	hide_window = yes
+	is_triggered_only = yes
+	only_playable = yes
+	religion = sigmarite
+
+	trigger = {
+		controls_religion = yes
+		had_global_flag = { flag = everchosen_died years >= 50 }
+	}
+
+	immediate = {
+		clr_global_flag = everchosen_died
+	}
+}
+
+###############################################################################
+# 20-22 Surrender offer
+###############################################################################
+
+# 20 Kneel before the Everchosen
+# When the Everchosen attacks a Chaos or Norscan ruler (after the first war),
+# the ruler is offered the chance to submit. Kneeling makes them a vassal,
+# brings Norscans into the worship of Chaos Undivided and hands them a
+# warbanner of the host. Refusing wins prestige and keeps the war.
+# Scope: ROOT = the defender, FROM = the Everchosen.
+letter_event = {
+	id = undivided.20
+	desc = EVTDESCundivided20
+	picture = GFX_evt_chaos_everchosen
+	is_triggered_only = yes
+	only_rulers = yes
+
+	option = {
+		name = EVTOPTAundivided20 # Come and get me
+		prestige = 200
+		FROM = { character_event = { id = undivided.21 } }
+		ai_chance = {
+			factor = 30
+			modifier = {
+				factor = 2
+				OR = { trait = zealous trait = ambitious trait = wroth trait = brave }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBundivided20 # I kneel
+		prestige = -200
+		set_defacto_liege = FROM
+		if = { limit = { religion = norscan_gods } religion = FROM }
+		if = {
+			limit = { NOT = { has_artifact = everchosen_host_banner } }
+			add_artifact = everchosen_host_banner
+		}
+		FROM = { character_event = { id = undivided.22 } }
+		ai_chance = {
+			factor = 70
+			modifier = {
+				factor = 0
+				OR = { trait = zealous primary_title = { higher_tier_than = KING } }
+			}
+			modifier = {
+				factor = 2
+				OR = {
+					trait = craven
+					trait = slothful
+					trait = content
+					trait = slow
+					trait = imbecile
+					trait = inbred
+					trait = weak
+					trait = cynical
+				}
+			}
+		}
+	}
+}
+
+# 21 Refused
+# Scope: ROOT = the Everchosen, FROM = the defiant ruler.
+character_event = {
+	id = undivided.21
+	desc = EVTDESCundivided21
+	picture = GFX_evt_chaos_everchosen
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAundivided21
+	}
+}
+
+# 22 Accepted
+# Scope: ROOT = the Everchosen, FROM = the ruler who knelt.
+character_event = {
+	id = undivided.22
+	desc = EVTDESCundivided22
+	picture = GFX_evt_chaos_everchosen
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAundivided22
+	}
+}
+
+###############################################################################
+# 25 The horde grows
+###############################################################################
+
+# 25 Spoils of the first conquest
+# After the Everchosen's first successful invasion, the herds and stores of
+# the conquered swell the horde's capital, and its levies refill.
+# Scope: ROOT = the Everchosen.
+character_event = {
+	id = undivided.25
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		capital_holding = {
+			add_building = no_cattle_pens_1
+			add_building = no_cattle_pens_2
+			add_building = no_cattle_pens_3
+			add_building = no_cattle_pens_4
+			add_building = no_cattle_pens_5
+			add_building = no_cattle_pens_6
+			add_building = no_cattle_pens_7
+			add_building = no_cattle_pens_8
+			add_building = no_meat_preserver_1
+			add_building = no_meat_preserver_2
+			add_building = no_meat_preserver_3
+			add_building = no_meat_preserver_4
+			add_building = no_meat_preserver_5
+			add_building = no_meat_preserver_6
+			add_building = no_meat_preserver_7
+			add_building = no_meat_preserver_8
+			add_building = no_sheep_1
+			add_building = no_sheep_2
+			add_building = no_sheep_3
+			add_building = no_sheep_4
+			add_building = no_sheep_5
+			add_building = no_sheep_6
+			add_building = no_sheep_7
+			add_building = no_sheep_8
+			refill_holding_levy = yes
+		}
+	}
+}
+
+###############################################################################
+# 30-42 The path of the Everchosen
+# (came from events/BR_chaos_events.txt, namespace "chaos", in the 2026 events
+# refactor)
+#
+# A Chaos ruler with the favour of all four gods takes the
+# seektobecomeeverchosen decision (wh_chaos_decisions) and journeys to the Altar of Ultimate Darkness
+# in the far north of Naggaroth. With the default game rule the journey is a
+# 60-day pilgrimage; with the extended rule the seeker must lead an army into
+# the altar's province (1364) in person. There they face four duels to the
+# death against champions of the gods. A seeker who wins all four is marked as
+# the Everchosen, gets the Host of Chaos, four daemon hosts, and the call goes
+# out to every free Chaos ruler of Norsca and the Wastes.
+###############################################################################
+
+# 30 The Everchosen
+# The decision's opening event: set out for the altar, or not.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.30
+	title = EVERCHOSEN
+	desc = EVTDESCundivided30
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes # seektobecomeeverchosen decision
+	min_age = 16
+
+	option = {
+		name = I_SHALL_SEEK_OUT_THE_GODS
+		trigger = { has_game_rule = { name = warhammer_everchosen_quest value = default } }
+		set_character_flag = potential_everchosen
+		add_trait = on_pilgrimage
+		character_event = { id = undivided.31 days = 60 }
+	}
+	option = {
+		name = I_SHALL_SEEK_OUT_THE_GODS
+		trigger = { has_game_rule = { name = warhammer_everchosen_quest value = extended } }
+		custom_tooltip = { text = undivided_lead_army_to_altar_tt }
+		set_character_flag = potential_everchosen
+		# The AI cannot plan the march, so it makes the pilgrimage instead.
+		if = {
+			limit = { ai = yes }
+			add_trait = on_pilgrimage
+			character_event = { id = undivided.31 days = 60 }
+		}
+	}
+	option = {
+		name = NO_NOT_NOW
+		ai_chance = { factor = 0 }
+	}
+}
+
+# 31 The Altar of Ultimate Darkness (default rule)
+# The pilgrimage ends at the altar. Turning back ends the quest and the
+# pilgrimage.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.31
+	title = EVERCHOSEN
+	desc = EVTDESCundivided31
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+	}
+
+	option = {
+		name = EVTOPTAundivided31 # Enter the temple
+		character_event = { id = undivided.33 days = 5 }
+	}
+	option = {
+		name = NO_NOT_NOW
+		clr_character_flag = potential_everchosen
+		if = { limit = { trait = on_pilgrimage } remove_trait = on_pilgrimage }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# 32 The Altar of Ultimate Darkness (extended rule)
+# A seeker who leads an army into the altar's province reaches the temple.
+# Scope: ROOT = a commander entering province 1364.
+character_event = {
+	id = undivided.32
+	title = EVERCHOSEN
+	desc = EVTDESCundivided31
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes # on_unit_entering_province
+	has_character_flag = potential_everchosen
+
+	trigger = {
+		location = { province_id = 1364 } # The Altar of Ultimate Darkness
+	}
+
+	option = {
+		name = EVTOPTAundivided31 # Enter the temple
+		character_event = { id = undivided.33 days = 5 }
+	}
+	option = {
+		name = NO_NOT_NOW
+		clr_character_flag = potential_everchosen
+		ai_chance = { factor = 0 }
+	}
+}
+
+# 33 The first trial
+# A champion of one of the four gods. Waits while the seeker is still busy
+# with another duel.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.33
+	title = EVERCHOSEN
+	desc = EVTDESCundivided33
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.33 days = 21 }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = combatant_1
+		undivided_create_trial_champion_effect = yes
+		event_target:combatant_2 = {
+			upgrade_education_effect = yes
+			add_five_duel_experience_modifier = yes
+			add_five_duel_experience_modifier = yes
+			undivided_trial_champion_setup_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided33 # Charge
+		show_portrait = event_target:combatant_2
+		undivided_trial_duel_effect = yes
+		character_event = { id = undivided.34 days = 7 }
+	}
+}
+
+# 34 The second trial
+# A chosen warrior of Chaos Undivided.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.34
+	title = EVERCHOSEN
+	desc = EVTDESCundivided34
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.34 days = 21 }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = combatant_1
+		create_random_soldier = {
+			name = "Chaos Champion"
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 30
+			trait = creature_human
+		}
+		new_character = {
+			save_event_target_as = combatant_2
+			change_martial = 5
+			upgrade_education_effect = yes
+			add_five_duel_experience_modifier = yes
+			add_five_duel_experience_modifier = yes
+			add_trait = brave
+			add_trait = cruel
+			add_trait = chaos_knight
+			undivided_trial_champion_setup_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided33 # Charge
+		show_portrait = event_target:combatant_2
+		undivided_trial_duel_effect = yes
+		character_event = { id = undivided.35 days = 7 }
+	}
+}
+
+# 35 The third trial
+# Another champion of the four gods, more seasoned.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.35
+	title = EVERCHOSEN
+	desc = EVTDESCundivided35
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.35 days = 21 }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = combatant_1
+		undivided_create_trial_champion_effect = yes
+		event_target:combatant_2 = {
+			upgrade_education_effect = yes
+			add_five_duel_experience_modifier = yes
+			add_five_duel_experience_modifier = yes
+			add_five_duel_experience_modifier = yes
+			undivided_trial_champion_setup_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided33 # Charge
+		show_portrait = event_target:combatant_2
+		undivided_trial_duel_effect = yes
+		character_event = { id = undivided.36 days = 7 }
+	}
+}
+
+# 36 The last trial
+# The final champion. Victory leads to the mark (38).
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.36
+	title = EVERCHOSEN
+	desc = EVTDESCundivided36
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.36 days = 21 }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = combatant_1
+		undivided_create_trial_champion_effect = yes
+		event_target:combatant_2 = {
+			upgrade_education_effect = yes
+			add_five_duel_experience_modifier = yes
+			add_five_duel_experience_modifier = yes
+			add_five_duel_experience_modifier = yes
+			undivided_trial_champion_setup_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided33 # Charge
+		show_portrait = event_target:combatant_2
+		undivided_trial_duel_effect = yes
+		character_event = { id = undivided.38 days = 7 }
+	}
+}
+
+# 37 The champion fades
+# A trial champion vanishes once the duel is over, the seeker is dead, or
+# five months have passed.
+# Scope: ROOT = the champion, FROM = the seeker.
+character_event = {
+	id = undivided.37
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		OR = {
+			FROM = { is_alive = no }
+			NOT = { has_character_flag = duel }
+			had_character_flag = { flag = duel months >= 5 }
+		}
+	}
+	fail_trigger_effect = { repeat_event = { id = undivided.37 days = 30 } }
+
+	immediate = {
+		death = { death_reason = death_vanished }
+	}
+}
+
+# 38 Rise, Everchosen
+# The seeker kneels at the altar and receives the mark. If another Everchosen
+# rose while the seeker was on the road, the gods turn away instead (42).
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.38
+	title = EVERCHOSEN
+	desc = EVTDESCundivided38
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_global_flag = everchosen_exists }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			character_event = { id = undivided.42 }
+		}
+	}
+
+	immediate = {
+		clr_character_flag = potential_everchosen
+		set_global_flag = everchosen_exists
+		activate_title = { title = e_host_chaos status = yes }
+		if = { limit = { trait = on_pilgrimage } remove_trait = on_pilgrimage }
+	}
+
+	option = {
+		name = AT_LAST
+		add_trait = everchosen
+		add_trait = mark_chaos
+		create_everchosen_artifacts = yes
+		set_graphical_culture = everchosen_visual
+		set_character_flag = first_everchosen_war
+		set_character_flag = horde_invader
+		set_character_flag = existing_everchosen
+		e_host_chaos = { grant_title = ROOT make_primary_title = yes }
+		religion_scope = { set_religion_head = e_host_chaos }
+		narrative_event = { id = undivided.39 }
+		character_event = { id = undivided.40 days = 21 }
+	}
+}
+
+# 39 The Everchosen has risen
+# Every player hears that a ruler has taken the mark at the altar.
+# Scope: ROOT = the new Everchosen.
+narrative_event = {
+	id = undivided.39
+	title = EVTNAMEundivided1
+	desc = EVTDESCundivided39
+	picture = GFX_evt_chaos_everchosen
+	border = GFX_event_narrative_frame_war
+	major = yes
+	hide_new = yes
+	hide_from = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAundivided1 # Protect us
+		trigger = {
+			NOR = {
+				religion_group = chaos_gods_group
+				religion_group = greenskin_gods_group
+				religion_group = necromantic_group
+				religion_group = horned_rat_god_group
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBundivided1 # For Chaos
+		trigger = { religion_group = chaos_gods_group }
+	}
+	option = {
+		name = EVTOPTCundivided1 # Greenskins
+		trigger = { religion_group = greenskin_gods_group }
+	}
+	option = {
+		name = EVTOPTDundivided1 # Undead
+		trigger = { religion_group = necromantic_group }
+	}
+	option = {
+		name = EVTOPTEundivided1 # Skaven
+		trigger = { religion_group = horned_rat_god_group }
+	}
+}
+
+# 40 Daemons march at your side
+# The new Everchosen returns home with a Bloodletter, a Daemonette, a
+# Plaguebearer and a Flamer, each with a host of 20,700, and the free Chaos
+# rulers of Norsca and the Wastes are asked to join (41).
+# Scope: ROOT = the Everchosen.
+character_event = {
+	id = undivided.40
+	title = EVERCHOSEN
+	desc = EVTDESCundivided40
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = everchosen
+		has_landed_title = e_host_chaos
+	}
+
+	option = {
+		name = EVTOPTAundivided40 # Let all bow
+		prestige = 2500
+		piety = 2500
+		any_independent_ruler = {
+			limit = {
+				NOT = { character = ROOT }
+				religion_group = chaos_gods_group
+				capital_scope = { OR = { region = world_norsca region = world_chaos_wastes } }
+				NOR = {
+					trait = norscan_patron_ulric
+					trait = norscan_patron_ursun
+					religion = hashut
+				}
+			}
+			character_event = { id = undivided.41 days = 21 }
+		}
+		create_random_soldier = {
+			random_traits = no
+			dynasty = RANDOM
+			culture = bloodletter_khorne
+			religion = chaos
+			age = 30
+			attributes = { martial = 20 diplomacy = 4 stewardship = 5 intrigue = 4 learning = 3 }
+			health = 6
+			fertility = 0.7
+			trait = khorne_demon
+			trait = khorne_bloodletter
+			trait = brilliant_strategist
+			trait = wroth
+			trait = cruel
+			trait = proud
+			trait = zealous
+		}
+		undivided_spawn_daemon_host_effect = yes
+		create_random_soldier = {
+			random_traits = no
+			dynasty = RANDOM
+			culture = daemonette_slaanesh
+			religion = chaos
+			age = 30
+			attributes = { martial = 15 diplomacy = 4 stewardship = 5 intrigue = 10 learning = 3 }
+			health = 6
+			fertility = 0.7
+			trait = slaanesh_demon
+			trait = slaanesh_daemonette
+			trait = brilliant_strategist
+			trait = wroth
+			trait = cruel
+			trait = hedonist
+			trait = lustful
+			trait = zealous
+		}
+		undivided_spawn_daemon_host_effect = yes
+		create_random_soldier = {
+			random_traits = no
+			dynasty = RANDOM
+			culture = plaguebearer_nurgle
+			religion = chaos
+			age = 30
+			attributes = { martial = 15 diplomacy = 4 stewardship = 5 intrigue = 5 learning = 3 }
+			health = 6
+			fertility = 0.7
+			trait = nurgle_demon
+			trait = nurgle_plaguebearer
+			trait = brilliant_strategist
+			trait = wroth
+			trait = lunatic_3
+			trait = hedonist
+			trait = cruel
+			trait = zealous
+		}
+		undivided_spawn_daemon_host_effect = yes
+		create_random_soldier = {
+			random_traits = no
+			dynasty = RANDOM
+			culture = flamer_tzeentch
+			religion = chaos
+			age = 30
+			attributes = { martial = 15 diplomacy = 4 stewardship = 5 intrigue = 30 learning = 3 }
+			health = 6
+			fertility = 0.7
+			trait = tzeentch_demon
+			trait = tzeentch_flamer
+			trait = brilliant_strategist
+			trait = wroth
+			trait = genius
+			trait = mystic
+			trait = cruel
+			trait = zealous
+		}
+		undivided_spawn_daemon_host_effect = yes
+	}
+}
+
+# 41 The call of the Everchosen
+# A free Chaos ruler of Norsca or the Wastes may kneel to the new Everchosen.
+# Most do; the proud, the ambitious and the great kings may not.
+# Scope: ROOT = the ruler, FROM = the Everchosen.
+character_event = {
+	id = undivided.41
+	title = EVERCHOSEN
+	desc = EVTDESCundivided41
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+	only_independent = yes
+	min_age = 16
+
+	trigger = {
+		FROM = { trait = everchosen }
+	}
+
+	option = {
+		name = EVTOPTAundivided41 # March with the Everchosen
+		set_defacto_liege = FROM
+		ai_chance = { factor = 75 }
+	}
+	option = {
+		name = EVTOPTBundivided41 # Never
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 2 OR = { trait = proud trait = ambitious } }
+			modifier = { factor = 2 primary_title = { higher_tier_than = DUKE } }
+			modifier = { factor = 0.5 OR = { trait = zealous trait = craven } }
+		}
+	}
+}
+
+# 42 The gods have chosen another
+# Another Everchosen rose while the seeker was on the road. The quest ends.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.42
+	title = EVERCHOSEN
+	desc = EVTDESCundivided42
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = potential_everchosen
+		if = { limit = { trait = on_pilgrimage } remove_trait = on_pilgrimage }
+	}
+
+	option = {
+		name = EVTOPTAundivided42
+	}
+}

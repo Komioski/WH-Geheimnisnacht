@@ -14,9 +14,42 @@ namespace = REP
 # The Westerland guilds ask their ruler to charter a merchant league in a
 # northern port city. If permitted, a new merchant republic forms there,
 # takes nearby trade posts and sets up its patrician houses.
-# REP.40 is fired for the ruler of Westerland at game start (51000).
+# REP.39 runs once per game from on_startup and sends REP.40 to the ruler of
+# Westerland a week in, once the realm's patrician houses exist.
+
+# Start the Marienburg League chain (setup)
+# Fired from on_startup (players only, also on load), so a global flag keeps
+# it to one run per game.
+character_event = {
+	id = REP.39
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { has_global_flag = marienburg_league_checked }
+	}
+
+	immediate = {
+		set_global_flag = marienburg_league_checked
+		if = {
+			limit = { e_westerland = { has_holder = yes } }
+			e_westerland = {
+				holder_scope = { character_event = { id = REP.40 days = 7 } }
+			}
+		}
+		else_if = {
+			limit = { k_westerland = { has_holder = yes } }
+			k_westerland = {
+				holder_scope = { character_event = { id = REP.40 days = 7 } }
+			}
+		}
+	}
+}
 
 # Guilds seek a charter (setup)
+# Westerland is itself a merchant republic, so the petitioner is one of its
+# patrician houses, a vassal republic or failing that any vassal with a city.
 character_event = {
 	id = REP.40
 	hide_window = yes
@@ -31,7 +64,13 @@ character_event = {
 		independent = yes
 		religion_group = old_world_group
 		NOT = { has_global_flag = hansa_formed }
-		any_vassal = { is_merchant_republic = yes }
+		any_vassal = {
+			OR = {
+				is_patrician = yes
+				is_merchant_republic = yes
+				any_demesne_title = { holding_type = city }
+			}
+		}
 		check_variable = { which = global_marienburg_expansion which <= 10 }
 	}
 
@@ -47,11 +86,12 @@ character_event = {
 						region = world_old_world_empire_wasteland
 					}
 				}
+				county = { NOT = { holder = ROOT } }
 				owner = {
 					NOR = {
+						character = ROOT
 						is_patrician = yes
 						is_merchant_republic = yes
-						any_liege = { is_merchant_republic = yes }
 					}
 				}
 			}
@@ -59,11 +99,27 @@ character_event = {
 		}
 		if = {
 			limit = { event_target:RepublicanCity = { always = yes } }
-			random_vassal = {
-				limit = { is_merchant_republic = yes }
-				save_event_target_as = RepublicanLeader
-				character_event = { id = REP.41 }
+			if = {
+				limit = { any_vassal = { is_patrician = yes } }
+				random_vassal = {
+					limit = { is_patrician = yes }
+					save_event_target_as = RepublicanLeader
+				}
 			}
+			else_if = {
+				limit = { any_vassal = { is_merchant_republic = yes } }
+				random_vassal = {
+					limit = { is_merchant_republic = yes }
+					save_event_target_as = RepublicanLeader
+				}
+			}
+			else = {
+				random_vassal = {
+					limit = { any_demesne_title = { holding_type = city } }
+					save_event_target_as = RepublicanLeader
+				}
+			}
+			event_target:RepublicanLeader = { character_event = { id = REP.41 } }
 		}
 	}
 }

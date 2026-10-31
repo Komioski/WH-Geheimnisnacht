@@ -1,4 +1,884 @@
 ###############################################################################
+# Greenskin events: size, shamans, camp life and fungus brewing (this file also
+# holds the warboss events, namespace warboss, further down; they came from
+# DR_greenskins_events.txt)
+# Namespace: greenskin (was "orcs" and "greenskinmagic" before the 2026 events
+# refactor; the shaman events came from events/BR_greenskin_magic_events.txt)
+# Faction: Greenskins
+#
+# Size                          greenskin.1 - greenskin.6
+# Shamans                       greenskin.10 - greenskin.15
+# Camp life                     greenskin.20 - greenskin.22
+# Fungus brewing                greenskin.30 - greenskin.35
+# Squig herding                 greenskin.40 - greenskin.43
+#
+# Fired from common/on_actions/wh_on_actions.txt (on_adulthood, the pulses
+# and on_combat_pulse).
+# Localisation: localisation/00_WHG_greenskin_events.csv
+# Full list with callers: docs/events/event_database.csv
+#
+# The larger Greenskin files (Power law, WAAAGH!) are events/WHG_greenskin_events.txt.
+###############################################################################
+
+namespace = greenskin
+
+###############################################################################
+# Size
+###############################################################################
+
+# greenskin.1 How big you grew
+# An orc or goblin coming of age gets a size trait from martial skill:
+# small below 10, average below 15, large below 25, huge from 25.
+# Fired at 16, and every five years through greenskin.5 and greenskin.6
+# for greenskins created as adults.
+# Scope: ROOT is the greenskin.
+character_event = {
+	id = greenskin.1
+	title = YOUR_SIZE
+	desc = EVTDESCgreenskin1
+	picture = GFX_evt_orcs
+	is_triggered_only = yes # on_adulthood, greenskin.5, greenskin.6
+
+	min_age = 16
+
+	trigger = {
+		OR = { culture_group = goblin_group culture_group = orc_group }
+		NOR = {
+			trait = orc_small
+			trait = orc_average
+			trait = orc_large
+			trait = orc_huge
+			trait = goblin_small
+			trait = goblin_average
+			trait = goblin_large
+			trait = goblin_huge
+		}
+	}
+
+	option = { # Arrrrgh!
+		name = ARRRRGH
+		if = {
+			limit = { culture_group = orc_group }
+			if = { limit = { martial = 25 } add_trait = orc_huge }
+			else_if = { limit = { martial = 15 } add_trait = orc_large }
+			else_if = { limit = { martial = 10 } add_trait = orc_average }
+			else = { add_trait = orc_small }
+		}
+		else = {
+			if = { limit = { martial = 25 } add_trait = goblin_huge }
+			else_if = { limit = { martial = 15 } add_trait = goblin_large }
+			else_if = { limit = { martial = 10 } add_trait = goblin_average }
+			else = { add_trait = goblin_small }
+		}
+	}
+}
+
+# greenskin.2 Bigger after the fight
+# A greenskin in battle grows one size step (up to huge). Brave, cruel and
+# wroth greenskins grow faster.
+# Scope: ROOT is the greenskin commander.
+character_event = {
+	id = greenskin.2
+	desc = EVTDESCgreenskin2
+	picture = GFX_evt_orcs
+	is_triggered_only = yes # on_combat_pulse
+
+	trigger = {
+		OR = {
+			trait = orc_small
+			trait = orc_average
+			trait = orc_large
+			trait = goblin_small
+			trait = goblin_average
+			trait = goblin_large
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = brave }
+		modifier = { factor = 2 trait = cruel }
+		modifier = { factor = 2 trait = wroth }
+	}
+
+	option = { # WAAAGH!
+		name = EVTOPTAgreenskin2
+		greenskin_grow_effect = yes
+	}
+}
+
+# greenskin.3 Stomp da grot
+# A goblin ruler catches a smaller grot pinching his grub. Stomping him makes
+# the goblin one size bigger (and maybe cruel); letting him off does nothing.
+# Rare: about once in 12 years.
+# Scope: ROOT is the goblin ruler.
+character_event = {
+	id = greenskin.3
+	desc = EVTDESCgreenskin3
+	picture = GFX_evt_orcs
+	is_triggered_only = yes # on_bi_yearly_pulse, random list greenskin_grot_stomp
+
+	culture_group = goblin_group
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		is_landed = yes
+		OR = { trait = goblin_small trait = goblin_average trait = goblin_large }
+	}
+
+	option = { # STOMP!
+		name = EVTOPTAgreenskin3
+		greenskin_grow_effect = yes
+		random = { chance = 20 add_trait = cruel }
+	}
+
+	option = { # Git outta 'ere
+		name = EVTOPTBgreenskin3
+		prestige = -10
+	}
+}
+
+# greenskin.5 Size catch-up for orcs
+# Five-yearly check that sends adult orcs without a size trait to
+# greenskin.1. Split from the goblin check so each has a cheap culture
+# pre-trigger and orcs of any faith are covered.
+# Scope: ROOT is the orc.
+character_event = {
+	id = greenskin.5
+	hide_window = yes
+	is_triggered_only = yes # on_five_year_pulse
+
+	culture_group = orc_group
+	min_age = 16
+
+	immediate = {
+		character_event = { id = greenskin.1 }
+	}
+}
+
+# greenskin.6 Size catch-up for goblins
+# Same as greenskin.5, for goblins.
+# Scope: ROOT is the goblin.
+character_event = {
+	id = greenskin.6
+	hide_window = yes
+	is_triggered_only = yes # on_five_year_pulse
+
+	culture_group = goblin_group
+	min_age = 16
+
+	immediate = {
+		character_event = { id = greenskin.1 }
+	}
+}
+
+###############################################################################
+# Shamans
+###############################################################################
+
+# greenskin.10 Da Waaagh! in yer 'ead
+# A landed greenskin of 30 or more who is pious (1000), a scholar, a mystic
+# or a theocracy can take up the Lore of the Waaagh! Craven or content
+# greenskins can only refuse. Theocracies may be refused by the gods (25%)
+# or made full shamans (40%). Tells the father (greenskin.11) and the top
+# liege (greenskin.12). One chance per character: refusing sets a flag.
+# Scope: ROOT is the greenskin.
+character_event = {
+	id = greenskin.10
+	title = MAGIC
+	desc = EVTDESCgreenskin10
+	picture = GFX_evt_orcs
+	is_triggered_only = yes # on_five_year_pulse, random list greenskin_shamans
+
+	religion_group = greenskin_gods_group
+	min_age = 30
+
+	trigger = {
+		is_landed = yes
+		OR = { culture_group = goblin_group culture_group = orc_group }
+		OR = { piety = 1000 trait = scholar trait = mystic is_theocracy = yes }
+		NOT = { trait = lore_waaagh }
+		NOT = { has_character_flag = refused_shaman }
+	}
+
+	option = { # I will get da power!
+		name = EVTOPTAgreenskin10
+		trigger = { NOR = { trait = craven trait = content } }
+		if = {
+			limit = { is_theocracy = yes }
+			random_list = {
+				25 = { set_character_flag = refused_shaman }
+				40 = { }
+				40 = { add_trait = greenskin_shaman }
+			}
+		}
+		if = {
+			limit = { NOT = { has_character_flag = refused_shaman } }
+			add_trait = lore_waaagh
+			magic_lvl_increase_effect = yes
+			enable_magic_xp_effect = yes
+			hidden_effect = {
+				top_liege = {
+					if = {
+						limit = {
+							NOT = { character = ROOT }
+							OR = { culture_group = orc_group culture_group = goblin_group }
+						}
+						character_event = { id = greenskin.12 days = 7 }
+					}
+				}
+				if = {
+					limit = { father = { is_alive = yes } }
+					father = { character_event = { id = greenskin.11 } }
+				}
+			}
+		}
+	}
+
+	option = { # Nah, I just likes to use my smasher!
+		name = EVTOPTBgreenskin10
+		set_character_flag = refused_shaman
+	}
+}
+
+# greenskin.11 Dat's my boy!
+# The new shaman's father hears the news and gains prestige.
+# Scope: ROOT is the father, FROM the new shaman.
+character_event = {
+	id = greenskin.11
+	title = MAGIC
+	desc = EVTDESCgreenskin11
+	picture = GFX_evt_orcs
+	is_triggered_only = yes # greenskin.10
+
+	option = { # Dats my boy!
+		name = EVTOPTAgreenskin11
+		prestige = 200
+	}
+}
+
+# greenskin.12 A shaman among the chiefs
+# The top liege hears that a vassal has become a shaman.
+# Scope: ROOT is the top liege, FROM the new shaman.
+character_event = {
+	id = greenskin.12
+	title = MAGIC
+	desc = EVTDESCgreenskin12
+	picture = GFX_evt_orcs
+	is_triggered_only = yes # greenskin.10
+
+	option = { # He iz gonna smash our enemies!
+		name = EVTOPTAgreenskin12
+	}
+}
+
+# greenskin.15 A shaman joins the warband
+# At war, an orc ruler of 20 or more can take in a young shaman as a son of
+# the dynasty (older shamans for older warbosses), or refuse out of fear.
+# At most once every ten years.
+# Scope: ROOT is the orc ruler.
+character_event = {
+	id = greenskin.15
+	desc = EVTDESCgreenskin15
+	picture = GFX_evt_orcs
+	is_triggered_only = yes # on_bi_yearly_pulse
+
+	min_age = 20
+	war = yes
+	prisoner = no
+
+	trigger = {
+		is_landed = yes
+		culture_group = orc_group
+		OR = {
+			NOT = { has_character_flag = greenskin_took_shaman }
+			had_character_flag = { flag = greenskin_took_shaman days = 3650 }
+		}
+	}
+
+	immediate = {
+		clr_character_flag = greenskin_took_shaman
+		set_character_flag = greenskin_took_shaman
+	}
+
+	option = { # Tell 'im ta stay outta mah way
+		name = EVTOPTAgreenskin15
+		prestige = 50
+		piety = 25
+		if = {
+			limit = { age >= 90 }
+			create_random_priest = {
+				random_traits = yes
+				dynasty = ROOT
+				culture = ROOT
+				religion = ROOT
+				female = no
+				age = 82
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Racial trait
+				change_learning = 8
+				change_diplomacy = 6
+				greenskin_new_shaman_effect = yes
+			}
+		}
+		else_if = {
+			limit = { age >= 60 }
+			create_random_priest = {
+				random_traits = yes
+				dynasty = ROOT
+				culture = ROOT
+				religion = ROOT
+				female = no
+				age = 53
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Racial trait
+				change_learning = 6
+				change_diplomacy = 5
+				greenskin_new_shaman_effect = yes
+			}
+		}
+		else = {
+			create_random_priest = {
+				random_traits = yes
+				dynasty = ROOT
+				culture = ROOT
+				religion = ROOT
+				female = no
+				age = 19
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Racial trait
+				change_learning = 5
+				change_diplomacy = 4
+				greenskin_new_shaman_effect = yes
+			}
+		}
+		recalc_succession = yes
+	}
+
+	option = { # Wot if he makes me 'ead splode?
+		name = EVTOPTBgreenskin15
+		prestige = -50
+		random = { chance = 25 add_trait = craven }
+	}
+}
+
+###############################################################################
+# Camp life
+###############################################################################
+
+# greenskin.20 Da broken choppa
+# An orc ruler at peace loses his best choppa to a clumsy grot. Rage (may turn
+# cruel) or curse (may become stressed).
+# Scope: ROOT is the orc ruler.
+character_event = {
+	id = greenskin.20
+	desc = EVTDESCgreenskin20
+	picture = GFX_evt_orcs
+	is_triggered_only = yes # on_bi_yearly_pulse
+
+	min_age = 16
+	war = no
+	prisoner = no
+
+	trigger = {
+		is_landed = yes
+		culture_group = orc_group
+	}
+
+	option = { # Ya stupid git!
+		name = EVTOPTAgreenskin20
+		prestige = -50
+		random = { chance = 15 add_trait = cruel }
+	}
+
+	option = { # Zog it!
+		name = EVTOPTBgreenskin20
+		prestige = -25
+		random = { chance = 5 add_trait = stressed }
+	}
+}
+
+# greenskin.21 Da grot thief
+# A goblin makes off with an orc ruler's choppa. Chase him (may turn cruel or
+# wroth), let it go (may turn slothful), or, for cunning orcs, follow him to
+# his stash (greenskin.22). About once in 15 years.
+# Scope: ROOT is the orc ruler.
+character_event = {
+	id = greenskin.21
+	desc = EVTDESCgreenskin21
+	picture = GFX_evt_orcs
+	is_triggered_only = yes # on_bi_yearly_pulse, random list greenskin_grot_thief
+
+	religion_group = greenskin_gods_group
+	culture_group = orc_group
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		is_landed = yes
+	}
+
+	option = { # Git 'im, lads!
+		name = EVTOPTAgreenskin21
+		random = { chance = 25 add_trait = cruel }
+		random = { chance = 25 add_trait = wroth }
+	}
+
+	option = { # Zog it...
+		name = EVTOPTBgreenskin21
+		prestige = -25
+		random = { chance = 15 add_trait = slothful }
+	}
+
+	option = { # Follow 'im to 'is stash
+		name = EVTOPTCgreenskin21
+		trigger = {
+			OR = { trait = quick trait = genius trait = deceitful }
+			NOR = { trait = inbred trait = slow trait = imbecile }
+		}
+		custom_tooltip = { text = EVTOPTCgreenskin21_tt }
+		character_event = { id = greenskin.22 }
+	}
+}
+
+# greenskin.22 Da stash
+# The thief's hoard: sell it for teef (may turn greedy) or arm the boyz
+# (prestige, piety, may turn gregarious).
+# Scope: ROOT is the orc ruler.
+character_event = {
+	id = greenskin.22
+	desc = EVTDESCgreenskin22
+	picture = GFX_evt_orcs
+	is_triggered_only = yes # greenskin.21
+
+	option = { # A big bag o' teef
+		name = EVTOPTAgreenskin22
+		wealth = 150
+		random = { chance = 10 add_trait = greedy }
+	}
+
+	option = { # Gud choppas for da lads
+		name = EVTOPTBgreenskin22
+		prestige = 150
+		piety = 50
+		wealth = 25
+		random = { chance = 15 add_trait = gregarious }
+	}
+}
+
+###############################################################################
+# Fungus brewing
+###############################################################################
+
+# greenskin.30 Fungus on da droppin' ground
+# A goblin suggests an orc with stewardship 12 and no lifestyle trait grow
+# fungus for beer. Plant fungus (greenskin.32, the gardener path) or plant the
+# goblin (greenskin.31, the impaler path).
+# Scope: ROOT is the orc.
+character_event = {
+	id = greenskin.30
+	desc = EVTDESCgreenskin30
+	picture = GFX_evt_garden
+	is_triggered_only = yes # on_decade_pulse, random list greenskins
+
+	religion_group = greenskin_gods_group
+	min_age = 25
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		culture_group = orc_group
+		in_command = no
+		stewardship = 12
+		NOR = {
+			lifestyle_traits = 1
+			has_character_flag = fungal_planter
+			has_character_flag = goblin_planter
+			has_character_modifier = the_impaler
+			has_character_modifier = the_gardener
+		}
+	}
+
+	option = { # Plant da goblin instead
+		name = EVTOPTAgreenskin30
+		prestige = 20
+		set_character_flag = goblin_planter
+		character_event = { id = greenskin.31 days = 90 random = 30 }
+	}
+
+	option = { # Gud idea, Skumzog!
+		name = EVTOPTBgreenskin30
+		piety = 20
+		set_character_flag = fungal_planter
+		character_event = { id = greenskin.32 days = 95 random = 55 }
+	}
+}
+
+# greenskin.31 Goblin beer
+# The planted goblin makes a nasty brew. Serve it (prestige, maybe a mushroom
+# artifact) or keep "gardening" (greenskin.33).
+# Scope: ROOT is the orc.
+character_event = {
+	id = greenskin.31
+	desc = EVTDESCgreenskin31
+	picture = GFX_evt_pale_rider
+	is_triggered_only = yes # greenskin.30
+
+	has_character_flag = goblin_planter
+
+	trigger = {
+		culture_group = orc_group
+		in_command = no
+		NOR = {
+			lifestyle_traits = 1
+			has_character_modifier = the_impaler
+			has_character_modifier = the_gardener
+		}
+	}
+
+	option = { # Drink up, lads!
+		name = EVTOPTAgreenskin31
+		prestige = 20
+		clr_character_flag = goblin_planter
+		random_list = {
+			40 = { }
+			35 = { add_artifact = scarlet_elf_cap_mushroom }
+			25 = { add_artifact = madcap_mushroom }
+		}
+	}
+
+	option = { # Mebbe use da fungus after all
+		name = EVTOPTBgreenskin31
+		clr_character_flag = goblin_planter
+		set_character_flag = goblin_harvester
+		character_event = { id = greenskin.33 days = 30 tooltip = EVTOPTBgreenskin31_tt }
+	}
+}
+
+# greenskin.32 Fungus beer
+# The fungus brew wins over an upstart. Keep pouring (wealth, maybe a mushroom
+# artifact) or try for fungus wine (greenskin.35).
+# Scope: ROOT is the orc.
+character_event = {
+	id = greenskin.32
+	desc = EVTDESCgreenskin32
+	picture = GFX_evt_garden
+	is_triggered_only = yes # greenskin.30
+
+	has_character_flag = fungal_planter
+
+	trigger = {
+		culture_group = orc_group
+		in_command = no
+		NOR = {
+			lifestyle_traits = 1
+			has_character_modifier = the_impaler
+			has_character_modifier = the_gardener
+		}
+	}
+
+	option = { # Have anuvva, boyz!
+		name = EVTOPTAgreenskin32
+		wealth = 30
+		clr_character_flag = fungal_planter
+		random_list = {
+			30 = { }
+			35 = { add_artifact = scarlet_elf_cap_mushroom }
+			35 = { add_artifact = madcap_mushroom }
+		}
+	}
+
+	option = { # Fungus wine
+		name = EVTOPTBgreenskin32
+		clr_character_flag = fungal_planter
+		set_character_flag = fungal_harvester
+		character_event = {
+			id = greenskin.35
+			days = 30
+			random = 10
+			tooltip = EVTOPTBgreenskin32_tt
+		}
+	}
+}
+
+# greenskin.33 Goblins on da lawn
+# The planted goblins make bad beer but a fine display. Keep them (towards
+# impaler, greenskin.34) or switch to fungus (mushroom artifact).
+# Scope: ROOT is the orc.
+character_event = {
+	id = greenskin.33
+	desc = EVTDESCgreenskin33
+	picture = GFX_evt_garden
+	is_triggered_only = yes # greenskin.31
+
+	has_character_flag = goblin_harvester
+
+	option = { # Dey look nice on me lawn
+		name = EVTOPTAgreenskin33
+		prestige = 40
+		character_event = { id = greenskin.34 days = 10 random = 10 }
+	}
+
+	option = { # Plant fungus instead
+		name = EVTOPTBgreenskin33
+		piety = 20
+		clr_character_flag = goblin_harvester
+		random_list = {
+			45 = { add_artifact = scarlet_elf_cap_mushroom }
+			55 = { add_artifact = madcap_mushroom }
+		}
+	}
+}
+
+# greenskin.34 Heads on sticks
+# No goblin steals any more. Become an impaler, or take a year-long impaler
+# modifier.
+# Scope: ROOT is the orc.
+character_event = {
+	id = greenskin.34
+	desc = EVTDESCgreenskin34
+	picture = GFX_evt_pale_rider
+	is_triggered_only = yes # greenskin.33
+
+	has_character_flag = goblin_harvester
+
+	immediate = {
+		clr_character_flag = goblin_harvester
+	}
+
+	option = { # Put up more
+		name = EVTOPTAgreenskin34
+		add_trait = impaler
+	}
+
+	option = { # Dat's da spirit
+		name = EVTOPTBgreenskin34
+		add_character_modifier = { name = the_impaler duration = 365 }
+	}
+}
+
+# greenskin.35 Da best brewer in da camp
+# The boyz love the fungus wine. Become a gardener, or take a year-long
+# gardener modifier; both give a mushroom artifact.
+# Scope: ROOT is the orc.
+character_event = {
+	id = greenskin.35
+	desc = EVTDESCgreenskin35
+	picture = GFX_evt_garden
+	is_triggered_only = yes # greenskin.32
+
+	has_character_flag = fungal_harvester
+
+	immediate = {
+		clr_character_flag = fungal_harvester
+	}
+
+	option = { # Best brewer in da camp
+		name = EVTOPTAgreenskin35
+		add_trait = gardener
+		random_list = {
+			25 = { add_artifact = scarlet_elf_cap_mushroom }
+			75 = { add_artifact = madcap_mushroom }
+		}
+	}
+
+	option = { # Me garden showed 'em
+		name = EVTOPTBgreenskin35
+		add_character_modifier = { name = the_gardener duration = 365 }
+		random_list = {
+			40 = { add_artifact = scarlet_elf_cap_mushroom }
+			60 = { add_artifact = madcap_mushroom }
+		}
+	}
+}
+
+###############################################################################
+# Squig herding
+###############################################################################
+
+# greenskin.40 Squigs in da cave
+# A goblin ruler finds a squig nest in the caves under his hold. Herd them
+# (greenskin.41 in about a year), eat them (prestige, may turn gluttonous)
+# or leave them be. One chance per character; night goblins are three
+# times as likely to get it.
+# Scope: ROOT is the goblin ruler.
+character_event = {
+	id = greenskin.40
+	desc = EVTDESCgreenskin40
+	picture = GFX_evt_night_goblins
+	is_triggered_only = yes # on_decade_pulse, random list greenskins
+
+	culture_group = goblin_group
+	min_age = 20
+	only_rulers = yes
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		is_landed = yes
+		in_command = no
+		NOT = { has_character_flag = greenskin_squig_nest }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 3 culture = goblin_night }
+	}
+
+	immediate = {
+		set_character_flag = greenskin_squig_nest
+	}
+
+	option = { # Round 'em up!
+		name = EVTOPTAgreenskin40
+		set_character_flag = greenskin_squig_herding
+		add_character_modifier = { name = greenskin_squig_pen years = 2 }
+		character_event = { id = greenskin.41 days = 365 random = 90 }
+	}
+
+	option = { # Squig stew
+		name = EVTOPTBgreenskin40
+		prestige = 25
+		health = 0.5
+		random = { chance = 20 add_trait = gluttonous }
+	}
+
+	option = { # Dey bite. Leave 'em.
+		name = EVTOPTCgreenskin40
+		random = { chance = 10 add_trait = craven }
+	}
+}
+
+# greenskin.41 Da squig pen
+# The herd has grown and eaten two herders. Breed them bigger (stewardship
+# and martial help; success leads to greenskin.42, failure ends the chain
+# with a bitten ruler) or sell them to the boyz for teef.
+# Scope: ROOT is the goblin ruler.
+character_event = {
+	id = greenskin.41
+	desc = EVTDESCgreenskin41
+	picture = GFX_evt_squig_attack
+	is_triggered_only = yes # greenskin.40
+
+	has_character_flag = greenskin_squig_herding
+
+	option = { # Bigger squigs!
+		name = EVTOPTAgreenskin41
+		random_list = {
+			60 = { # They grow
+				modifier = { factor = 1.5 stewardship = 12 }
+				modifier = { factor = 1.5 martial = 12 }
+				custom_tooltip = { text = EVTOPTAgreenskin41_tt }
+				character_event = { id = greenskin.42 days = 365 random = 90 }
+			}
+			40 = { # They bite
+				clr_character_flag = greenskin_squig_herding
+				remove_character_modifier = greenskin_squig_pen
+				prestige = -25
+				add_trait = wounded
+			}
+		}
+	}
+
+	option = { # Sell 'em to da boyz
+		name = EVTOPTBgreenskin41
+		clr_character_flag = greenskin_squig_herding
+		remove_character_modifier = greenskin_squig_pen
+		scaled_wealth = { value = 0.25 min = 25 }
+		if = {
+			limit = { NOT = { has_artifact = squig } }
+			add_artifact = squig
+			check_mount_flags_effect = yes
+		}
+	}
+}
+
+# greenskin.42 Da great cave squig
+# One squig grew into a great cave squig. Ride it (martial and the brave
+# help: a great cave squig mount, a bounce into a wound, or maimed), or make
+# it boss of the herd (greenskin_squig_herder for ten years, and the herd
+# goes to war in greenskin.43 a few years later).
+# Scope: ROOT is the goblin ruler.
+character_event = {
+	id = greenskin.42
+	desc = EVTDESCgreenskin42
+	picture = GFX_evt_squig_attack
+	is_triggered_only = yes # greenskin.41
+
+	has_character_flag = greenskin_squig_herding
+
+	immediate = {
+		remove_character_modifier = greenskin_squig_pen
+	}
+
+	option = { # Oi'm ridin' it!
+		name = EVTOPTAgreenskin42
+		clr_character_flag = greenskin_squig_herding
+		random_list = {
+			50 = { # Tamed
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.5 trait = brave }
+				prestige = 100
+				if = {
+					limit = { NOT = { has_artifact = great_cave_squig } }
+					add_artifact = great_cave_squig
+					check_mount_flags_effect = yes
+				}
+				add_character_modifier = { name = greenskin_squig_rider years = 10 }
+			}
+			35 = { # Bounced off
+				prestige = 50
+				add_trait = wounded
+			}
+			15 = { # Chewed on
+				modifier = { factor = 0.5 martial = 12 }
+				prestige = 50
+				add_maimed_trait_effect = yes
+			}
+		}
+	}
+
+	option = { # Da herd boss
+		name = EVTOPTBgreenskin42
+		add_character_modifier = { name = greenskin_squig_herder years = 10 }
+		character_event = { id = greenskin.43 days = 1095 random = 730 }
+	}
+}
+
+# greenskin.43 Squigs to war
+# The herd boss has bred a whole herd. Loose it on the enemy (squig hoppers
+# for five years) or hold a big squig feast (prestige, may turn gluttonous).
+# Ends the chain.
+# Scope: ROOT is the goblin ruler.
+character_event = {
+	id = greenskin.43
+	desc = EVTDESCgreenskin43
+	picture = GFX_evt_night_goblins
+	is_triggered_only = yes # greenskin.42
+
+	has_character_flag = greenskin_squig_herding
+
+	immediate = {
+		clr_character_flag = greenskin_squig_herding
+	}
+
+	option = { # Let 'em loose!
+		name = EVTOPTAgreenskin43
+		add_character_modifier = { name = greenskin_squig_hoppers years = 5 }
+	}
+
+	option = { # SQUIG FEAST!
+		name = EVTOPTBgreenskin43
+		prestige = 100
+		random = { chance = 25 add_trait = gluttonous }
+	}
+}
+
+###############################################################################
 # Greenskin warbosses: Greenskin Power, weak warbosses, challenges, the death
 # of a warboss, greenskin hordes, settling land and cleansing it
 # Namespace: warboss (was "DR_greenskins" before the 2026 events refactor)
@@ -17,11 +897,11 @@
 # on_new_holder, on_rebel_revolt), decisions/wh_greenskin_decisions.txt and
 # the head-bashing duel in events/hfp_duel_events.txt.
 # Shared effects: common/scripted_effects/wh_warboss_effects.txt
-# Localisation: localisation/00_warboss_events.csv
+# Localisation: localisation/00_WHG_greenskin_events.csv
 # Full list with callers: docs/events/event_database.csv
 #
-# The WAAAGH! itself is in events/DR_waaagh_events.txt (namespace waaagh).
-# Size, shamans and camp life are in events/BR_greenskin_events.txt.
+# The WAAAGH! itself is in events/WHG_waaagh_events.txt (namespace waaagh).
+# Size, shamans and camp life are in events/WHG_greenskin_events.txt.
 ###############################################################################
 
 namespace = warboss

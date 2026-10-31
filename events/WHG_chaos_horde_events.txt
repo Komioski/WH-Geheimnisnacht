@@ -1,0 +1,1669 @@
+###############################################################################
+# Chaos hordes: settlements, Karag Dum, sacking and break-up
+# Namespace: chaoshorde (was "chaosr" in wh_chaos_razing_seige_events.txt
+# before the 2026 events refactor)
+# Faction: Chaos
+#
+# The life of a Chaos horde of the Wastes: the camps it raises, the fall of
+# the dwarf hold of Karag Dum, what its warriors do to a captured holding,
+# and how it shatters when its warlord dies.
+#
+# Sections:
+#   1-9    a semi-nomadic settlement grows into a castle or a city
+#   20-22  the fate of Karag Dum
+#   30-42  sacking captured holdings
+#   50-56  the horde shatters on the warlord's death
+#
+# Callers:
+#   chaoshorde.2   establish_tribe decision (wh_chaos_decisions)
+#   chaoshorde.20  on_siege_over_winner (wh_on_actions)
+#   chaoshorde.30-32, 39, 42  on_siege_over_winner random list (wh_on_actions)
+#   chaoshorde.50  on_death (wh_on_actions)
+#
+# Shared code:
+#   common/scripted_triggers/wh_chaoshorde_triggers.txt
+#   common/scripted_effects/wh_chaoshorde_effects.txt
+#   the settlement progress effects in common/scripted_effects/wh_scripted_effects.txt
+#   common/artifacts/29_artifacts_chaoshorde.txt
+# Localisation: localisation/00_WHG_chaos_horde_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = chaoshorde
+
+###############################################################################
+# 1-9 Semi-nomadic settlements
+# A horde ruler of the Wastes plants a tribal camp under a chieftain
+# (establish_tribe decision, then chaoshorde.2). Every few months chaoshorde.1
+# rolls what happens to it; good and bad turns move a progress counter on the
+# province. Once the counter reaches 6 the camp can become a castle or a city
+# (chaoshorde.4).
+#
+# Event targets kept along the chain:
+#   chaos_chief                the chieftain
+#   chaos_settlement           the tribal holding
+#   chaos_settlement_province  its province
+###############################################################################
+
+# chaoshorde.1 The settlement grows
+# Hidden. Rolls the next turn in the settlement's life. If the camp is held
+# above baron rank (no chieftain to govern it) it is warned for two years and
+# then abandoned (chaoshorde.9).
+# Scope: ROOT is the horde ruler.
+character_event = {
+	id = chaoshorde.1
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:chaos_settlement_province = { owner = { character = ROOT } }
+		event_target:chaos_settlement = { holding_type = tribal num_of_buildings >= 1 }
+	}
+
+	fail_trigger_effect = {
+		event_target:chaos_settlement_province = { chaoshorde_settlement_reset_effect = yes }
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				event_target:chaos_settlement = { holder_scope = { higher_tier_than = BARON } }
+			}
+			if = {
+				limit = {
+					event_target:chaos_settlement_province = {
+						has_province_flag = absence_of_governor2
+					}
+				}
+				character_event = { id = chaoshorde.9 }
+			}
+			else_if = {
+				limit = {
+					event_target:chaos_settlement_province = {
+						has_province_flag = absence_of_governor1
+					}
+				}
+				event_target:chaos_settlement_province = {
+					clr_province_flag = absence_of_governor1
+					set_province_flag = absence_of_governor2
+				}
+				repeat_event = { id = chaoshorde.1 days = 365 }
+			}
+			else = {
+				event_target:chaos_settlement_province = {
+					set_province_flag = absence_of_governor1
+				}
+				repeat_event = { id = chaoshorde.1 days = 365 }
+			}
+		}
+		else = {
+			random_list = {
+				15 = { # Clansmen flock to it
+					trigger = {
+						NOT = {
+							event_target:chaos_settlement_province = {
+								has_province_flag = development_is_done
+							}
+						}
+					}
+					add_1_point_to_chaos_settlement_progress_effect = yes
+					evaluate_chaos_settlement_progress_effect = yes
+					character_event = { id = chaoshorde.6 days = 365 random = 30 }
+				}
+				5 = { # A young warrior raises a band
+					trigger = {
+						NOT = {
+							event_target:chaos_settlement_province = {
+								has_province_flag = development_is_done
+							}
+						}
+					}
+					lose_1_point_to_chaos_settlement_progress_effect = yes
+					evaluate_chaos_settlement_progress_effect = yes
+					character_event = { id = chaoshorde.7 days = 360 }
+				}
+				10 = { # The chieftain is murdered
+					trigger = {
+						event_target:chaos_settlement_province = {
+							NOT = { has_province_flag = start_bracket }
+							NOT = { has_province_flag = development_is_done }
+						}
+					}
+					lose_1_point_to_chaos_settlement_progress_effect = yes
+					evaluate_chaos_settlement_progress_effect = yes
+					character_event = { id = chaoshorde.8 days = 300 }
+				}
+				10 = { # The Wastes wreck a building
+					trigger = {
+						NOT = {
+							event_target:chaos_settlement_province = {
+								has_province_flag = development_is_done
+							}
+						}
+					}
+					lose_1_point_to_chaos_settlement_progress_effect = yes
+					evaluate_chaos_settlement_progress_effect = yes
+					character_event = { id = chaoshorde.3 days = 120 }
+				}
+				5 = { # Quiet growth (early)
+					trigger = {
+						event_target:chaos_settlement_province = {
+							has_province_flag = start_bracket
+						}
+					}
+					random = {
+						chance = 75
+						add_1_point_to_chaos_settlement_progress_effect = yes
+						evaluate_chaos_settlement_progress_effect = yes
+					}
+					repeat_event = { id = chaoshorde.1 days = 60 }
+				}
+				10 = { # Quiet growth (middle)
+					trigger = {
+						event_target:chaos_settlement_province = { has_province_flag = mid_bracket }
+					}
+					random = {
+						chance = 85
+						add_1_point_to_chaos_settlement_progress_effect = yes
+						evaluate_chaos_settlement_progress_effect = yes
+					}
+					repeat_event = { id = chaoshorde.1 days = 120 }
+				}
+				10 = { # Quiet growth (late)
+					trigger = {
+						event_target:chaos_settlement_province = {
+							has_province_flag = top_bracket
+							NOT = { has_province_flag = development_is_done }
+						}
+					}
+					random = {
+						chance = 85
+						add_1_point_to_chaos_settlement_progress_effect = yes
+						evaluate_chaos_settlement_progress_effect = yes
+					}
+					repeat_event = { id = chaoshorde.1 days = 240 }
+				}
+				10 = { # Ready to be fortified
+					trigger = {
+						event_target:chaos_settlement_province = {
+							has_province_flag = development_is_done
+						}
+					}
+					character_event = { id = chaoshorde.4 days = 62 }
+				}
+			}
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# chaoshorde.2 A settlement is founded
+# The chieftain raises a tribal camp with its first buildings, and the
+# settlement chain starts (chaoshorde.1).
+# Scope: ROOT is the province.
+province_event = {
+	id = chaoshorde.2
+	desc = EVTDESCchaoshorde2
+	picture = GFX_evt_chaos_marauder
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # establish_tribe decision
+
+	option = {
+		name = EXCELLENT
+		hidden_effect = {
+			set_variable = { which = chaos_settlement_event_progress value = 0 }
+			set_variable = { which = chaos_settlement_development value = 0 }
+		}
+		save_event_target_as = chaos_settlement_province
+		set_province_flag = start_bracket
+		any_province_holding = {
+			limit = { holding_type = tribal }
+			add_building = tb_steppe_hold_1
+			add_building = tb_market_town_1
+			add_building = tb_steppechaos_barracks_1
+			if = {
+				limit = { event_target:chaos_chief = { culture = ROOT } }
+				add_building = tb_noblestable_1
+				add_building = tb_steppe_hold_2
+			}
+			if = {
+				limit = { event_target:chaos_chief = { culture_group = kurgan_group } }
+				add_building = tb_steppekurgan_militia_1
+			}
+			else_if = {
+				limit = { event_target:chaos_chief = { culture_group = hung_group } }
+				add_building = tb_steppehung_militia_1
+			}
+			save_event_target_as = chaos_settlement
+		}
+		owner = { character_event = { id = chaoshorde.1 days = 30 } }
+	}
+}
+
+# chaoshorde.3 The Wastes wreck a building
+# The warping land destroys a building of the camp.
+# Scope: ROOT is the horde ruler.
+character_event = {
+	id = chaoshorde.3
+	desc = EVTDESCchaoshorde3
+	picture = GFX_evt_questing_chaos_wastes
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = CURSES
+		event_target:chaos_settlement = { destroy_random_building = yes }
+		character_event = { id = chaoshorde.1 }
+	}
+}
+
+# chaoshorde.4 The settlement stands
+# The camp has outlasted the Wastes: turn it into a city (trade) or a castle
+# (war), with walls, barracks and a market or town. If the province already
+# has both, the camp stays a camp.
+# Scope: ROOT is the horde ruler.
+character_event = {
+	id = chaoshorde.4
+	desc = EVTDESCchaoshorde4
+	picture = GFX_evt_questing_darklands
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaoshorde4 # A city
+		trigger = { event_target:chaos_settlement_province = { has_city = no } }
+		event_target:chaos_settlement = {
+			convert_to = city
+			add_building = ct_wall_1
+			add_building = ct_wall_2
+			add_building = ct_wall_q_1
+			add_building = ct_training_grounds_1
+			add_building = ct_training_grounds_2
+			add_building = ct_barracks_1
+			add_building = ct_barracks_2
+			add_building = ct_marketplace_1
+		}
+		event_target:chaos_settlement_province = { chaoshorde_settlement_reset_effect = yes }
+		prestige = 250
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		name = EVTOPTBchaoshorde4 # A Dark Fortress
+		trigger = { event_target:chaos_settlement_province = { has_castle = no } }
+		event_target:chaos_settlement = {
+			convert_to = castle
+			add_building = ca_wall_1
+			add_building = ca_wall_2
+			add_building = ca_wall_q_1
+			add_building = ca_militia_barracks_1
+			add_building = ca_militia_barracks_2
+			add_building = ca_steppe_barracks_1
+			add_building = ca_steppe_barracks_2
+			add_building = ca_town_1
+		}
+		event_target:chaos_settlement_province = { chaoshorde_settlement_reset_effect = yes }
+		prestige = 250
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		name = EVTOPTCchaoshorde4 # Keep the camp
+		trigger = { event_target:chaos_settlement_province = { has_city = yes has_castle = yes } }
+		event_target:chaos_settlement = { add_building = tb_steppe_hold_2 }
+		event_target:chaos_settlement_province = { chaoshorde_settlement_reset_effect = yes }
+		prestige = 100
+	}
+}
+
+# chaoshorde.6 Clansmen flock to the settlement
+# Word of the camp spreads and warriors join the horde.
+# Scope: ROOT is the horde ruler.
+character_event = {
+	id = chaoshorde.6
+	desc = EVTDESCchaoshorde6
+	picture = GFX_evt_chaos_march
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EXCELLENT
+		manpower = 100
+		prestige = 100
+		character_event = { id = chaoshorde.1 }
+	}
+}
+
+# chaoshorde.7 A young warrior raises a band
+# A warrior of the camp gathers followers and rises in revolt.
+# Scope: ROOT is the horde ruler.
+character_event = {
+	id = chaoshorde.7
+	desc = EVTDESCchaoshorde7
+	picture = GFX_evt_chaos_march
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaoshorde7
+		prestige = -100
+		event_target:chaos_settlement_province = {
+			set_province_flag = force_peasant_revolt
+			province_event = { id = TOG.1000 }
+		}
+		character_event = { id = chaoshorde.1 }
+	}
+}
+
+# chaoshorde.8 The chieftain is murdered
+# A champion of one of the gods kills the chieftain. The ruler can take the
+# killer's oath and let them rule the camp, or have them put to death and
+# leave the camp to the chieftain's heir.
+# Scope: ROOT is the horde ruler.
+character_event = {
+	id = chaoshorde.8
+	desc = EVTDESCchaoshorde8
+	picture = GFX_evt_chaos_march
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:chaos_settlement = { has_holder = yes }
+	}
+
+	immediate = {
+		event_target:chaos_settlement = {
+			holder_scope = { save_event_target_as = chaoshorde_old_chief }
+		}
+		event_target:chaos_settlement_province = {
+			random_list = {
+				20 = {
+					create_character = {
+						dynasty = random
+						religion = nurgle
+						culture = PREV
+						female = no
+						age = 50
+						attributes = { diplomacy = 10 }
+						trait = has_nurgles_rot
+						trait = quick
+						trait = ugly
+						trait = chaste
+						trait = champion_nurgle
+					}
+				}
+				20 = {
+					create_character = {
+						dynasty = random
+						religion = slaanesh
+						culture = PREV
+						female = yes
+						age = 18
+						health = 6
+						fertility = 0.8
+						attributes = {
+							martial = 9
+							diplomacy = 3
+							stewardship = 9
+							intrigue = 12
+							learning = 6
+						}
+						trait = patient
+						trait = shrewd
+						trait = proud
+						trait = lustful
+						trait = champion_slaanesh
+					}
+				}
+				20 = {
+					create_character = {
+						dynasty = random
+						religion = khorne
+						culture = PREV
+						female = no
+						age = 17
+						attributes = {
+							martial = 12
+							diplomacy = 6
+							stewardship = 4
+							intrigue = 3
+							learning = 3
+						}
+						trait = temperate
+						trait = wroth
+						trait = champion_khorne
+					}
+				}
+				15 = {
+					create_character = {
+						dynasty = random
+						religion = tzeentch
+						culture = PREV
+						female = no
+						age = 66
+						health = 6
+						attributes = {
+							martial = 12
+							diplomacy = 6
+							stewardship = 6
+							intrigue = 6
+							learning = 12
+						}
+						trait = ambitious
+						trait = champion_tzeentch
+						trait = scholar
+						trait = envious
+						trait = arbitrary
+					}
+				}
+				20 = {
+					create_character = {
+						dynasty = random
+						religion = chaos
+						culture = PREV
+						female = no
+						age = 21
+						trait = chaos_knight
+					}
+				}
+				5 = {
+					create_character = {
+						random_traits = no
+						dynasty = random
+						religion = chaos
+						culture = PREV
+						female = no
+						age = 16
+						trait = naive_appeaser
+						trait = imbecile
+						trait = feeble
+						trait = groomed
+						trait = dull
+						trait = champion_undivided
+						trait = trusting
+					}
+				}
+			}
+		}
+		new_character = {
+			save_event_target_as = chaos_chief
+			character_event = { id = aiclean.31 } # Racial trait
+			nurgle_blessing_check_effect = yes
+		}
+		event_target:chaoshorde_old_chief = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_murder killer = event_target:chaos_chief } }
+		}
+	}
+
+	option = {
+		name = EVTOPTAchaoshorde8 # Swear to me or die
+		event_target:chaos_chief = { show_portrait = yes }
+		event_target:chaos_settlement = { grant_title = event_target:chaos_chief }
+		character_event = { id = chaoshorde.1 }
+		ai_chance = { factor = 2 }
+	}
+	option = {
+		name = EVTOPTBchaoshorde8 # Kill the killer
+		event_target:chaos_chief = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_execution killer = ROOT } }
+		}
+		character_event = { id = chaoshorde.1 }
+		ai_chance = { factor = 1 }
+	}
+}
+
+# chaoshorde.9 The settlement is abandoned
+# A camp without a chieftain to govern it (three years held above baron
+# rank) falls to rubble and is torn down.
+# Scope: ROOT is the horde ruler.
+character_event = {
+	id = chaoshorde.9
+	desc = EVTDESCchaoshorde9
+	picture = GFX_evt_questing_darklands
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = CURSES
+		prestige = -250
+		event_target:chaos_settlement_province = { chaoshorde_settlement_reset_effect = yes }
+		event_target:chaos_settlement = { destroy_settlement = THIS }
+	}
+}
+
+###############################################################################
+# 20-22 The fate of Karag Dum
+###############################################################################
+
+# chaoshorde.20 Karag Dum falls
+# Hidden. When a siege in the duchy of Karag Dum ends, the winner's top
+# liege decides the hold's fate (chaoshorde.21) if they now hold all of it.
+# Fired from on_siege_over_winner.
+# Scope: ROOT is the siege winner, FROM the taken holding.
+character_event = {
+	id = chaoshorde.20
+	hide_window = yes
+	is_triggered_only = yes # on_siege_over_winner
+
+	trigger = {
+		NOT = { has_global_flag = fate_of_karakdum }
+		FROM = { de_jure_liege_or_above = d_karak_dum }
+	}
+
+	immediate = {
+		top_liege = { narrative_event = { id = chaoshorde.21 days = 1 } }
+	}
+}
+
+# chaoshorde.21 The fate of Karag Dum
+# A Chaos ruler who controls all of Karag Dum chooses: burn the hold and
+# take it (A), hand it to a Dawi Zharr governor who sells its people as
+# slaves (B), or burn it and leave it to four champions of the gods (C).
+# Each god likes a different choice. Every power nearby hears of it
+# (chaoshorde.22).
+# Scope: ROOT is the conqueror.
+narrative_event = {
+	id = chaoshorde.21
+	title = EVTTITLE_FATE_OF_KARAG_DUM
+	desc = { trigger = { NOT = { religion = hashut } } text = EVTDESCchaoshorde21 }
+	desc = { trigger = { religion = hashut } text = EVTDESCchaoshorde21b }
+	picture = GFX_evt_dwarf_fortress
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes
+	religion_group = chaos_gods_group
+
+	trigger = {
+		independent = yes
+		NOT = { has_global_flag = fate_of_karakdum }
+		completely_controls = d_karak_dum
+	}
+
+	immediate = {
+		set_global_flag = fate_of_karakdum
+		create_character = {
+			random_traits = no
+			name = "Leadbald"
+			dynasty = random
+			religion = hashut
+			culture = dwarf_chaos
+			female = no
+			age = 104
+			attributes = { martial = 6 diplomacy = 6 stewardship = 9 intrigue = 12 learning = 6 }
+			trait = creature_dwarf
+			trait = thrifty_clerk
+			trait = cruel
+			trait = architect
+			trait = greedy
+			trait = temperate
+		}
+		new_character = {
+			if = { limit = { ROOT = { NOT = { religion = hashut } } } add_trait = adventurer }
+			random_list = {
+				10 = { add_trait = chaos_dwarf_sorcerer }
+				10 = { add_trait = chaos_dwarf_daemonsmith }
+				10 = { add_trait = ambitious }
+				10 = { add_trait = shrewd add_trait = sturdy }
+				10 = { }
+			}
+			save_event_target_as = dawi_zharr_candidate
+		}
+	}
+
+	option = {
+		name = EVTOPTAchaoshorde21 # Burn it and take it
+		ai_chance = {
+			factor = 25
+			modifier = {
+				factor = 0
+				OR = { religion = nurgle religion = tzeentch religion = hashut }
+			}
+		}
+		if = {
+			limit = { religion = tzeentch }
+			add_offmap_currency = { offmap = tzeentch_warp value = 100 }
+		}
+		else_if = {
+			limit = { religion = khorne }
+			add_offmap_currency = { offmap = khorne_warp value = 500 }
+		}
+		else_if = {
+			limit = { religion = nurgle }
+			add_offmap_currency = { offmap = nurgle_warp value = -100 }
+		}
+		else_if = {
+			limit = { religion = slaanesh }
+			add_offmap_currency = { offmap = slaanesh_warp value = 100 }
+		}
+		chaoshorde_karak_dum_grudge_effect = yes
+		wealth = 500
+		prestige = 250
+		piety = 250
+		add_trait = greedy
+		add_artifact = karag_dum_runehammer
+		c_karak_dum = { grant_title = { target = PREV type = invasion } }
+		c_rodmarin = { grant_title = { target = PREV type = invasion } }
+		c_grung_dwor = { grant_title = { target = PREV type = invasion } }
+		c_grongol_norn = { grant_title = { target = PREV type = invasion } }
+		d_karak_dum = { grant_title = { target = PREV type = invasion } }
+		hidden_effect = {
+			gain_settlements_under_title = { title = c_karak_dum enemy = ROOT type = holy_war }
+			gain_settlements_under_title = { title = c_rodmarin enemy = ROOT type = holy_war }
+			gain_settlements_under_title = { title = c_grung_dwor enemy = ROOT type = holy_war }
+			gain_settlements_under_title = { title = c_grongol_norn enemy = ROOT type = holy_war }
+		}
+		# Hashut is in the Chaos group too, so it is checked first
+		if = {
+			limit = { religion = hashut }
+			c_karak_dum = { location = { culture = dwarf_chaos religion = hashut } }
+			c_rodmarin = { location = { culture = dwarf_chaos religion = hashut } }
+			c_grongol_norn = { location = { culture = dwarf_chaos religion = hashut } }
+			c_grung_dwor = { location = { culture = dwarf_chaos religion = hashut } }
+		}
+		else = { chaoshorde_karak_dum_resettle_effect = yes }
+		chaoshorde_karak_dum_jong_on_effect = yes
+		k_karak_dum = { destroy_landed_title = THIS }
+		hidden_effect = {
+			event_target:dawi_zharr_candidate = { death = { death_reason = death_murder } }
+		}
+	}
+	option = {
+		name = {
+			text = EVTOPTBchaoshorde21 # The Dawi Zharr can have it
+			trigger = { NOT = { religion = hashut } }
+		}
+		name = {
+			text = EVTOPTBchaoshorde21b # Appoint a governor
+			trigger = { religion = hashut }
+		}
+		event_target:dawi_zharr_candidate = { show_portrait = yes }
+		ai_chance = { factor = 25 }
+		if = {
+			limit = { religion = tzeentch }
+			add_offmap_currency = { offmap = tzeentch_warp value = 1000 }
+		}
+		else_if = {
+			limit = { religion = khorne }
+			add_offmap_currency = { offmap = khorne_warp value = 200 }
+		}
+		else_if = {
+			limit = { religion = nurgle }
+			add_offmap_currency = { offmap = nurgle_warp value = 400 }
+		}
+		else_if = {
+			limit = { religion = slaanesh }
+			add_offmap_currency = { offmap = slaanesh_warp value = 200 }
+		}
+		wealth = 100
+		prestige = 250
+		piety = 125
+		chaoshorde_karak_dum_grudge_effect = yes
+		k_karak_dum = { destroy_landed_title = THIS }
+		event_target:dawi_zharr_candidate = {
+			c_karak_dum = { grant_title = { target = PREV type = invasion } }
+			c_rodmarin = { grant_title = { target = PREV type = invasion } }
+			c_grung_dwor = { grant_title = { target = PREV type = invasion } }
+			c_grongol_norn = { grant_title = { target = PREV type = invasion } }
+			d_karak_dum = { grant_title = { target = PREV type = invasion } }
+			hidden_effect = {
+				gain_settlements_under_title = { title = c_karak_dum enemy = PREV type = holy_war }
+				gain_settlements_under_title = { title = c_rodmarin enemy = PREV type = holy_war }
+				gain_settlements_under_title = { title = c_grung_dwor enemy = PREV type = holy_war }
+				gain_settlements_under_title = {
+					title = c_grongol_norn
+					enemy = PREV
+					type = holy_war
+				}
+			}
+			set_defacto_liege = ROOT
+			chaoshorde_karak_dum_jong_on_effect = yes
+			set_character_flag = buying_chaos_dwarfs
+			character_event = { id = DR_chaos_dwarf.14 }
+			wealth = 400
+		}
+		c_karak_dum = { location = { culture = dwarf_chaos religion = hashut } }
+		c_rodmarin = { location = { culture = dwarf_chaos religion = hashut } }
+	}
+	option = {
+		name = EVTOPTCchaoshorde21 # Burn it and leave it to the warlords
+		trigger = { NOR = { trait = kind religion = nurgle religion = hashut } }
+		ai_chance = { factor = 10 }
+		if = {
+			limit = { religion = tzeentch }
+			add_offmap_currency = { offmap = tzeentch_warp value = 250 }
+		}
+		else_if = {
+			limit = { religion = khorne }
+			add_offmap_currency = { offmap = khorne_warp value = 500 }
+		}
+		else_if = {
+			limit = { religion = slaanesh }
+			add_offmap_currency = { offmap = slaanesh_warp value = 500 }
+		}
+		chaoshorde_karak_dum_grudge_effect = yes
+		wealth = 500
+		prestige = 250
+		piety = 250
+		add_artifact = karag_dum_runehammer
+		hidden_effect = {
+			chaoshorde_karak_dum_resettle_effect = yes
+			chaoshorde_karak_dum_warlords_effect = yes
+		}
+		chaoshorde_karak_dum_jong_on_effect = yes
+		k_karak_dum = { destroy_landed_title = THIS }
+		hidden_effect = {
+			event_target:dawi_zharr_candidate = { death = { death_reason = death_murder } }
+		}
+	}
+
+	after = {
+		any_playable_ruler = {
+			limit = {
+				NOT = { character = ROOT }
+				capital_scope = { NOT = { region = world_albion } }
+				OR = {
+					AND = { religion_group = greenskin_gods_group is_within_diplo_range = ROOT }
+					capital_scope = { region = world_old_world }
+					capital_scope = { region = world_chaos_wastes_broken_lands }
+					capital_scope = { region = world_chaos_wastes_eastern_steppes }
+					capital_scope = { region = world_norsca }
+					capital_scope = { region = world_troll_country }
+					religion_group = dwarf_gods_group
+					religion = hashut
+				}
+				OR = {
+					ai = no
+					AND = {
+						religion_group = dwarf_gods_group
+						NOT = { capital_scope = { region = world_karaz_ankor_southern_holds } }
+					}
+					AND = { religion_group = old_world_group independent = yes }
+				}
+			}
+			character_event = { id = chaoshorde.22 days = 30 }
+		}
+	}
+}
+
+# chaoshorde.22 News of Karag Dum
+# Rulers of the Old World, the Wastes, the dwarf holds and nearby greenskins
+# hear that Karag Dum has fallen. Dwarfs swear a grudge against the
+# conqueror and the Dawi Zharr governor; others may fear the conqueror.
+# Scope: ROOT is the ruler hearing the news, FROM the conqueror.
+character_event = {
+	id = chaoshorde.22
+	title = EVTTITLE_FATE_OF_KARAG_DUM
+	desc = { trigger = { religion_group = greenskin_gods_group } text = EVTDESCchaoshorde22 }
+	desc = { trigger = { religion_group = chaos_gods_group } text = EVTDESCchaoshorde22b }
+	desc = {
+		trigger = {
+			NOR = { religion_group = chaos_gods_group religion_group = greenskin_gods_group }
+		}
+		text = EVTDESCchaoshorde22c
+	}
+	picture = {
+		trigger = { FROM = { NOT = { religion = hashut } } }
+		picture = GFX_evt_dwarf_fortress
+	}
+	picture = { trigger = { FROM = { religion = hashut } } picture = GFX_evt_chaos_dwarf_march }
+
+	is_triggered_only = yes
+
+	option = {
+		name = {
+			text = EVTOPTAchaoshorde22h # Hashut
+			trigger = { religion = hashut }
+		}
+		name = {
+			text = EVTOPTAchaoshorde22c # Chaos
+			trigger = { religion_group = chaos_gods_group NOT = { religion = hashut } }
+		}
+		name = {
+			text = EVTOPTAchaoshorde22d # Dwarfs
+			trigger = { religion_group = dwarf_gods_group }
+		}
+		name = {
+			text = EVTOPTAchaoshorde22g # Greenskins
+			trigger = { religion_group = greenskin_gods_group }
+		}
+		name = {
+			text = EVTOPTAchaoshorde22 # Everyone else
+			trigger = {
+				NOR = {
+					religion_group = chaos_gods_group
+					religion_group = dwarf_gods_group
+					religion_group = greenskin_gods_group
+				}
+			}
+		}
+		if = {
+			limit = { religion_group = dwarf_gods_group }
+			opinion = { modifier = opinion_dwarf_grudge who = FROM months = 10000 }
+			if = {
+				limit = { event_target:dawi_zharr_candidate = { is_alive = yes } }
+				opinion = {
+					modifier = opinion_dwarf_grudge
+					who = event_target:dawi_zharr_candidate
+					months = 10000
+				}
+			}
+		}
+		else_if = { limit = { religion_group = greenskin_gods_group } prestige = -200 }
+		else_if = {
+			limit = { NOR = { trait = brave religion_group = chaos_gods_group } }
+			opinion = { modifier = opinion_afraid who = FROM years = 25 }
+		}
+		FROM = { show_portrait = yes }
+		ai_chance = { factor = 10 }
+	}
+	option = {
+		name = EVTOPTBchaoshorde22 # It stood too long anyway
+		trigger = { religion_group = dwarf_gods_group }
+		piety = -250
+		if = {
+			limit = { NOT = { trait = brave } }
+			opinion = { modifier = opinion_afraid who = FROM years = 25 }
+		}
+		ai_chance = { factor = 5 modifier = { factor = 0 NOR = { trait = cruel trait = cynical } } }
+	}
+}
+
+###############################################################################
+# 30-42 Sacking captured holdings
+# When a Chaos ruler takes a holding of a non-Chaos ruler, the warriors may
+# wreck it. At war, the first such siege asks the ruler for orders
+# (chaoshorde.38): lax, normal, strict or no mercy. The orders last two years.
+# Out of war, or with orders given, the dispatchers below pick what happens.
+# Beastmen have their own events; Norscans and the Dawi Zharr are not sacked.
+#
+# FROM in the dispatchers is the taken holding; in the outcome events it is
+# FROMFROM (FROM being the dispatching ruler).
+###############################################################################
+
+# chaoshorde.30 A building burns in the siege
+# Dispatcher: one building of the taken holding is lost (chaoshorde.37).
+# Fired from on_siege_over_winner (random list).
+# Scope: ROOT is the siege winner, FROM the holding.
+character_event = {
+	id = chaoshorde.30
+	hide_window = yes
+	is_triggered_only = yes # on_siege_over_winner, random list
+
+	trigger = {
+		chaoshorde_sacker_trigger = yes
+	}
+
+	immediate = {
+		chaoshorde_ask_sack_orders_effect = yes
+		if = {
+			limit = { OR = { chaoshorde_sack_orders_trigger = yes war = no } }
+			character_event = { id = chaoshorde.37 days = 1 }
+		}
+	}
+}
+
+# chaoshorde.31 The warriors run riot
+# Dispatcher: a holding without buildings is razed (chaoshorde.33); one with
+# buildings is sacked (chaoshorde.34). Strict orders spare an empty holding.
+# Fired from on_siege_over_winner (random list).
+# Scope: ROOT is the siege winner, FROM the holding.
+character_event = {
+	id = chaoshorde.31
+	hide_window = yes
+	is_triggered_only = yes # on_siege_over_winner, random list
+
+	trigger = {
+		chaoshorde_sacker_trigger = yes
+		FROM = { chaoshorde_sackable_holding_trigger = yes }
+	}
+
+	immediate = {
+		chaoshorde_ask_sack_orders_effect = yes
+		if = {
+			limit = {
+				FROM = { NOT = { has_any_building = yes } NOT = { is_capital = yes } }
+				OR = {
+					has_character_modifier = more_sacking
+					has_character_modifier = normal_sacking
+					has_character_modifier = zealous_sacking
+					war = no
+				}
+			}
+			character_event = { id = chaoshorde.33 days = 1 }
+			FROM = { owner = { character_event = { id = chaoshorde.36 days = 2 } } }
+		}
+		else_if = {
+			limit = {
+				FROM = { has_any_building = yes }
+				OR = { chaoshorde_sack_orders_trigger = yes war = no }
+			}
+			character_event = { id = chaoshorde.34 days = 1 }
+			FROM = { owner = { character_event = { id = chaoshorde.36 days = 1 } } }
+		}
+	}
+}
+
+# chaoshorde.32 The town is put to the torch
+# Dispatcher for settled holdings (not tribal or nomad): an empty one is
+# razed (chaoshorde.33), one with buildings burns (chaoshorde.35). Strict
+# orders spare it.
+# Fired from on_siege_over_winner (random list).
+# Scope: ROOT is the siege winner, FROM the holding.
+character_event = {
+	id = chaoshorde.32
+	hide_window = yes
+	is_triggered_only = yes # on_siege_over_winner, random list
+
+	trigger = {
+		chaoshorde_sacker_trigger = yes
+		FROM = {
+			chaoshorde_sackable_holding_trigger = yes
+			NOT = { holding_type = tribal }
+			NOT = { holding_type = nomad }
+		}
+	}
+
+	immediate = {
+		chaoshorde_ask_sack_orders_effect = yes
+		if = {
+			limit = {
+				OR = {
+					has_character_modifier = more_sacking
+					has_character_modifier = normal_sacking
+					has_character_modifier = zealous_sacking
+					war = no
+				}
+			}
+			if = {
+				limit = { FROM = { NOT = { has_any_building = yes } NOT = { is_capital = yes } } }
+				character_event = { id = chaoshorde.33 days = 1 }
+				FROM = { owner = { character_event = { id = chaoshorde.36 days = 1 } } }
+			}
+			else_if = {
+				limit = { FROM = { has_any_building = yes } }
+				character_event = { id = chaoshorde.35 days = 1 }
+				FROM = { owner = { character_event = { id = chaoshorde.36 days = 1 } } }
+			}
+		}
+	}
+}
+
+# chaoshorde.33 Nothing left to occupy
+# The holding is razed to the ground. The Dark Gods take note (doom), and
+# the warriors may bring back a trophy.
+# Scope: ROOT is the sacker, FROMFROM the holding.
+character_event = {
+	id = chaoshorde.33
+	desc = { trigger = { has_character_modifier = zealous_sacking } text = EVTDESCchaoshorde33 }
+	desc = {
+		trigger = { NOT = { has_character_modifier = zealous_sacking } }
+		text = EVTDESCchaoshorde33b
+	}
+	picture = GFX_evt_siege
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaoshorde33
+		add_doom_progress_medium_effect = yes
+		prestige = 100
+		if = {
+			limit = { NOT = { has_artifact = chaos_despoiler_trophy } }
+			random = { chance = 5 add_artifact = chaos_despoiler_trophy }
+		}
+		FROMFROM = { destroy_settlement = THIS }
+	}
+}
+
+# chaoshorde.34 The holding is sacked
+# Notification: two buildings are lost and the holding is sacked for a year.
+# Scope: ROOT is the sacker, FROMFROM the holding.
+character_event = {
+	id = chaoshorde.34
+	desc = EVTDESCchaoshorde34
+	picture = GFX_evt_siege
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+	hide_from = yes
+	notification = yes
+
+	immediate = {
+		FROMFROM = {
+			destroy_random_building = yes
+			destroy_random_building = yes
+			add_holding_modifier = { modifier = sacked months = 12 }
+		}
+		add_doom_progress_tiny_effect = yes
+	}
+
+	option = {
+		name = EXCELLENT
+	}
+}
+
+# chaoshorde.35 The town burns
+# Notification: four buildings are lost and the holding burns (two years).
+# Scope: ROOT is the sacker, FROMFROM the holding.
+character_event = {
+	id = chaoshorde.35
+	desc = EVTDESCchaoshorde35
+	picture = GFX_evt_siege
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+	hide_from = yes
+	notification = yes
+
+	immediate = {
+		FROMFROM = {
+			destroy_random_building = yes
+			destroy_random_building = yes
+			destroy_random_building = yes
+			destroy_random_building = yes
+			add_holding_modifier = { modifier = burned months = 24 }
+		}
+		add_doom_progress_tiny_effect = yes
+	}
+
+	option = {
+		name = EXCELLENT
+	}
+}
+
+# chaoshorde.36 Your holding is ruined
+# Notification for the owner of a sacked or razed holding.
+# Scope: ROOT is the owner, FROMFROM the holding.
+character_event = {
+	id = chaoshorde.36
+	desc = EVTDESCchaoshorde36
+	picture = GFX_evt_siege
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+	hide_from = yes
+	notification = yes
+
+	option = {
+		name = CURSES
+	}
+}
+
+# chaoshorde.37 A building burns
+# Notification: one building of the taken holding is lost.
+# Scope: ROOT is the sacker, FROMFROM the holding.
+character_event = {
+	id = chaoshorde.37
+	desc = EVTDESCchaoshorde37
+	picture = GFX_evt_siege
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+	hide_from = yes
+	notification = yes
+
+	trigger = {
+		FROMFROM = { chaoshorde_sackable_holding_trigger = yes has_any_building = yes }
+	}
+
+	immediate = {
+		FROMFROM = { destroy_random_building = yes }
+		add_doom_progress_tiny_effect = yes
+	}
+
+	option = {
+		name = EXCELLENT
+	}
+}
+
+# chaoshorde.38 Orders for the captured towns
+# The ruler tells the warriors how to treat the holdings they take for the
+# next two years: lax, normal, strict, or no mercy (in a holy war, or for a
+# zealous or wrathful ruler).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = chaoshorde.38
+	desc = EVTDESCchaoshorde38
+	picture = GFX_evt_siege
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		remove_character_modifier = more_sacking
+		remove_character_modifier = normal_sacking
+		remove_character_modifier = less_sacking
+		remove_character_modifier = zealous_sacking
+	}
+
+	option = {
+		name = EVTOPTAchaoshorde38 # Let them have their fun
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0 OR = { trait = kind trait = charitable } }
+			modifier = {
+				factor = 2
+				OR = {
+					trait = deceitful
+					trait = ambitious
+					trait = envious
+					trait = cruel
+					trait = impaler
+				}
+			}
+		}
+		custom_tooltip = {
+			text = desc_more_sacking
+			hidden_tooltip = { add_character_modifier = { name = more_sacking days = 730 } }
+		}
+	}
+	option = {
+		name = EVTOPTCchaoshorde38 # Keep them intact
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 2 OR = { trait = kind trait = charitable trait = greedy } }
+			modifier = { factor = 0 OR = { trait = envious trait = cruel trait = impaler } }
+		}
+		custom_tooltip = {
+			text = desc_less_sacking
+			hidden_tooltip = { add_character_modifier = { name = less_sacking days = 730 } }
+		}
+	}
+	option = {
+		name = EVTOPTDchaoshorde38 # No mercy
+		trigger = {
+			OR = {
+				trait = zealous
+				trait = wroth
+				any_war = {
+					OR = {
+						using_cb = religious
+						using_cb = crusade
+						using_cb = new_crusade
+						using_cb = everchosen_invasion
+						using_cb = daemonic_subjugation
+					}
+				}
+			}
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0 OR = { trait = kind trait = charitable } }
+			modifier = {
+				factor = 2
+				OR = {
+					trait = deceitful
+					trait = ambitious
+					trait = envious
+					trait = cruel
+					trait = impaler
+				}
+			}
+			modifier = { factor = 4 trait = zealous }
+		}
+		custom_tooltip = {
+			text = desc_zealous_sacking
+			hidden_tooltip = { add_character_modifier = { name = zealous_sacking days = 730 } }
+		}
+	}
+	option = {
+		name = EVTOPTBchaoshorde38 # Why ask me?
+		ai_chance = { factor = 20 }
+		custom_tooltip = {
+			text = desc_normal_sacking
+			hidden_tooltip = { add_character_modifier = { name = normal_sacking days = 730 } }
+		}
+	}
+	after = {
+		clr_character_flag = chaoshorde_asked_orders
+	}
+}
+
+# chaoshorde.39 Slaughter
+# Dispatcher under lax or no-mercy orders only: an empty holding is razed
+# (chaoshorde.33), one with buildings is gutted (chaoshorde.40).
+# Fired from on_siege_over_winner (random list).
+# Scope: ROOT is the siege winner, FROM the holding.
+character_event = {
+	id = chaoshorde.39
+	hide_window = yes
+	is_triggered_only = yes # on_siege_over_winner, random list
+
+	trigger = {
+		chaoshorde_sacker_trigger = yes
+		FROM = { chaoshorde_sackable_holding_trigger = yes }
+	}
+
+	immediate = {
+		chaoshorde_ask_sack_orders_effect = yes
+		if = {
+			limit = {
+				OR = {
+					has_character_modifier = more_sacking
+					has_character_modifier = zealous_sacking
+				}
+			}
+			if = {
+				limit = { FROM = { NOT = { has_any_building = yes } NOT = { is_capital = yes } } }
+				character_event = { id = chaoshorde.33 days = 1 }
+			}
+			else_if = {
+				limit = { FROM = { has_any_building = yes } }
+				character_event = { id = chaoshorde.40 days = 1 }
+			}
+			FROM = { owner = { character_event = { id = chaoshorde.36 days = 1 } } }
+		}
+	}
+}
+
+# chaoshorde.40 The town is gutted
+# Notification: eight buildings are lost and the holding burns (two years).
+# Scope: ROOT is the sacker, FROMFROM the holding.
+character_event = {
+	id = chaoshorde.40
+	desc = { trigger = { has_character_modifier = zealous_sacking } text = EVTDESCchaoshorde40 }
+	desc = {
+		trigger = { NOT = { has_character_modifier = zealous_sacking } }
+		text = EVTDESCchaoshorde40b
+	}
+	picture = GFX_evt_siege
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+	hide_from = yes
+	notification = yes
+
+	immediate = {
+		FROMFROM = {
+			while = { count = 8 destroy_random_building = yes }
+			add_holding_modifier = { modifier = burned months = 24 }
+		}
+		add_doom_progress_tiny_effect = yes
+	}
+
+	option = {
+		name = EXCELLENT
+	}
+}
+
+# chaoshorde.42 Razed to the ground
+# Dispatcher under lax or no-mercy orders: any holding but a capital is
+# razed (chaoshorde.33), buildings or not. Rare.
+# Fired from on_siege_over_winner (random list).
+# Scope: ROOT is the siege winner, FROM the holding.
+character_event = {
+	id = chaoshorde.42
+	hide_window = yes
+	is_triggered_only = yes # on_siege_over_winner, random list
+
+	trigger = {
+		chaoshorde_sacker_trigger = yes
+		FROM = { chaoshorde_sackable_holding_trigger = yes NOT = { is_capital = yes } }
+		OR = { has_character_modifier = more_sacking has_character_modifier = zealous_sacking }
+	}
+
+	immediate = {
+		character_event = { id = chaoshorde.33 days = 1 }
+		FROM = { owner = { character_event = { id = chaoshorde.36 days = 2 } } }
+	}
+}
+
+###############################################################################
+# 50-56 The horde shatters
+# When an independent Chaos horde warlord dies, the realm's stability law
+# decides how much breaks away. Low stability: every duchy outside the
+# capital's that borders a foreign realm may break off under a new warlord
+# (chaoshorde.51). Middling: every kingdom outside the capital's (chaoshorde.56).
+# The heir keeps more the more prestige they have. Settled vassals go free
+# either way. Vassals choosing independence is the vanilla nomad rule
+# (GR.10/GR.11), which also runs for Chaos hordes.
+###############################################################################
+
+# chaoshorde.50 The warlord is dead
+# Hidden. Starts the break-up for the heir.
+# Fired from on_death.
+# Scope: ROOT is the dead warlord.
+character_event = {
+	id = chaoshorde.50
+	hide_window = yes
+	is_triggered_only = yes # on_death
+
+	only_playable = yes
+	only_independent = yes
+	religion_group = chaos_gods_group
+
+	trigger = {
+		is_nomadic = yes
+		government = chaos_horde_government
+		current_heir = { always = yes }
+	}
+
+	immediate = {
+		current_heir = { save_event_target_as = nomadic_heir }
+		if = {
+			limit = { has_law = nomad_stability_law_1 }
+			capital_scope = {
+				duchy = { save_event_target_as = capital_duchy }
+				kingdom = { save_event_target_as = capital_kingdom }
+			}
+			event_target:nomadic_heir = { character_event = { id = chaoshorde.56 days = 1 } }
+			chaoshorde_free_settled_vassals_effect = yes
+		}
+		else_if = {
+			limit = { has_law = nomad_stability_law_0 }
+			capital_scope = { duchy = { save_event_target_as = capital_duchy } }
+			event_target:nomadic_heir = { character_event = { id = chaoshorde.51 days = 1 } }
+			chaoshorde_free_settled_vassals_effect = yes
+		}
+	}
+}
+
+# chaoshorde.51 The tribes break away
+# A duchy outside the capital's, bordering a foreign realm, breaks off under
+# a new warlord (chaoshorde.52), and the heir is asked again until their
+# prestige holds the rest (the bar drops with every duchy lost). A player
+# can follow a breakaway warlord instead.
+# Scope: ROOT is the heir, FROM the dead warlord.
+character_event = {
+	id = chaoshorde.51
+	desc = EVTDESCchaoshorde51
+	picture = GFX_evt_chaos_warband
+
+	is_triggered_only = yes
+	religion_group = chaos_gods_group
+
+	trigger = {
+		chaoshorde_breakaway_prestige_trigger = yes
+		any_realm_province = {
+			NOT = { any_province_holding = { holding_type = nomad } }
+			duchy = { NOT = { title = event_target:capital_duchy } }
+			any_neighbor_province = { owner = { NOT = { same_realm = ROOT } } }
+		}
+	}
+
+	fail_trigger_effect = { set_variable = { which = chaos_tribe_break_aways value = 0 } }
+
+	immediate = {
+		change_variable = { which = chaos_tribe_break_aways value = 1 }
+		random_realm_province = {
+			limit = {
+				NOT = { any_province_holding = { holding_type = nomad } }
+				duchy = { NOT = { title = event_target:capital_duchy } }
+				any_neighbor_province = { owner = { NOT = { same_realm = ROOT } } }
+			}
+			duchy = { save_event_target_as = target_duchy }
+			save_event_target_as = target_prov
+		}
+	}
+
+	option = {
+		name = EVTOPTAchaoshorde51 # Who is the boss here?
+		prestige = 250
+		event_target:target_prov = { province_event = { id = chaoshorde.52 } }
+	}
+	option = {
+		name = EVTOPTBchaoshorde51 # Ah, glorious Chaos
+		trigger = { ai = no }
+		custom_tooltip = { text = desc_character_swap_breakaway }
+		set_character_flag = breakaway_swapping
+		event_target:target_prov = { province_event = { id = chaoshorde.52 } }
+	}
+}
+
+# chaoshorde.52 A warlord breaks away
+# Hidden. A warlord of the local tribes (or a beastman) takes the province's
+# county, and the heir's other counties in that duchy, as an independent
+# ruler. Champions of the gods may go on to subjugate their neighbours
+# (chaoshorde.53); others may bind one weaker warband (chaoshorde.54). Then
+# the heir is asked again (chaoshorde.51 or 56).
+# Scope: ROOT is the breakaway province.
+province_event = {
+	id = chaoshorde.52
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = {
+				event_target:target_duchy = { owner = { character = event_target:nomadic_heir } }
+			}
+			event_target:target_duchy = { destroy_landed_title = THIS }
+		}
+		chaoshorde_create_breakaway_warlord_effect = yes
+		event_target:nomadic_heir = {
+			opinion = { modifier = opinion_breakaway_nomad who = new_character years = 3 }
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			ROOT = { county = { grant_title_no_opinion = { target = PREVPREV type = invasion } } }
+			set_defacto_liege = THIS
+			if = {
+				limit = { culture_group = beastman_group }
+				set_government_type = beastman_government
+			}
+			else_if = {
+				limit = { is_tribal = yes }
+				random_list = {
+					75 = { set_government_type = chaos_horde_government }
+					25 = {
+						if = {
+							limit = { event_target:target_duchy = { has_holder = no } }
+							event_target:target_duchy = {
+								grant_title_no_opinion = { target = PREV }
+							}
+						}
+					}
+				}
+			}
+			population = 4000
+			if = {
+				limit = { is_chaos_champion_trigger = yes }
+				random_list = {
+					35 = {
+						set_character_flag = successful_chaos_warlord
+						character_event = { id = chaoshorde.53 days = 30 }
+						prestige = 750
+						piety = 750
+					}
+					65 = { }
+				}
+			}
+			random_list = {
+				25 = { # A strong band (always for a rising champion)
+					set_character_flag = successful_chaos_warlord
+					character_event = { id = chaoshorde.54 days = 15 }
+					population = 2000
+					prestige = 800
+					wealth = 120
+					piety = 200
+					create_retinue = chaosmarauders
+					create_retinue = chaosmarauders
+					create_retinue = chaosmarauderchampions
+					create_retinue = chaosmarauderhorsemen
+				}
+				75 = { # A weak band that can be bound by a neighbour
+					modifier = { factor = 0 has_character_flag = successful_chaos_warlord }
+					set_character_flag = breakaway_chaos_warlord
+					character_event = { id = chaoshorde.55 days = 50 }
+					prestige = 500
+					wealth = 80
+					piety = 100
+					create_retinue = chaosmarauders
+					create_retinue = chaosmarauders
+					create_retinue = chaosmarauderhorsemen
+				}
+			}
+		}
+		event_target:nomadic_heir = {
+			any_realm_province = {
+				limit = {
+					NOT = { any_province_holding = { holding_type = nomad } }
+					duchy = { title = event_target:target_duchy }
+				}
+				county = {
+					new_character = { grant_title_no_opinion = { target = PREV type = invasion } }
+				}
+			}
+		}
+	}
+
+	after = {
+		event_target:nomadic_heir = {
+			if = {
+				limit = { event_target:capital_kingdom = { always = yes } }
+				character_event = { id = chaoshorde.56 }
+			}
+			else = { character_event = { id = chaoshorde.51 } }
+		}
+	}
+}
+
+# chaoshorde.53 The champion binds the warbands
+# A breakaway champion makes every neighbouring breakaway warband that has
+# not yet risen kneel to them.
+# Scope: ROOT is the champion.
+character_event = {
+	id = chaoshorde.53
+	desc = EVTDESCchaoshorde53
+	picture = GFX_evt_chaos_warband
+
+	is_triggered_only = yes
+	notification = yes
+
+	trigger = {
+		is_ruler = yes
+		independent = yes
+	}
+
+	fail_trigger_effect = { clr_character_flag = successful_chaos_warlord }
+
+	immediate = {
+		any_neighbor_independent_ruler = {
+			limit = {
+				has_character_flag = breakaway_chaos_warlord
+				NOT = { has_character_flag = successful_chaos_warlord }
+			}
+			opinion = { modifier = opinion_subjugated who = ROOT }
+			set_defacto_liege = ROOT
+		}
+		clr_character_flag = successful_chaos_warlord
+	}
+
+	option = {
+		name = EXCELLENT
+	}
+}
+
+# chaoshorde.54 The warlord binds a warband
+# As chaoshorde.53, for one neighbouring warband.
+# Scope: ROOT is the warlord.
+character_event = {
+	id = chaoshorde.54
+	desc = EVTDESCchaoshorde54
+	picture = GFX_evt_chaos_warband
+
+	is_triggered_only = yes
+	notification = yes
+
+	trigger = {
+		is_ruler = yes
+		independent = yes
+		any_neighbor_independent_ruler = {
+			has_character_flag = breakaway_chaos_warlord
+			NOT = { has_character_flag = successful_chaos_warlord }
+		}
+	}
+
+	fail_trigger_effect = { clr_character_flag = successful_chaos_warlord }
+
+	immediate = {
+		random_neighbor_independent_ruler = {
+			limit = {
+				has_character_flag = breakaway_chaos_warlord
+				NOT = { has_character_flag = successful_chaos_warlord }
+			}
+			opinion = { modifier = opinion_subjugated who = ROOT }
+			set_defacto_liege = ROOT
+		}
+		clr_character_flag = successful_chaos_warlord
+	}
+
+	option = {
+		name = EXCELLENT
+	}
+}
+
+# chaoshorde.55 The breakaway settles
+# Hidden. After 50 days a breakaway warband can no longer be bound by its
+# neighbours.
+# Scope: ROOT is the warlord.
+character_event = {
+	id = chaoshorde.55
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = breakaway_chaos_warlord
+	}
+}
+
+# chaoshorde.56 The kingdoms break away
+# As chaoshorde.51, by kingdom: any province outside the capital's kingdom
+# can break off, and the heir needs less prestige to hold the rest.
+# Scope: ROOT is the heir, FROM the dead warlord.
+character_event = {
+	id = chaoshorde.56
+	desc = EVTDESCchaoshorde51
+	picture = GFX_evt_chaos_warband
+
+	is_triggered_only = yes
+	religion_group = chaos_gods_group
+
+	trigger = {
+		chaoshorde_breakaway_kingdom_prestige_trigger = yes
+		any_realm_province = {
+			NOT = { any_province_holding = { holding_type = nomad } }
+			kingdom = { NOT = { title = event_target:capital_kingdom } }
+			any_neighbor_province = { owner = { NOT = { same_realm = ROOT } } }
+		}
+	}
+
+	fail_trigger_effect = { set_variable = { which = chaos_tribe_break_aways value = 0 } }
+
+	immediate = {
+		change_variable = { which = chaos_tribe_break_aways value = 1 }
+		random_realm_province = {
+			limit = {
+				NOT = { any_province_holding = { holding_type = nomad } }
+				kingdom = { NOT = { title = event_target:capital_kingdom } }
+				any_neighbor_province = { owner = { NOT = { same_realm = ROOT } } }
+			}
+			duchy = { save_event_target_as = target_duchy }
+			save_event_target_as = target_prov
+		}
+	}
+
+	option = {
+		name = EVTOPTAchaoshorde51 # Who is the boss here?
+		prestige = 250
+		event_target:target_prov = { province_event = { id = chaoshorde.52 } }
+	}
+	option = {
+		name = EVTOPTBchaoshorde51 # Ah, glorious Chaos
+		trigger = { ai = no }
+		custom_tooltip = { text = desc_character_swap_breakaway }
+		set_character_flag = breakaway_swapping
+		event_target:target_prov = { province_event = { id = chaoshorde.52 } }
+	}
+}

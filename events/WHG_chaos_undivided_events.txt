@@ -1233,6 +1233,7 @@ character_event = {
 #   20-22  surrender offer to Chaos and Norscan rulers
 #   25     the horde grows after its first conquest
 #   30-42  the path of the Everchosen (the altar, the four trials, the mark)
+#   49-73  the extended path: the treasures of Archaon and the crowning
 #
 # Callers:
 #   undivided.1   on_decade_pulse (wh_on_actions), for the Sigmarite head
@@ -1243,7 +1244,8 @@ character_event = {
 #   undivided.20  everchosen_invasion on_add (cb_types_chaos)
 #   undivided.25  everchosen_invasion on_success (cb_types_chaos)
 #   undivided.30  seektobecomeeverchosen decision (wh_chaos_decisions)
-#   undivided.32  on_unit_entering_province (nb_on_actions)
+#   undivided.49  on_unit_entering_province (nb_on_actions)
+#   undivided.59  on_death (wh_on_actions)
 #
 # undivided.30-42 are the path to the mantle for a living Chaos ruler; undivided.10
 # cleans up after any Everchosen, player or AI.
@@ -1285,7 +1287,8 @@ narrative_event = {
 		NOT = { has_global_flag = everchosen_exists }
 		NOT = { has_global_flag = everchosen_died }
 		NOT = { has_global_flag = self_declared_black_crusade }
-		is_doom_very_high_trigger = yes
+		NOT = { has_global_flag = everchosen_quest_claimed } # a player seeker holds the Mark
+		undivided_winds_allow_everchosen_trigger = yes
 	}
 
 	immediate = {
@@ -1813,11 +1816,8 @@ narrative_event = {
 		any_demesne_title = { limit = { tier = EMPEROR } unsafe_destroy_landed_title = THIS }
 		clr_global_flag = everchosen_exists
 		set_global_flag = everchosen_died
-		unsafe_destroy_artifact = armor_of_morkar
-		unsafe_destroy_artifact = crown_of_domination
-		unsafe_destroy_artifact = eye_of_sheerian
-		unsafe_destroy_artifact = slayer_of_kings
-		unsafe_destroy_artifact = steed_of_the_apocalypse_mount
+		clr_global_flag = everchosen_quest_claimed
+		undivided_destroy_artifacts_effect = yes
 		reduce_doom_progress_reset_effect = yes
 	}
 
@@ -2028,6 +2028,10 @@ character_event = {
 			add_trait = on_pilgrimage
 			character_event = { id = undivided.31 days = 60 }
 		}
+		else = {
+			undivided_quest_stage_altar_effect = yes
+			hidden_effect = { character_event = { id = undivided.58 days = 730 } }
+		}
 	}
 	option = {
 		name = NO_NOT_NOW
@@ -2064,28 +2068,31 @@ character_event = {
 }
 
 # 32 The Altar of Ultimate Darkness (extended rule)
-# A seeker who leads an army into the altar's province reaches the temple.
-# Scope: ROOT = a commander entering province 1364.
+# A seeker who leads an army into the altar's province reaches the temple. If
+# another seeker already took the Mark, the gods turn away (42). Not yet
+# lets them come back later.
+# Scope: ROOT = the seeker. Fired by undivided.49.
 character_event = {
 	id = undivided.32
 	title = EVERCHOSEN
 	desc = EVTDESCundivided31
 	picture = GFX_evt_daemons
 
-	is_triggered_only = yes # on_unit_entering_province
+	is_triggered_only = yes
 	has_character_flag = potential_everchosen
 
 	trigger = {
-		location = { province_id = 1364 } # The Altar of Ultimate Darkness
+		NOT = { has_global_flag = everchosen_quest_claimed }
 	}
+	fail_trigger_effect = { character_event = { id = undivided.42 } }
 
 	option = {
 		name = EVTOPTAundivided31 # Enter the temple
 		character_event = { id = undivided.33 days = 5 }
 	}
 	option = {
-		name = NO_NOT_NOW
-		clr_character_flag = potential_everchosen
+		name = EVTOPTBundivided32 # Not yet
+		clr_character_flag = everchosen_busy
 		ai_chance = { factor = 0 }
 	}
 }
@@ -2267,7 +2274,11 @@ character_event = {
 		name = EVTOPTAundivided33 # Charge
 		show_portrait = event_target:combatant_2
 		undivided_trial_duel_effect = yes
-		character_event = { id = undivided.38 days = 7 }
+		if = {
+			limit = { undivided_extended_quest_trigger = yes }
+			character_event = { id = undivided.50 days = 7 } # the Mark; the crown comes later
+		}
+		else = { character_event = { id = undivided.38 days = 7 } }
 	}
 }
 
@@ -2295,13 +2306,22 @@ character_event = {
 }
 
 # 38 Rise, Everchosen
-# The seeker kneels at the altar and receives the mark. If another Everchosen
-# rose while the seeker was on the road, the gods turn away instead (42).
+# The seeker kneels at the altar and receives the mark (default rule), or is
+# crowned by Be'lakor at Zanbaijin (extended rule, from 73). If another
+# Everchosen rose while the seeker was on the road, the gods turn away
+# instead (42). Every path ends holding all five artifacts.
 # Scope: ROOT = the seeker.
 character_event = {
 	id = undivided.38
 	title = EVERCHOSEN
-	desc = EVTDESCundivided38
+	desc = {
+		trigger = { NOT = { has_character_flag = everchosen_crowned_by_belakor } }
+		text = EVTDESCundivided38
+	}
+	desc = {
+		trigger = { has_character_flag = everchosen_crowned_by_belakor }
+		text = EVTDESCundivided38b
+	}
 	picture = GFX_evt_daemons
 
 	is_triggered_only = yes
@@ -2326,9 +2346,16 @@ character_event = {
 
 	option = {
 		name = AT_LAST
+		clr_character_flag = everchosen_crowned_by_belakor
+		clr_character_flag = everchosen_marked
+		clr_character_flag = everchosen_has_dorghar
+		clr_character_flag = everchosen_has_slayer
+		clr_global_flag = everchosen_quest_claimed
+		undivided_quest_clear_stage_effect = yes
 		add_trait = everchosen
-		add_trait = mark_chaos
-		create_everchosen_artifacts = yes
+		if = { limit = { NOT = { trait = mark_chaos } } add_trait = mark_chaos }
+		undivided_give_missing_artifacts_effect = yes
+		add_doom_progress_major_effect = yes
 		set_graphical_culture = everchosen_visual
 		set_character_flag = first_everchosen_war
 		set_character_flag = horde_invader
@@ -2544,10 +2571,1156 @@ character_event = {
 
 	immediate = {
 		clr_character_flag = potential_everchosen
+		undivided_quest_clear_stage_effect = yes
 		if = { limit = { trait = on_pilgrimage } remove_trait = on_pilgrimage }
 	}
 
 	option = {
 		name = EVTOPTAundivided42
+	}
+}
+
+###############################################################################
+# 49-79 The path of the Everchosen, extended rule
+# A player on the extended rule walks Archaon's road from the lore: the Mark
+# at the Altar of Ultimate Darkness, the ships seized on the Naggaroth coast,
+# the Armour of Morkar in a sunless necropolis on Ildelver, the Eye of
+# Sheerian from the dragon Flamefang on the northern coast of Norsca, then
+# Dorghar from Agrammon's menagerie in the Realm of Chaos and the Slayer of
+# Kings from Krakanrok on the Chimera Plateau (in either order), and last the
+# crowning at Zanbaijin by Be'lakor. Only the first seeker to take the Mark
+# may walk it; if they die, the treasures vanish and the road opens again.
+# Each stage puts a modifier on the seeker naming the next place to go
+# (undivided_quest_stage_*_effect), and a reminder follows if they stall.
+#
+#   49     the seeker's army enters a province (on_unit_entering_province)
+#   50-53  the Mark, the seized ships, the black fleet
+#   54-57  the Armour of Morkar
+#   58     reminder;  59 a seeker dies
+#   60-61  the Eye of Sheerian
+#   62-66  Dorghar, Steed of the Apocalypse
+#   67-69  the Slayer of Kings
+#   70-73  Zanbaijin and the Crown of Domination; undivided.38 crowns them
+###############################################################################
+
+# 49 The seeker arrives
+# Hidden. When the seeker's army enters a province, starts the event for the
+# stage they are on if this is the right place.
+# Scope: ROOT = a commander entering a province.
+character_event = {
+	id = undivided.49
+	hide_window = yes
+	is_triggered_only = yes # on_unit_entering_province
+	has_character_flag = potential_everchosen
+
+	trigger = {
+		undivided_extended_quest_trigger = yes
+		NOT = { has_character_flag = everchosen_busy }
+	}
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = everchosen_stage_altar undivided_at_altar_trigger = yes }
+			set_character_flag = everchosen_busy
+			character_event = { id = undivided.32 }
+		}
+		else_if = {
+			limit = {
+				has_character_flag = everchosen_stage_coast
+				undivided_at_ship_coast_trigger = yes
+			}
+			set_character_flag = everchosen_busy
+			character_event = { id = undivided.53 }
+		}
+		else_if = {
+			limit = {
+				has_character_flag = everchosen_stage_necropolis
+				undivided_at_necropolis_trigger = yes
+			}
+			set_character_flag = everchosen_busy
+			character_event = { id = undivided.54 }
+		}
+		else_if = {
+			limit = {
+				has_character_flag = everchosen_stage_cliff
+				undivided_at_beast_cliff_trigger = yes
+			}
+			set_character_flag = everchosen_busy
+			character_event = { id = undivided.60 }
+		}
+		else_if = {
+			limit = {
+				has_character_flag = everchosen_stage_hunt
+				NOT = { has_character_flag = everchosen_has_slayer }
+				NOT = { has_character_flag = everchosen_on_dorghar_road }
+				undivided_at_chimera_plateau_trigger = yes
+			}
+			set_character_flag = everchosen_busy
+			character_event = { id = undivided.67 }
+		}
+		else_if = {
+			limit = {
+				has_character_flag = everchosen_stage_zanbaijin
+				undivided_at_zanbaijin_trigger = yes
+			}
+			set_character_flag = everchosen_busy
+			character_event = { id = undivided.70 }
+		}
+	}
+}
+
+# 50 The Mark of Chaos
+# The last champion falls and the altar drinks his blood. The seeker takes the
+# Mark of all four gods, and only they may now walk the road. A ruler who is
+# not yet a horde leaves their lands behind (daemon.1). Meanwhile the
+# seeker's warband has marched to the coast and seized the ships (51).
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.50
+	title = EVERCHOSEN
+	desc = EVTDESCundivided50
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_global_flag = everchosen_exists }
+		NOT = { has_global_flag = everchosen_quest_claimed }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			character_event = { id = undivided.42 }
+		}
+	}
+
+	immediate = {
+		set_global_flag = everchosen_quest_claimed
+		set_character_flag = everchosen_marked
+		if = { limit = { NOT = { trait = mark_chaos } } add_trait = mark_chaos }
+		add_doom_progress_medium_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAundivided50 # To the ships
+		if = {
+			limit = { is_nomadic = no }
+			custom_tooltip = { text = undivided_becomes_horde_tt }
+			hidden_effect = { character_event = { id = daemon.1 } }
+		}
+		undivided_quest_stage_coast_effect = yes
+		custom_tooltip = { text = undivided_quest_coast_tt }
+		hidden_effect = { character_event = { id = undivided.51 days = 3 } }
+	}
+}
+
+# 51 The ships are taken
+# Hidden. The seeker's warband falls on Tullich, burns the docks and holds
+# the ships. The warband waits there for its lord; the coast's top liege
+# hears of it (52).
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.51
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = everchosen_stage_coast
+	}
+
+	immediate = {
+		1344 = { # Tullich
+			add_province_modifier = { name = everchosen_ships_seized duration = 1825 }
+			ROOT = { undivided_seafarers_spawn_effect = yes }
+			if = {
+				limit = { has_owner = yes owner = { top_liege = { NOT = { character = ROOT } } } }
+				owner = { top_liege = { character_event = { id = undivided.52 } } }
+			}
+		}
+	}
+}
+
+# 52 Raiders on the coast
+# The top liege of Tullich learns that a marked champion's warband has burned
+# the docks and stolen the ships.
+# Scope: ROOT = the top liege, FROM = the seeker.
+character_event = {
+	id = undivided.52
+	title = EVERCHOSEN
+	desc = EVTDESCundivided52
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAundivided52 # Hunt them down
+	}
+}
+
+# 53 The black fleet
+# At the coast the seeker finds their warband and the captured ships: the
+# fleet is theirs, and the necropolis lies across the Sea of Chaos.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.53
+	title = EVERCHOSEN
+	desc = EVTDESCundivided53
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = everchosen_stage_coast
+	}
+
+	option = {
+		name = EVTOPTAundivided53 # Set sail
+		location = {
+			ROOT = {
+				spawn_fleet = {
+					province = closest
+					owner = ROOT
+					disband_on_peace = no
+					troops = { galleys = { 80 80 } }
+					earmark = everchosen_black_fleet
+				}
+			}
+		}
+		undivided_quest_stage_necropolis_effect = yes
+		custom_tooltip = { text = undivided_quest_necropolis_tt }
+	}
+}
+
+# 54 The isle of the dead
+# On Ildelver the seeker must find the necropolis of the pale half-men. A
+# failed search can be tried again a month later while the army stays.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.54
+	title = EVERCHOSEN
+	desc = EVTDESCundivided54
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = everchosen_stage_necropolis
+		undivided_at_necropolis_trigger = yes
+	}
+	fail_trigger_effect = { clr_character_flag = everchosen_busy }
+
+	option = {
+		name = EVTOPTAundivided54 # Search the barrows
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 learning = 14 }
+				modifier = { factor = 1.5 is_doom_very_high_trigger = yes }
+				character_event = { id = undivided.55 days = 3 }
+			}
+			40 = {
+				custom_tooltip = { text = undivided_search_again_tt }
+				character_event = { id = undivided.54 days = 30 }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBundivided54 # Make a prisoner talk
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 intrigue = 14 }
+				modifier = { factor = 1.5 trait = cruel }
+				modifier = { factor = 1.5 is_doom_very_high_trigger = yes }
+				character_event = { id = undivided.55 days = 3 }
+			}
+			40 = {
+				custom_tooltip = { text = undivided_search_again_tt }
+				character_event = { id = undivided.54 days = 30 }
+			}
+		}
+	}
+}
+
+# 55 The pale host
+# The half-men pour out of the necropolis. Victory opens the tomb (56); a
+# defeat costs a wound, and the seeker may attack again in three months.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.55
+	title = EVERCHOSEN
+	desc = EVTDESCundivided55
+	picture = GFX_evt_battle
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = everchosen_stage_necropolis
+		undivided_at_necropolis_trigger = yes
+	}
+	fail_trigger_effect = { clr_character_flag = everchosen_busy }
+
+	option = {
+		name = EVTOPTAundivided55 # Burn the city
+		random_list = {
+			65 = {
+				modifier = { factor = 1.3 martial = 12 }
+				modifier = { factor = 1.3 martial = 18 }
+				modifier = { factor = 1.3 trait = brilliant_strategist }
+				modifier = { factor = 1.5 is_doom_very_high_trigger = yes }
+				prestige = 150
+				character_event = { id = undivided.56 days = 6 }
+			}
+			35 = {
+				prestige = -100
+				add_trait_wounded_effect = yes
+				custom_tooltip = { text = undivided_attack_again_tt }
+				character_event = { id = undivided.55 days = 90 }
+			}
+		}
+	}
+}
+
+# 56 The shade of Morkar
+# In the deepest tomb the vengeful spirit of the first Everchosen rises to
+# fight for his armour, to the death.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.56
+	title = EVERCHOSEN
+	desc = EVTDESCundivided56
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.56 days = 21 }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = combatant_1
+		create_random_soldier = {
+			name = "Morkar"
+			random_traits = no
+			dynasty = none
+			religion = chaos
+			culture = kul
+			female = no
+			age = 45
+			attributes = { martial = 18 diplomacy = 4 stewardship = 2 intrigue = 6 learning = 5 }
+			trait = creature_human
+			trait = wroth
+			trait = brave
+		}
+		new_character = {
+			save_event_target_as = combatant_2
+			give_nickname = nick_the_uniter
+			undivided_guardian_setup_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided56 # Curse him in the old tongue
+		show_portrait = event_target:combatant_2
+		undivided_trial_duel_effect = yes
+		character_event = { id = undivided.57 days = 7 }
+	}
+}
+
+# 57 The Armour of Morkar
+# The shade is banished and the black armour is the seeker's. Next: the
+# Cliff of Beasts.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.57
+	title = EVERCHOSEN
+	desc = EVTDESCundivided57
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.57 days = 7 }
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided57 # It fits as if forged for me
+		if = {
+			limit = { NOT = { has_artifact = armor_of_morkar } }
+			add_artifact = armor_of_morkar
+			new_artifact = { set_creation_date = 1.1.1 }
+		}
+		add_doom_progress_tiny_effect = yes
+		undivided_quest_stage_cliff_effect = yes
+		custom_tooltip = { text = undivided_quest_cliff_tt }
+	}
+}
+
+# 58 The gods grow impatient
+# Every two years, a seeker who has stalled for two years on one stage is
+# reminded where to go. After three reminders the gods begin to punish them.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.58
+	title = EVERCHOSEN
+	desc = {
+		trigger = { has_character_flag = everchosen_stage_altar }
+		text = EVTDESCundivided58_altar
+	}
+	desc = {
+		trigger = { has_character_flag = everchosen_stage_coast }
+		text = EVTDESCundivided58_coast
+	}
+	desc = {
+		trigger = { has_character_flag = everchosen_stage_necropolis }
+		text = EVTDESCundivided58_necropolis
+	}
+	desc = {
+		trigger = { has_character_flag = everchosen_stage_cliff }
+		text = EVTDESCundivided58_cliff
+	}
+	desc = {
+		trigger = { has_character_flag = everchosen_stage_hunt }
+		text = EVTDESCundivided58_hunt
+	}
+	desc = {
+		trigger = { has_character_flag = everchosen_stage_zanbaijin }
+		text = EVTDESCundivided58_zanbaijin
+	}
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+	has_character_flag = potential_everchosen
+
+	trigger = {
+		undivided_extended_quest_trigger = yes
+		NOT = { has_character_flag = everchosen_busy }
+		NOT = { has_character_flag = everchosen_on_dorghar_road }
+		OR = {
+			had_character_flag = { flag = everchosen_stage_altar days = 700 }
+			had_character_flag = { flag = everchosen_stage_coast days = 700 }
+			had_character_flag = { flag = everchosen_stage_necropolis days = 700 }
+			had_character_flag = { flag = everchosen_stage_cliff days = 700 }
+			had_character_flag = { flag = everchosen_stage_hunt days = 700 }
+			had_character_flag = { flag = everchosen_stage_zanbaijin days = 700 }
+		}
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.58 days = 730 }
+		}
+	}
+
+	immediate = {
+		change_variable = { which = everchosen_reminders value = 1 }
+	}
+
+	option = {
+		name = EVTOPTAundivided58 # I go
+		if = {
+			limit = { check_variable = { which = everchosen_reminders value = 3 } }
+			prestige = -200
+			piety = -200
+		}
+		repeat_event = { id = undivided.58 days = 730 }
+	}
+}
+
+# 59 The seeker dies
+# Hidden. A seeker who dies before the crown loses everything: the treasures
+# vanish, the Mark is free for another, and doom eases if they were marked.
+# Scope: ROOT = the dead seeker. Fired by on_death.
+character_event = {
+	id = undivided.59
+	hide_window = yes
+	is_triggered_only = yes
+	has_character_flag = potential_everchosen
+
+	trigger = {
+		NOT = { trait = everchosen }
+	}
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = everchosen_marked }
+			reduce_doom_progress_medium_effect = yes
+		}
+		undivided_quest_reset_effect = yes
+	}
+}
+
+# 60 Flamefang
+# On the northern coast of Norsca the Chaos Dragon Flamefang guards its hoard
+# and the Eye of Sheerian. It swallows the seeker whole; only the Armour of
+# Morkar lets them cut their way out. A duel to the death.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.60
+	title = EVERCHOSEN
+	desc = EVTDESCundivided60
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.60 days = 21 }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = combatant_1
+		create_random_soldier = {
+			name = "Flamefang"
+			random_traits = no
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 300
+			attributes = { martial = 22 diplomacy = 0 stewardship = 0 intrigue = 0 learning = 6 }
+		}
+		new_character = {
+			save_event_target_as = combatant_2
+			set_graphical_culture = generic_monster
+			add_trait = creature_monster
+			add_trait = wroth
+			add_trait = brave
+			add_ten_duel_experience_modifier = yes
+			undivided_guardian_setup_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided60 # Into the beast
+		show_portrait = event_target:combatant_2
+		undivided_trial_duel_effect = yes
+		character_event = { id = undivided.61 days = 7 }
+	}
+}
+
+# 61 The Eye of Sheerian
+# The dragon is dead and the Eye is the seeker's. Two treasures remain, in
+# either order: Dorghar in the Realm of Chaos, or the Slayer of Kings on the
+# Chimera Plateau.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.61
+	title = EVERCHOSEN
+	desc = EVTDESCundivided61
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.61 days = 7 }
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { has_artifact = eye_of_sheerian } }
+			add_artifact = eye_of_sheerian
+			new_artifact = { set_creation_date = 1.1.1 }
+		}
+		add_doom_progress_tiny_effect = yes
+		undivided_quest_stage_hunt_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAundivided61 # Into the Realm of Chaos for the steed
+		custom_tooltip = { text = undivided_dorghar_road_tt }
+		set_character_flag = everchosen_on_dorghar_road
+		add_trait = on_pilgrimage
+		character_event = { id = undivided.62 days = 45 }
+	}
+	option = {
+		name = EVTOPTBundivided61 # East, to the Chimera Plateau
+		custom_tooltip = { text = undivided_quest_plateau_tt }
+	}
+}
+
+# 62 The road into the Realm of Chaos
+# The seeker crosses into the Realm of Chaos on pilgrimage. Each god's domain
+# tests a different strength; a failure costs blood or sanity, but the road
+# goes on to Agrammon's menagerie (63).
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.62
+	title = EVERCHOSEN
+	desc = EVTDESCundivided62
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = everchosen_on_dorghar_road
+	}
+
+	option = {
+		name = EVTOPTAundivided62 # The brass road of Khorne
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 martial = 14 }
+				modifier = { factor = 1.5 trait = brave }
+				prestige = 100
+			}
+			40 = { add_trait_wounded_effect = yes }
+		}
+		character_event = { id = undivided.63 days = 20 }
+	}
+	option = {
+		name = EVTOPTBundivided62 # The shifting labyrinth of Tzeentch
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 learning = 14 }
+				modifier = { factor = 1.5 trait = mystic }
+				change_learning = 1
+			}
+			40 = {
+				hidden_effect = {
+					if = {
+						limit = { lunacy_can_go_mad_trigger = yes }
+						change_variable = { which = "lunatic_counter" value = 2 }
+						character_event = { id = mutate.5 }
+					}
+				}
+				custom_tooltip = { text = undivided_mind_frays_tt }
+			}
+		}
+		character_event = { id = undivided.63 days = 20 }
+	}
+	option = {
+		name = EVTOPTCundivided62 # The rotting garden of Nurgle
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 health = 6 }
+				modifier = { factor = 1.5 trait = robust }
+				add_trait = robust
+			}
+			40 = { add_trait = ill }
+		}
+		character_event = { id = undivided.63 days = 20 }
+	}
+	option = {
+		name = EVTOPTDundivided62 # The palace of Slaanesh
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 trait = chaste }
+				modifier = { factor = 1.5 trait = temperate }
+				modifier = { factor = 0.5 trait = lustful }
+				piety = 150
+			}
+			40 = {
+				if = { limit = { NOT = { trait = hedonist } } add_trait = hedonist }
+				else = { add_trait = lustful }
+			}
+		}
+		character_event = { id = undivided.63 days = 20 }
+	}
+}
+
+# 63 Agrammon's menagerie
+# The Daemon Prince keeps beasts from every corner of the Realm of Chaos. The
+# seeker must get past the keepers to the steed: by force, by stealth, or as
+# Archaon did, hidden beneath a beast and tracking the steed by its stench.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.63
+	title = EVERCHOSEN
+	desc = EVTDESCundivided63
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = everchosen_on_dorghar_road
+	}
+
+	option = {
+		name = EVTOPTAundivided63 # Cut through the keepers
+		random_list = {
+			55 = {
+				modifier = { factor = 1.5 martial = 16 }
+				modifier = { factor = 1.3 is_doom_very_high_trigger = yes }
+				character_event = { id = undivided.64 days = 5 }
+			}
+			45 = {
+				add_trait_wounded_effect = yes
+				custom_tooltip = { text = undivided_try_again_tt }
+				character_event = { id = undivided.63 days = 30 }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBundivided63 # Slip past in the dark
+		random_list = {
+			55 = {
+				modifier = { factor = 1.5 intrigue = 16 }
+				modifier = { factor = 1.3 is_doom_very_high_trigger = yes }
+				character_event = { id = undivided.64 days = 5 }
+			}
+			45 = {
+				custom_tooltip = { text = undivided_try_again_tt }
+				character_event = { id = undivided.63 days = 30 }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTCundivided63 # Hide beneath a beast and follow the stench
+		add_trait = stressed
+		hidden_effect = {
+			if = {
+				limit = { lunacy_can_go_mad_trigger = yes }
+				change_variable = { which = "lunatic_counter" value = 1 }
+				character_event = { id = mutate.5 }
+			}
+		}
+		character_event = { id = undivided.64 days = 5 }
+	}
+}
+
+# 64 The steed of the apocalypse
+# The beast changes shape and bursts into flame as the seeker tries to break
+# it. Failure burns them; they may try again a month later.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.64
+	title = EVERCHOSEN
+	desc = EVTDESCundivided64
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = everchosen_on_dorghar_road
+	}
+
+	option = {
+		name = EVTOPTAundivided64 # Hold on
+		random_list = {
+			50 = {
+				modifier = { factor = 1.3 martial = 14 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 trait = strong }
+				modifier = { factor = 1.3 trait = robust }
+				modifier = { factor = 1.5 is_doom_very_high_trigger = yes }
+				character_event = { id = undivided.65 days = 3 }
+			}
+			50 = {
+				add_trait_wounded_effect = yes
+				custom_tooltip = { text = undivided_try_again_tt }
+				character_event = { id = undivided.64 days = 30 }
+			}
+		}
+	}
+}
+
+# 65 Dorghar
+# The steed is broken and the seeker rides out of the Realm of Chaos. If the
+# Slayer of Kings is won too, Zanbaijin is next; otherwise the Chimera
+# Plateau.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.65
+	title = EVERCHOSEN
+	desc = EVTDESCundivided65
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = everchosen_on_dorghar_road
+	}
+
+	option = {
+		name = EVTOPTAundivided65 # Ride
+		clr_character_flag = everchosen_on_dorghar_road
+		set_character_flag = everchosen_has_dorghar
+		if = { limit = { trait = on_pilgrimage } remove_trait = on_pilgrimage }
+		if = {
+			limit = { NOT = { has_artifact = steed_of_the_apocalypse_mount } }
+			add_artifact = steed_of_the_apocalypse_mount
+			new_artifact = { set_creation_date = 1.1.1 }
+		}
+		add_doom_progress_tiny_effect = yes
+		if = {
+			limit = { has_character_flag = everchosen_has_slayer }
+			undivided_quest_stage_zanbaijin_effect = yes
+			custom_tooltip = { text = undivided_quest_zanbaijin_tt }
+		}
+		else = {
+			undivided_quest_stage_hunt_effect = yes
+			custom_tooltip = { text = undivided_quest_plateau_tt }
+		}
+	}
+}
+
+# 67 Krakanrok the Black
+# On the Chimera Plateau the father of the Dragon Ogres sleeps with the
+# Slayer of Kings in his chest. Prince Ograx lifts a talon for the seeker;
+# the daemon U'zuhl shrieks and Krakanrok stirs. The blade must be quenched in
+# royal blood: one of the seeker's lords or commanders, a band of their
+# companions, or Prince Ograx himself (a duel to the death).
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.67
+	title = EVERCHOSEN
+	desc = EVTDESCundivided67
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = everchosen_stage_hunt
+		undivided_at_chimera_plateau_trigger = yes
+	}
+	fail_trigger_effect = { clr_character_flag = everchosen_busy }
+
+	immediate = {
+		random_courtier_or_vassal = {
+			limit = { undivided_royal_blood_trigger = yes }
+			save_event_target_as = blood_offering
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided67 # Quench it in a lord's blood
+		trigger = { event_target:blood_offering = { always = yes } }
+		event_target:blood_offering = { death = { death_reason = death_sacrificed killer = ROOT } }
+		character_event = { id = undivided.69 days = 1 }
+	}
+	option = {
+		name = EVTOPTBundivided67 # Feed it my companions
+		trigger = { any_courtier = { undivided_companion_trigger = yes } }
+		random_courtier = {
+			limit = { undivided_companion_trigger = yes }
+			death = { death_reason = death_sacrificed killer = ROOT }
+		}
+		random_courtier = {
+			limit = { undivided_companion_trigger = yes }
+			death = { death_reason = death_sacrificed killer = ROOT }
+		}
+		random_courtier = {
+			limit = { undivided_companion_trigger = yes }
+			death = { death_reason = death_sacrificed killer = ROOT }
+		}
+		random_courtier = {
+			limit = { undivided_companion_trigger = yes }
+			death = { death_reason = death_sacrificed killer = ROOT }
+		}
+		character_event = { id = undivided.69 days = 1 }
+	}
+	option = {
+		name = EVTOPTCundivided67 # Strike down Prince Ograx
+		save_event_target_as = combatant_1
+		create_random_soldier = {
+			name = "Ograx"
+			random_traits = no
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 200
+			attributes = { martial = 20 diplomacy = 2 stewardship = 2 intrigue = 2 learning = 4 }
+		}
+		new_character = {
+			save_event_target_as = combatant_2
+			set_graphical_culture = generic_monster
+			add_trait = creature_monster
+			add_trait = proud
+			add_trait = brave
+			undivided_guardian_setup_effect = yes
+		}
+		undivided_trial_duel_effect = yes
+		character_event = { id = undivided.68 days = 7 }
+	}
+}
+
+# 68 The prince's blood
+# The seeker survived the duel with Prince Ograx: the blade drinks.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.68
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.68 days = 7 }
+		}
+	}
+
+	immediate = {
+		character_event = { id = undivided.69 }
+	}
+}
+
+# 69 The Slayer of Kings
+# U'zuhl is quiet, for now. If Dorghar is already won, Zanbaijin is next;
+# otherwise the road leads into the Realm of Chaos.
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.69
+	title = EVERCHOSEN
+	desc = EVTDESCundivided69
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+	}
+
+	immediate = {
+		set_character_flag = everchosen_has_slayer
+		if = {
+			limit = { NOT = { has_artifact = slayer_of_kings } }
+			add_artifact = slayer_of_kings
+			new_artifact = { set_creation_date = 1.1.1 }
+		}
+		add_doom_progress_tiny_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAundivided69 # To Zanbaijin
+		trigger = { has_character_flag = everchosen_has_dorghar }
+		undivided_quest_stage_zanbaijin_effect = yes
+		custom_tooltip = { text = undivided_quest_zanbaijin_tt }
+	}
+	option = {
+		name = EVTOPTBundivided69 # Into the Realm of Chaos for the steed
+		trigger = { NOT = { has_character_flag = everchosen_has_dorghar } }
+		undivided_quest_stage_hunt_effect = yes
+		custom_tooltip = { text = undivided_dorghar_road_tt }
+		set_character_flag = everchosen_on_dorghar_road
+		add_trait = on_pilgrimage
+		character_event = { id = undivided.62 days = 45 }
+	}
+}
+
+# 70 Zanbaijin
+# The seeker claims the city of the Wastes as the seat of their reign; the
+# old holder is cast out. Be'lakor waits (71).
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.70
+	title = EVERCHOSEN
+	desc = EVTDESCundivided70
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = everchosen_stage_zanbaijin
+	}
+	fail_trigger_effect = { clr_character_flag = everchosen_busy }
+
+	option = {
+		name = EVTOPTAundivided70 # This is my throne
+		if = {
+			limit = { NOT = { has_landed_title = c_zanbaijin } }
+			c_zanbaijin = { grant_title = ROOT }
+		}
+		character_event = { id = undivided.71 days = 7 }
+	}
+}
+
+# 71 The Shrine of the gods
+# Be'lakor leads the seeker to the shrine where the crown waits. The gods
+# test them: Nurgle with plague, Tzeentch with a crystal maze, Slaanesh with
+# temptation. Failures cost dearly but do not end the trial; Khorne's
+# Bloodthirster comes last (72).
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.71
+	title = EVERCHOSEN
+	desc = EVTDESCundivided71
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = everchosen_stage_zanbaijin
+	}
+
+	immediate = {
+		create_random_soldier = {
+			name = "Be'lakor"
+			random_traits = no
+			dynasty = none
+			religion = chaos
+			culture = ROOT
+			female = no
+			age = 500
+			attributes = { martial = 20 diplomacy = 10 stewardship = 5 intrigue = 25 learning = 20 }
+			trait = prince_undivided
+		}
+		new_character = {
+			save_event_target_as = belakor
+			character_event = { id = undivided.37 days = 120 }
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided71 # Walk blind through the maze
+		show_portrait = event_target:belakor
+		random_list = {
+			60 = { modifier = { factor = 1.5 health = 6 } prestige = 50 }
+			40 = { add_trait = ill }
+		}
+		random_list = {
+			50 = { modifier = { factor = 1.5 trait = zealous } piety = 100 }
+			50 = {
+				hidden_effect = {
+					if = {
+						limit = { lunacy_can_go_mad_trigger = yes }
+						change_variable = { which = "lunatic_counter" value = 1 }
+						character_event = { id = mutate.5 }
+					}
+				}
+				custom_tooltip = { text = undivided_mind_frays_tt }
+			}
+		}
+		random_list = {
+			60 = { modifier = { factor = 1.5 trait = chaste } prestige = 50 }
+			40 = { if = { limit = { NOT = { trait = lustful } } add_trait = lustful } }
+		}
+		character_event = { id = undivided.72 days = 3 }
+	}
+	option = {
+		name = EVTOPTBundivided71 # Read the maze with your own eyes
+		show_portrait = event_target:belakor
+		random_list = {
+			60 = { modifier = { factor = 1.5 health = 6 } prestige = 50 }
+			40 = { add_trait = ill }
+		}
+		random_list = {
+			50 = { modifier = { factor = 1.5 learning = 16 } change_learning = 1 }
+			50 = {
+				hidden_effect = {
+					if = {
+						limit = { lunacy_can_go_mad_trigger = yes }
+						change_variable = { which = "lunatic_counter" value = 1 }
+						character_event = { id = mutate.5 }
+					}
+				}
+				custom_tooltip = { text = undivided_mind_frays_tt }
+			}
+		}
+		random_list = {
+			60 = { modifier = { factor = 1.5 trait = chaste } prestige = 50 }
+			40 = { if = { limit = { NOT = { trait = lustful } } add_trait = lustful } }
+		}
+		character_event = { id = undivided.72 days = 3 }
+	}
+}
+
+# 72 The Bloodthirster
+# Khorne's test: a Greater Daemon of the Blood God, to the death. The
+# survivor is crowned (73).
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.72
+	title = EVERCHOSEN
+	desc = EVTDESCundivided72
+	picture = GFX_evt_daemons
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.72 days = 21 }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = combatant_1
+		create_random_soldier = {
+			name = "Bloodthirster"
+			random_traits = no
+			dynasty = none
+			religion = chaos
+			culture = bloodletter_khorne
+			female = no
+			age = 500
+			attributes = { martial = 25 diplomacy = 0 stewardship = 0 intrigue = 2 learning = 2 }
+			trait = khorne_demon
+			trait = wroth
+			trait = brave
+		}
+		new_character = {
+			save_event_target_as = combatant_2
+			add_ten_duel_experience_modifier = yes
+			undivided_guardian_setup_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTAundivided72 # Take its whip
+		show_portrait = event_target:combatant_2
+		undivided_trial_duel_effect = yes
+		character_event = { id = undivided.73 days = 7 }
+	}
+}
+
+# 73 The crown on the throne of corpses
+# The Bloodthirster is dead. Be'lakor sets the Crown of Domination on the
+# seeker's head; the coronation follows (undivided.38).
+# Scope: ROOT = the seeker.
+character_event = {
+	id = undivided.73
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = potential_everchosen
+		NOT = { has_character_flag = duel }
+	}
+	fail_trigger_effect = {
+		if = {
+			limit = { has_character_flag = potential_everchosen }
+			repeat_event = { id = undivided.73 days = 7 }
+		}
+	}
+
+	immediate = {
+		set_character_flag = everchosen_crowned_by_belakor
+		character_event = { id = undivided.38 }
 	}
 }

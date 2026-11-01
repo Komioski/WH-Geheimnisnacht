@@ -1233,7 +1233,7 @@ character_event = {
 #   20-22  surrender offer to Chaos and Norscan rulers
 #   25     the horde grows after its first conquest
 #   30-42  the path of the Everchosen (the altar, the four trials, the mark)
-#   49-73  the extended path: the treasures of Archaon and the crowning
+#   49-76  the extended path: the treasures of Archaon and the crowning
 #
 # Callers:
 #   undivided.1   on_decade_pulse (wh_on_actions), for the Sigmarite head
@@ -1246,6 +1246,8 @@ character_event = {
 #   undivided.30  seektobecomeeverchosen decision (wh_chaos_decisions)
 #   undivided.49  on_unit_entering_province (nb_on_actions)
 #   undivided.59  on_death (wh_on_actions)
+#   undivided.74  on_battle_won_owner (wh_on_actions)
+#   undivided.75  on_battle_lost_owner (wh_on_actions)
 #
 # undivided.30-42 are the path to the mantle for a living Chaos ruler; undivided.10
 # cleans up after any Everchosen, player or AI.
@@ -1288,7 +1290,7 @@ narrative_event = {
 		NOT = { has_global_flag = everchosen_died }
 		NOT = { has_global_flag = self_declared_black_crusade }
 		NOT = { has_global_flag = everchosen_quest_claimed } # a player seeker holds the Mark
-		undivided_winds_allow_everchosen_trigger = yes
+		is_doom_very_high_trigger = yes
 	}
 
 	immediate = {
@@ -2309,7 +2311,8 @@ character_event = {
 # The seeker kneels at the altar and receives the mark (default rule), or is
 # crowned by Be'lakor at Zanbaijin (extended rule, from 73). If another
 # Everchosen rose while the seeker was on the road, the gods turn away
-# instead (42). Every path ends holding all five artifacts.
+# instead (42). Every path ends holding all five artifacts; doom goes to its
+# maximum, and a settled ruler becomes a horde (daemon.1).
 # Scope: ROOT = the seeker.
 character_event = {
 	id = undivided.38
@@ -2355,13 +2358,18 @@ character_event = {
 		add_trait = everchosen
 		if = { limit = { NOT = { trait = mark_chaos } } add_trait = mark_chaos }
 		undivided_give_missing_artifacts_effect = yes
-		add_doom_progress_major_effect = yes
+		undivided_doom_to_max_effect = yes # The Winds of Chaos howl
 		set_graphical_culture = everchosen_visual
 		set_character_flag = first_everchosen_war
 		set_character_flag = horde_invader
 		set_character_flag = existing_everchosen
 		e_host_chaos = { grant_title = ROOT make_primary_title = yes }
 		religion_scope = { set_religion_head = e_host_chaos }
+		if = { # A settled lord leaves their lands behind and rides as a horde
+			limit = { is_nomadic = no }
+			custom_tooltip = { text = undivided_becomes_horde_tt }
+			hidden_effect = { character_event = { id = daemon.1 days = 1 } }
+		}
 		narrative_event = { id = undivided.39 }
 		character_event = { id = undivided.40 days = 21 }
 	}
@@ -2595,12 +2603,13 @@ character_event = {
 #
 #   49     the seeker's army enters a province (on_unit_entering_province)
 #   50-53  the Mark, the seized ships, the black fleet
-#   54-57  the Armour of Morkar
+#   54-57  the Armour of Morkar (the battle is settled by 74-76)
 #   58     reminder;  59 a seeker dies
 #   60-61  the Eye of Sheerian
 #   62-66  Dorghar, Steed of the Apocalypse
 #   67-69  the Slayer of Kings
 #   70-73  Zanbaijin and the Crown of Domination; undivided.38 crowns them
+#   74-76  the necropolis battle: won, lost, or the dead fade
 ###############################################################################
 
 # 49 The seeker arrives
@@ -2671,9 +2680,10 @@ character_event = {
 
 # 50 The Mark of Chaos
 # The last champion falls and the altar drinks his blood. The seeker takes the
-# Mark of all four gods, and only they may now walk the road. A ruler who is
-# not yet a horde leaves their lands behind (daemon.1). Meanwhile the
-# seeker's warband has marched to the coast and seized the ships (51).
+# Mark of all four gods, and only they may now walk the road. A feudal seeker
+# keeps their lands as a base for the journey and only becomes a horde when
+# crowned (38). Meanwhile the seeker's warband has marched to the coast and
+# seized the ships (51).
 # Scope: ROOT = the seeker.
 character_event = {
 	id = undivided.50
@@ -2704,11 +2714,6 @@ character_event = {
 
 	option = {
 		name = EVTOPTAundivided50 # To the ships
-		if = {
-			limit = { is_nomadic = no }
-			custom_tooltip = { text = undivided_becomes_horde_tt }
-			hidden_effect = { character_event = { id = daemon.1 } }
-		}
 		undivided_quest_stage_coast_effect = yes
 		custom_tooltip = { text = undivided_quest_coast_tt }
 		hidden_effect = { character_event = { id = undivided.51 days = 3 } }
@@ -2841,9 +2846,13 @@ character_event = {
 	}
 }
 
-# 55 The pale host
-# The half-men pour out of the necropolis. Victory opens the tomb (56); a
-# defeat costs a wound, and the seeker may attack again in three months.
+# 55 The dead march out
+# The shade of Morkar, the first Everchosen, leads the dead of the necropolis
+# against the seeker. A real host spawns on the island under the shade and
+# attacks at once (undivided_necropolis_host_effect). The battle decides it:
+# if the seeker's army wins, the shade is destroyed and the armour is theirs
+# (74, then 57); if it loses, the seeker dies among the barrows (75). If no
+# battle comes within a year, the dead return to their tombs (76).
 # Scope: ROOT = the seeker.
 character_event = {
 	id = undivided.55
@@ -2860,82 +2869,15 @@ character_event = {
 	fail_trigger_effect = { clr_character_flag = everchosen_busy }
 
 	option = {
-		name = EVTOPTAundivided55 # Burn the city
-		random_list = {
-			65 = {
-				modifier = { factor = 1.3 martial = 12 }
-				modifier = { factor = 1.3 martial = 18 }
-				modifier = { factor = 1.3 trait = brilliant_strategist }
-				modifier = { factor = 1.5 is_doom_very_high_trigger = yes }
-				prestige = 150
-				character_event = { id = undivided.56 days = 6 }
-			}
-			35 = {
-				prestige = -100
-				add_trait_wounded_effect = yes
-				custom_tooltip = { text = undivided_attack_again_tt }
-				character_event = { id = undivided.55 days = 90 }
-			}
-		}
-	}
-}
-
-# 56 The shade of Morkar
-# In the deepest tomb the vengeful spirit of the first Everchosen rises to
-# fight for his armour, to the death.
-# Scope: ROOT = the seeker.
-character_event = {
-	id = undivided.56
-	title = EVERCHOSEN
-	desc = EVTDESCundivided56
-	picture = GFX_evt_daemons
-
-	is_triggered_only = yes
-
-	trigger = {
-		has_character_flag = potential_everchosen
-		NOT = { has_character_flag = duel }
-	}
-	fail_trigger_effect = {
-		if = {
-			limit = { has_character_flag = potential_everchosen }
-			repeat_event = { id = undivided.56 days = 21 }
-		}
-	}
-
-	immediate = {
-		save_event_target_as = combatant_1
-		create_random_soldier = {
-			name = "Morkar"
-			random_traits = no
-			dynasty = none
-			religion = chaos
-			culture = kul
-			female = no
-			age = 45
-			attributes = { martial = 18 diplomacy = 4 stewardship = 2 intrigue = 6 learning = 5 }
-			trait = creature_human
-			trait = wroth
-			trait = brave
-		}
-		new_character = {
-			save_event_target_as = combatant_2
-			give_nickname = nick_the_uniter
-			undivided_guardian_setup_effect = yes
-		}
-	}
-
-	option = {
-		name = EVTOPTAundivided56 # Curse him in the old tongue
-		show_portrait = event_target:combatant_2
-		undivided_trial_duel_effect = yes
-		character_event = { id = undivided.57 days = 7 }
+		name = EVTOPTAundivided55 # Form the battle line
+		custom_tooltip = { text = undivided_necropolis_battle_tt }
+		hidden_effect = { undivided_necropolis_host_effect = yes }
 	}
 }
 
 # 57 The Armour of Morkar
-# The shade is banished and the black armour is the seeker's. Next: the
-# Cliff of Beasts.
+# The shade fell with its host and the black armour is the seeker's. Next:
+# the Cliff of Beasts.
 # Scope: ROOT = the seeker.
 character_event = {
 	id = undivided.57
@@ -3383,10 +3325,11 @@ character_event = {
 
 # 67 Krakanrok the Black
 # On the Chimera Plateau the father of the Dragon Ogres sleeps with the
-# Slayer of Kings in his chest. Prince Ograx lifts a talon for the seeker;
-# the daemon U'zuhl shrieks and Krakanrok stirs. The blade must be quenched in
-# royal blood: one of the seeker's lords or commanders, a band of their
-# companions, or Prince Ograx himself (a duel to the death).
+# Slayer of Kings in his chest, and the daemon U'zuhl shrieks in the blade.
+# It must be quenched to silence it before Krakanrok wakes: one death of royal
+# blood among those standing with the seeker (landed, noble-born or kin), or,
+# if there is none, everyone who came with them. With no one to give, the
+# beast wakes and crushes the seeker.
 # Scope: ROOT = the seeker.
 character_event = {
 	id = undivided.67
@@ -3410,79 +3353,37 @@ character_event = {
 	}
 
 	option = {
-		name = EVTOPTAundivided67 # Quench it in a lord's blood
+		name = EVTOPTAundivided67 # Royal blood
 		trigger = { event_target:blood_offering = { always = yes } }
-		event_target:blood_offering = { death = { death_reason = death_sacrificed killer = ROOT } }
-		character_event = { id = undivided.69 days = 1 }
-	}
-	option = {
-		name = EVTOPTBundivided67 # Feed it my companions
-		trigger = { any_courtier = { undivided_companion_trigger = yes } }
-		random_courtier = {
-			limit = { undivided_companion_trigger = yes }
-			death = { death_reason = death_sacrificed killer = ROOT }
-		}
-		random_courtier = {
-			limit = { undivided_companion_trigger = yes }
-			death = { death_reason = death_sacrificed killer = ROOT }
-		}
-		random_courtier = {
-			limit = { undivided_companion_trigger = yes }
-			death = { death_reason = death_sacrificed killer = ROOT }
-		}
-		random_courtier = {
-			limit = { undivided_companion_trigger = yes }
+		event_target:blood_offering = {
+			show_portrait = yes
 			death = { death_reason = death_sacrificed killer = ROOT }
 		}
 		character_event = { id = undivided.69 days = 1 }
 	}
 	option = {
-		name = EVTOPTCundivided67 # Strike down Prince Ograx
-		save_event_target_as = combatant_1
-		create_random_soldier = {
-			name = "Ograx"
-			random_traits = no
-			dynasty = none
-			religion = chaos
-			culture = ROOT
-			female = no
-			age = 200
-			attributes = { martial = 20 diplomacy = 2 stewardship = 2 intrigue = 2 learning = 4 }
+		name = EVTOPTBundivided67 # All of them
+		trigger = {
+			NOT = { event_target:blood_offering = { always = yes } }
+			any_courtier_or_vassal = { undivided_blood_companion_trigger = yes }
 		}
-		new_character = {
-			save_event_target_as = combatant_2
-			set_graphical_culture = generic_monster
-			add_trait = creature_monster
-			add_trait = proud
-			add_trait = brave
-			undivided_guardian_setup_effect = yes
+		custom_tooltip = { text = undivided_quench_all_tt }
+		any_courtier_or_vassal = {
+			limit = { undivided_blood_companion_trigger = yes }
+			death = { death_reason = death_sacrificed killer = ROOT }
 		}
-		undivided_trial_duel_effect = yes
-		character_event = { id = undivided.68 days = 7 }
+		character_event = { id = undivided.69 days = 1 }
 	}
-}
-
-# 68 The prince's blood
-# The seeker survived the duel with Prince Ograx: the blade drinks.
-# Scope: ROOT = the seeker.
-character_event = {
-	id = undivided.68
-	hide_window = yes
-	is_triggered_only = yes
-
-	trigger = {
-		has_character_flag = potential_everchosen
-		NOT = { has_character_flag = duel }
-	}
-	fail_trigger_effect = {
+	option = {
+		name = EVTOPTCundivided67 # There is no one
+		trigger = { NOT = { any_courtier_or_vassal = { undivided_blood_companion_trigger = yes } } }
 		if = {
-			limit = { has_character_flag = potential_everchosen }
-			repeat_event = { id = undivided.68 days = 7 }
+			limit = { is_invincible_trigger = yes }
+			add_trait_wounded_effect = yes
+			clr_character_flag = everchosen_busy
+			custom_tooltip = { text = undivided_krakanrok_spared_tt }
 		}
-	}
-
-	immediate = {
-		character_event = { id = undivided.69 }
+		else = { death = { death_reason = death_accident_generic_beast } }
 	}
 }
 
@@ -3722,5 +3623,89 @@ character_event = {
 	immediate = {
 		set_character_flag = everchosen_crowned_by_belakor
 		character_event = { id = undivided.38 }
+	}
+}
+
+# 74 The shade falls
+# Hidden. The seeker's army beat the host of the dead: the shade of Morkar is
+# destroyed with it, and the tomb lies open (57).
+# Scope: ROOT = the seeker (winning army owner), FROM = the shade.
+# Fired by on_battle_won_owner.
+character_event = {
+	id = undivided.74
+	hide_window = yes
+	is_triggered_only = yes
+	has_character_flag = everchosen_stage_necropolis
+
+	trigger = {
+		FROM = { has_character_flag = necropolis_guardian }
+	}
+
+	immediate = {
+		FROM = {
+			clr_character_flag = necropolis_guardian
+			if = {
+				limit = { is_alive = yes }
+				disband_event_forces = necropolis_dead
+				death = { death_reason = death_battle killer = ROOT }
+			}
+		}
+		prestige = 150
+		character_event = { id = undivided.57 days = 3 }
+	}
+}
+
+# 75 Among the barrows
+# The dead broke the seeker's army, and the seeker falls with it. The quest
+# resets on their death (59). An invincible seeker is only wounded and may
+# search again.
+# Scope: ROOT = the seeker (losing army owner), FROM = the shade.
+# Fired by on_battle_lost_owner.
+character_event = {
+	id = undivided.75
+	title = EVERCHOSEN
+	desc = EVTDESCundivided75
+	picture = GFX_evt_battle
+	is_triggered_only = yes
+	has_character_flag = everchosen_stage_necropolis
+
+	trigger = {
+		FROM = { has_character_flag = necropolis_guardian }
+	}
+
+	option = {
+		name = EVTOPTAundivided75
+		FROM = {
+			clr_character_flag = necropolis_guardian
+			if = {
+				limit = { is_alive = yes }
+				disband_event_forces = necropolis_dead
+				death = { death_reason = death_missing }
+			}
+		}
+		if = {
+			limit = { is_invincible_trigger = yes }
+			add_trait_wounded_effect = yes
+			clr_character_flag = everchosen_busy
+		}
+		else = { death = { death_reason = death_battle killer = FROM } }
+	}
+}
+
+# 76 The dead return to their tombs
+# Hidden. A year passed without a battle: the host fades and the seeker may
+# search the island again.
+# Scope: ROOT = the shade, FROM = the seeker. Fired by
+# undivided_necropolis_host_effect.
+character_event = {
+	id = undivided.76
+	hide_window = yes
+	is_triggered_only = yes
+	has_character_flag = necropolis_guardian
+
+	immediate = {
+		disband_event_forces = necropolis_dead
+		FROM = { clr_character_flag = everchosen_busy }
+		death = { death_reason = death_missing }
 	}
 }

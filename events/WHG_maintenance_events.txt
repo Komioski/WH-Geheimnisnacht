@@ -1,0 +1,2984 @@
+###############################################################################
+# Maintenance events
+# Namespace: aiclean (the old wh_setup namespace was folded in as aiclean.51-52)
+# Faction: Generic
+#
+# Hidden upkeep that keeps the Warhammer world consistent: special successions
+# and titles, race upkeep (old age, dwarf ranks, elven youth), game start setup
+# (places of power, secret cults, female-led titles), the ruler designer
+# choices for faith, vampire bloodline and magic, the Phoenix Crown bloodlines
+# and the capital swap offers for Bretonnia, the Empire and Ulthuan.
+#
+# The ids are not grouped by section because aiclean.31 alone is fired from
+# well over a hundred places. Sections by id:
+#
+# Succession and titles         aiclean.1-5, 15-17, 23, 29
+# Race upkeep                   aiclean.6, 7, 14, 18, 19, 42, 43
+# Helpers for other events      aiclean.8-11, 13, 21, 22, 24
+# Government and court          aiclean.12, 20, 26-28
+# Game start                    aiclean.25, 30, 44, 47
+# Ruler designer                aiclean.31-41
+# Phoenix Crown bloodlines      aiclean.45, 46
+# Capital swaps                 aiclean.48-50
+# Wonder names (not hooked up)  aiclean.51, 52
+#
+# Fired from common/on_actions/wh_on_actions.txt (birth, adolescence, death,
+# new holder, pulses), common/on_actions/wh_rulerdesigner_system.txt (game
+# start, startup, religion change, employer change), decisions, character
+# history and many scripted effects.
+# Loc: localisation/00_maintenance_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = aiclean
+
+# aiclean.1 Nomad heir keeps the faith
+# When a nomadic ruler dies, an heir of another religion group takes the
+# ruler's faith. A government flip between chaos_horde_government and
+# nomadic_government crashes the game, so the heir must match.
+# Scope: ROOT is the dying nomad.
+character_event = {
+	id = aiclean.1
+	hide_window = yes
+
+	only_rulers = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_nomadic = yes
+	}
+
+	immediate = {
+		current_heir = { if = { limit = { NOT = { religion_group = ROOT } } religion = ROOT } }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.2 Samur chapter needs a witch hunter
+# The Samur witch hunter chapter is destroyed when it passes to someone who is
+# not a witch hunter.
+# Scope: ROOT is the new holder, FROM the title.
+character_event = {
+	id = aiclean.2
+	hide_window = yes
+
+	only_playable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { title = d_samur_chapter }
+		NOT = { is_witch_hunter_trigger = yes }
+	}
+
+	immediate = {
+		d_samur_chapter = { destroy_landed_title = THIS }
+		activate_title = { title = d_samur_chapter status = no }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.3 The Everqueen dies
+# A dying Everqueen hands Avelorn to her living heir (aiclean.4).
+# Scope: ROOT is the Everqueen.
+character_event = {
+	id = aiclean.3
+	hide_window = yes
+
+	religion_group = cadai_group
+	only_women = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = everqueen
+		everqueen_heir = { is_alive = yes }
+	}
+
+	immediate = {
+		everqueen_heir = { character_event = { id = aiclean.4 } }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.4 The new Everqueen
+# The heir becomes Everqueen, drops her placeholder court title and receives
+# every title of the late Everqueen.
+# Scope: ROOT is the heir, FROM the late Everqueen.
+character_event = {
+	id = aiclean.4
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		remove_trait = everqueen_heir
+		add_trait = everqueen
+		set_character_flag = ai_flag_refuse_conversion
+		any_demesne_title = {
+			limit = { has_title_flag = asur_supercourtier_flag }
+			unsafe_destroy_landed_title = THIS
+		}
+		FROM = { any_demesne_title = { grant_title = ROOT } }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.5 Crown lost
+# Every two years an Everqueen without Avelorn or a Phoenix King without
+# Ulthuan loses the trait.
+# Scope: ROOT is the character.
+character_event = {
+	id = aiclean.5
+	hide_window = yes
+
+	religion_group = cadai_group
+
+	is_triggered_only = yes
+
+	trigger = {
+		OR = {
+			AND = { trait = everqueen NOT = { has_landed_title = k_avelorn } is_alive = yes }
+			AND = { trait = phoenix_king NOT = { has_landed_title = e_ulthuan } is_alive = yes }
+		}
+	}
+
+	immediate = {
+		if = { limit = { trait = everqueen } remove_trait = everqueen }
+		if = { limit = { trait = phoenix_king } remove_trait = phoenix_king }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.6 Dwarf newborns look young
+# Newborn dwarfs and Chaos Dwarfs that inherited an old-age portrait set get
+# the young one.
+# Scope: ROOT is the baby.
+character_event = {
+	id = aiclean.6
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		OR = {
+			graphical_culture = olddwarfgfx
+			graphical_culture = olddwarfrevgfx
+			graphical_culture = oldchaosdwarfgfx
+			graphical_culture = oldchaosdwarfrevgfx
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				OR = {
+					trait = creature_dwarf
+					graphical_culture = olddwarfgfx
+					graphical_culture = olddwarfrevgfx
+				}
+			}
+			set_graphical_culture = dwarf_main
+		}
+		if = {
+			limit = {
+				OR = {
+					trait = creature_chaos_dwarf
+					graphical_culture = oldchaosdwarfgfx
+					graphical_culture = oldchaosdwarfrevgfx
+				}
+			}
+			set_graphical_culture = dwarf_chaos
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.7 Growing old
+# Every five years a human, Skaven or halfling of 50, or a dwarf or Chaos
+# Dwarf of 200 (lifespan_age_50_trigger), gets the old-age trait that matches
+# their looks; women become infertile and men less fertile, once. Old dwarfs
+# get the grey-bearded portraits. Elves, immortals, Chaos champions and ice
+# witches do not age this way.
+# Scope: ROOT is the character.
+character_event = {
+	id = aiclean.7
+	hide_window = yes
+
+	min_age = 50
+
+	is_triggered_only = yes
+
+	trigger = {
+		OR = {
+			trait = creature_human
+			trait = creature_skaven
+			trait = creature_halfling
+			lifespan_dwarf_trigger = yes
+		}
+		lifespan_age_50_trigger = yes
+		NOR = {
+			is_immortal_trigger = yes
+			is_chaos_champion_chosen_or_prince_trigger = yes
+			trait = lore_ice
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { NOR = { trait = old_1 trait = old_2 trait = old_3 trait = old_4 } }
+			if = { limit = { trait = fair } add_trait = old_2 }
+			else_if = { limit = { trait = pretty } add_trait = old_3 }
+			else_if = { limit = { trait = beautiful } add_trait = old_4 }
+			else = { add_trait = old_1 }
+			if = { limit = { female = yes } add_trait = infertile }
+			else = { fertility = -0.2 }
+		}
+		if = {
+			limit = {
+				trait = creature_chaos_dwarf
+				NOR = {
+					trait = transgender
+					graphical_culture = olddwarfgfx
+					graphical_culture = oldchaosdwarfgfx
+					graphical_culture = slayerdwarfgfx
+				}
+			}
+			set_graphical_culture = dwarf_chaos_old
+		}
+		if = {
+			limit = {
+				trait = creature_dwarf
+				NOR = {
+					trait = transgender
+					graphical_culture = olddwarfgfx
+					graphical_culture = oldchaosdwarfgfx
+					graphical_culture = slayerdwarfgfx
+				}
+			}
+			set_graphical_culture = dwarf_old
+		}
+		if = {
+			limit = {
+				trait = creature_chaos_dwarf
+				trait = transgender
+				NOR = {
+					graphical_culture = olddwarfgfx
+					graphical_culture = oldchaosdwarfgfx
+					graphical_culture = slayerdwarfgfx
+				}
+			}
+			set_graphical_culture = oldchaosdwarfrev
+		}
+		if = {
+			limit = {
+				trait = creature_dwarf
+				trait = transgender
+				NOR = {
+					graphical_culture = olddwarfgfx
+					graphical_culture = oldchaosdwarfgfx
+					graphical_culture = slayerdwarfgfx
+				}
+			}
+			set_graphical_culture = olddwarfrev
+		}
+	}
+}
+
+# aiclean.8 Vassal conversion demanded
+# Fired by the demand-conversion decisions: passes the demand to the vassal
+# (aiclean.9).
+# Scope: ROOT is the demander, FROM the vassal.
+character_event = {
+	id = aiclean.8
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { character_event = { id = aiclean.9 } }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.9 Vassal conversion carried out
+# Runs the vanilla conversion event 39700 for the saved converted target.
+# Scope: ROOT is the vassal, FROM the demander.
+character_event = {
+	id = aiclean.9
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		# Fires for the vassal and each of his courtiers and vassals.
+		# Note: needs to fire for vassals/courtier before character
+		# FROMFROM is the demander. FROM is the vassal. ROOT is the character.
+		event_target:converted = { character_event = { id = 39700 } }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.10 Spell failed
+# Notification that a spell fizzled: the caster loses 25 prestige. Fired by
+# the magic decisions.
+# Scope: ROOT is the caster.
+character_event = {
+	id = aiclean.10
+	picture = GFX_evt_mage_battle_magic
+	desc = EVTDESCaiclean10
+	notification = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		prestige = -25
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.11 Woodwalking ends
+# Removes the woodwalking trait when its timer runs out. Fired by the magic
+# decisions.
+# Scope: ROOT is the woodwalker.
+character_event = {
+	id = aiclean.11
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		remove_trait = woodwalking
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.12 Greenskin government reset
+# A new greenskin title holder on the second greenskin government goes back to
+# the normal one.
+# Scope: ROOT is the new holder.
+character_event = {
+	id = aiclean.12
+	hide_window = yes
+
+	religion_group = greenskin_gods_group
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { government = greenskin_government2 }
+			set_government_type = greenskin_government
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.13 Master dies
+# When a mage dies, their apprentices are freed.
+# Scope: ROOT is the dead master.
+character_event = {
+	id = aiclean.13
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		any_friend = { trait = mage_apprentice has_character_flag = mage_master@ROOT }
+	}
+
+	immediate = {
+		any_friend = {
+			limit = { has_character_flag = mage_master@ROOT }
+			remove_trait = mage_apprentice
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.14 Dwarf ranks at game start
+# Gives starting dwarf men the rank that fits their age and skills:
+# beardling under 75, then thunderer, quarreller, hammerer or warrior, and
+# longbeard from 250. Cowards are flagged and never become warriors.
+# Scope: ROOT is the dwarf.
+character_event = {
+	id = aiclean.14
+	hide_window = yes
+
+	religion_group = dwarf_gods_group
+	only_men = yes
+	min_age = 16
+	max_age = 300
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_save_game = no
+		trait = creature_dwarf
+		NOR = {
+			trait = dwarf_slayer_king
+			trait = dwarf_slayer
+			trait = longbeard
+			trait = ironbreaker
+			has_character_flag = dwarf_did_not_become_warrior
+			has_character_flag = becoming_thunderer
+			has_character_flag = becoming_quarreller
+			has_character_flag = becoming_dwarf_warrior
+			AND = { NOT = { age = 75 } trait = beardling }
+			AND = {
+				NOT = { age = 250 }
+				OR = { trait = dwarf_warrior trait = quarreller trait = hammerer trait = thunderer }
+			}
+		}
+	}
+
+	immediate = {
+		remove_trait = beardling
+		if = { limit = { NOT = { age = 75 } } add_trait = beardling }
+		else_if = {
+			limit = {
+				age = 75
+				diplomacy = 12
+				NOR = {
+					trait = quarreller
+					trait = hammerer
+					trait = dwarf_warrior
+					trait = thunderer
+				}
+			}
+			add_trait = thunderer
+		}
+		else_if = {
+			limit = {
+				age = 75
+				stewardship = 12
+				NOR = {
+					trait = quarreller
+					trait = hammerer
+					trait = dwarf_warrior
+					trait = thunderer
+				}
+			}
+			add_trait = quarreller
+		}
+		else_if = {
+			limit = {
+				age = 75
+				martial = 15
+				NOR = {
+					trait = quarreller
+					trait = hammerer
+					trait = dwarf_warrior
+					trait = thunderer
+				}
+			}
+			add_trait = hammerer
+		}
+		else_if = {
+			limit = { age = 75 trait = craven }
+			set_character_flag = dwarf_did_not_become_warrior
+		}
+		else_if = {
+			limit = { age = 250 }
+			remove_trait = quarreller
+			remove_trait = hammerer
+			remove_trait = dwarf_warrior
+			remove_trait = thunderer
+			add_trait = longbeard
+		}
+		else = { add_trait = dwarf_warrior }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.15 Special titles die with their holder
+# The Red Dukedom, Drachenfels and the Sylvanian empire are destroyed when
+# their holder dies.
+# Scope: ROOT is the dead holder.
+character_event = {
+	id = aiclean.15
+	hide_window = yes
+
+	only_playable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		OR = {
+			has_landed_title = k_red_dukedom
+			has_landed_title = k_drachenfels
+			has_landed_title = e_sylvania
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { has_landed_title = k_red_dukedom }
+			k_red_dukedom = { unsafe_destroy_landed_title = THIS }
+		}
+		if = {
+			limit = { has_landed_title = k_drachenfels }
+			k_drachenfels = { unsafe_destroy_landed_title = THIS }
+			clr_global_flag = drachenfels_back
+		}
+		if = {
+			limit = { has_landed_title = e_sylvania }
+			e_sylvania = { unsafe_destroy_landed_title = THIS }
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.16 The Akghan church and Martek university go on
+# When the head of the Akghan church or the University of Martek dies, a new
+# human mage of their faith and culture is created to take over (aiclean.17).
+# Scope: ROOT is the dead holder.
+character_event = {
+	id = aiclean.16
+	hide_window = yes
+
+	only_playable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		OR = { has_landed_title = d_akghan_church has_landed_title = d_university_of_martek }
+	}
+
+	immediate = {
+		if = {
+			limit = { has_landed_title = d_akghan_church }
+			random_list = {
+				25 = {
+					create_character = {
+						random_traits = yes
+						dynasty = NONE
+						religion = ROOT
+						culture = ROOT
+						female = no
+						age = 39
+					}
+				}
+				25 = {
+					create_character = {
+						random_traits = yes
+						dynasty = RANDOM
+						religion = ROOT
+						culture = ROOT
+						female = no
+						age = 56
+					}
+				}
+				25 = {
+					create_character = {
+						random_traits = yes
+						dynasty = RANDOM
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						age = 42
+					}
+				}
+				25 = {
+					create_character = {
+						random_traits = yes
+						dynasty = NONE
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						age = 54
+					}
+				}
+			}
+			new_character = {
+				add_trait = celibate
+				add_trait = creature_human
+				random_list = {
+					25 = { add_trait = lore_light }
+					25 = { add_trait = lore_fire }
+					25 = { add_trait = lore_metal }
+					25 = { add_trait = lore_life }
+				}
+				random_list = {
+					50 = { add_trait = magic_potential_1 }
+					30 = { add_trait = magic_potential_2 }
+					15 = { add_trait = magic_potential_3 }
+					5 = { add_trait = magic_potential_4 }
+				}
+				magic_power_random_effect = yes
+				character_event = { id = aiclean.17 }
+			}
+		}
+		if = {
+			limit = { has_landed_title = d_university_of_martek }
+			random_list = {
+				25 = {
+					create_character = {
+						random_traits = yes
+						dynasty = RANDOM
+						religion = ROOT
+						culture = ROOT
+						female = no
+						age = 48
+					}
+				}
+				25 = {
+					create_character = {
+						random_traits = yes
+						dynasty = RANDOM
+						religion = ROOT
+						culture = ROOT
+						female = no
+						age = 53
+					}
+				}
+				25 = {
+					create_character = {
+						random_traits = yes
+						dynasty = RANDOM
+						religion = ROOT
+						culture = ROOT
+						female = no
+						age = 65
+					}
+				}
+				25 = {
+					create_character = {
+						random_traits = yes
+						dynasty = RANDOM
+						religion = ROOT
+						culture = ROOT
+						female = no
+						age = 70
+					}
+				}
+			}
+			new_character = {
+				add_trait = creature_human
+				add_trait = celibate
+				add_trait = arabyan_scholar
+				random_list = {
+					25 = { add_trait = lore_light }
+					50 = { add_trait = lore_fire }
+					25 = { add_trait = lore_metal }
+				}
+				random_list = {
+					50 = { add_trait = magic_potential_1 }
+					30 = { add_trait = magic_potential_2 }
+					15 = { add_trait = magic_potential_3 }
+					5 = { add_trait = magic_potential_4 }
+				}
+				magic_power_random_effect = yes
+				character_event = { id = aiclean.17 }
+			}
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.17 Titles pass to the successor
+# The new mage receives every title of the dead holder.
+# Scope: ROOT is the new holder, FROM the dead holder.
+character_event = {
+	id = aiclean.17
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { any_demesne_title = { grant_title = ROOT } }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.18 Elven youth
+# Elves at adolescence become elven maidens or scions, which keeps them from
+# low-born marriages; aiclean.19 ends it about 45 years later.
+# Scope: ROOT is the elf.
+character_event = {
+	id = aiclean.18
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = creature_elf
+	}
+
+	immediate = {
+		if = { limit = { is_female = yes } add_trait = elven_maiden }
+		else = { add_trait = elven_scion }
+		character_event = { id = aiclean.19 years = 45 random = 3 }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.19 Elven youth ends
+# Between 45 and 65 elves lose the youth trait, gain 50 prestige and can marry.
+# Scope: ROOT is the elf.
+character_event = {
+	id = aiclean.19
+	hide_window = yes
+
+	min_age = 45
+	max_age = 65
+
+	is_triggered_only = yes
+
+	trigger = {
+		OR = { trait = elven_scion trait = elven_maiden }
+	}
+
+	immediate = {
+		remove_trait = elven_scion
+		remove_trait = elven_maiden
+		prestige = 50
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.20 Court cleansing
+# Every ten years an AI ruler below king with five or more Skaven breeders or
+# ten or more Khemri soldiers at court quietly loses all of them. The AI
+# spawns too many of them.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = aiclean.20
+	hide_window = yes
+
+	only_rulers = yes
+	ai = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		lower_tier_than = KING
+		OR = {
+			any_courtier = { trait = skaven_breeder count = 5 }
+			any_courtier = { trait = khemri_soldier count = 10 }
+		}
+	}
+
+	immediate = {
+		any_courtier = {
+			limit = { trait = skaven_breeder }
+			death = { death_reason = death_missing }
+		}
+		any_courtier = {
+			limit = { trait = khemri_soldier }
+			death = { death_reason = death_missing }
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.21 Mining outpost taken
+# After a siege of a trade post, checks a day later (aiclean.22) whether the
+# mining outpost still stands.
+# Scope: ROOT is the besieger, FROM the taken holding.
+character_event = {
+	id = aiclean.21
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { has_province_flag = mining_outpost_flag }
+	}
+
+	immediate = {
+		FROM = {
+			save_event_target_as = mining_province
+			province_event = { id = aiclean.22 days = 1 }
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.22 Mining outpost gone
+# Clears the mining outpost flag from a province that lost its trade post.
+# Scope: ROOT is the province.
+province_event = {
+	id = aiclean.22
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		event_target:mining_province = {
+			if = { limit = { has_trade_post = no } clr_province_flag = mining_outpost_flag }
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.23 Crown law cooldown cleared
+# A new holder of a crown law title clears the crown_law_change flag.
+# Scope: ROOT is the new holder, FROM the title.
+character_event = {
+	id = aiclean.23
+	hide_window = yes
+
+	only_rulers = yes
+	is_triggered_only = yes #
+
+	trigger = {
+		FROM = { is_crown_law_title = yes }
+	}
+
+	immediate = {
+		FROM = { clr_title_flag = crown_law_change }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.24 Dynasty bloodlines
+# A newborn joins every always_transfer bloodline their parents own when they
+# share the dynasty.
+# Scope: ROOT is the baby.
+character_event = {
+	id = aiclean.24
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		mother_even_if_dead = {
+			any_owned_bloodline = {
+				limit = { has_bloodline_flag = always_transfer PREV = { dynasty = ROOT } }
+				add_bloodline_member = ROOT
+			}
+		}
+		father_even_if_dead = {
+			any_owned_bloodline = {
+				limit = { has_bloodline_flag = always_transfer PREV = { dynasty = ROOT } }
+				add_bloodline_member = ROOT
+			}
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.25 Places of power and the Mists of Albion
+# At the start of a new game sets the active, corrupt and inactive places of
+# power across the map and the Mists of Albion (unless the game rule turns
+# them off). Runs once, for the host.
+# Scope: ROOT is the host player.
+character_event = {
+	id = aiclean.25
+	hide_window = yes
+
+	is_triggered_only = yes
+	only_playable = yes
+	ai = no
+	trigger = {
+		is_multiplayer_host_character = yes
+		is_save_game = no
+	}
+
+	immediate = {
+		## High Elves
+		# Active
+		1495 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1499 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1503 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1509 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1521 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1533 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1537 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1543 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1549 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1562 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1572 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1583 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1584 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1589 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1599 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1611 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		1621 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		2148 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		# Corrupt (By the Cult of Pleasure or Khaine)
+		1511 = { add_province_modifier = { name = corrupt_place_of_power_elf duration = -1 } }
+		1525 = { add_province_modifier = { name = corrupt_place_of_power_elf duration = -1 } }
+		1575 = { add_province_modifier = { name = corrupt_place_of_power_elf duration = -1 } }
+		1579 = { add_province_modifier = { name = corrupt_place_of_power_elf duration = -1 } }
+		1600 = { add_province_modifier = { name = corrupt_place_of_power_elf duration = -1 } }
+		## Wood Elves
+		# Active
+		260 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		261 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		818 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		2111 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		2287 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		2293 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		2300 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		2309 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		2312 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		2323 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		2324 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		2327 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		2331 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		2332 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		2336 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		2346 = { add_province_modifier = { name = active_place_of_power_wood duration = -1 } }
+		# Corrupt
+		564 = { add_province_modifier = { name = corrupt_place_of_power_wood duration = -1 } }
+		2426 = { add_province_modifier = { name = corrupt_place_of_power_wood duration = -1 } }
+		# Inactive
+		231 = { add_province_modifier = { name = inactive_place_of_power_wood duration = -1 } }
+		594 = { add_province_modifier = { name = inactive_place_of_power_wood duration = -1 } }
+		617 = { add_province_modifier = { name = inactive_place_of_power_wood duration = -1 } }
+		## Norsca
+		# Active
+		2445 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		# Corrupt
+		3 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		28 = { add_province_modifier = { name = corrupt_place_of_power_elf duration = -1 } }
+		33 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		39 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		13 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		50 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		65 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		70 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		100 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		130 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		146 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		412 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		## Wastes
+		# Corrupt
+		405 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		953 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		956 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		1177 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		1221 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		1654 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		2421 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		# Inactive
+		953 = { add_province_modifier = { name = inactive_place_of_power_wood duration = -1 } }
+		## Albion
+		# Active
+		2404 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		2406 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		2409 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		# Corrupt
+		2412 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		## Kislev
+		# Active
+		149 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		174 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		175 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		182 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		194 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		202 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		# Corrupt
+		203 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		214 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		# Inactive
+		159 = { add_province_modifier = { name = inactive_place_of_power_man duration = -1 } }
+		168 = { add_province_modifier = { name = inactive_place_of_power_man duration = -1 } }
+		## Southern Realms
+		# Active
+		528 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		553 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		600 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		614 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		# Corrupt
+		689 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		2216 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		# Inactive
+		573 = { add_province_modifier = { name = inactive_place_of_power_wood duration = -1 } }
+		578 = { add_province_modifier = { name = inactive_place_of_power_man duration = -1 } }
+		690 = { add_province_modifier = { name = inactive_place_of_power_man duration = -1 } }
+		723 = { add_province_modifier = { name = inactive_place_of_power_man duration = -1 } }
+		## Bretonnia
+		# Active
+		219 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		802 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		829 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		894 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		940 = { add_province_modifier = { name = active_place_of_power_elf duration = -1 } }
+		# Corrupt
+		826 = { add_province_modifier = { name = corrupt_place_of_power_elf duration = -1 } }
+		847 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		## Northern Empire
+		# Active
+		222 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		239 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		243 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		251 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		274 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		## Central Empire
+		# Active
+		294 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		299 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		300 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		324 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		329 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		330 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		334 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		932 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		959 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		## Southern Empire
+		# Active
+		316 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		341 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		364 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		359 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		929 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		# Corrupt
+		380 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		386 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		# Inactive
+		933 = { add_province_modifier = { name = inactive_place_of_power_man duration = -1 } }
+		## Ostermark
+		# Active
+		336 = { add_province_modifier = { name = active_place_of_power_man duration = -1 } }
+		# Corrupt
+		370 = { add_province_modifier = { name = corrupt_place_of_power_man duration = -1 } }
+		# Inactive
+		373 = { add_province_modifier = { name = inactive_place_of_power_man duration = -1 } }
+		## Mists of Albion
+		set_global_flag = mists_of_albion
+		if = {
+			limit = { has_game_rule = { name = warhammer_mists_of_albion value = off } }
+			clr_global_flag = mists_of_albion
+			set_global_flag = mists_of_albion_cleared
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.26 Women's titles need a woman
+# A man holding a female-led title (Sisters of Sigmar, Frosthome Lodge and
+# the like) abdicates to a newly created woman of his faith and culture: a
+# priestess for theocracies, a soldier otherwise. His court follows her, and
+# the Frosthome heir becomes an ice witch.
+# Scope: ROOT is the man.
+character_event = {
+	id = aiclean.26
+	hide_window = yes
+
+	only_rulers = yes
+	is_triggered_only = yes
+
+	only_men = yes
+
+	trigger = {
+		is_female_led_random_ruler = yes
+	}
+
+	immediate = {
+		if = {
+			limit = { is_theocracy = yes }
+			random_list = {
+				10 = {
+					create_random_priest = {
+						random_traits = yes
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						dynasty = none
+						age = 30
+					}
+					random = { chance = 25 new_character = { add_age = 3 } }
+					random = { chance = 25 new_character = { add_age = -2 } }
+					random = { chance = 25 new_character = { add_age = -1 } }
+				}
+				10 = {
+					create_random_priest = {
+						random_traits = yes
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						dynasty = none
+						age = 35
+					}
+					random = { chance = 25 new_character = { add_age = 3 } }
+					random = { chance = 25 new_character = { add_age = -2 } }
+					random = { chance = 25 new_character = { add_age = -1 } }
+				}
+				10 = {
+					create_random_priest = {
+						random_traits = yes
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						dynasty = none
+						age = 40
+					}
+					random = { chance = 25 new_character = { add_age = 3 } }
+					random = { chance = 5 new_character = { add_age = 1 } }
+					random = { chance = 25 new_character = { add_age = -2 } }
+					random = { chance = 25 new_character = { add_age = -1 } }
+				}
+				20 = {
+					create_random_priest = {
+						random_traits = yes
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						dynasty = none
+						age = 45
+					}
+					random = { chance = 25 new_character = { add_age = 3 } }
+					random = { chance = 25 new_character = { add_age = -2 } }
+					random = { chance = 25 new_character = { add_age = -1 } }
+				}
+				15 = {
+					create_random_priest = {
+						random_traits = yes
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						dynasty = none
+						age = 50
+					}
+					random = { chance = 25 new_character = { add_age = 3 } }
+					random = { chance = 25 new_character = { add_age = -2 } }
+					random = { chance = 25 new_character = { add_age = -1 } }
+				}
+				10 = {
+					create_random_priest = {
+						random_traits = yes
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						dynasty = none
+						age = 55
+					}
+					random = { chance = 25 new_character = { add_age = 3 } }
+					random = { chance = 25 new_character = { add_age = -2 } }
+					random = { chance = 25 new_character = { add_age = -1 } }
+				}
+			}
+			e_realm_of_undivided = { holder_scope = { save_event_target_as = courtier_migration } }
+			FROMFROM = {
+				any_courtier = {
+					set_character_flag = courtier_migration
+					force_host = event_target:courtier_migration
+				}
+			}
+			new_character = {
+				# Set Racial Trait
+				character_event = { id = aiclean.31 }
+				set_character_flag = am_dumbai
+				ROOT = {
+					abdicate_to = PREV
+					# Bring the old court back from the Realm of Chaos holding pen
+					e_realm_of_undivided = {
+						holder_scope = {
+							any_courtier = {
+								limit = { has_character_flag = courtier_migration }
+								force_host = PREVPREVPREVPREV
+								clr_character_flag = courtier_migration
+							}
+						}
+					}
+					transfer_scaled_wealth = { to = PREV value = all }
+				}
+				# Ice Witches
+				if = {
+					limit = { has_landed_title = d_frosthome_lodge }
+					new_character = {
+						add_trait = ice_witch
+						add_trait = lore_ice
+						remove_trait = giant
+						magic_power_teach_effect = yes
+						enable_magic_xp_effect = yes
+						join_society = ice_witch_sisterhood
+						society_rank_up = { society = ice_witch_sisterhood rank = 2 }
+					}
+				}
+			}
+		}
+		else = {
+			random_list = {
+				10 = {
+					create_random_soldier = {
+						random_traits = yes
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						dynasty = none
+						age = 30
+					}
+				}
+				10 = {
+					create_random_soldier = {
+						random_traits = yes
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						dynasty = none
+						age = 35
+					}
+				}
+				10 = {
+					create_random_soldier = {
+						random_traits = yes
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						dynasty = none
+						age = 40
+					}
+				}
+				20 = {
+					create_random_soldier = {
+						random_traits = yes
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						dynasty = none
+						age = 45
+					}
+				}
+				20 = {
+					create_random_soldier = {
+						random_traits = yes
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						dynasty = none
+						age = 50
+					}
+				}
+				20 = {
+					create_random_soldier = {
+						random_traits = yes
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						dynasty = none
+						age = 55
+					}
+				}
+				10 = {
+					create_random_soldier = {
+						random_traits = yes
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						dynasty = none
+						age = 60
+					}
+				}
+			}
+			e_realm_of_undivided = { holder_scope = { save_event_target_as = courtier_migration } }
+			FROMFROM = {
+				any_courtier = {
+					set_character_flag = courtier_migration
+					force_host = event_target:courtier_migration
+				}
+			}
+			new_character = {
+				# Set Racial Trait
+				character_event = { id = aiclean.31 }
+				ROOT = {
+					abdicate_to = PREV
+					# Bring the old court back from the Realm of Chaos holding pen
+					e_realm_of_undivided = {
+						holder_scope = {
+							any_courtier = {
+								limit = { has_character_flag = courtier_migration }
+								force_host = PREVPREVPREVPREV
+								clr_character_flag = courtier_migration
+							}
+						}
+					}
+					transfer_scaled_wealth = { to = PREV value = all }
+				}
+				# Ice Witches
+				if = {
+					limit = { has_landed_title = d_frosthome_lodge }
+					ROOT = { remove_claim = d_frosthome_lodge }
+					new_character = {
+						add_trait = ice_witch
+						add_trait = lore_ice
+						magic_power_teach_effect = yes
+						enable_magic_xp_effect = yes
+						join_society = ice_witch_sisterhood
+						society_rank_up = { society = ice_witch_sisterhood rank = 2 }
+					}
+				}
+			}
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.27 Slann are Mage-Priests
+# Gives every Slann the Mage-Priest character title.
+# Scope: ROOT is the Slann.
+character_event = {
+	id = aiclean.27
+	hide_window = yes
+
+	religion = old_ones
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = creature_slann
+	}
+
+	immediate = {
+		# Set Slaan as Mage Priest
+		set_special_character_title = MAGE_PRIEST
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.28 Corsair titles
+# Atruhayid feudal rulers with a port capital get corsair titles by tier.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = aiclean.28
+	hide_window = yes
+
+	religion = atruhayid
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_feudal = yes
+		capital_scope = { port = yes }
+	}
+
+	immediate = {
+		# Set Special Corsair Titles
+		if = {
+			limit = { tier = DUKE }
+			if = { limit = { is_female = yes } set_special_character_title = CORSAIR_LADY }
+			else = { set_special_character_title = CORSAIR_LORD }
+		}
+		else_if = {
+			limit = { tier = KING }
+			if = { limit = { is_female = yes } set_special_character_title = CORSAIR_PRINCESS }
+			else = { set_special_character_title = CORSAIR_PRINCE }
+		}
+		else_if = {
+			limit = { tier = EMPEROR }
+			if = { limit = { is_female = yes } set_special_character_title = CORSAIR_QUEEN }
+			else = { set_special_character_title = CORSAIR_KING }
+		}
+		else = { set_special_character_title = CORSAIR }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.29 The Dragon Emperor
+# Fired from Xen-Huong's character history: creates the Heavenly Court,
+# grants the imperial baronies and the nickname the Heavenly Master.
+# Scope: ROOT is Xen-Huong.
+character_event = {
+	id = aiclean.29
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		create_title = {
+			tier = EMPEROR
+			landless = yes
+			temporary = yes
+			culture = ROOT
+			name = "CELESTIAL_COURT"
+			holder = ROOT
+		}
+		b_imperial_city = { gain_title = ROOT }
+		b_temple_of_two_moons = { gain_title = ROOT }
+		b_altar_of_heavens = { gain_title = ROOT }
+		give_nickname = nick_the_heavenly_master
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.30 Game start setup
+# At the start of a new game: Skaven surface tunnels under the burrows, secret
+# faiths for members of the Chaos and Atharti cults, and male holders of
+# female-led titles vanish (aiclean.26 has already replaced them).
+# Scope: ROOT is any character.
+character_event = {
+	id = aiclean.30
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_save_game = no
+	}
+
+	immediate = {
+		# Set surface tunnel modifiers for Skaven
+		any_province = {
+			limit = {
+				region = world_surface_burrows
+				NOT = { has_province_modifier = skaven_surface_tunnels }
+			}
+			add_province_modifier = { name = skaven_surface_tunnels duration = -1 }
+		}
+		# Set Religions for secret cults
+		trigger_switch = {
+			on_trigger = society_member_of
+			cult_of_khorne = { set_secret_religion = khorne }
+			cult_of_nurgle = { set_secret_religion = nurgle }
+			cult_of_tzeentch = { set_secret_religion = tzeentch }
+			cult_of_slaanesh = { set_secret_religion = slaanesh }
+			cult_of_undivided = { set_secret_religion = chaos }
+			cult_of_pleasure = { set_secret_religion = atharti }
+		}
+		# Kills male rulers of female held titles
+		if = {
+			limit = { is_female = no is_female_led_random_ruler = yes }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_missing } }
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.31 Race trait check
+# Gives a character without a racial trait the right one. Fired at startup,
+# on employer change and by most effects that create characters.
+# Scope: ROOT is the character.
+character_event = {
+	id = aiclean.31
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_racial_trait_trigger = no
+	}
+
+	immediate = {
+		new_character_effect = yes
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.32 Wrong faith
+# A character in a faith their culture or race cannot hold is moved to the
+# right one (by culture, liege and region). Players of human culture choose
+# instead (aiclean.33). Gives up after 50 tries and logs the character.
+# Scope: ROOT is the character.
+character_event = {
+	id = aiclean.32
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { has_character_flag = aborted_religion_fix }
+		has_wrong_religion = yes
+	}
+
+	immediate = {
+		change_variable = { which = "tried_to_correct_religion" value = 1 }
+		if = {
+			# Some events (an Amazon running away, for one) legitimately move a
+			# character into another faith. Give up after 50 tries rather than
+			# loop forever.
+			limit = { check_variable = { which = "tried_to_correct_religion" value = 50 } }
+			log = "Error: character [Root.GetID] tried to correct religion, but errors occurred, aborted to prevent infinite loop"
+			set_character_flag = aborted_religion_fix
+		}
+		else_if = {
+			limit = { culture = amazon is_female = no }
+			if = {
+				limit = { liege = { religion = amazon trait = creature_amazon } }
+				religion = amazon
+			}
+			if = {
+				limit = { NOT = { liege = { religion = amazon trait = creature_amazon } } }
+				religion = kukaili
+			}
+		}
+		else_if = {
+			limit = { culture_group = druchii_group }
+			random_list = {
+				70 = { religion = cytharai }
+				10 = { religion = atharti }
+				20 = { religion = anath_raema }
+			}
+		}
+		else_if = { limit = { culture_group = asrai_group } religion = asrai_cadai }
+		else_if = { limit = { culture_group = asur_group } religion = cadai }
+		else_if = {
+			limit = { culture_group = dwarf_group }
+			if = { limit = { NOT = { culture = dwarf_norse } } religion = ancestor_gods }
+			if = { limit = { culture = dwarf_norse } religion = norse_ancestor_gods }
+		}
+		else_if = { limit = { culture_group = dwarf_chaos_group } religion = hashut }
+		else_if = {
+			limit = { culture = miyan }
+			if = {
+				limit = {
+					OR = {
+						liege = { religion = amazon trait = creature_amazon }
+						any_demesne_province = {
+							any_neighbor_province = {
+								owner = { religion = amazon trait = creature_amazon }
+							}
+						}
+					}
+				}
+				religion = amazon
+			}
+			if = {
+				limit = {
+					NOR = {
+						liege = { religion = amazon trait = creature_amazon }
+						any_demesne_province = {
+							any_neighbor_province = {
+								owner = { religion = amazon trait = creature_amazon }
+							}
+						}
+					}
+				}
+				religion = kukaili
+			}
+		}
+		else_if = { limit = { culture = mootlander } religion = halfling_gods }
+		else_if = { limit = { culture_group = orc_group } religion = greenskin_gods }
+		else_if = {
+			limit = { culture_group = goblin_group }
+			if = { limit = { NOT = { culture = goblin_forest } } religion = greenskin_gods }
+			if = { limit = { culture = goblin_forest } religion = spider_god }
+		}
+		else_if = {
+			limit = { culture = nehekharan }
+			if = {
+				limit = { ROOT = { character = c_11004 NOT = { religion = nagashi } } }
+				religion = nagashi
+			}
+			if = { limit = { liege = { character = c_11004 } } religion = nagashi }
+			if = {
+				limit = { liege = { NOT = { character = c_11004 } } }
+				religion = nehekharan_gods
+			}
+		}
+		else_if = { limit = { culture_group = skaven_group } religion = horned_rat }
+		else_if = { limit = { culture_group = ogre_group } religion = great_maw }
+		else_if = {
+			limit = { culture_group = beastman_group }
+			if = {
+				limit = { liege = { religion = chaos } culture_group = beastman_group }
+				religion = chaos
+			}
+			if = {
+				limit = { liege = { NOT = { religion = chaos } culture_group = beastman_group } }
+				liege = { religion_scope = { save_event_target_as = liege_religion } }
+				religion = event_target:liege_religion
+			}
+			if = {
+				limit = { liege = { NOT = { culture_group = beastman_group } } }
+				religion = chaos
+			}
+			if = {
+				limit = { independent = yes }
+				random_list = {
+					60 = { religion = chaos }
+					10 = { religion = tzeentch }
+					10 = { religion = nurgle }
+					10 = { religion = slaanesh }
+					10 = { religion = khorne }
+				}
+			}
+		}
+		else_if = { limit = { culture_group = forest_group } religion = asrai_cadai }
+		else_if = {
+			limit = { culture_group = lizardman_group NOT = { religion = old_ones } }
+			religion = old_ones
+		}
+		else_if = {
+			limit = { is_human = yes ai = yes }
+			if = { limit = { culture_group = norscan_group } religion = norscan_gods }
+			else_if = { limit = { culture = nehekka } religion = nehekharan_gods }
+			else_if = { limit = { culture_group = oriental_group } religion = draconite }
+			else_if = {
+				limit = { OR = { culture_group = hung_group culture_group = kurgan_group } }
+				random_list = {
+					40 = { religion = chaos }
+					15 = { religion = tzeentch }
+					15 = { religion = nurgle }
+					15 = { religion = slaanesh }
+					15 = { religion = khorne }
+				}
+			}
+			else_if = {
+				limit = {
+					OR = { trait = vampire_necrarch_visible trait = vampire_necrarch_hidden }
+				}
+				religion = nagashi
+			}
+			else_if = {
+				limit = {
+					is_vampire_trigger = yes
+					NOR = { trait = vampire_necrarch_visible trait = vampire_necrarch_hidden }
+				}
+				religion = vampiric
+			}
+			else_if = {
+				limit = { OR = { culture = ostlander culture = middenlander culture = hochlander } }
+				random_list = {
+					85 = { religion = ulrican }
+					10 = { religion = sigmarite }
+					5 = { religion = morrian }
+				}
+			}
+			else_if = {
+				limit = { OR = { culture = talabeclander culture = ostermarker } }
+				random_list = {
+					85 = { religion = taalite }
+					10 = { religion = sigmarite }
+					5 = { religion = morrian }
+				}
+			}
+			else_if = {
+				limit = { culture = westerlander }
+				random_list = {
+					55 = { religion = sigmarite }
+					40 = { religion = manannite }
+					5 = { religion = morrian }
+				}
+			}
+			else_if = {
+				limit = { culture = nordlander }
+				random_list = {
+					55 = { religion = ulrican }
+					30 = { religion = manannite }
+					10 = { religion = sigmarite }
+					5 = { religion = morrian }
+				}
+			}
+			else_if = {
+				limit = { culture = sylvanian }
+				random_list = {
+					40 = { religion = sigmarite }
+					40 = { religion = taalite }
+					20 = { religion = morrian }
+				}
+			}
+			else_if = {
+				limit = {
+					culture_group = imperial_group
+					NOR = {
+						culture = nordlander
+						culture = westerlander
+						culture = talabeclander
+						culture = ostermarker
+						culture = ostlander
+						culture = middenlander
+						culture = hochlander
+						culture = sylvanian
+					}
+				}
+				religion = sigmarite
+			}
+			else_if = {
+				limit = { OR = { culture_group = estalian_group culture_group = tilean_group } }
+				random_list = {
+					80 = { religion = myrmidian }
+					10 = { religion = shallyan }
+					10 = { religion = morrian }
+				}
+			}
+			else_if = {
+				limit = { culture_group = bretonnian_group }
+				random_list = {
+					95 = { religion = grail }
+					5 = { religion = shallyan modifier = { factor = 10 trait = peasant_leader } }
+				}
+			}
+			else_if = {
+				limit = { culture_group = kislevite_group }
+				random_list = {
+					50 = {
+						religion = kislev_gods
+						modifier = { factor = 0 OR = { culture = ropsmann culture = ungol } }
+					}
+					50 = {
+						religion = northern_gods
+						modifier = { factor = 0 OR = { culture = gospodar culture = kislevite } }
+					}
+				}
+			}
+			else_if = { limit = { culture_group = sartosan_group } religion = stromfels }
+			else_if = {
+				limit = { culture = amazon }
+				random_list = {
+					90 = { religion = kukaili }
+					10 = { religion = amazon }
+				}
+			}
+			else_if = {
+				limit = { culture_group = arabyan_group }
+				random_list = {
+					60 = { religion = ormazd }
+					10 = { religion = kitabid }
+					30 = { religion = atruhayid }
+				}
+			}
+			else_if = {
+				limit = { culture_group = southlander_group }
+				random_list = {
+					70 = { religion = akghan }
+					30 = { religion = shadowmen }
+				}
+			}
+		}
+		else_if = {
+			limit = { is_human = yes ai = no }
+			character_event = { id = aiclean.33 days = 3 }
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.33 Choose your faith, page 1
+# The ruler designer asks a human player for their faith: the four Chaos
+# gods, the necromantic faiths, Chaos Undivided, or the next page.
+# Scope: ROOT is the player.
+character_event = {
+	id = aiclean.33
+	desc = EVTDESCaiclean33
+	picture = GFX_evt_large_army
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = choosing_chaos_gods
+		clr_character_flag = choosing_necromantic_gods
+		clr_character_flag = choosing_old_world_gods
+		clr_character_flag = choosing_amazon_gods
+		clr_character_flag = choosing_ormazd_gods
+	}
+
+	option = {
+		name = EVTOPTAaiclean33
+		custom_tooltip = { text = aiclean_locked_in_tt }
+		set_character_flag = choosing_chaos_gods
+		character_event = {
+			id = aiclean.35 # Specific God choice after religion group choice
+			days = 1
+		}
+	}
+	option = {
+		name = EVTOPTBaiclean33
+		set_character_flag = choosing_necromantic_gods
+		character_event = {
+			id = aiclean.35 # Specific God choice after religion group choice
+			days = 1
+		}
+	}
+	option = {
+		name = EVTOPTCaiclean33
+		religion = chaos
+	}
+	option = {
+		name = EVTOPTDaiclean33
+		trigger = { NOR = { culture_group = hung_group culture_group = kurgan_group } }
+		character_event = {
+			id = aiclean.34 # Player choice event if human for religion page 2
+			days = 1
+		}
+	}
+}
+
+# aiclean.34 Choose your faith, page 2
+# The faiths open to the player's culture: Norscan, Old World, Amazonian,
+# Nehekharan, Cathayan or southern gods.
+# Scope: ROOT is the player.
+character_event = {
+	id = aiclean.34
+	desc = EVTDESCaiclean34
+	picture = GFX_evt_large_army
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAaiclean34
+		trigger = { culture_group = norscan_group }
+		religion = norscan_gods
+	}
+	option = {
+		name = EVTOPTBaiclean34
+		trigger = {
+			OR = {
+				culture_group = albion_group
+				culture_group = bretonnian_group
+				culture_group = estalian_group
+				culture_group = imperial_group
+				culture_group = kislevite_group
+				culture_group = sartosan_group
+				culture_group = tilean_group
+			}
+		}
+		set_character_flag = choosing_old_world_gods
+		character_event = {
+			id = aiclean.35 # Specific God choice after religion group choice
+			days = 1
+		}
+	}
+	option = {
+		name = EVTOPTCaiclean34
+		trigger = { culture = amazon }
+		set_character_flag = choosing_amazon_gods
+		character_event = {
+			id = aiclean.35 # Specific God choice after religion group choice
+			days = 1
+		}
+	}
+	option = {
+		name = EVTOPTDaiclean34
+		trigger = { culture = nehekka }
+		religion = nehekharan_gods
+	}
+	option = {
+		name = EVTOPTEaiclean34
+		trigger = { culture_group = oriental_group }
+		religion = draconite
+	}
+	option = {
+		name = EVTOPTFaiclean34
+		trigger = { OR = { culture_group = arabyan_group culture_group = southlander_group } }
+		set_character_flag = choosing_ormazd_gods
+		character_event = {
+			id = aiclean.35 # Specific God choice after religion group choice
+			days = 1
+		}
+	}
+	option = {
+		name = EVTOPTGaiclean34
+		character_event = {
+			id = aiclean.33 # Player choice event if human for religion page 1
+			days = 1
+		}
+	}
+}
+
+# aiclean.35 Choose your god
+# The gods of the group picked on the first two pages.
+# Scope: ROOT is the player.
+character_event = {
+	id = aiclean.35
+	desc = EVTDESCaiclean35
+	picture = GFX_evt_large_army
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAaiclean35
+		trigger = { has_character_flag = choosing_chaos_gods }
+		religion = tzeentch
+	}
+	option = {
+		name = EVTOPTBaiclean35
+		trigger = { has_character_flag = choosing_chaos_gods }
+		religion = nurgle
+	}
+	option = {
+		name = EVTOPTCaiclean35
+		trigger = { has_character_flag = choosing_chaos_gods }
+		religion = slaanesh
+	}
+	option = {
+		name = EVTOPTDaiclean35
+		trigger = { has_character_flag = choosing_chaos_gods }
+		religion = khorne
+	}
+	option = {
+		name = EVTOPTEaiclean35
+		trigger = { has_character_flag = choosing_necromantic_gods }
+		religion = vampiric
+	}
+	option = {
+		name = EVTOPTFaiclean35
+		trigger = { has_character_flag = choosing_necromantic_gods }
+		religion = nagashi
+	}
+	option = {
+		name = EVTOPTGaiclean35
+		trigger = { has_character_flag = choosing_old_world_gods culture_group = imperial_group }
+		religion = sigmarite
+	}
+	option = {
+		name = EVTOPTHaiclean35
+		trigger = {
+			has_character_flag = choosing_old_world_gods
+			OR = {
+				culture = ostlander
+				culture = middenlander
+				culture = hochlander
+				culture = nordlander
+			}
+		}
+		religion = ulrican
+	}
+	option = {
+		name = EVTOPTIaiclean35
+		trigger = {
+			has_character_flag = choosing_old_world_gods
+			OR = { culture = talabeclander culture = ostermarker }
+		}
+		religion = taalite
+	}
+	option = {
+		name = EVTOPTJaiclean35
+		trigger = {
+			has_character_flag = choosing_old_world_gods
+			OR = { culture = nordlander culture = westerlander }
+		}
+		religion = manannite
+	}
+	option = {
+		name = EVTOPTKaiclean35
+		trigger = {
+			has_character_flag = choosing_old_world_gods
+			OR = { culture_group = estalian_group culture_group = tilean_group }
+		}
+		religion = myrmidian
+	}
+	option = {
+		name = EVTOPTLaiclean35
+		trigger = {
+			has_character_flag = choosing_old_world_gods
+			OR = {
+				culture_group = bretonnian_group
+				culture_group = estalian_group
+				culture_group = tilean_group
+			}
+		}
+		religion = shallyan
+	}
+	option = {
+		name = EVTOPTMaiclean35
+		trigger = { has_character_flag = choosing_old_world_gods culture_group = bretonnian_group }
+		religion = grail
+	}
+	option = {
+		name = EVTOPTNaiclean35
+		trigger = { has_character_flag = choosing_old_world_gods culture_group = albion_group }
+		religion = old_faith
+	}
+	option = {
+		name = EVTOPTOaiclean35
+		trigger = { has_character_flag = choosing_old_world_gods culture_group = kislevite_group }
+		religion = kislev_gods
+	}
+	option = {
+		name = EVTOPTPaiclean35
+		trigger = { has_character_flag = choosing_old_world_gods culture_group = kislevite_group }
+		religion = northern_gods
+	}
+	option = {
+		name = EVTOPTQaiclean35
+		trigger = { has_character_flag = choosing_old_world_gods culture_group = sartosan_group }
+		religion = stromfels
+	}
+	option = {
+		name = EVTOPTRaiclean35
+		trigger = { has_character_flag = choosing_amazon_gods culture = amazon }
+		religion = amazon
+	}
+	option = {
+		name = EVTOPTSaiclean35
+		trigger = { has_character_flag = choosing_amazon_gods culture = amazon }
+		religion = kukaili
+	}
+	option = {
+		name = EVTOPTTaiclean35
+		trigger = { has_character_flag = choosing_ormazd_gods culture_group = arabyan_group }
+		religion = ormazd
+	}
+	option = {
+		name = EVTOPTUaiclean35
+		trigger = { has_character_flag = choosing_ormazd_gods culture_group = arabyan_group }
+		religion = kitabid
+	}
+	option = {
+		name = EVTOPTVaiclean35
+		trigger = { has_character_flag = choosing_ormazd_gods culture_group = arabyan_group }
+		religion = atruhayid
+	}
+	option = {
+		name = EVTOPTWaiclean35
+		trigger = { has_character_flag = choosing_ormazd_gods culture_group = southlander_group }
+		religion = akghan
+	}
+	option = {
+		name = EVTOPTXaiclean35
+		trigger = { has_character_flag = choosing_ormazd_gods culture_group = southlander_group }
+		religion = shadowmen
+	}
+	option = {
+		name = EVTOPTYaiclean35
+		character_event = { id = aiclean.33 days = 1 }
+	}
+
+	after = {
+		clr_character_flag = choosing_chaos_gods
+		clr_character_flag = choosing_necromantic_gods
+		clr_character_flag = choosing_old_world_gods
+		clr_character_flag = choosing_amazon_gods
+		clr_character_flag = choosing_ormazd_gods
+	}
+}
+
+# aiclean.36 Choose your vampire bloodline, page 1
+# A ruler-designed vampire picks a bloodline: von Carstein, Lahmian or Blood
+# Dragon, or more.
+# Scope: ROOT is the vampire.
+character_event = {
+	id = aiclean.36
+	desc = EVTDESCaiclean36
+	is_triggered_only = yes
+	picture = GFX_evt_vampire_castle
+
+	immediate = {
+		remove_trait = rulerdesigned_vampire
+	}
+
+	option = {
+		name = EVTOPTAaiclean36
+		add_trait = vampire_carstein_visible
+		set_graphical_culture = generic_vampire
+	}
+	option = {
+		name = EVTOPTBaiclean36
+		add_trait = vampire_lahmian_visible
+		set_graphical_culture = lahmian_vampire
+	}
+	option = {
+		name = EVTOPTCaiclean36
+		add_trait = vampire_blood_visible
+		set_graphical_culture = blood_vampire
+		culture = blooddragons_culture
+	}
+	option = {
+		name = EVTOPTDaiclean36
+		character_event = { id = aiclean.37 }
+	}
+}
+
+# aiclean.37 Choose your vampire bloodline, page 2
+# Strigoi, Necrarch or Jade, or more.
+# Scope: ROOT is the vampire.
+character_event = {
+	id = aiclean.37
+	desc = EVTDESCaiclean37
+	is_triggered_only = yes
+	picture = GFX_evt_vampire_castle
+
+	option = {
+		name = EVTOPTAaiclean37
+		add_trait = vampire_strigoi_visible
+		set_graphical_culture = strigoi_vampire
+	}
+	option = {
+		name = EVTOPTBaiclean37
+		add_trait = vampire_necrarch_visible
+		set_graphical_culture = necrarch_vampire
+	}
+	option = {
+		name = EVTOPTCaiclean37
+		add_trait = vampire_jade_visible
+		set_graphical_culture = jade_vampire
+	}
+	option = {
+		name = EVTOPTDaiclean37
+		character_event = { id = aiclean.38 }
+	}
+}
+
+# aiclean.38 Choose your vampire bloodline, page 3
+# Mahtmasi, or back.
+# Scope: ROOT is the vampire.
+character_event = {
+	id = aiclean.38
+	desc = EVTDESCaiclean38
+	picture = GFX_evt_vampire_castle
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAaiclean38
+		add_trait = vampire_mahtmasi_visible
+		set_graphical_culture = mahtmasi_vampire
+	}
+	option = {
+		name = EVTOPTBaiclean38
+		character_event = { id = aiclean.37 }
+	}
+	option = {
+		name = EVTOPTCaiclean38
+		character_event = { id = aiclean.36 }
+	}
+}
+
+# aiclean.39 Choose your magic power
+# A ruler-designed mage picks a magic power from 1 to 4 and, if untrained,
+# gets a lore; then picks a potential (aiclean.40) if they have none.
+# Scope: ROOT is the mage.
+character_event = {
+	id = aiclean.39
+	picture = GFX_evt_mage_choose_lore
+	desc = EVTDESCaiclean39
+
+	is_triggered_only = yes
+
+	immediate = {
+		remove_trait = rulerdesigner_magic
+	}
+
+	option = {
+		name = EVTOPTAaiclean39
+		add_character_modifier = { modifier = magic_power_1 duration = -1 }
+		enable_magic_xp_effect = yes
+		magic_power_1_xp_effect = yes
+		if = { limit = { NOT = { is_trained_mage_trigger = yes } } random_lore_effect = yes }
+		if = {
+			limit = { NOT = { magic_potential_trigger = yes } }
+			character_event = { id = aiclean.40 }
+		}
+		else = { character_event = { id = aiclean.41 } }
+	}
+	option = {
+		name = EVTOPTBaiclean39
+		add_character_modifier = { modifier = magic_power_2 duration = -1 }
+		enable_magic_xp_effect = yes
+		magic_power_2_xp_effect = yes
+		if = { limit = { NOT = { is_trained_mage_trigger = yes } } random_lore_effect = yes }
+		if = {
+			limit = { NOT = { magic_potential_trigger = yes } }
+			character_event = { id = aiclean.40 }
+		}
+		else = { character_event = { id = aiclean.41 } }
+	}
+	option = {
+		name = EVTOPTCaiclean39
+		add_character_modifier = { modifier = magic_power_3 duration = -1 }
+		enable_magic_xp_effect = yes
+		magic_power_3_xp_effect = yes
+		if = { limit = { NOT = { is_trained_mage_trigger = yes } } random_lore_effect = yes }
+		if = {
+			limit = { NOT = { magic_potential_trigger = yes } }
+			character_event = { id = aiclean.40 }
+		}
+		else = { character_event = { id = aiclean.41 } }
+	}
+	option = {
+		name = EVTOPTDaiclean39
+		add_character_modifier = { modifier = magic_power_4 duration = -1 }
+		enable_magic_xp_effect = yes
+		magic_power_4_xp_effect = yes
+		if = { limit = { NOT = { is_trained_mage_trigger = yes } } random_lore_effect = yes }
+		if = {
+			limit = { NOT = { magic_potential_trigger = yes } }
+			character_event = { id = aiclean.40 }
+		}
+		else = { character_event = { id = aiclean.41 } }
+	}
+}
+
+# aiclean.40 Choose your magic potential
+# Magic potential 1 to 4.
+# Scope: ROOT is the mage.
+character_event = {
+	id = aiclean.40
+	picture = GFX_evt_mage_choose_lore
+	desc = EVTDESCaiclean40
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAaiclean40
+		add_trait = magic_potential_1
+		character_event = { id = aiclean.41 }
+	}
+	option = {
+		name = EVTOPTBaiclean40
+		add_trait = magic_potential_2
+		character_event = { id = aiclean.41 }
+	}
+	option = {
+		name = EVTOPTCaiclean40
+		add_trait = magic_potential_3
+		character_event = { id = aiclean.41 }
+	}
+	option = {
+		name = EVTOPTDaiclean40
+		add_trait = magic_potential_4
+		character_event = { id = aiclean.41 }
+	}
+}
+
+# aiclean.41 A lore for the untrained
+# A ruler-designed mage who still has no lore or school gets a random lore.
+# Scope: ROOT is the mage.
+character_event = {
+	id = aiclean.41
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { is_trained_mage_trigger = yes }
+	}
+
+	immediate = {
+		random_list = {
+			5 = { add_trait = lore_fire }
+			5 = { add_trait = lore_beasts }
+			5 = { add_trait = lore_metal }
+			5 = { add_trait = lore_light }
+			5 = { add_trait = lore_life }
+			5 = { add_trait = lore_heavens }
+			5 = { add_trait = lore_death }
+			5 = { add_trait = lore_shadows }
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.42 Immortal portrait fix
+# At adulthood an immortal race waits a month (aiclean.43).
+# Scope: ROOT is the character.
+character_event = {
+	id = aiclean.42
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_immortal_racial_trait_trigger = yes
+	}
+
+	immediate = {
+		character_event = { id = aiclean.43 months = 1 }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.43 Immortal portrait fix applied
+# Sets the immortal's apparent age.
+# Scope: ROOT is the character.
+character_event = {
+	id = aiclean.43
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_immortal_racial_trait_trigger = yes
+	}
+
+	immediate = {
+		apply_immortal_age_effect = yes
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.44 The Red Duke's bloodline
+# At game start removes the Red Duke's bloodline from anyone but him.
+# Scope: ROOT is any character.
+character_event = {
+	id = aiclean.44
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		any_character = {
+			limit = {
+				NOT = { trait = special_char_red_duke }
+				any_owned_bloodline = { has_bloodline_flag = warhammer_bloodline_red_duke }
+			}
+			any_owned_bloodline = {
+				limit = { has_bloodline_flag = warhammer_bloodline_red_duke }
+				remove_bloodline_member = PREV
+			}
+		}
+	}
+}
+
+# aiclean.45 Burnt by the flames
+# A failed walk through the Flames of Asuryan founds the burnt bloodline,
+# unless the redeemed one is already active. Fired by asur.3 and asur.4.
+# Scope: ROOT is the burnt elf.
+character_event = {
+	id = aiclean.45
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = {
+				NOT = {
+					any_owned_bloodline = {
+						has_bloodline_flag = burnt_by_flames_redeemed
+						bloodline_is_active_for = PREV
+					}
+				}
+			}
+			if = { limit = { is_female = no } create_bloodline = { type = burnt_by_flames_male } }
+			if = {
+				limit = { is_female = yes }
+				create_bloodline = { type = burnt_by_flames_female }
+			}
+		}
+	}
+}
+
+# aiclean.46 Redeemed by the flames
+# A descendant of the burnt passes through the flames unharmed and is crowned:
+# 500 prestige, 1000 piety and the redeemed bloodline for the whole living
+# dynasty. Fired by the Phoenix King crowning.
+# Scope: ROOT is the new Phoenix King.
+narrative_event = {
+	id = aiclean.46
+	title = EVTNAMEaiclean46
+	desc = EVTDESCaiclean46
+	picture = GFX_evt_phoenix_king
+	sound = bloodline_added
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAaiclean46
+		prestige = 500
+		piety = 1000
+		if = {
+			limit = { is_female = no }
+			create_bloodline = { type = burnt_by_flames_redeemed_male }
+			any_dynasty_member = {
+				limit = { NOT = { trait = burnt_by_asuryan } }
+				new_bloodline = { add_bloodline_member = PREV }
+			}
+		}
+		if = {
+			limit = { is_female = yes }
+			create_bloodline = { type = burnt_by_flames_redeemed_female }
+			any_dynasty_member = {
+				limit = { NOT = { trait = burnt_by_asuryan } }
+				new_bloodline = { add_bloodline_member = PREV }
+			}
+		}
+		custom_tooltip = { text = aiclean_bloodline_dynasty_tt }
+	}
+}
+
+# aiclean.47 Wonder levies refilled
+# On loading a single player game, levies of wonder provinces at peace are
+# refilled.
+# Scope: ROOT is the player.
+character_event = {
+	id = aiclean.47
+	hide_window = yes
+	is_triggered_only = yes
+	only_playable = yes
+	ai = no
+	trigger = {
+		multiplayer = no
+		is_multiplayer_host_character = yes
+	}
+
+	immediate = {
+		any_wonder = {
+			limit = {
+				wonder_owner = { war = no NOT = { has_raised_levies = PREV } }
+				location = { owner = { war = no NOT = { has_raised_levies = PREV } } }
+			}
+			location = { any_province_holding = { refill_holding_levy = yes } }
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# aiclean.48 Move the Bretonnian court
+# A new independent King of Bretonnia may move the capital to one of their
+# own dukedoms.
+# Scope: ROOT is the king, FROM e_bretonnia.
+character_event = {
+	id = aiclean.48
+	desc = EVTDESCaiclean48
+	picture = GFX_evt_questing_bretonnia
+	is_triggered_only = yes
+	only_independent = yes
+	only_playable = yes
+	trigger = {
+		FROM = { title = e_bretonnia }
+	}
+
+	option = {
+		name = EVTOPTAaiclean48
+		trigger = {
+			has_landed_title = k_couronne
+			has_landed_title = c_couronne
+			NOT = { e_bretonnia = { capital_scope = { province = c_couronne } } }
+		}
+		e_bretonnia = { set_preferred_capital = c_couronne }
+		capital = c_couronne
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTBaiclean48
+		trigger = {
+			has_landed_title = k_languille
+			has_landed_title = c_languille
+			NOT = { e_bretonnia = { capital_scope = { province = c_languille } } }
+		}
+		e_bretonnia = { set_preferred_capital = c_languille }
+		capital = c_languille
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTCaiclean48
+		trigger = {
+			has_landed_title = k_lyonesse
+			has_landed_title = c_lyonesse
+			NOT = { e_bretonnia = { capital_scope = { province = c_lyonesse } } }
+		}
+		e_bretonnia = { set_preferred_capital = c_lyonesse }
+		capital = c_lyonesse
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTDaiclean48
+		trigger = {
+			has_landed_title = k_artois
+			has_landed_title = c_artois
+			NOT = { e_bretonnia = { capital_scope = { province = c_artois } } }
+		}
+		e_bretonnia = { set_preferred_capital = c_artois }
+		capital = c_artois
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTEaiclean48
+		trigger = {
+			has_landed_title = k_gisoreux
+			has_landed_title = c_gisoreux
+			NOT = { e_bretonnia = { capital_scope = { province = c_gisoreux } } }
+		}
+		e_bretonnia = { set_preferred_capital = c_gisoreux }
+		capital = c_gisoreux
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTFaiclean48
+		trigger = {
+			has_landed_title = k_mousillon
+			has_landed_title = c_mousillon
+			NOT = { e_bretonnia = { capital_scope = { province = c_mousillon } } }
+		}
+		capital = c_mousillon
+		e_bretonnia = { set_preferred_capital = c_mousillon }
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTGaiclean48
+		trigger = {
+			has_landed_title = k_bordeleaux
+			has_landed_title = c_bordeleaux
+			NOT = { e_bretonnia = { capital_scope = { province = c_bordeleaux } } }
+		}
+		e_bretonnia = { set_preferred_capital = c_bordeleaux }
+		capital = c_bordeleaux
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTHaiclean48
+		trigger = {
+			has_landed_title = k_bastonne
+			has_landed_title = c_bastonne
+			NOT = { e_bretonnia = { capital_scope = { province = c_bastonne } } }
+		}
+		e_bretonnia = { set_preferred_capital = c_bastonne }
+		capital = c_bastonne
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTIaiclean48
+		trigger = {
+			has_landed_title = k_aquitaine
+			has_landed_title = c_aquitaine
+			NOT = { e_bretonnia = { capital_scope = { province = c_aquitaine } } }
+		}
+		e_bretonnia = { set_preferred_capital = c_aquitaine }
+		capital = c_aquitaine
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTJaiclean48
+		trigger = {
+			has_landed_title = k_brionne
+			has_landed_title = c_brionne
+			NOT = { e_bretonnia = { capital_scope = { province = c_brionne } } }
+		}
+		e_bretonnia = { set_preferred_capital = c_brionne }
+		capital = c_brionne
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTKaiclean48
+		trigger = {
+			has_landed_title = k_quenelles
+			has_landed_title = c_quenelles
+			NOT = { e_bretonnia = { capital_scope = { province = c_quenelles } } }
+		}
+		e_bretonnia = { set_preferred_capital = c_quenelles }
+		capital = c_quenelles
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTLaiclean48
+		trigger = {
+			has_landed_title = k_carcassonne
+			has_landed_title = c_carcassonne
+			NOT = { e_bretonnia = { capital_scope = { province = c_carcassonne } } }
+		}
+		e_bretonnia = { set_preferred_capital = c_carcassonne }
+		capital = c_carcassonne
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTMaiclean48
+		trigger = {
+			has_landed_title = k_montfort
+			has_landed_title = c_montfort
+			NOT = { e_bretonnia = { capital_scope = { province = c_montfort } } }
+		}
+		e_bretonnia = { set_preferred_capital = c_montfort }
+		capital = c_montfort
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTNaiclean48
+		trigger = {
+			has_landed_title = k_parravon
+			has_landed_title = c_parravon
+			NOT = { e_bretonnia = { capital_scope = { province = c_parravon } } }
+		}
+		e_bretonnia = { set_preferred_capital = c_parravon }
+		capital = c_parravon
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTOaiclean48
+		ai_chance = { factor = 1 }
+	}
+}
+
+# aiclean.49 Move the Imperial capital
+# A new independent Emperor may move the capital to one of their own
+# provinces.
+# Scope: ROOT is the Emperor, FROM e_the_empire.
+character_event = {
+	id = aiclean.49
+	desc = EVTDESCaiclean49
+	picture = GFX_evt_questing_empire
+	is_triggered_only = yes
+	only_independent = yes
+	only_playable = yes
+	trigger = {
+		FROM = { title = e_the_empire }
+	}
+
+	option = {
+		name = EVTOPTAaiclean49
+		trigger = {
+			has_landed_title = k_reikland
+			has_landed_title = c_altdorf
+			NOT = { e_the_empire = { capital_scope = { province = c_altdorf } } }
+		}
+		e_the_empire = { set_preferred_capital = c_altdorf }
+		capital = c_altdorf
+		ai_chance = { factor = 5 modifier = { religion = sigmarite factor = 2 } }
+	}
+	option = {
+		name = EVTOPTBaiclean49
+		trigger = {
+			has_landed_title = k_wissenland
+			has_landed_title = c_nuln
+			NOT = { e_the_empire = { capital_scope = { province = c_nuln } } }
+		}
+		e_the_empire = { set_preferred_capital = c_nuln }
+		capital = c_nuln
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTCaiclean49
+		trigger = {
+			has_landed_title = k_averland
+			has_landed_title = c_averheim
+			NOT = { e_the_empire = { capital_scope = { province = c_averheim } } }
+		}
+		e_the_empire = { set_preferred_capital = c_averheim }
+		capital = c_averheim
+	}
+	option = {
+		name = EVTOPTDaiclean49
+		trigger = {
+			has_landed_title = k_talabecland
+			has_landed_title = c_talabheim
+			NOT = { e_the_empire = { capital_scope = { province = c_talabheim } } }
+		}
+		e_the_empire = { set_preferred_capital = c_talabheim }
+		capital = c_talabheim
+		ai_chance = { factor = 5 modifier = { religion = taalite factor = 2 } }
+	}
+	option = {
+		name = EVTOPTEaiclean49
+		trigger = {
+			has_landed_title = k_stirland
+			has_landed_title = c_wurtbad
+			NOT = { e_the_empire = { capital_scope = { province = c_wurtbad } } }
+		}
+		capital = c_wurtbad
+		e_the_empire = { set_preferred_capital = c_wurtbad }
+		ai_chance = { factor = 3 }
+	}
+	option = {
+		name = EVTOPTFaiclean49
+		trigger = {
+			has_landed_title = k_middenland
+			has_landed_title = c_middenheim
+			NOT = { e_the_empire = { capital_scope = { province = c_middenheim } } }
+		}
+		e_the_empire = { set_preferred_capital = c_middenheim }
+		capital = c_middenheim
+		ai_chance = { factor = 5 modifier = { religion = ulrican factor = 2 } }
+	}
+	option = {
+		name = EVTOPTGaiclean49
+		trigger = {
+			has_landed_title = c_marienburg
+			NOT = { e_the_empire = { capital_scope = { province = c_marienburg } } }
+		}
+		e_the_empire = { set_preferred_capital = c_marienburg }
+		capital = c_marienburg
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTHaiclean49
+		trigger = {
+			has_landed_title = k_nordland
+			has_landed_title = c_salzenmund
+			NOT = { e_the_empire = { capital_scope = { province = c_salzenmund } } }
+		}
+		e_the_empire = { set_preferred_capital = c_salzenmund }
+		capital = c_salzenmund
+		ai_chance = { factor = 4 }
+	}
+	option = {
+		name = EVTOPTIaiclean49
+		trigger = {
+			has_landed_title = k_ostland
+			has_landed_title = c_wolfenburg
+			NOT = { e_the_empire = { capital_scope = { province = c_wolfenburg } } }
+		}
+		e_the_empire = { set_preferred_capital = c_wolfenburg }
+		capital = c_wolfenburg
+		ai_chance = { factor = 4 }
+	}
+	option = {
+		name = EVTOPTJaiclean49
+		trigger = {
+			has_landed_title = k_ostermark
+			has_landed_title = c_bechafen
+			NOT = { e_the_empire = { capital_scope = { province = c_bechafen } } }
+		}
+		e_the_empire = { set_preferred_capital = c_bechafen }
+		capital = c_bechafen
+		ai_chance = { factor = 4 }
+	}
+	option = {
+		name = EVTOPTKaiclean49
+		trigger = {
+			has_landed_title = c_mordheim
+			NOT = { e_the_empire = { capital_scope = { province = c_mordheim } } }
+		}
+		e_the_empire = { set_preferred_capital = c_mordheim }
+		capital = c_mordheim
+		ai_chance = { factor = 3 }
+	}
+	option = {
+		name = EVTOPTLaiclean49
+		trigger = {
+			has_landed_title = k_sylvania
+			has_landed_title = c_drakenhof
+			NOT = { e_the_empire = { capital_scope = { province = c_drakenhof } } }
+		}
+		e_the_empire = { set_preferred_capital = c_drakenhof }
+		capital = c_drakenhof
+		ai_chance = { factor = 2 }
+	}
+	option = {
+		name = EVTOPTMaiclean49
+	}
+}
+
+# aiclean.50 Move the capital of Ulthuan
+# A new independent Phoenix King may move the capital to one of their own
+# kingdoms.
+# Scope: ROOT is the Phoenix King, FROM e_ulthuan.
+character_event = {
+	id = aiclean.50
+	picture = GFX_evt_questing_ulthuan
+	desc = EVTDESCaiclean50
+	is_triggered_only = yes
+	only_independent = yes
+	only_playable = yes
+	trigger = {
+		FROM = { title = e_ulthuan }
+	}
+
+	option = {
+		name = EVTOPTAaiclean50
+		trigger = {
+			has_landed_title = k_saphery
+			has_landed_title = c_hoeth
+			NOT = { e_ulthuan = { capital_scope = { province = c_hoeth } } }
+		}
+		e_ulthuan = { set_preferred_capital = c_hoeth }
+		capital = c_hoeth
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTBaiclean50
+		trigger = {
+			has_landed_title = k_eataine
+			has_landed_title = c_lothern
+			NOT = { e_ulthuan = { capital_scope = { province = c_lothern } } }
+		}
+		e_ulthuan = { set_preferred_capital = c_lothern }
+		capital = c_lothern
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTCaiclean50
+		trigger = {
+			has_landed_title = k_caledor
+			has_landed_title = c_summersong
+			NOT = { e_ulthuan = { capital_scope = { province = c_summersong } } }
+		}
+		e_ulthuan = { set_preferred_capital = c_summersong }
+		capital = c_summersong
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTDaiclean50
+		trigger = {
+			has_landed_title = k_tiranoc
+			has_landed_title = c_tor_anroc
+			NOT = { e_ulthuan = { capital_scope = { province = c_tor_anroc } } }
+		}
+		e_ulthuan = { set_preferred_capital = c_tor_anroc }
+		capital = c_tor_anroc
+	}
+	option = {
+		name = EVTOPTEaiclean50
+		trigger = {
+			has_landed_title = k_ellyrion
+			has_landed_title = c_tor_elyr
+			NOT = { e_ulthuan = { capital_scope = { province = c_tor_elyr } } }
+		}
+		e_ulthuan = { set_preferred_capital = c_tor_elyr }
+		capital = c_tor_elyr
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTFaiclean50
+		trigger = {
+			has_landed_title = c_eversprings
+			NOT = { e_ulthuan = { capital_scope = { province = c_eversprings } } }
+		}
+		e_ulthuan = { set_preferred_capital = c_eversprings }
+		capital = c_eversprings
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTGaiclean50
+		trigger = {
+			has_landed_title = k_yvresse
+			has_landed_title = c_tor_yvraine
+			NOT = { e_ulthuan = { capital_scope = { province = c_tor_yvraine } } }
+		}
+		e_ulthuan = { set_preferred_capital = c_tor_yvraine }
+		capital = c_tor_yvraine
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTHaiclean50
+		trigger = {
+			has_landed_title = k_nagarythe
+			has_landed_title = c_anlec
+			NOT = { e_ulthuan = { capital_scope = { province = c_anlec } } }
+		}
+		e_ulthuan = { set_preferred_capital = c_anlec }
+		capital = c_anlec
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTIaiclean50
+		trigger = {
+			has_landed_title = k_chrace
+			has_landed_title = c_tor_achare
+			NOT = { e_ulthuan = { capital_scope = { province = c_tor_achare } } }
+		}
+		e_ulthuan = { set_preferred_capital = c_tor_achare }
+		capital = c_tor_achare
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTJaiclean50
+		trigger = {
+			has_landed_title = k_cothique
+			has_landed_title = c_tor_dynal
+			NOT = { e_ulthuan = { capital_scope = { province = c_tor_dynal } } }
+		}
+		e_ulthuan = { set_preferred_capital = c_tor_dynal }
+		capital = c_tor_dynal
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTKaiclean50
+	}
+}
+
+# aiclean.51 Wonder stage named
+# Names and describes a wonder when a stage is finished. Not fired yet: most
+# wonder names are still missing (was wh_setup.101).
+# Scope: FROMFROM is the wonder's province.
+character_event = {
+	id = aiclean.51
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROMFROM = { wonder_naming_and_describing_effect = yes }
+	}
+}
+
+# aiclean.52 Wonder upgrade named
+# Names and describes a wonder when an upgrade is finished. Not fired yet (was
+# wh_setup.102).
+# Scope: FROMFROMFROM is the wonder's province.
+character_event = {
+	id = aiclean.52
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROMFROMFROM = { wonder_naming_and_describing_effect = yes }
+	}
+}

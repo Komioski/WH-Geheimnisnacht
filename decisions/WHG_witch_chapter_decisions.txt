@@ -1,0 +1,274 @@
+###############################################################################
+# Witch hunter chapter decisions
+# Court witch hunters (Court Witch Hunter, Court Inquisitor, Court Templar) and
+# the powers of the Holy Inquisition of Myrmidia and the Templars of Solkan.
+# Societies: common/societies/dow_witch_hunters.txt.
+# Events: events/WHG_witch_chapter_events.txt (namespace whchapter).
+# Triggers and effects: wh_witch_hunter_triggers.txt, wh_witch_hunter_effects.txt.
+# The invite_witchhunter decision (employment_decisions.txt) sends for a new
+# court witch hunter; train_court_witch_hunter sends a courtier to a
+# chapterhouse for four years to become one.
+###############################################################################
+
+targetted_decisions = {
+	# A ruler with room for another court witch hunter sends a hard-minded
+	# courtier to a chapterhouse. Four years later he comes home a witch
+	# hunter (whchapter.7) and takes the court title if a seat is still free;
+	# in Estalia, Tilea, the Border Princes and Solkanite courts he is also
+	# sworn to the local chapter.
+	train_court_witch_hunter = {
+		ai_check_interval = 60
+		filter = court
+		ai_target_filter = court
+
+		from_potential = {
+			is_playable = yes
+			whunter_court_hunter_seat_empty_trigger = yes
+			NOT = { has_character_modifier = whunter_training_cooldown }
+		}
+		potential = {
+			liege = { character = FROM }
+			whunter_trainable_courtier_trigger = yes
+			NOT = { has_character_modifier = whunter_at_chapterhouse }
+		}
+		allow = {
+			FROM = { piety = 100 wealth = 50 }
+			is_councillor = no
+		}
+		effect = {
+			FROM = {
+				piety = -100
+				wealth = -50
+				hidden_effect = {
+					add_character_modifier = {
+						name = whunter_training_cooldown
+						duration = 1825
+						hidden = yes
+					}
+				}
+			}
+			add_character_modifier = { name = whunter_at_chapterhouse duration = 1500 }
+			custom_tooltip = { text = train_court_witch_hunter_tt }
+			hidden_effect = { character_event = { id = whchapter.7 days = 1460 random = 30 } }
+		}
+		revoke_allowed = { always = no }
+		ai_will_do = {
+			factor = 1
+			modifier = { factor = 2 trait = zealous }
+			modifier = {
+				factor = 0
+				FROM = { NOT = { piety = 300 } } # AI keeps a piety cushion
+			}
+		}
+	}
+
+	# Inquisitor-General power: put an accused prisoner before a tribunal.
+	inquisition_hold_tribunal = {
+		ai_check_interval = 24
+		filter = all
+		ai_target_filter = all
+		is_in_society = yes
+
+		from_potential = {
+			society_member_of = holy_inquisition_myrmidia
+			society_rank >= 3
+			NOT = { trait = incapable }
+			prisoner = no
+		}
+		potential = {
+			prisoner = yes
+			OR = { # held by the Inquisitor, or by the lord he serves at court
+				host = { character = FROM }
+				AND = { FROM = { is_ruler = no } host = { any_courtier = { character = FROM } } }
+			}
+		}
+		allow = { whunter_tribunal_accused_trigger = yes FROM = { society_currency >= 100 } }
+		effect = {
+			FROM = { change_society_currency = -100 }
+			save_event_target_as = tribunal_accused
+			FROM = { character_event = { id = whchapter.1 } }
+		}
+		revoke_allowed = { always = no }
+		ai_will_do = { factor = 1 }
+	}
+}
+
+society_decisions = {
+	# Grand Inquisitor power: the Knights of the Blazing Sun ride as his escort
+	# for two years.
+	inquisition_blazing_sun_escort = {
+		ai_check_interval = 60
+		only_playable = no
+		is_in_society = yes
+
+		potential = { society_member_of = holy_inquisition_myrmidia society_rank == 4 }
+		allow = {
+			society_currency >= 750
+			NOT = { has_character_modifier = blazing_sun_escort_cooldown }
+			prisoner = no
+			NOT = { trait = incapable }
+			OR = { is_ruler = yes liege = { is_ruler = yes } }
+		}
+		effect = {
+			change_society_currency = -750
+			add_character_modifier = { name = blazing_sun_escort_cooldown duration = 3650 }
+			custom_tooltip = { text = inquisition_blazing_sun_escort_tt }
+			hidden_effect = {
+				if = {
+					limit = { is_ruler = yes }
+					location = {
+						ROOT = {
+							spawn_unit = {
+								province = PREV
+								owner = ROOT
+								leader = ROOT
+								earmark = blazing_sun_escort
+								troops = { knights = { 300 300 } heavy_infantry = { 500 500 } }
+								attrition = 0.5
+								disband_on_peace = no
+							}
+						}
+					}
+				}
+				else = { # a courtier Grand Inquisitor: the knights serve his lord
+					location = {
+						ROOT = {
+							liege = {
+								spawn_unit = {
+									province = PREVPREV
+									owner = THIS
+									leader = ROOT
+									earmark = blazing_sun_escort
+									troops = { knights = { 300 300 } heavy_infantry = { 500 500 } }
+									attrition = 0.5
+									disband_on_peace = no
+								}
+							}
+						}
+					}
+				}
+				character_event = { id = whchapter.3 days = 730 }
+			}
+		}
+		ai_will_do = {
+			factor = 1
+			modifier = { factor = 0 NOT = { war = yes } NOT = { liege = { war = yes } } }
+		}
+	}
+
+	# Templar power: swear an oath of vengeance for three years.
+	templar_oath_of_vengeance = {
+		ai_check_interval = 36
+		only_playable = no
+		is_in_society = yes
+
+		potential = { society_member_of = templars_of_solkan society_rank >= 2 }
+		allow = {
+			society_currency >= 300
+			NOT = { has_character_modifier = templar_oath_of_vengeance }
+			NOT = { has_character_modifier = templar_oath_cooldown }
+			prisoner = no
+		}
+		effect = {
+			change_society_currency = -300
+			add_character_modifier = { name = templar_oath_of_vengeance duration = 1095 }
+			hidden_effect = {
+				add_character_modifier = {
+					name = templar_oath_cooldown
+					duration = 2190
+					hidden = yes
+				}
+			}
+			piety = 25
+		}
+		ai_will_do = { factor = 1 modifier = { factor = 0.2 NOT = { war = yes } } }
+	}
+
+	# Vindicator power: purge the province you stand in by fire. Clears the
+	# taints witch hunters cleanse and drags any cultist at its lord's court
+	# into the light.
+	templar_purge_by_fire = {
+		ai_check_interval = 36
+		only_playable = no
+		is_in_society = yes
+
+		potential = { society_member_of = templars_of_solkan society_rank >= 3 }
+		allow = {
+			society_currency >= 400
+			NOT = { has_character_modifier = templar_purge_cooldown }
+			prisoner = no
+			NOT = { trait = incapable }
+			location = {
+				has_owner = yes
+				NOT = { has_province_modifier = purged_by_solkan }
+				owner = { religion_group = old_world_group }
+			}
+		}
+		effect = {
+			change_society_currency = -400
+			hidden_effect = {
+				add_character_modifier = {
+					name = templar_purge_cooldown
+					duration = 1825
+					hidden = yes
+				}
+			}
+			location = {
+				add_province_modifier = { name = purged_by_solkan duration = 1825 }
+				remove_province_modifier = nurgle_province_disease
+				remove_province_modifier = beastmen_unrest
+				remove_province_modifier = warpdust_traces
+				remove_province_modifier = slaanesh_hedonism
+				owner = { opinion = { who = ROOT modifier = opinion_purged_my_lands years = 5 } }
+			}
+			piety = 50
+			hidden_effect = {
+				location = {
+					owner = {
+						random_courtier = {
+							limit = { is_ruler = no prisoner = no is_cultist_trigger = yes }
+							save_event_target_as = purge_cultist
+						}
+					}
+				}
+				character_event = { id = whchapter.4 }
+			}
+		}
+		ai_will_do = {
+			factor = 1
+			modifier = {
+				factor = 0
+				location = { NOT = { whunter_tainted_province_trigger = yes } }
+				NOT = { location = { owner = { any_courtier = { is_cultist_trigger = yes } } } }
+			}
+		}
+	}
+}
+
+decisions = {
+	# The Border Princes have no witch hunter order of their own; a lord there
+	# invites a chapter to send hunters (whchapter.5 picks the chapter).
+	border_princes_invite_chapter = {
+		ai_check_interval = 120
+		only_playable = yes
+
+		potential = {
+			capital_scope = { region = world_old_world_border_princes }
+			whunter_can_keep_court_hunter_trigger = yes
+			NOT = { has_character_modifier = border_chapter_invited }
+		}
+		allow = { wealth = 100 prestige = 100 war = no }
+		effect = {
+			wealth = -100
+			prestige = -50
+			add_character_modifier = { name = border_chapter_invited duration = 3650 hidden = yes }
+			custom_tooltip = { text = border_princes_invite_chapter_tt }
+			hidden_effect = { character_event = { id = whchapter.5 } }
+		}
+		ai_will_do = {
+			factor = 1
+			modifier = { factor = 0 any_courtier = { is_witch_hunter_trigger = yes } }
+			modifier = { factor = 0 NOT = { wealth = 300 } }
+		}
+	}
+}

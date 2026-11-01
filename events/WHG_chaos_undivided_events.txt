@@ -8,18 +8,20 @@
 # Gifts and trials of the Chaos gods outside the cults: Khorne's blood
 # tournament, where a lord's warriors fight to the death until one champion
 # remains; the price Tzeentch asks for a daemon host; the diseases a servant
-# of Nurgle bestows; the ascension of a daemon prince; and the doom that
-# lifts when a chosen of Chaos dies.
+# of Nurgle bestows; the revels thrown for Slaanesh; the ascension of a
+# daemon prince; and the doom that lifts when a chosen of Chaos dies.
 #
 # Khorne's blood tournament      chaosfl.1 - chaosfl.23
 # Tzeentch's price               chaosfl.30 - chaosfl.31
 # Nurgle's gifts                 chaosfl.40 - chaosfl.44
+# Slaanesh's Revel of Excess     chaosfl.70 - chaosfl.74
 # Daemon princes                 chaosfl.50
 # Doom                           chaosfl.60
 #
 # Decisions in wh_chaos_decisions.txt start the tournament (chaosfl.1 and
 # chaosfl.2), Tzeentch's sacrifice (chaosfl.30 or 31), Nurgle's gift
-# (chaosfl.40) and every daemon prince ascension (chaosfl.50).
+# (chaosfl.40), the Revel of Excess (chaosfl.70) and every daemon prince
+# ascension (chaosfl.50).
 # send_duel_result_tournament_effect in wh_scripted_effects.txt fires the bout
 # results (chaosfl.12). common/on_actions/wh_on_actions.txt on_death fires
 # chaosfl.60.
@@ -937,6 +939,184 @@ character_event = {
 		name = EVTOPTAchaosfl44
 		add_trait = has_nurgles_rot
 		nurgle_blessing_check_effect = yes
+	}
+}
+
+###############################################################################
+# The Revel of Excess
+# A servant of Slaanesh throws a revel for the Dark Prince (slaaneshi_revel
+# decision, once every five years). A lavish revel is safer; an unbridled one
+# pleases the Dark Prince more often, but kills more guests and leaves its
+# host jaded more often. Outcomes: the Dark Prince is pleased (favour, and
+# sometimes a Daemonette stays behind), a guest dies of excess, the court is
+# corrupted, or the host is left jaded.
+###############################################################################
+
+# chaosfl.70 The Revel of Excess
+# The host chooses how far the revel goes.
+# Scope: ROOT is the host. Decision slaaneshi_revel.
+character_event = {
+	id = chaosfl.70
+	desc = EVTDESCchaosfl70
+	picture = GFX_evt_slaanesh
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl70
+		wealth = -100
+		add_doom_progress_tiny_effect = yes
+		random_list = {
+			25 = { character_event = { id = chaosfl.71 days = 3 } }
+			10 = {
+				trigger = { any_courtier = { chaosfl_revel_victim_trigger = yes } }
+				character_event = { id = chaosfl.72 days = 3 }
+			}
+			40 = { character_event = { id = chaosfl.73 days = 3 } }
+			25 = { character_event = { id = chaosfl.74 days = 3 } }
+		}
+		ai_chance = { factor = 60 modifier = { factor = 0.5 trait = lustful } }
+	}
+	option = {
+		name = EVTOPTBchaosfl70
+		trigger = { wealth = 150 }
+		wealth = -250
+		add_doom_progress_tiny_effect = yes
+		random_list = {
+			40 = { character_event = { id = chaosfl.71 days = 3 } }
+			25 = {
+				trigger = { any_courtier = { chaosfl_revel_victim_trigger = yes } }
+				character_event = { id = chaosfl.72 days = 3 }
+			}
+			5 = { character_event = { id = chaosfl.73 days = 3 } }
+			30 = { character_event = { id = chaosfl.74 days = 3 } }
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = lustful }
+			modifier = { factor = 2 trait = hedonist }
+		}
+	}
+}
+
+# chaosfl.71 The Dark Prince is pleased
+# Favour with Slaanesh and prestige. One time in three a Daemonette stays
+# behind to serve (darkgift.3).
+# Scope: ROOT is the host. chaosfl.70.
+character_event = {
+	id = chaosfl.71
+	desc = {
+		trigger = { NOT = { has_character_flag = chaosfl_revel_daemonette } }
+		text = EVTDESCchaosfl71
+	}
+	desc = { trigger = { has_character_flag = chaosfl_revel_daemonette } text = EVTDESCchaosfl71b }
+	picture = GFX_evt_slaanesh
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = chaosfl_revel_daemonette
+		random = { chance = 33 set_character_flag = chaosfl_revel_daemonette }
+	}
+
+	option = {
+		name = EVTOPTAchaosfl71
+		add_offmap_currency = { offmap = slaanesh_warp value = 400 }
+		prestige = 200
+		if = {
+			limit = { has_character_flag = chaosfl_revel_daemonette }
+			character_event = { id = darkgift.3 }
+		}
+	}
+
+	after = {
+		clr_character_flag = chaosfl_revel_daemonette
+	}
+}
+
+# chaosfl.72 Death by excess
+# A guest is found dead among the cushions. Slaanesh approves.
+# Scope: ROOT is the host. chaosfl.70.
+character_event = {
+	id = chaosfl.72
+	desc = EVTDESCchaosfl72
+	picture = GFX_evt_slaanesh
+
+	is_triggered_only = yes
+
+	trigger = {
+		any_courtier = { chaosfl_revel_victim_trigger = yes }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { chaosfl_revel_victim_trigger = yes }
+			save_event_target_as = revel_victim
+		}
+	}
+
+	option = {
+		name = EVTOPTAchaosfl72
+		piety = 75
+		add_offmap_currency = { offmap = slaanesh_warp value = 150 }
+		event_target:revel_victim = { death = { death_reason = death_accident } }
+	}
+}
+
+# chaosfl.73 The court is corrupted
+# Up to two courtiers wake with new appetites.
+# Scope: ROOT is the host. chaosfl.70.
+character_event = {
+	id = chaosfl.73
+	desc = EVTDESCchaosfl73
+	picture = GFX_evt_slaanesh
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl73
+		prestige = 100
+		random_courtier = {
+			limit = {
+				age = 16
+				prisoner = no
+				NOR = { trait = lustful trait = gluttonous trait = hedonist }
+			}
+			chaosfl_revel_appetite_effect = yes
+		}
+		random_courtier = {
+			limit = {
+				age = 16
+				prisoner = no
+				NOR = { trait = lustful trait = gluttonous trait = hedonist }
+			}
+			chaosfl_revel_appetite_effect = yes
+		}
+	}
+}
+
+# chaosfl.74 Jaded
+# Nothing satisfies the host any more: stress, or a crueller pleasure.
+# Scope: ROOT is the host. chaosfl.70.
+character_event = {
+	id = chaosfl.74
+	desc = EVTDESCchaosfl74
+	picture = GFX_evt_slaanesh
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAchaosfl74
+		trigger = { NOT = { trait = stressed } }
+		add_trait = stressed
+		ai_chance = { factor = 50 }
+	}
+	option = {
+		name = EVTOPTBchaosfl74
+		remove_trait = kind
+		add_trait = cruel
+		piety = 50
+		ai_chance = { factor = 50 modifier = { factor = 2 trait = cruel } }
 	}
 }
 

@@ -18,6 +18,7 @@
 #   20-23  Sorcerer-Prophets: ascension, the Sorcerer's Curse, bound K'daai
 #   30-37  slaves: raids, the slave buildings, selling captives
 #   40-45  the arms trade (Dawi Zharr and Dawi sellers)
+#   50-53  winged mounts: a Great Taurus or a Lammasu
 #
 # Callers:
 #   dawizharr.1   sacrifice_to_hashut decision (wh_chaos_dwarf_decisions)
@@ -31,6 +32,7 @@
 #   dawizharr.36  chaos_dwarf_sell_into_slavery decision
 #   dawizharr.40  buy_from_chaos_dwarfs and buy_from_dwarfs decisions, chaoshorde.21
 #   dawizharr.45  sell_stuff_chaos_dwarfs decision
+#   dawizharr.50, 52  on_five_year_pulse random list dawizharr_mounts
 #
 # Shared code:
 #   common/scripted_triggers/wh_dawizharr_triggers.txt
@@ -47,7 +49,7 @@ namespace = dawizharr
 ###############################################################################
 # 1-8 Sacrifices to Hashut
 # A prisoner can be thrown into the furnace at any time (sacrifice_to_hashut
-# decision). Once every four years at least Hashut wants an offering: a
+# decision). Once every seven years at least Hashut wants an offering: a
 # prisoner, a slave building's worth of slaves, or the ruler's standing with
 # vassals and priests (dawizharr.8). The grand sacrifice (dawizharr.5) costs
 # gold and draws an answer from Hashut (dawizharr.10-19).
@@ -881,7 +883,7 @@ character_event = {
 }
 
 # dawizharr.31 Yearly upkeep of a Chaos Dwarf realm
-# Hidden. Starts Hashut's four-year sacrifice clock for a new ruler, asks for
+# Hidden. Starts Hashut's seven-year sacrifice clock for a new ruler, asks for
 # an overdue sacrifice (dawizharr.8) and herds slave buildings outside the
 # capital to it (dawizharr.32).
 # Scope: ROOT is the ruler. on_yearly_pulse.
@@ -1364,8 +1366,9 @@ character_event = {
 
 # dawizharr.44 The goods arrive
 # War machines come with a guard regiment and wait at the capital; arms and
-# armour equip the capital's levies for ten years. A Dawi Zharr arms deal also
-# brings a Hellforged Greatshield for the buyer (dawizharr_greatshield).
+# armour equip the capital's levies for ten years. A seller who likes the
+# buyer (opinion 50+) may add a Hellforged Greatshield (1 in 4, once in the
+# buyer's lifetime, dawizharr_greatshield).
 # Scope: ROOT is the buyer, FROM the seller.
 character_event = {
 	id = dawizharr.44
@@ -1441,8 +1444,16 @@ character_event = {
 				add_province_modifier = { name = chaos_dwarf_weapons duration = 3650 }
 			}
 			if = {
-				limit = { NOT = { has_artifact = dawizharr_greatshield } }
-				add_artifact = dawizharr_greatshield
+				limit = {
+					NOT = { has_artifact = dawizharr_greatshield }
+					NOT = { has_character_flag = dawizharr_got_greatshield }
+					FROM = { opinion = { who = ROOT value = 50 } }
+				}
+				random = {
+					chance = 25
+					add_artifact = dawizharr_greatshield
+					set_character_flag = dawizharr_got_greatshield
+				}
 			}
 		}
 		dawizharr_arms_clear_buyer_effect = yes
@@ -1461,5 +1472,120 @@ character_event = {
 
 	immediate = {
 		FROM = { set_character_flag = buying_chaos_dwarfs character_event = { id = dawizharr.40 } }
+	}
+}
+
+###############################################################################
+# 50-53 Winged mounts
+# The Dawi Zharr's own way to a Great Taurus or a Lammasu, for players and AI
+# alike (the mount market still sells both). On a five-year list a ruler
+# without either beast is offered one: a Great Taurus from the breeding pens
+# of Zharr-Naggrund, or, for a Sorcerer-Prophet, a Lammasu to bargain with.
+# The binding takes five years. Restored from the old DR_chaos_dwarf.20-23,
+# which nothing ever fired.
+###############################################################################
+
+# dawizharr.50 A Great Taurus from the pens
+# Scope: ROOT is the ruler. on_five_year_pulse list dawizharr_mounts.
+character_event = {
+	id = dawizharr.50
+	desc = EVTDESCdawizharr50
+	picture = GFX_evt_great_taurus
+
+	is_triggered_only = yes
+	only_rulers = yes
+	capable_only = yes
+	prisoner = no
+	min_age = 20
+	religion = hashut
+	culture_group = dwarf_chaos_group
+
+	trigger = {
+		trait = creature_chaos_dwarf
+		NOT = { has_character_flag = taming_beast }
+		NOT = { has_artifact = great_taurus_mount }
+		NOT = { has_artifact = lamassu_mount }
+		piety = 300
+	}
+
+	option = {
+		name = EVTOPTAdawizharr50
+		piety = -300
+		set_character_flag = taming_beast
+		character_event = { id = dawizharr.51 days = 1825 random = 180 }
+		ai_chance = { factor = 80 }
+	}
+	option = {
+		name = EVTOPTBdawizharr50
+		ai_chance = { factor = 20 }
+	}
+}
+
+# dawizharr.51 The Great Taurus is bound
+# Scope: ROOT is the rider. dawizharr.50.
+character_event = {
+	id = dawizharr.51
+	desc = EVTDESCdawizharr51
+	picture = GFX_evt_great_taurus
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdawizharr51
+		clr_character_flag = taming_beast
+		add_artifact = great_taurus_mount
+		prestige = 150
+	}
+}
+
+# dawizharr.52 A Lammasu to bargain with
+# Only a Sorcerer-Prophet can master a Lammasu, and only by striking a pact.
+# Scope: ROOT is the sorcerer. on_five_year_pulse list dawizharr_mounts.
+character_event = {
+	id = dawizharr.52
+	desc = EVTDESCdawizharr52
+	picture = GFX_evt_lammasu
+
+	is_triggered_only = yes
+	only_rulers = yes
+	capable_only = yes
+	prisoner = no
+	religion = hashut
+	culture_group = dwarf_chaos_group
+
+	trigger = {
+		trait = chaos_dwarf_sorcerer
+		NOT = { has_character_flag = taming_beast }
+		NOT = { has_artifact = lamassu_mount }
+		piety = 500
+	}
+
+	option = {
+		name = EVTOPTAdawizharr52
+		piety = -500
+		set_character_flag = taming_beast
+		character_event = { id = dawizharr.53 days = 1825 random = 180 }
+		ai_chance = { factor = 80 }
+	}
+	option = {
+		name = EVTOPTBdawizharr52
+		ai_chance = { factor = 20 }
+	}
+}
+
+# dawizharr.53 The Lammasu is bound
+# Scope: ROOT is the sorcerer. dawizharr.52.
+character_event = {
+	id = dawizharr.53
+	desc = EVTDESCdawizharr53
+	picture = GFX_evt_lammasu
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdawizharr53
+		clr_character_flag = taming_beast
+		add_artifact = lamassu_mount
+		prestige = 250
 	}
 }

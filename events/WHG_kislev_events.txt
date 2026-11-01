@@ -1,0 +1,1473 @@
+###############################################################################
+# Kislev events
+# Namespace: kislev (was "iwitch" and "wardrobe" in BR_kislev_magic_events.txt
+# and "erengrad" in S_minor_events.txt)
+# Faction: Kislev
+#
+# The Ice Witch Sisterhood and its missions: hunting men who meddle with
+# magic, finding and training new sisters, and the Frosthome Lodge. A child's
+# night walk through a wardrobe into a frozen, ruined land. The rebellious
+# burghers of Erengrad and the founding of the Tzar's guard.
+#
+# Ice Witch Sisterhood: missions            kislev.1
+# Missions: the hunt for a male mage        kislev.5 - kislev.9
+# Missions: a new sister                    kislev.10 - kislev.21
+# Missions: a proper focus                  kislev.25 - kislev.27
+# The Frosthome Lodge                       kislev.35
+# AI rank-ups                               kislev.40
+# Into the Wardrobe                         kislev.100 - kislev.112
+# Rebellious Erengrad                       kislev.200 - kislev.206
+#
+# Fired from common/on_actions/wh_magic_on_actions.txt: kislev.1 on the
+# society bi-yearly pulse, kislev.40 every five years, kislev.35 and
+# kislev.201 on_new_holder (all three kinds); wh_on_actions.txt: kislev.200
+# on_startup, kislev.27 on_focus_selected, the adolescence list
+# kislev_wardrobe (kislev.100). decisions/wh_witch_decisions.txt starts the
+# hunt (kislev.7), decisions/realm_decisions.txt founds the guard
+# (kislev.205), and S_magic_inheritance_events.txt reports the hunt
+# (kislev.8, 9).
+# Scripted triggers: common/scripted_triggers/wh_kislev_triggers.txt
+# Scripted effects: common/scripted_effects/wh_kislev_effects.txt
+# Artifacts: common/artifacts/25_artifacts_kislev.txt
+# Loc: localisation/00_WHG_kislev_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = kislev
+
+###############################################################################
+# Ice Witch Sisterhood: missions
+###############################################################################
+
+# kislev.1 The Sisterhood's missions
+# Every two years each sister without a quest may be given one by a Grand Ice
+# Witch: a proper focus, the hunt for a man who meddles with magic (Ice
+# Maidens), or a new sister to find. The AI sometimes skips the mission and
+# just gains or loses standing.
+# Scope: ROOT is a member of the Ice Witch Sisterhood.
+character_event = {
+	id = kislev.1
+	hide_window = yes
+
+	is_in_society = yes
+	only_capable = yes
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse
+
+	trigger = {
+		society_member_of = ice_witch_sisterhood
+		has_any_quest = no
+		NOT = { has_character_modifier = quest_cooldown_timer }
+		is_inaccessible_trigger = no
+		any_society_member = {
+			is_society_grandmaster = yes
+			same_society_as = ROOT
+			NOT = { has_character_flag = own_mission_tombola }
+		}
+	}
+	immediate = {
+		kislev_save_matriarch_effect = yes
+		random_list = {
+			20 = {
+				trigger = {
+					has_dlc = "Way of Life"
+					is_landed = yes
+					NOR = {
+						has_focus = focus_scholarship
+						has_focus = focus_rulership
+						has_focus = focus_intrigue
+						has_focus = focus_war
+					}
+				}
+				event_target:lodge_hero = { character_event = { id = kislev.25 } }
+			}
+			25 = {
+				trigger = {
+					is_landed = yes
+					society_rank = 2
+					age = 16
+					kislev_male_mage_exists_trigger = yes
+				}
+				modifier = { factor = 2 ai = yes society_rank == 2 }
+				event_target:lodge_hero = { character_event = { id = kislev.5 } }
+			}
+			60 = {
+				trigger = { is_landed = yes is_adult = yes kislev_recruit_exists_trigger = yes }
+				modifier = { factor = 5 ice_witch_sisterhood = { num_of_society_members < 25 } }
+				modifier = { factor = 5 has_landed_title = d_frosthome_lodge }
+				modifier = { factor = 0.5 ice_witch_sisterhood = { num_of_society_members = 30 } }
+				modifier = { factor = 0 ice_witch_sisterhood = { num_of_society_members = 45 } }
+				modifier = { factor = 2.5 has_landed_title = e_kislev }
+				modifier = { factor = 10 any_child = { kislev_witch_recruit_trigger = yes } }
+				modifier = {
+					factor = 25
+					ai = yes
+					any_player = { kislev_witch_recruit_trigger = yes }
+				}
+				event_target:lodge_hero = { character_event = { id = kislev.10 } }
+			}
+			75 = {
+				trigger = { ai = yes }
+				modifier = { factor = 0 ice_witch_sisterhood = { num_of_society_members < 15 } }
+				random_list = {
+					70 = {
+						modifier = { factor = 0.9 society_influence >= 30 }
+						modifier = { factor = 0.9 society_influence >= 40 }
+						modifier = { factor = 0.8 society_influence >= 50 }
+						modifier = { factor = 0.7 society_influence >= 70 }
+						modifier = { factor = 0.6 society_influence >= 80 }
+						modifier = { factor = 0.5 society_influence >= 90 }
+						add_mission_succeed_influence_effect = yes
+					}
+					30 = { add_mission_fail_influence_effect = yes }
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# Missions: the hunt for a male mage
+###############################################################################
+
+# kislev.5 The hunt is ordered
+# The Grand Ice Witch hands the hunt to the sister.
+# Scope: ROOT is the Grand Ice Witch; FROM the sister.
+character_event = {
+	id = kislev.5
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { society_quest_event = { id = kislev.6 days = 7 random = 7 } }
+	}
+}
+
+# kislev.6 A man who meddles with magic
+# Kislevite law gives the Winds of Magic to women. A man of the realm or a
+# neighbouring Kislevite realm has been working magic; the sister is to hunt
+# him down (the decision in wh_witch_decisions.txt starts the
+# confrontation, kislev.7).
+# Scope: ROOT is the sister; FROM the Grand Ice Witch.
+society_quest_event = {
+	id = kislev.6
+	desc = EVTDESCkislev6
+
+	is_in_society = yes
+	only_capable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+		society_member_of = ice_witch_sisterhood
+		same_society_as = FROM
+		has_any_quest = no
+		NOT = { has_character_modifier = quest_cooldown_timer }
+		is_inaccessible_trigger = no
+		is_landed = yes
+		kislev_male_mage_exists_trigger = yes
+	}
+	immediate = {
+		kislev_find_male_mage_effect = yes
+	}
+
+	quest_target = event_target:male_target
+
+	option = {
+		name = EVTOPTAkislev6
+		set_character_flag = deadly_duel@event_target:male_target
+		event_target:male_target = {
+			show_scope_change = no
+			set_quest_target = { id = quest_ice_witch_hunt holder = ROOT }
+		}
+	}
+	option = {
+		name = EVTOPTBkislev6
+		custom_tooltip = { text = decline_quest_tooltip }
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# kislev.7 The confrontation
+# The sister has found her quarry; the accused is confronted
+# (magicpotential.12 in S_magic_inheritance_events.txt), and his lord decides
+# his fate. The outcome comes back as kislev.8 or kislev.9.
+# Scope: ROOT is the sister; FROM the accused.
+character_event = {
+	id = kislev.7
+	desc = EVTDESCkislev7
+	picture = "GFX_evt_kislev_ice_witch"
+
+	is_triggered_only = yes # decision in wh_witch_decisions.txt
+
+	immediate = {
+		save_event_target_as = witch_hunter
+		FROM = {
+			save_event_target_as = the_accused
+			character_event = { id = magicpotential.12 days = 7 random = 7 }
+		}
+	}
+
+	option = {
+		name = EVTOPTAkislev7
+	}
+}
+
+# kislev.8 Justice done
+# The accused was burned or hollowed. The sister returns with honour.
+# Scope: ROOT is the sister.
+character_event = {
+	id = kislev.8
+	desc = EVTDESCkislev8
+	picture = "GFX_evt_kislev_ice_witch"
+
+	is_triggered_only = yes # S_magic_inheritance_events.txt
+
+	trigger = {
+		society_member_of = ice_witch_sisterhood
+		has_quest = quest_ice_witch_hunt
+	}
+
+	option = {
+		name = EVTOPTAkislev8
+		clr_quest = quest_ice_witch_hunt
+		piety = 100
+		add_society_currency_medium_effect = yes
+		add_legend_progress_trivial_effect = yes
+	}
+}
+
+# kislev.9 The quarry spared
+# The accused's lord showed him mercy. The Sisterhood is not pleased.
+# Scope: ROOT is the sister.
+character_event = {
+	id = kislev.9
+	desc = EVTDESCkislev9
+	picture = "GFX_evt_kislev_ice_witch"
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # S_magic_inheritance_events.txt
+
+	trigger = {
+		society_member_of = ice_witch_sisterhood
+		has_quest = quest_ice_witch_hunt
+	}
+
+	option = {
+		name = EVTOPTAkislev9
+		clr_quest = quest_ice_witch_hunt
+		piety = -100
+		add_mission_fail_influence_effect = yes
+	}
+}
+
+###############################################################################
+# Missions: a new sister
+###############################################################################
+
+# kislev.10 A new sister is wanted
+# Scope: ROOT is the Grand Ice Witch; FROM the sister.
+character_event = {
+	id = kislev.10
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { society_quest_event = { id = kislev.11 days = 7 random = 7 } }
+	}
+}
+
+# kislev.11 A girl with the gift
+# The Sisterhood names a girl or woman with the gift who is not yet one of
+# them: a player first, then the sister's own daughter, a woman of her realm,
+# a girl of her Kislevite liege's realm, or of a neighbouring Kislevite realm
+# (kislev_find_recruit_effect). The sister travels to meet her (kislev.12).
+# Scope: ROOT is the sister; FROM the Grand Ice Witch.
+society_quest_event = {
+	id = kislev.11
+	desc = EVTDESCkislev11
+
+	is_in_society = yes
+	only_capable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_landed = yes
+		is_adult = yes
+		FROM = { is_alive = yes }
+		society_member_of = ice_witch_sisterhood
+		same_society_as = FROM
+		has_any_quest = no
+		NOT = { has_character_modifier = quest_cooldown_timer }
+		is_inaccessible_trigger = no
+		kislev_recruit_exists_trigger = yes
+	}
+	immediate = {
+		kislev_find_recruit_effect = yes
+	}
+
+	quest_target = event_target:recruit_to_be
+
+	option = {
+		name = EVTOPTAkislev11
+		event_target:recruit_to_be = {
+			show_scope_change = no
+			set_quest_target = { id = quest_iwitch_recruit holder = ROOT }
+			set_character_flag = priority_mage_recruit
+		}
+		save_event_target_as = recruiter
+		character_event = { id = kislev.12 days = 6 random = 9 }
+	}
+	option = {
+		name = EVTOPTBkislev11
+		custom_tooltip = { text = decline_quest_tooltip }
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# kislev.12 The sister arrives
+# Scope: ROOT is the recruiting sister; event_target:recruit_to_be the girl.
+character_event = {
+	id = kislev.12
+	desc = EVTDESCkislev12
+	picture = "GFX_evt_kislev_ice_witch"
+	portrait = event_target:recruit_to_be
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev12
+		event_target:recruit_to_be = { character_event = { id = kislev.13 days = 15 random = 7 } }
+	}
+}
+
+# kislev.13 The Sisterhood calls
+# The girl may join and begin her studies (one to five years, quicker for the
+# clever or those who already know Ice magic), or refuse if she is grown.
+# Girls of Frosthome Lodge vassals move to the sister's court.
+# Scope: ROOT is the recruit; FROM the sister.
+character_event = {
+	id = kislev.13
+	desc = EVTDESCkislev13
+	picture = "GFX_evt_kislev_ice_witch"
+	portrait = event_target:recruit_to_be
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev13
+		#Join
+		if = {
+			limit = {
+				is_landed = no
+				event_target:recruiter = {
+					OR = {
+						has_landed_title = d_frosthome_lodge
+						liege = { has_landed_title = d_frosthome_lodge }
+					}
+				}
+			}
+			move_character = event_target:recruiter
+			set_character_flag = ai_flag_refuse_concubinage
+			set_character_flag = no_court_invites
+		}
+		add_trait = studying_magic
+		join_society = ice_witch_sisterhood
+		if = { limit = { trait = lore_ice } character_event = { id = kislev.20 years = 1 } }
+		else = {
+			random_list = {
+				20 = {
+					trigger = { learning = 15 }
+					modifier = { factor = 2 learning = 20 }
+					modifier = { factor = 5 trait = genius }
+					character_event = { id = kislev.20 days = 696 }
+				}
+				20 = {
+					modifier = { factor = 2 learning = 12 }
+					modifier = { factor = 2 learning = 15 }
+					modifier = { factor = 2 trait = genius }
+					character_event = { id = kislev.20 years = 3 }
+				}
+				15 = { character_event = { id = kislev.20 years = 4 } }
+				15 = {
+					trigger = { NOT = { learning = 8 } }
+					modifier = { factor = 6 NOT = { learning = 6 } }
+					character_event = { id = kislev.20 years = 5 }
+				}
+			}
+		}
+		FROM = { character_event = { id = kislev.14 } }
+		ai_chance = { factor = 25 }
+	}
+	option = {
+		name = EVTOPTBkislev13
+		#Refuse
+		trigger = { age = 18 }
+		set_character_flag = refused_magical_recruitment
+		prestige = -250
+		FROM = { character_event = { id = kislev.15 } }
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 0.5 diplomacy = 12 }
+			modifier = { factor = 0.5 learning = 12 }
+			modifier = { factor = 0.5 diplomacy = 15 }
+			modifier = { factor = 0.5 learning = 15 }
+			modifier = { factor = 0 OR = { trait = ambitious trait = craven } }
+		}
+	}
+}
+
+# kislev.14 The girl accepts
+# The sister starts her lessons (kislev.16).
+# Scope: ROOT is the sister; FROM the recruit.
+character_event = {
+	id = kislev.14
+	desc = EVTDESCkislev14
+	picture = "GFX_evt_kislev_ice_witch_casting"
+	portrait = event_target:recruit_to_be
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev14
+		character_event = { id = kislev.16 }
+	}
+}
+
+# kislev.15 The girl refuses
+# Scope: ROOT is the sister; FROM the recruit.
+character_event = {
+	id = kislev.15
+	desc = EVTDESCkislev15
+	picture = "GFX_evt_mysterious_forest"
+	portrait = event_target:recruit_to_be
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev15
+		clr_quest = quest_iwitch_recruit
+		add_mission_fail_influence_effect = yes
+	}
+}
+
+# kislev.16 The lessons
+# Every year or so until her induction the sister chooses what to teach:
+# caution, daring or focus (kislev.17 - 19). If the pupil dies or is already
+# inducted, the lessons stop.
+# Scope: ROOT is the sister; event_target:recruit_to_be the pupil.
+character_event = {
+	id = kislev.16
+	desc = EVTDESCkislev16
+	picture = "GFX_evt_kislev_ice_witch"
+	portrait = event_target:recruit_to_be
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:recruit_to_be = { is_alive = yes NOT = { trait = ice_witch } }
+	}
+	fail_trigger_effect = { kislev_end_lessons_effect = yes }
+
+	option = {
+		name = EVTOPTAkislev16
+		#Caution
+		event_target:recruit_to_be = { character_event = { id = kislev.17 } }
+	}
+	option = {
+		name = EVTOPTBkislev16
+		#Daring
+		event_target:recruit_to_be = { character_event = { id = kislev.18 } }
+	}
+	option = {
+		name = EVTOPTCkislev16
+		#Focus
+		event_target:recruit_to_be = { character_event = { id = kislev.19 } }
+	}
+}
+
+# kislev.17 A lesson in caution
+# Ice bites the careless. A rash or slow pupil has a small chance to die of
+# the lesson; otherwise she gains Learning and Diplomacy, more surely with a
+# teacher who has magic herself.
+# Scope: ROOT is the pupil; FROM the sister.
+character_event = {
+	id = kislev.17
+	desc = EVTDESCkislev17
+	picture = "GFX_evt_kislev_ice_witch"
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = ice_witch }
+		FROM = { is_alive = yes }
+	}
+	fail_trigger_effect = { kislev_end_lessons_effect = yes }
+
+	option = {
+		name = EVTOPTAkislev17
+		if = {
+			limit = {
+				OR = {
+					AND = { is_adult = no NOT = { learning = 14 } }
+					AND = { is_adult = yes NOT = { learning = 16 } }
+					trait = wroth
+				}
+			}
+			kislev_lesson_accident_effect = yes
+		}
+		hidden_tooltip = {
+			FROM = { character_event = { id = kislev.16 days = 250 random = 150 } }
+			random_list = {
+				50 = { change_learning = 1 change_diplomacy = 1 }
+				50 = { modifier = { factor = 1.45 FROM = { has_magic_power_trigger = no } } }
+			}
+		}
+	}
+}
+
+# kislev.18 A lesson in daring
+# The pupil is pushed to experiment. Timid or dull pupils risk the most; the
+# rewards are broader.
+# Scope: ROOT is the pupil; FROM the sister.
+character_event = {
+	id = kislev.18
+	desc = EVTDESCkislev18
+	picture = "GFX_evt_kislev_ice_witch_casting"
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = ice_witch }
+		FROM = { is_alive = yes }
+	}
+	fail_trigger_effect = { kislev_end_lessons_effect = yes }
+
+	option = {
+		name = EVTOPTAkislev18
+		if = {
+			limit = {
+				OR = {
+					AND = {
+						NOT = { trait = patient }
+						OR = {
+							AND = { is_adult = no NOT = { learning = 10 } }
+							AND = { is_adult = yes NOT = { learning = 12 } }
+						}
+					}
+					trait = content
+					trait = craven
+				}
+			}
+			kislev_lesson_accident_effect = yes
+		}
+		hidden_tooltip = {
+			FROM = { character_event = { id = kislev.16 days = 250 random = 150 } }
+			random_list = {
+				20 = { change_learning = 1 change_martial = 1 }
+				20 = { change_learning = 1 change_intrigue = 1 }
+				20 = { change_learning = 1 change_stewardship = 1 }
+				40 = { modifier = { factor = 1.45 FROM = { has_magic_power_trigger = no } } }
+			}
+		}
+	}
+}
+
+# kislev.19 A lesson in focus
+# Discipline above all. Impatient, stubborn or wrathful pupils risk the
+# most.
+# Scope: ROOT is the pupil; FROM the sister.
+character_event = {
+	id = kislev.19
+	desc = EVTDESCkislev19
+	picture = "GFX_evt_kislev_ice_witch_casting"
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = ice_witch }
+		FROM = { is_alive = yes }
+	}
+	fail_trigger_effect = { kislev_end_lessons_effect = yes }
+
+	option = {
+		name = EVTOPTAkislev19
+		if = {
+			limit = {
+				OR = {
+					AND = {
+						NOT = { trait = temperate }
+						OR = {
+							AND = { is_adult = no NOT = { learning = 10 } }
+							AND = { is_adult = yes NOT = { learning = 12 } }
+						}
+					}
+					trait = ambitious
+					trait = stubborn
+					trait = wroth
+				}
+			}
+			kislev_lesson_accident_effect = yes
+		}
+		hidden_tooltip = {
+			FROM = { character_event = { id = kislev.16 days = 250 random = 150 } }
+			random_list = {
+				50 = { change_learning = 1 }
+				50 = { modifier = { factor = 1.45 FROM = { has_magic_power_trigger = no } } }
+			}
+		}
+	}
+}
+
+# kislev.20 An Ice Witch
+# The pupil's training is done. She becomes an Ice Witch, learns the Lore of
+# Ice if she did not know it, and rises to the first rank. Her teacher hears
+# of it (kislev.21).
+# Scope: ROOT is the new Ice Witch.
+character_event = {
+	id = kislev.20
+	desc = EVTDESCkislev20
+	picture = "GFX_evt_kislev_ice_witch"
+
+	is_triggered_only = yes
+
+	trigger = {
+		society_member_of = ice_witch_sisterhood
+		NOT = { trait = ice_witch }
+	}
+
+	option = {
+		name = EVTOPTAkislev20
+		remove_trait = studying_magic
+		if = { limit = { religion = kislev_gods } piety = 100 }
+		add_trait = ice_witch
+		if = {
+			limit = { NOT = { trait = lore_ice } }
+			prestige = 250
+			add_trait = lore_ice
+			magic_power_teach_effect = yes
+			enable_magic_xp_effect = yes
+		}
+		if = {
+			limit = { society_rank == 1 }
+			society_rank_up = { society = ice_witch_sisterhood rank = 1 }
+		}
+		event_target:recruiter = { character_event = { id = kislev.21 } }
+		ai_chance = { factor = 25 }
+	}
+}
+
+# kislev.21 A sister made
+# The mission is done. Teacher and pupil may part as friends.
+# Scope: ROOT is the teacher; FROM the new Ice Witch.
+character_event = {
+	id = kislev.21
+	desc = EVTDESCkislev21
+	picture = "GFX_evt_kislev_ice_witch_casting"
+	portrait = event_target:recruit_to_be
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev21
+		clr_quest = quest_iwitch_recruit
+		add_society_currency_medium_effect = yes
+		random = { chance = 50 add_friend = FROM }
+	}
+}
+
+###############################################################################
+# Missions: a proper focus
+###############################################################################
+
+# kislev.25 A focus is wanted
+# Scope: ROOT is the Grand Ice Witch; FROM the sister.
+character_event = {
+	id = kislev.25
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { society_quest_event = { id = kislev.26 days = 7 random = 7 } }
+	}
+}
+
+# kislev.26 A proper focus
+# A sister who wastes her days is told to give her life to study, the
+# Tzarina's court, its secrets, or the defence of Kislev. Choosing that focus
+# completes the mission (kislev.27).
+# Scope: ROOT is the sister; FROM the Grand Ice Witch.
+society_quest_event = {
+	id = kislev.26
+	desc = { text = EVTDESCkislev26 trigger = { has_character_flag = kislev_focus_scholarship } }
+	desc = { text = EVTDESCkislev26b trigger = { has_character_flag = kislev_focus_rulership } }
+	desc = { text = EVTDESCkislev26c trigger = { has_character_flag = kislev_focus_intrigue } }
+	desc = { text = EVTDESCkislev26d trigger = { has_character_flag = kislev_focus_war } }
+
+	is_in_society = yes
+	only_capable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		society_member_of = ice_witch_sisterhood
+		same_society_as = FROM
+		has_any_quest = no
+		NOT = { has_character_modifier = quest_cooldown_timer }
+		is_inaccessible_trigger = no
+		has_dlc = "Way of Life"
+		is_landed = yes
+		NOR = {
+			has_focus = focus_scholarship
+			has_focus = focus_rulership
+			has_focus = focus_intrigue
+			has_focus = focus_war
+		}
+	}
+	immediate = {
+		random_list = {
+			40 = { set_character_flag = kislev_focus_scholarship }
+			20 = { set_character_flag = kislev_focus_rulership }
+			20 = { set_character_flag = kislev_focus_intrigue }
+			20 = { set_character_flag = kislev_focus_war }
+		}
+	}
+
+	quest_target = ROOT
+
+	option = {
+		name = EVTOPTAkislev26
+		trigger_switch = {
+			on_trigger = has_character_flag
+			kislev_focus_scholarship = {
+				set_quest_target = { id = quest_iwitch_focus_scholarship holder = ROOT }
+			}
+			kislev_focus_rulership = {
+				set_quest_target = { id = quest_iwitch_focus_rulership holder = ROOT }
+			}
+			kislev_focus_intrigue = {
+				set_quest_target = { id = quest_iwitch_focus_intrigue holder = ROOT }
+			}
+			kislev_focus_war = { set_quest_target = { id = quest_iwitch_focus_war holder = ROOT } }
+		}
+	}
+	option = {
+		name = EVTOPTBkislev26
+		custom_tooltip = { text = decline_quest_tooltip }
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		ai_chance = { factor = 0 }
+	}
+
+	after = {
+		clr_character_flag = kislev_focus_scholarship
+		clr_character_flag = kislev_focus_rulership
+		clr_character_flag = kislev_focus_intrigue
+		clr_character_flag = kislev_focus_war
+	}
+}
+
+# kislev.27 The focus taken
+# The sister has taken up the focus she was told to (on_focus_selected).
+# Scope: ROOT is the sister.
+character_event = {
+	id = kislev.27
+	desc = { text = EVTDESCkislev27 trigger = { has_focus = focus_scholarship } }
+	desc = { text = EVTDESCkislev27b trigger = { has_focus = focus_rulership } }
+	desc = { text = EVTDESCkislev27c trigger = { has_focus = focus_intrigue } }
+	desc = { text = EVTDESCkislev27d trigger = { has_focus = focus_war } }
+	picture = "GFX_evt_kislev_ice_witch"
+
+	is_in_society = yes
+
+	is_triggered_only = yes # on_focus_selected
+
+	trigger = {
+		society_member_of = ice_witch_sisterhood
+		OR = {
+			AND = { has_quest = quest_iwitch_focus_scholarship has_focus = focus_scholarship }
+			AND = { has_quest = quest_iwitch_focus_rulership has_focus = focus_rulership }
+			AND = { has_quest = quest_iwitch_focus_intrigue has_focus = focus_intrigue }
+			AND = { has_quest = quest_iwitch_focus_war has_focus = focus_war }
+		}
+	}
+
+	option = {
+		name = EVTOPTAkislev27
+		clr_quest = quest_iwitch_focus_scholarship
+		clr_quest = quest_iwitch_focus_rulership
+		clr_quest = quest_iwitch_focus_intrigue
+		clr_quest = quest_iwitch_focus_war
+		add_society_currency_minor_effect = yes
+		add_legend_progress_trivial_effect = yes
+	}
+}
+
+###############################################################################
+# The Frosthome Lodge
+###############################################################################
+
+# kislev.35 The Frosthome Lodge passes on
+# When the Frosthome Lodge passes from an Ice Witch to a woman who is not
+# one, the new mistress is made an Ice Witch of the second rank.
+# Scope: ROOT is the new holder; FROM the title; FROMFROM the old holder.
+character_event = {
+	id = kislev.35
+	hide_window = yes
+
+	only_women = yes
+	religion_group = old_world_group
+
+	is_triggered_only = yes # on_new_holder, _inheritance, _usurpation
+
+	trigger = {
+		FROM = { title = d_frosthome_lodge }
+		FROMFROM = { trait = ice_witch }
+		NOR = { society_member_of = ice_witch_sisterhood trait = ice_witch }
+	}
+	immediate = {
+		add_trait = ice_witch
+		if = {
+			limit = { NOT = { trait = lore_ice } }
+			add_trait = lore_ice
+			magic_power_teach_effect = yes
+			enable_magic_xp_effect = yes
+		}
+		change_diplomacy = 2
+		change_learning = 2
+		join_society = ice_witch_sisterhood
+		society_rank_up = { society = ice_witch_sisterhood rank = 2 }
+	}
+}
+
+###############################################################################
+# AI rank-ups
+###############################################################################
+
+# kislev.40 Rising in the Sisterhood
+# Every five years an AI sister with enough Wintry Excellence may rise a rank
+# (to Grand Ice Witch only if a place is free).
+# Scope: ROOT is an AI member of the Ice Witch Sisterhood.
+character_event = {
+	id = kislev.40
+	hide_window = yes
+
+	ai = yes
+	is_in_society = yes
+
+	is_triggered_only = yes # on_five_year_pulse
+
+	trigger = {
+		society_member_of = ice_witch_sisterhood
+		is_inaccessible_or_incapable_trigger = no
+		society_can_rank_up = yes
+		has_society_currency_minor_trigger = yes
+	}
+	immediate = {
+		random_list = {
+			50 = { }
+			50 = {
+				trigger = { society_rank < 3 }
+				society_rank_up = 1
+				detract_society_currency_medium_effect = yes
+			}
+			500 = {
+				trigger = {
+					society_rank == 3
+					NOT = { is_society_rank_full = { society = ice_witch_sisterhood rank = 4 } }
+				}
+				society_rank_up = 1
+				detract_society_currency_medium_effect = yes
+			}
+		}
+	}
+}
+
+###############################################################################
+# Into the Wardrobe
+###############################################################################
+
+# kislev.100 A sleepless night
+# A restless Kislevite child wanders the castle at night (rare, from the
+# adolescence pulse; curious and sly children are likelier).
+# Scope: ROOT is a Kislevite child.
+character_event = {
+	id = kislev.100
+	desc = EVTDESCkislev100
+	picture = "GFX_evt_explore_forest"
+	border = GFX_event_normal_frame_intrigue
+
+	culture_group = kislevite_group
+	max_age = 16
+	prisoner = no
+
+	is_triggered_only = yes # adolescence pulse, list kislev_wardrobe
+
+	trigger = {
+		NOR = {
+			trait = ice_witch
+			trait = hag_witch
+			trait = lore_ice
+			trait = lore_hag
+			has_character_flag = discovered_wardrobe
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 10 trait = curious }
+		modifier = { factor = 2 intrigue = 4 }
+	}
+
+	option = {
+		name = EVTOPTAkislev100
+		character_event = { id = kislev.101 }
+	}
+}
+
+# kislev.101 The wardrobe
+# In a forgotten room stands a wardrobe carved with frozen forests. The child
+# may flee back to bed (kislev.102) or look closer (kislev.103).
+# Scope: ROOT is the child.
+character_event = {
+	id = kislev.101
+	desc = EVTDESCkislev101
+	picture = "GFX_evt_explore_forest"
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = discovered_wardrobe
+	}
+
+	option = {
+		name = EVTOPTAkislev101
+		character_event = { id = kislev.102 }
+	}
+	option = {
+		name = EVTOPTBkislev101
+		character_event = { id = kislev.103 }
+	}
+}
+
+# kislev.102 Back to bed
+# Scope: ROOT is the child.
+character_event = {
+	id = kislev.102
+	desc = EVTDESCkislev102
+	picture = "GFX_evt_explore_forest"
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev102
+	}
+}
+
+# kislev.103 Inside
+# The wardrobe closes behind the child.
+# Scope: ROOT is the child.
+character_event = {
+	id = kislev.103
+	desc = EVTDESCkislev103
+	picture = "GFX_evt_explore_forest"
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev103
+		character_event = { id = kislev.104 }
+	}
+}
+
+# kislev.104 The frozen land
+# The back of the wardrobe opens on a snowbound forest. The left path leads
+# nowhere (kislev.105); the right to a ruined village (kislev.106).
+# Scope: ROOT is the child.
+character_event = {
+	id = kislev.104
+	desc = EVTDESCkislev104
+	picture = "GFX_evt_explore_forest"
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev104
+		character_event = { id = kislev.105 }
+	}
+	option = {
+		name = EVTOPTBkislev104
+		character_event = { id = kislev.106 }
+	}
+}
+
+# kislev.105 The cold
+# Scope: ROOT is the child.
+character_event = {
+	id = kislev.105
+	desc = EVTDESCkislev105
+	picture = "GFX_evt_explore_forest"
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev105
+		character_event = { id = kislev.112 }
+	}
+}
+
+# kislev.106 Something in the ruins
+# A beast prowls the dead village. Running is safer (15% caught); hiding
+# risks more (35% caught) but leads to the gem (kislev.109, 110).
+# Scope: ROOT is the child.
+character_event = {
+	id = kislev.106
+	desc = EVTDESCkislev106
+	picture = "GFX_evt_explore_forest"
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev106
+		#Run
+		random_list = {
+			85 = { character_event = { id = kislev.107 tooltip = EVTTOOLTIPkislev107 } }
+			15 = { long_character_event = { id = kislev.108 tooltip = EVTTOOLTIPkislev108 } }
+		}
+	}
+	option = {
+		name = EVTOPTBkislev106
+		#Hide
+		random_list = {
+			65 = { character_event = { id = kislev.109 tooltip = EVTTOOLTIPkislev109 } }
+			35 = { long_character_event = { id = kislev.108 tooltip = EVTTOOLTIPkislev108 } }
+		}
+	}
+}
+
+# kislev.107 Safe
+# Scope: ROOT is the child.
+character_event = {
+	id = kislev.107
+	desc = EVTDESCkislev107
+	picture = "GFX_evt_explore_forest"
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev107
+		character_event = { id = kislev.112 }
+	}
+}
+
+# kislev.108 Caught
+# The beast's claws find the child, who escapes bleeding.
+# Scope: ROOT is the child.
+long_character_event = {
+	id = kislev.108
+	desc = EVTDESCkislev108
+	picture = "GFX_evt_explore_forest"
+	border = GFX_event_long_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev108
+		add_trait = wounded
+	}
+}
+
+# kislev.109 Unseen
+# Scope: ROOT is the child.
+character_event = {
+	id = kislev.109
+	desc = EVTDESCkislev109
+	picture = "GFX_evt_explore_forest"
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev109
+		character_event = { id = kislev.110 }
+	}
+}
+
+# kislev.110 The gem
+# A gem of blue ice glows in the ruined hearth. Touching it awakens the
+# child's gift: an Ice Witch for a girl, a warlock for a boy (and the
+# Sisterhood hunts such men). A shard may come away in the child's hand
+# (rare artifact kislev_wardrobe_shard).
+# Scope: ROOT is the child.
+character_event = {
+	id = kislev.110
+	desc = EVTDESCkislev110
+	picture = "GFX_evt_explore_forest"
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev110
+		#Touch it
+		custom_tooltip = { text = EVTTOOLTIPkislev110 }
+		hidden_tooltip = {
+			add_trait = magic_potential_3
+			add_character_modifier = { name = magic_power_2 duration = -1 }
+			if = { limit = { is_female = yes } add_trait = ice_witch }
+			else = { add_trait = warlock }
+		}
+		character_event = { id = kislev.111 }
+	}
+	option = {
+		name = EVTOPTBkislev110
+		#Leave it
+		character_event = { id = kislev.112 }
+	}
+}
+
+# kislev.111 Power
+# Scope: ROOT is the child.
+character_event = {
+	id = kislev.111
+	desc = EVTDESCkislev111
+	picture = "GFX_evt_ice_spell"
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev111
+		random = {
+			chance = 20
+			limit = { NOT = { has_artifact = kislev_wardrobe_shard } }
+			add_artifact = kislev_wardrobe_shard
+		}
+		character_event = { id = kislev.112 }
+	}
+}
+
+# kislev.112 Was it a dream?
+# The child wakes on the floor in the morning sun; the wardrobe is gone.
+# Scope: ROOT is the child.
+character_event = {
+	id = kislev.112
+	desc = EVTDESCkislev112
+	picture = "GFX_evt_explore_forest"
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev112
+	}
+}
+
+###############################################################################
+# Rebellious Erengrad
+###############################################################################
+
+# kislev.200 Rebellious Erengrad
+# At game start, a feudal ruler of Kislev who faces a burgher republic in
+# Erengrad may claim the city by force (Kislevite and Norscan rulers call it
+# tyranny) or demand a bribe (kislev.202). The AI ruler also founds the
+# Tzar Guard five years later (kislev.205).
+# Scope: ROOT is the holder of e_kislev.
+narrative_event = {
+	id = kislev.200
+	title = EVTTITLEkislev200
+	desc = EVTDESCkislev200
+	picture = "GFX_evt_busy_trading_dock_republic"
+	border = GFX_event_narrative_frame_war
+
+	only_playable = yes
+	only_independent = yes
+	only_capable = yes
+	prisoner = no
+	religion = kislev_gods
+
+	is_triggered_only = yes # on_startup
+
+	trigger = {
+		has_landed_title = e_kislev
+		is_feudal = yes
+		NOT = { has_global_flag = erengrad_claim }
+		k_norvard = { holder_scope = { is_merchant_republic = yes } }
+	}
+	immediate = {
+		set_global_flag = erengrad_claim
+		k_norvard = { holder_scope = { save_event_target_as = kislev_erengrad_lord } }
+		if = { limit = { ai = yes } character_event = { id = kislev.205 years = 5 } }
+	}
+
+	option = {
+		name = EVTOPTAkislev200
+		#Punitive expedition
+		prestige = 50
+		add_claim = k_norvard
+		event_target:kislev_erengrad_lord = {
+			opinion = { modifier = opinion_angry who = ROOT years = 5 }
+		}
+		any_independent_ruler = {
+			limit = {
+				NOT = { character = ROOT }
+				OR = {
+					religion = northern_gods
+					religion = northern_gods_reformed
+					religion = kislev_gods
+				}
+				mercenary = no
+				holy_order = no
+			}
+			opinion = { modifier = opinion_tyrant who = ROOT years = 10 }
+		}
+		ai_chance = { factor = 75 }
+	}
+	option = {
+		name = EVTOPTBkislev200
+		#Demand a bribe
+		prestige = -100
+		event_target:kislev_erengrad_lord = { narrative_event = { id = kislev.202 days = 7 } }
+		ai_chance = { factor = 25 }
+	}
+}
+
+# kislev.201 The fate of the Veche
+# When the ruler of Kislev takes Erengrad after claiming it, they may burn the
+# burghers' Veche and seize the city, or let the burghers keep their trade
+# as vassals under the holder of the Erengrad duchy.
+# Scope: ROOT is the new holder of k_norvard; FROM the title.
+narrative_event = {
+	id = kislev.201
+	title = EVTTITLEkislev201
+	desc = EVTDESCkislev201
+	picture = "GFX_evt_burning_house"
+	border = GFX_event_narrative_frame_war
+
+	has_global_flag = erengrad_claim
+
+	is_triggered_only = yes # on_new_holder, _inheritance, _usurpation
+
+	trigger = {
+		FROM = { title = k_norvard }
+		has_landed_title = e_kislev
+		NOT = { has_global_flag = veche }
+	}
+	immediate = {
+		set_global_flag = veche
+	}
+
+	option = {
+		name = EVTOPTAkislev201
+		#Burn the Veche
+		prestige = -100
+		wealth = 500
+		add_trait = greedy
+		c_erengrad = { if = { limit = { NOT = { holder = ROOT } } ROOT = { grant_title = PREV } } }
+		c_plowce = { if = { limit = { NOT = { holder = ROOT } } ROOT = { grant_title = PREV } } }
+		k_norvard = { destroy_landed_title = THIS }
+		any_realm_character = {
+			limit = { is_patrician = yes }
+			wealth = -100
+			opinion = { modifier = opinion_furious who = ROOT years = 20 }
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.5 OR = { trait = kind trait = charitable } }
+		}
+	}
+	option = {
+		name = EVTOPTBkislev201
+		#Let them keep their trade
+		trigger = { d_erengrad = { has_holder = yes NOT = { holder = ROOT } } }
+		d_erengrad = { holder_scope = { k_norvard = { grant_title = PREV } } }
+		ai_chance = {
+			factor = 50
+			modifier = {
+				factor = 0.5
+				OR = {
+					has_global_flag = defiant_erengrad
+					trait = cruel
+					trait = wroth
+					trait = greedy
+				}
+			}
+		}
+	}
+}
+
+# kislev.202 The ultimatum
+# The burghers decide whether to pay the ruler of Kislev or defy them.
+# Scope: ROOT is the ruler of Erengrad; FROM the ruler of Kislev.
+narrative_event = {
+	id = kislev.202
+	title = EVTTITLEkislev202
+	desc = EVTDESCkislev202
+	picture = "GFX_evt_council"
+	border = GFX_event_narrative_frame_diplomacy
+
+	only_playable = yes
+	only_independent = yes
+	only_capable = yes
+	prisoner = no
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_landed_title = k_norvard
+		is_merchant_republic = yes
+	}
+
+	option = {
+		name = EVTOPTAkislev202
+		#Pay
+		any_realm_character = {
+			limit = { is_patrician = yes }
+			wealth = -100
+			opinion = { modifier = opinion_angry who = ROOT years = 3 }
+		}
+		FROM = {
+			opinion = { modifier = opinion_pleased who = ROOT years = 10 }
+			narrative_event = { id = kislev.203 days = 7 }
+		}
+		set_global_flag = bribed_kislev
+		ai_chance = { factor = 25 }
+	}
+	option = {
+		name = EVTOPTBkislev202
+		#Defy
+		prestige = 250
+		FROM = {
+			opinion = { modifier = opinion_furious who = ROOT years = 10 }
+			narrative_event = { id = kislev.204 days = 7 }
+		}
+		set_global_flag = defiant_erengrad
+		ai_chance = { factor = 75 }
+	}
+}
+
+# kislev.203 The burghers pay
+# Erengrad pays and becomes a permanent tributary of Kislev.
+# Scope: ROOT is the ruler of Kislev; FROM the ruler of Erengrad.
+narrative_event = {
+	id = kislev.203
+	title = EVTTITLEkislev203
+	desc = EVTDESCkislev203
+	picture = "GFX_evt_princess_byzantine"
+	border = GFX_event_narrative_frame_diplomacy
+
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_landed_title = e_kislev
+	}
+
+	option = {
+		name = EVTOPTAkislev203
+		wealth = 500
+		FROM = { opinion = { modifier = opinion_bitter who = ROOT years = 10 } }
+		make_tributary = { who = FROM tributary_type = permanent }
+	}
+}
+
+# kislev.204 Erengrad unmoved
+# The burghers refuse. The ruler of Kislev gains a claim on the city.
+# Scope: ROOT is the ruler of Kislev; FROM the ruler of Erengrad.
+narrative_event = {
+	id = kislev.204
+	title = EVTTITLEkislev204
+	desc = EVTDESCkislev204
+	picture = "GFX_evt_courtiers_talking"
+	border = GFX_event_narrative_frame_war
+
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_landed_title = e_kislev
+	}
+
+	option = {
+		name = EVTOPTAkislev204
+		prestige = -50
+		add_claim = k_norvard
+		FROM = { opinion = { modifier = opinion_furious who = ROOT years = 10 } }
+	}
+}
+
+# kislev.205 The Tzar Guard
+# The ruler of Kislev founds the palace guard (decision
+# organize_kremlin_guard, or five years after kislev.200 for the AI). A
+# veteran captain is made its commander.
+# Scope: ROOT is the ruler of Kislev.
+character_event = {
+	id = kislev.205
+	hide_window = yes
+
+	only_playable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_landed_title = e_kislev
+		is_feudal = yes
+	}
+	immediate = {
+		set_global_flag = kremlin_guard_founded
+		activate_title = { title = d_kremlin_guard status = yes }
+		narrative_event = { id = kislev.206 }
+		create_character = {
+			random_traits = yes
+			religion = kislev_gods
+			culture = kislevite
+			dynasty = NONE
+			age = 34
+			female = 28
+			trait = creature_human
+			trait = skilled_tactician
+		}
+		new_character = {
+			add_trait = varangian
+			set_character_flag = is_chosen_varangian_leader
+			d_kremlin_guard = { grant_title = PREV }
+			set_defacto_liege = ROOT
+		}
+	}
+}
+
+# kislev.206 The guard reborn
+# Notice for the ruler who founded the Kremlin Guard (kislev.205).
+# Scope: ROOT is the ruler of Kislev.
+narrative_event = {
+	id = kislev.206
+	title = EVTTITLEkislev206
+	desc = EVTDESCkislev206
+	picture = "GFX_evt_viking_battle_oldgods"
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAkislev206
+	}
+}

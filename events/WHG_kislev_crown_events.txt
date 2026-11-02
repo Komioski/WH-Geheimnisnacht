@@ -1,0 +1,1209 @@
+###############################################################################
+# The crown of Kislev
+# Namespace: tsar
+# Faction: Kislev
+#
+# The Ice Throne and the court around it: the Ice Palace that melts under a
+# ruler who is no Ice Witch, the two coronations of Tzar and Tzarina, Ursun's
+# Trial, the Unwed Queen, the Heirs of Miska, the Great Pulk, guest right of
+# bread and salt, and the Ice Queen's Ball. Komi's proposal doc, segment 4.
+#
+# The crown at the start                     tsar.1
+# A new ruler of Kislev                      tsar.2 - 6
+# The Thaw and the Ice Palace                tsar.10 - 15
+# The Tzarina's suitors and consort          tsar.20 - 25
+# Heirs of Miska                             tsar.30 - 31
+# The Great Pulk                             tsar.41 - 43
+# Bread and salt                             tsar.50 - 52
+# The Ice Queen's Ball                       tsar.60 - 64
+#
+# Fired from common/on_actions/wh_on_actions.txt: tsar.1 on_startup; tsar.2
+# on the three new-holder hooks; tsar.5 on_battle_won_owner; tsar.30
+# on_war_ended_defeat (the attacker lost); tsar.31 on_birth; tsar.50
+# on_become_imprisoned_any_reason; tsar.51 on_death; tsar.60 on_decade_pulse;
+# the five-year list tsar_court (20, 25). Decisions in
+# decisions/WHG_kislev_crown_decisions.txt fire tsar.15 and tsar.41.
+# Event modifiers: common/event_modifiers/wh_kislev_crown_modifiers.txt
+# Opinion modifiers: common/opinion_modifiers/wh_kislev_crown_opinions.txt
+# Loc: localisation/00_WHG_kislev_crown_events.csv
+# Full list with callers: docs/events/event_database.csv
+#
+# Global flags: ice_palace_melting (the court moved to the Bokha Palace and
+# the Ice Palace is left to melt, tsar.13), ice_palace_melted (it is gone,
+# until an Ice Witch raises it, tsar.15).
+###############################################################################
+
+namespace = tsar
+
+###############################################################################
+# The crown at the start
+###############################################################################
+
+# tsar.1 The palace holds
+# Hidden. At the start of the game a ruler of Kislev who is no Ice Witch
+# already pays the Sisterhood to keep the Ice Palace whole.
+# Scope: ROOT holds e_kislev.
+character_event = {
+	id = tsar.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_startup
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = e_kislev
+		NOT = { has_global_flag = tsar_crown_started }
+	}
+
+	immediate = {
+		set_global_flag = tsar_crown_started
+		if = {
+			limit = { NOT = { trait = ice_witch } }
+			add_character_modifier = { name = tsar_ice_palace_upkeep duration = -1 }
+		}
+	}
+}
+
+###############################################################################
+# A new ruler of Kislev
+###############################################################################
+
+# tsar.2 A new ruler of Kislev
+# Hidden. The new Tzarina is crowned in the Ice Palace (tsar.3), the new
+# Tzar at Ursun's temple (tsar.4). A ruler who is no Ice Witch finds the
+# palace dripping (tsar.10); an Ice Witch stops a palace that was left to
+# melt.
+# Scope: ROOT is the new holder, FROM the title.
+character_event = {
+	id = tsar.2
+	hide_window = yes
+
+	is_triggered_only = yes # on_new_holder, _inheritance, _usurpation
+	only_rulers = yes
+
+	trigger = {
+		FROM = { title = e_kislev }
+	}
+
+	immediate = {
+		if = {
+			limit = { is_female = yes }
+			character_event = { id = tsar.3 days = 7 }
+		}
+		else = {
+			character_event = { id = tsar.4 days = 7 }
+		}
+		if = {
+			limit = { trait = ice_witch }
+			clr_global_flag = ice_palace_melting
+		}
+		else_if = {
+			limit = {
+				NOT = { has_global_flag = ice_palace_melting }
+				NOT = { has_global_flag = ice_palace_melted }
+			}
+			character_event = { id = tsar.10 days = 30 random = 30 }
+		}
+	}
+}
+
+# tsar.3 The Tzarina's crowning
+# The new Tzarina is crowned in the Ice Palace with the frost crown, or in
+# the Bokha Palace if the Ice Palace is gone.
+# Scope: ROOT is the new Tzarina.
+character_event = {
+	id = tsar.3
+	desc = {
+		trigger = { has_global_flag = ice_palace_melted }
+		text = EVTDESCtsar3b
+	}
+	desc = {
+		trigger = { NOT = { has_global_flag = ice_palace_melted } }
+		text = EVTDESCtsar3
+	}
+	picture = GFX_evt_coronation
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes # tsar.2
+
+	trigger = { has_landed_title = e_kislev }
+
+	option = {
+		name = EVTOPTAtsar3
+		prestige = 100
+		if = {
+			limit = { trait = ice_witch }
+			piety = 50
+		}
+		any_vassal = {
+			limit = { religion = kislev_gods }
+			opinion = { who = ROOT modifier = opinion_tsar_crowned }
+		}
+	}
+}
+
+# tsar.4 The night in the bear cave
+# The new Tzar spends a night in Ursun's cave before he is crowned at the
+# temple. Go into the cave, or be crowned without it. Either way his
+# reign begins with Ursun's Trial: he must win against Chaos, beasts or
+# greenskins within five years (tsar.5, tsar.6).
+# Scope: ROOT is the new Tzar.
+character_event = {
+	id = tsar.4
+	desc = EVTDESCtsar4
+	picture = GFX_evt_tamed_bear
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # tsar.2
+
+	trigger = { has_landed_title = e_kislev }
+
+	immediate = {
+		set_character_flag = tsar_ursun_trial
+		character_event = { id = tsar.6 days = 1825 }
+	}
+
+	# Into the cave
+	option = {
+		name = EVTOPTAtsar4
+		random_list = {
+			70 = {
+				modifier = { factor = 1.5 trait = brave }
+				modifier = { factor = 0.5 trait = craven }
+				prestige = 150
+				add_character_modifier = { name = tsar_ursun_blessed years = 10 }
+			}
+			20 = {
+				prestige = 150
+				add_trait = wounded
+				add_character_modifier = { name = tsar_ursun_blessed years = 10 }
+			}
+			10 = {
+				prestige = 50
+				add_maimed_trait_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 80
+			modifier = { factor = 0.2 trait = craven }
+		}
+	}
+
+	# Crowned without the cave
+	option = {
+		name = EVTOPTBtsar4
+		prestige = -100
+		any_vassal = {
+			limit = { religion = kislev_gods }
+			opinion = { who = ROOT modifier = opinion_tsar_shunned_cave }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = craven }
+		}
+	}
+}
+
+# tsar.5 Ursun's Trial passed
+# The Tzar has won a battle against Chaos, beastmen, greenskins or the
+# ratmen within five years of his crowning.
+# Scope: ROOT is the Tzar, FROM the defeated army's owner.
+character_event = {
+	id = tsar.5
+	desc = EVTDESCtsar5
+	picture = GFX_evt_battle_kislev_gods
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_battle_won_owner
+	only_rulers = yes
+	has_character_flag = tsar_ursun_trial
+
+	trigger = {
+		has_landed_title = e_kislev
+		FROM = {
+			OR = {
+				religion_group = chaos_gods_group
+				religion_group = greenskin_gods_group
+				religion_group = horned_rat_god_group
+			}
+		}
+	}
+
+	immediate = {
+		clr_character_flag = tsar_ursun_trial
+	}
+
+	option = {
+		name = EVTOPTAtsar5
+		prestige = 200
+		any_vassal = {
+			limit = { culture_group = kislevite_group }
+			opinion = { who = ROOT modifier = opinion_tsar_trial_passed }
+		}
+	}
+}
+
+# tsar.6 Ursun's Trial failed
+# Five years and no victory: the boyars say Ursun has turned from the Tzar,
+# and a pretender rises.
+# Scope: ROOT is the Tzar.
+character_event = {
+	id = tsar.6
+	desc = EVTDESCtsar6
+	picture = GFX_evt_kislev_boyars
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # tsar.4
+	has_character_flag = tsar_ursun_trial
+
+	trigger = {
+		has_landed_title = e_kislev
+	}
+
+	immediate = {
+		clr_character_flag = tsar_ursun_trial
+		random_vassal = {
+			limit = {
+				higher_tier_than = COUNT
+				culture_group = kislevite_group
+				is_adult = yes
+				prisoner = no
+			}
+			preferred_limit = { is_rival = ROOT }
+			preferred_limit = { trait = ambitious }
+			save_event_target_as = tsar_pretender
+		}
+	}
+
+	option = {
+		name = EVTOPTAtsar6
+		add_character_modifier = { name = tsar_trial_failed years = 10 }
+		any_vassal = {
+			limit = { culture_group = kislevite_group }
+			opinion = { who = ROOT modifier = opinion_tsar_trial_failed }
+		}
+		if = {
+			limit = { event_target:tsar_pretender = { always = yes } }
+			event_target:tsar_pretender = { add_weak_claim = e_kislev }
+		}
+	}
+}
+
+###############################################################################
+# The Thaw and the Ice Palace
+###############################################################################
+
+# tsar.10 The Thaw
+# The new ruler is no Ice Witch, and the Ice Palace drips. Beg the
+# Sisterhood to hold it (a cost every year), move the court to the Bokha
+# Palace and leave the Ice Palace to melt slowly (tsar.13), or let it melt
+# now: a new age, an angry Ice Court, and a flood (tsar.11).
+# Scope: ROOT is the new ruler of Kislev.
+character_event = {
+	id = tsar.10
+	desc = EVTDESCtsar10
+	picture = GFX_evt_kislev_ice_witch
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes # tsar.2
+
+	trigger = {
+		has_landed_title = e_kislev
+		NOT = { trait = ice_witch }
+		NOT = { has_global_flag = ice_palace_melted }
+		NOT = { has_global_flag = ice_palace_melting }
+	}
+
+	# Beg the Sisterhood
+	option = {
+		name = EVTOPTAtsar10
+		add_character_modifier = { name = tsar_ice_palace_upkeep duration = -1 }
+		ai_chance = { factor = 60 }
+	}
+
+	# Move to the Bokha Palace
+	option = {
+		name = EVTOPTBtsar10
+		add_character_modifier = { name = tsar_bokha_court duration = -1 }
+		set_global_flag = ice_palace_melting
+		character_event = { id = tsar.13 days = 1825 random = 1825 }
+		ai_chance = { factor = 25 }
+	}
+
+	# Let it melt
+	option = {
+		name = EVTOPTCtsar10
+		set_global_flag = ice_palace_melted
+		add_character_modifier = { name = tsar_new_age years = 20 }
+		any_realm_character = {
+			limit = { trait = ice_witch }
+			opinion = { who = ROOT modifier = opinion_tsar_palace_melted }
+		}
+		character_event = { id = tsar.11 days = 60 random = 60 }
+		ai_chance = {
+			factor = 15
+			modifier = { factor = 3 trait = ambitious }
+		}
+	}
+}
+
+# tsar.11 The flood
+# The meltwater of the Ice Palace runs down the hill into the lower city of
+# Kislev. Pay for the repairs, or let the city dig itself out.
+# Scope: ROOT is the ruler of Kislev.
+character_event = {
+	id = tsar.11
+	desc = EVTDESCtsar11
+	picture = GFX_evt_kislev_town
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # tsar.10, tsar.13
+
+	# Pay for the repairs
+	option = {
+		name = EVTOPTAtsar11
+		trigger = { wealth = 100 }
+		wealth = -100
+		202 = { add_province_modifier = { name = tsar_kislev_flooded years = 2 } }
+		ai_chance = { factor = 70 }
+	}
+
+	# Let the city dig itself out
+	option = {
+		name = EVTOPTBtsar11
+		202 = { add_province_modifier = { name = tsar_kislev_flooded years = 6 } }
+		ai_chance = { factor = 30 }
+	}
+}
+
+# tsar.13 The Ice Palace is gone
+# Years after the court moved to the Bokha Palace, the last of the Ice
+# Palace slides down the hill, and the lower city floods (tsar.11).
+# Scope: ROOT is the ruler of Kislev who moved the court.
+character_event = {
+	id = tsar.13
+	desc = EVTDESCtsar13
+	picture = GFX_evt_kislev_town
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # tsar.10
+
+	trigger = {
+		has_global_flag = ice_palace_melting
+	}
+
+	immediate = {
+		clr_global_flag = ice_palace_melting
+		set_global_flag = ice_palace_melted
+	}
+
+	option = {
+		name = EVTOPTAtsar13
+		if = {
+			limit = { has_landed_title = e_kislev }
+			character_event = { id = tsar.11 days = 7 }
+		}
+	}
+}
+
+# tsar.15 The Ice Palace rises
+# An Ice Witch on the throne calls the Ice Palace back out of the frost
+# (decision tsar_raise_ice_palace). Great prestige, and once in her life a
+# shard of the Frozen Throne.
+# Scope: ROOT is the Tzarina.
+character_event = {
+	id = tsar.15
+	desc = EVTDESCtsar15
+	picture = GFX_evt_kislev_ice_witch_casting
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # tsar_raise_ice_palace
+
+	immediate = {
+		clr_global_flag = ice_palace_melted
+		clr_global_flag = ice_palace_melting
+		remove_character_modifier = tsar_bokha_court
+		remove_character_modifier = tsar_ice_palace_upkeep
+	}
+
+	option = {
+		name = EVTOPTAtsar15
+		prestige = 500
+		if = {
+			limit = {
+				NOT = { has_character_flag = tsar_raised_palace }
+				NOT = { has_artifact = tsar_frozen_throne_shard }
+			}
+			set_character_flag = tsar_raised_palace
+			add_artifact = tsar_frozen_throne_shard
+		}
+		any_realm_character = {
+			limit = { trait = ice_witch }
+			remove_opinion = { who = ROOT modifier = opinion_tsar_palace_melted }
+			opinion = { who = ROOT modifier = opinion_tsar_palace_raised }
+		}
+	}
+}
+
+###############################################################################
+# The Tzarina's suitors and consort
+###############################################################################
+
+# tsar.20 The Unwed Queen
+# A great boyar presses his suit for the unwed Tzarina's hand. Marry him
+# (he comes to her court, her house keeps the children), refuse him (he
+# is shamed and may turn against her), or, as an Ice Witch, say she is wed
+# to Kislev.
+# Scope: ROOT is the Tzarina; event_target:tsar_suitor the boyar.
+character_event = {
+	id = tsar.20
+	desc = EVTDESCtsar20
+	picture = GFX_evt_kislev_boyars
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # on_five_year_pulse tsar_court
+	only_rulers = yes
+	only_women = yes
+
+	trigger = {
+		has_landed_title = e_kislev
+		is_married = no
+		is_adult = yes
+		NOT = { age = 50 }
+		any_vassal = {
+			higher_tier_than = COUNT
+			is_female = no
+			is_adult = yes
+			is_married = no
+			prisoner = no
+			culture_group = kislevite_group
+		}
+	}
+
+	immediate = {
+		random_vassal = {
+			limit = {
+				higher_tier_than = COUNT
+				is_female = no
+				is_adult = yes
+				is_married = no
+				prisoner = no
+				culture_group = kislevite_group
+			}
+			preferred_limit = { trait = ambitious }
+			save_event_target_as = tsar_suitor
+		}
+	}
+
+	# Marry him
+	option = {
+		name = EVTOPTAtsar20
+		add_spouse_matrilineal = event_target:tsar_suitor
+		event_target:tsar_suitor = { opinion = { who = ROOT modifier = opinion_tsar_favoured } }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 0.2 is_lover = event_target:tsar_suitor }
+		}
+	}
+
+	# Refuse him
+	option = {
+		name = EVTOPTBtsar20
+		add_character_modifier = { name = tsar_unwed_queen years = 5 }
+		event_target:tsar_suitor = {
+			opinion = { who = ROOT modifier = opinion_tsar_suit_refused }
+			if = {
+				limit = { trait = ambitious }
+				join_faction = { faction = faction_independence faction_leader = THIS can_join_existing = yes }
+			}
+		}
+		ai_chance = { factor = 40 }
+	}
+
+	# Wed to Kislev
+	option = {
+		name = EVTOPTCtsar20
+		trigger = { trait = ice_witch }
+		piety = 50
+		event_target:tsar_suitor = { opinion = { who = ROOT modifier = opinion_tsar_suit_declined } }
+		ai_chance = { factor = 40 }
+	}
+}
+
+# tsar.25 The consort's plot
+# Very rare. The Tzarina's husband has been gathering boyars who would
+# rather see a man rule in her name. Throw him in the cells, send him away
+# to the frontier, or give him a seat at court and keep him close.
+# Scope: ROOT is the Tzarina; event_target:tsar_consort her husband.
+character_event = {
+	id = tsar.25
+	desc = EVTDESCtsar25
+	picture = GFX_evt_shadowy_cabal
+	border = GFX_event_narrative_frame_intrigue
+
+	is_triggered_only = yes # on_five_year_pulse tsar_court
+	only_rulers = yes
+	only_women = yes
+
+	trigger = {
+		has_landed_title = e_kislev
+		any_spouse = {
+			is_ruler = no
+			prisoner = no
+			host = { character = ROOT }
+			OR = {
+				trait = ambitious
+				trait = deceitful
+				intrigue = 12
+			}
+		}
+	}
+
+	immediate = {
+		random_spouse = {
+			limit = {
+				is_ruler = no
+				prisoner = no
+				host = { character = ROOT }
+				OR = {
+					trait = ambitious
+					trait = deceitful
+					intrigue = 12
+				}
+			}
+			save_event_target_as = tsar_consort
+		}
+	}
+
+	# To the cells
+	option = {
+		name = EVTOPTAtsar25
+		event_target:tsar_consort = {
+			imprison = ROOT
+			opinion = { who = ROOT modifier = opinion_tsar_disgraced }
+		}
+		prestige = 50
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = paranoid }
+		}
+	}
+
+	# Send him to the frontier
+	option = {
+		name = EVTOPTBtsar25
+		event_target:tsar_consort = {
+			opinion = { who = ROOT modifier = opinion_tsar_suit_refused }
+		}
+		prestige = -25
+		ai_chance = { factor = 40 }
+	}
+
+	# Keep him close
+	option = {
+		name = EVTOPTCtsar25
+		event_target:tsar_consort = { opinion = { who = ROOT modifier = opinion_tsar_favoured } }
+		prestige = -50
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 is_lover = event_target:tsar_consort }
+		}
+	}
+}
+
+###############################################################################
+# Heirs of Miska
+###############################################################################
+
+# tsar.30 Heir of Miska
+# A Tzarina who bears Fearfrost and throws back a Chaos invasion is named
+# an heir of Khan-Queen Miska. The girls of her house are born with the
+# frost in them more often (tsar.31).
+# Scope: ROOT is the Tzarina who defended, FROM the Chaos attacker.
+character_event = {
+	id = tsar.30
+	desc = EVTDESCtsar30
+	picture = GFX_evt_kislev_ice_witch
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # on_war_ended_defeat
+	only_rulers = yes
+	only_women = yes
+
+	trigger = {
+		has_landed_title = e_kislev
+		has_artifact = fearfrost
+		NOT = { trait = heir_of_miska }
+		FROM = { religion_group = chaos_gods_group }
+	}
+
+	option = {
+		name = EVTOPTAtsar30
+		add_trait = heir_of_miska
+		set_dynasty_flag = heirs_of_miska
+		prestige = 300
+	}
+}
+
+# tsar.31 Born with the frost
+# Hidden. A Gospodar or Kislevite girl of a house with an Heir of Miska has
+# a small chance to be born with the gift of ice magic.
+# Scope: ROOT is the newborn.
+character_event = {
+	id = tsar.31
+	hide_window = yes
+
+	is_triggered_only = yes # on_birth
+	only_women = yes
+
+	trigger = {
+		has_dynasty_flag = heirs_of_miska
+		OR = { culture = gospodar culture = kislevite }
+		NOR = {
+			has_character_flag = magic_potential_flag_1
+			has_character_flag = magic_potential_flag_2
+			has_character_flag = magic_potential_flag_3
+			has_character_flag = magic_potential_flag_4
+		}
+	}
+
+	immediate = {
+		random = {
+			chance = 5
+			set_character_flag = magic_potential_flag_3
+		}
+	}
+}
+
+###############################################################################
+# The Great Pulk
+###############################################################################
+
+# tsar.41 The Tzar's Pulk
+# The crown calls the Great Pulk (decision tsar_call_great_pulk). Send your
+# rota (the crown's favour, Favour at Court for Duma members), or refuse
+# (shame; a great boyar who refuses disgraces his house, tsar.43).
+# Scope: ROOT is the vassal, FROM the ruler of Kislev.
+character_event = {
+	id = tsar.41
+	desc = EVTDESCtsar41
+	picture = GFX_evt_kislev_lancers
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # tsar_call_great_pulk
+
+	trigger = {
+		FROM = { war = yes }
+		prisoner = no
+	}
+
+	# Send the rota
+	option = {
+		name = EVTOPTAtsar41
+		FROM = { opinion = { who = ROOT modifier = opinion_tsar_pulk_answered } }
+		prestige = 25
+		if = {
+			limit = { society_member_of = boyar_duma }
+			change_society_currency = 100
+		}
+		if = {
+			limit = { higher_tier_than = COUNT }
+			FROM = {
+				capital_scope = {
+					FROM = {
+						spawn_unit = {
+							province = PREV
+							owner = FROM
+							troops = {
+								knights = { 150 150 }
+								light_cavalry = { 250 250 }
+								archers = { 200 200 }
+							}
+							earmark = tsar_great_pulk
+							disband_on_peace = yes
+							maintenance_multiplier = 0.5
+						}
+					}
+				}
+			}
+		}
+		else = {
+			FROM = {
+				capital_scope = {
+					FROM = {
+						spawn_unit = {
+							province = PREV
+							owner = FROM
+							troops = {
+								light_cavalry = { 150 150 }
+								archers = { 100 100 }
+							}
+							earmark = tsar_great_pulk
+							disband_on_peace = yes
+							maintenance_multiplier = 0.5
+						}
+					}
+				}
+			}
+		}
+		ai_chance = {
+			factor = 80
+			modifier = { factor = 1.5 opinion = { who = FROM value >= 25 } }
+		}
+	}
+
+	# Refuse
+	option = {
+		name = EVTOPTBtsar41
+		prestige = -100
+		FROM = { opinion = { who = ROOT modifier = opinion_tsar_pulk_refused } }
+		if = {
+			limit = { society_member_of = boyar_duma }
+			change_society_currency = -100
+		}
+		if = {
+			limit = { higher_tier_than = COUNT }
+			FROM = { character_event = { id = tsar.43 days = 5 } }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 opinion = { who = FROM value < 0 } }
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 0.5 trait = brave }
+		}
+	}
+}
+
+# tsar.43 The Disgraced House
+# A great boyar refused the Great Pulk. Shame his house before the court,
+# call him out (the crown's champion fights him), or let it pass.
+# Scope: ROOT is the ruler of Kislev, FROM the boyar who refused.
+character_event = {
+	id = tsar.43
+	desc = EVTDESCtsar43
+	picture = GFX_evt_kislev_boyars
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # tsar.41
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	# Shame his house
+	option = {
+		name = EVTOPTAtsar43
+		prestige = 50
+		FROM = {
+			prestige = -200
+			opinion = { who = ROOT modifier = opinion_tsar_disgraced }
+		}
+		ai_chance = { factor = 50 }
+	}
+
+	# The duel
+	option = {
+		name = EVTOPTBtsar43
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 martial = 14 }
+				modifier = { factor = 0.6 FROM = { martial = 14 } }
+				prestige = 150
+				FROM = {
+					add_trait = wounded
+					prestige = -150
+					opinion = { who = ROOT modifier = opinion_tsar_disgraced }
+				}
+			}
+			40 = {
+				prestige = -100
+				FROM = { prestige = 100 }
+			}
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0 trait = craven }
+		}
+	}
+
+	# Let it pass
+	option = {
+		name = EVTOPTCtsar43
+		prestige = -50
+		ai_chance = { factor = 20 }
+	}
+}
+
+###############################################################################
+# Bread and salt
+# A guest who has eaten the host's bread and salt (opinion_bread_and_salt,
+# flag salt_guest) is under guest right. A host who imprisons or kills his
+# guest becomes an Oathbreaker of the Salt.
+###############################################################################
+
+# tsar.50 A guest seized
+# Hidden. A guest under bread and salt is imprisoned by the host.
+# Scope: ROOT is the guest, FROM the one who imprisoned him.
+character_event = {
+	id = tsar.50
+	hide_window = yes
+
+	is_triggered_only = yes # on_become_imprisoned_any_reason
+	has_character_flag = salt_guest
+
+	trigger = {
+		has_opinion_modifier = { name = opinion_bread_and_salt who = FROM }
+	}
+
+	immediate = {
+		remove_opinion = { who = FROM modifier = opinion_bread_and_salt }
+		clr_character_flag = salt_guest
+		FROM = { character_event = { id = tsar.52 } }
+	}
+}
+
+# tsar.51 A guest slain
+# Hidden. A guest under bread and salt is killed by the host.
+# Scope: ROOT is the dead guest; killer the host.
+character_event = {
+	id = tsar.51
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+	has_character_flag = salt_guest
+
+	immediate = {
+		clr_character_flag = salt_guest
+		killer = {
+			if = {
+				limit = {
+					ROOT = { has_opinion_modifier = { name = opinion_bread_and_salt who = PREV } }
+				}
+				character_event = { id = tsar.52 }
+			}
+		}
+	}
+}
+
+# tsar.52 Oathbreaker of the Salt
+# The host broke guest right. Every Kislevite ruler hears of it.
+# Scope: ROOT is the oathbreaker.
+character_event = {
+	id = tsar.52
+	desc = EVTDESCtsar52
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # tsar.50, tsar.51
+
+	option = {
+		name = EVTOPTAtsar52
+		add_character_modifier = { name = tsar_oathbreaker_salt years = 10 }
+		any_playable_ruler = {
+			limit = {
+				culture_group = kislevite_group
+				NOT = { character = ROOT }
+			}
+			opinion = { who = ROOT modifier = opinion_tsar_salt_broken }
+		}
+	}
+}
+
+###############################################################################
+# The Ice Queen's Ball
+###############################################################################
+
+# tsar.60 The Ice Queen's Ball
+# Once a decade the crown gives the Ice Queen's Ball. The boyars who come
+# eat the crown's bread and salt (guest right, tsar.50) and something always
+# happens among the dancers: a rival exposed (tsar.61), a marriage brokered
+# (tsar.62), a witch revealed (tsar.63, tsar.64).
+# Scope: ROOT is the ruler of Kislev.
+character_event = {
+	id = tsar.60
+	desc = EVTDESCtsar60
+	picture = GFX_evt_feast
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes # on_decade_pulse
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = e_kislev
+		prisoner = no
+		NOT = { has_character_modifier = tsar_ball_cd }
+		any_vassal = { culture_group = kislevite_group }
+	}
+
+	immediate = {
+		add_character_modifier = { name = tsar_ball_cd years = 9 hidden = yes }
+	}
+
+	# A grand ball
+	option = {
+		name = EVTOPTAtsar60
+		trigger = { wealth = 150 }
+		wealth = -150
+		prestige = 100
+		tsar_ball_guests_effect = yes
+		ai_chance = { factor = 60 }
+	}
+
+	# A modest ball
+	option = {
+		name = EVTOPTBtsar60
+		wealth = -30
+		prestige = 25
+		tsar_ball_guests_effect = yes
+		ai_chance = { factor = 40 }
+	}
+}
+
+# tsar.61 A rival unmasked
+# Among the dancers a boyar is heard plotting against the crown. Seize him
+# here (he is a guest under bread and salt), shame him before the court,
+# or let it pass.
+# Scope: ROOT is the ruler of Kislev; event_target:tsar_ball_rival the boyar.
+character_event = {
+	id = tsar.61
+	desc = EVTDESCtsar61
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # tsar.60
+
+	trigger = {
+		any_vassal = {
+			prisoner = no
+			opinion = { who = ROOT value < 0 }
+		}
+	}
+
+	immediate = {
+		random_vassal = {
+			limit = {
+				prisoner = no
+				opinion = { who = ROOT value < 0 }
+			}
+			preferred_limit = { is_rival = ROOT }
+			save_event_target_as = tsar_ball_rival
+		}
+	}
+
+	# Seize him
+	option = {
+		name = EVTOPTAtsar61
+		event_target:tsar_ball_rival = { imprison = ROOT }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 trait = wroth }
+		}
+	}
+
+	# Shame him
+	option = {
+		name = EVTOPTBtsar61
+		prestige = 50
+		event_target:tsar_ball_rival = {
+			prestige = -150
+			opinion = { who = ROOT modifier = opinion_tsar_disgraced }
+		}
+		ai_chance = { factor = 50 }
+	}
+
+	# Let it pass
+	option = {
+		name = EVTOPTCtsar61
+		event_target:tsar_ball_rival = { opinion = { who = ROOT modifier = opinion_tsar_ball_guest } }
+		ai_chance = { factor = 40 }
+	}
+}
+
+# tsar.62 A match among the dancers
+# One of the ruler's unwed children has danced all night with the child of
+# a boyar. Bless the match, or forbid it.
+# Scope: ROOT is the ruler of Kislev; event_target:tsar_ball_kin the
+# ruler's child, event_target:tsar_ball_match the boyar's child,
+# event_target:tsar_ball_house the boyar.
+character_event = {
+	id = tsar.62
+	desc = EVTDESCtsar62
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # tsar.60
+
+	trigger = {
+		OR = {
+			AND = {
+				any_child = { tsar_ball_kin_trigger = yes is_female = no }
+				any_vassal = { any_child = { tsar_ball_match_trigger = yes is_female = yes } }
+			}
+			AND = {
+				any_child = { tsar_ball_kin_trigger = yes is_female = yes }
+				any_vassal = { any_child = { tsar_ball_match_trigger = yes is_female = no } }
+			}
+		}
+	}
+
+	immediate = {
+		random_child = {
+			limit = {
+				tsar_ball_kin_trigger = yes
+				OR = {
+					AND = {
+						is_female = no
+						ROOT = { any_vassal = { any_child = { tsar_ball_match_trigger = yes is_female = yes } } }
+					}
+					AND = {
+						is_female = yes
+						ROOT = { any_vassal = { any_child = { tsar_ball_match_trigger = yes is_female = no } } }
+					}
+				}
+			}
+			save_event_target_as = tsar_ball_kin
+		}
+		if = {
+			limit = { event_target:tsar_ball_kin = { is_female = no } }
+			random_vassal = {
+				limit = { any_child = { tsar_ball_match_trigger = yes is_female = yes } }
+				save_event_target_as = tsar_ball_house
+				random_child = {
+					limit = { tsar_ball_match_trigger = yes is_female = yes }
+					save_event_target_as = tsar_ball_match
+				}
+			}
+		}
+		else = {
+			random_vassal = {
+				limit = { any_child = { tsar_ball_match_trigger = yes is_female = no } }
+				save_event_target_as = tsar_ball_house
+				random_child = {
+					limit = { tsar_ball_match_trigger = yes is_female = no }
+					save_event_target_as = tsar_ball_match
+				}
+			}
+		}
+	}
+
+	# Bless the match
+	option = {
+		name = EVTOPTAtsar62
+		if = {
+			limit = { is_female = yes event_target:tsar_ball_kin = { is_female = yes } }
+			event_target:tsar_ball_kin = { add_spouse_matrilineal = event_target:tsar_ball_match }
+		}
+		else = {
+			event_target:tsar_ball_kin = { add_spouse = event_target:tsar_ball_match }
+		}
+		event_target:tsar_ball_house = { opinion = { who = ROOT modifier = opinion_tsar_favoured } }
+		ai_chance = { factor = 70 }
+	}
+
+	# Forbid it
+	option = {
+		name = EVTOPTBtsar62
+		event_target:tsar_ball_kin = { opinion = { who = ROOT modifier = opinion_tsar_suit_refused } }
+		ai_chance = { factor = 30 }
+	}
+}
+
+# tsar.63 A witch among the dancers
+# A dancer is found with the marks of the Ruinous Powers on her. The Chekist
+# takes her, or she burns before the court.
+# Scope: ROOT is the ruler of Kislev; event_target:tsar_ball_witch the
+# witch.
+character_event = {
+	id = tsar.63
+	desc = EVTDESCtsar63
+	picture = GFX_evt_witch_hunters
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # tsar.60
+
+	trigger = {
+		any_courtier = {
+			is_adult = yes
+			prisoner = no
+			OR = { is_cultist_trigger = yes whunter_suspect_courtier_trigger = yes }
+		}
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = {
+				is_adult = yes
+				prisoner = no
+				OR = { is_cultist_trigger = yes whunter_suspect_courtier_trigger = yes }
+			}
+			preferred_limit = { is_female = yes }
+			save_event_target_as = tsar_ball_witch
+		}
+	}
+
+	# To the Chekist
+	option = {
+		name = EVTOPTAtsar63
+		event_target:tsar_ball_witch = { imprison = ROOT }
+		piety = 25
+		ai_chance = { factor = 60 }
+	}
+
+	# The pyre
+	option = {
+		name = EVTOPTBtsar63
+		piety = 50
+		event_target:tsar_ball_witch = {
+			add_trait = staked
+			death = { death_reason = death_execution_burning killer = ROOT }
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+}
+
+# tsar.64 The frost in her
+# A girl of the court makes the candles freeze as she dances: she has the
+# gift of ice. Send her to the Sisterhood, or keep her at court.
+# Scope: ROOT is the ruler of Kislev; event_target:tsar_ball_witch the girl.
+character_event = {
+	id = tsar.64
+	desc = EVTDESCtsar64
+	picture = GFX_evt_kislev_ice_witch
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # tsar.60
+
+	trigger = {
+		any_courtier = { kislev_witch_recruit_trigger = yes }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { kislev_witch_recruit_trigger = yes }
+			save_event_target_as = tsar_ball_witch
+		}
+	}
+
+	# To the Sisterhood
+	option = {
+		name = EVTOPTAtsar64
+		event_target:tsar_ball_witch = { set_character_flag = priority_mage_recruit }
+		any_realm_character = {
+			limit = { trait = ice_witch }
+			opinion = { who = ROOT modifier = opinion_tsar_favoured }
+		}
+		ai_chance = { factor = 70 }
+	}
+
+	# Keep her at court
+	option = {
+		name = EVTOPTBtsar64
+		event_target:tsar_ball_witch = { opinion = { who = ROOT modifier = opinion_tsar_favoured } }
+		ai_chance = { factor = 30 }
+	}
+}

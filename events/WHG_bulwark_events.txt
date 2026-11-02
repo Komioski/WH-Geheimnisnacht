@@ -1,0 +1,1787 @@
+###############################################################################
+# The bulwark against Chaos
+# Namespace: bulwark
+# Faction: Kislev
+#
+# Kislev stands between the Chaos Wastes and the rest of the world. These
+# events make it the first wall every invasion hits, and give it the tools to
+# hold: General Winter, the Spring Driving and its returning Kurgan chieftain,
+# the Motherland Calls when a Black Crusade comes, the set pieces of the Siege
+# of Praag, the Lynsk Line and the Last Stand of the Stanitsa, the doom the
+# wall gains or loses, the Tzar's Call to the powers of order, the old pacts
+# with the Empire and the Dwarfs, and the rare help that comes unasked.
+# Komi's proposal doc, segment 5.
+#
+# General Winter                             bulwark.1 - 2
+# The Spring Driving                         bulwark.10 - 13
+# Black Crusades: the Motherland Calls       bulwark.20 - 23
+# The Oath of Karaz                          bulwark.25
+# The Siege of Praag                         bulwark.30 - 35
+# The Lynsk Line                             bulwark.40 - 42
+# The Last Stand of the Stanitsa             bulwark.45 - 46
+# Rare aid                                   bulwark.50 - 58
+# The Tzar's Call                            bulwark.60 - 61
+# Brothers in the North, the Emperor's call  bulwark.65 - 67
+# Doom: champions slain, the Gate, the crown bulwark.80 - 86
+#
+# Fired from common/on_actions/wh_on_actions.txt: bulwark.1 and bulwark.40 on
+# on_unit_entering_province; the yearly lists bulwark_spring (bulwark.10) and
+# bulwark_aid (50 - 58); bulwark.20 on_war_started; bulwark.22 on
+# on_war_ended_defeat and bulwark.23 on the other two war ends; bulwark.30 and
+# bulwark.45 on on_siege_pulse; bulwark.35 on on_siege_over_winner;
+# bulwark.80 and bulwark.86 on_death; bulwark.85 on_decade_pulse. Decisions
+# in decisions/WHG_bulwark_decisions.txt fire bulwark.2, 60, 65 and 67.
+# Scripted triggers: common/scripted_triggers/wh_bulwark_triggers.txt
+# Event modifiers: common/event_modifiers/wh_bulwark_modifiers.txt
+# Opinion modifiers: common/opinion_modifiers/wh_bulwark_opinions.txt
+# Artifacts: common/artifacts/25_artifacts_kislev.txt
+# Loc: localisation/00_WHG_bulwark_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = bulwark
+
+###############################################################################
+# General Winter
+###############################################################################
+
+# bulwark.1 General Winter
+# Hidden. A foreign commander marches into a Kislevite province in winter,
+# at war with its lord: the province turns hostile with cold (supply and
+# attrition) for three months, and he may fall ill. Kislevites, the peoples
+# of the Wastes and Norsca, the dead and daemons do not feel it.
+# Scope: ROOT is the commander entering the province.
+character_event = {
+	id = bulwark.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_unit_entering_province
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		in_command = yes
+		NOT = { is_sub_unit_leader = yes }
+		bulwark_winter_immune_trigger = no
+		location = {
+			region = world_old_world_kislev
+			is_winter = yes
+			owner = {
+				top_liege = {
+					ROOT = { top_liege = { war_with = PREVPREV } }
+				}
+			}
+		}
+	}
+
+	immediate = {
+		location = {
+			if = {
+				limit = {
+					NOR = {
+						has_province_modifier = bulwark_kislev_winter
+						has_province_modifier = bulwark_called_winter
+					}
+				}
+				add_province_modifier = { name = bulwark_kislev_winter days = 90 }
+			}
+		}
+		if = {
+			limit = { NOT = { has_character_modifier = bulwark_frost_cd } }
+			add_character_modifier = { name = bulwark_frost_cd years = 1 hidden = yes }
+			random = {
+				chance = 10
+				add_trait = ill
+			}
+		}
+	}
+}
+
+# bulwark.2 Call the Winter
+# An Ice Witch calls an early winter on the enemies in her lord's Kislevite
+# lands (decision bulwark_call_winter). The besieged and occupied provinces
+# freeze for half a year. One time in three the cold comes home too: a
+# famine at her lord's capital.
+# Scope: ROOT is the Ice Witch.
+character_event = {
+	id = bulwark.2
+	desc = EVTDESCbulwark2
+	picture = GFX_evt_kislev_ice_witch_casting
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # bulwark_call_winter
+
+	immediate = {
+		top_liege = {
+			any_realm_province = {
+				limit = {
+					region = world_old_world_kislev
+					OR = { has_siege = yes is_occupied = yes }
+				}
+				remove_province_modifier = bulwark_kislev_winter
+				add_province_modifier = { name = bulwark_called_winter days = 180 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAbulwark2
+		random = {
+			chance = 33
+			top_liege = {
+				capital_scope = { add_province_modifier = { name = bulwark_winter_famine years = 2 } }
+			}
+		}
+		random = {
+			chance = 20
+			add_trait = ill
+		}
+	}
+}
+
+###############################################################################
+# The Spring Driving
+# Every spring the Kurgan ride south over the Lynsk. A raid has a face: a
+# chieftain (flag bulwark_nemesis, the lord's rival) who comes back year
+# after year until he is killed.
+###############################################################################
+
+# bulwark.10 The Spring Driving comes
+# Hidden. Picks the chieftain: the lord's old nemesis if he still lives,
+# otherwise a new one from a Kurgan court (or a Chaos court of the Wastes).
+# Scope: ROOT is a Kislevite lord with land in northern Kislev.
+character_event = {
+	id = bulwark.10
+	hide_window = yes
+
+	is_triggered_only = yes # on_yearly_pulse bulwark_spring
+	only_rulers = yes
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		bulwark_northern_lord_trigger = yes
+		NOT = { has_character_modifier = bulwark_spring_cd }
+	}
+
+	immediate = {
+		add_character_modifier = { name = bulwark_spring_cd years = 3 hidden = yes }
+		random_demesne_province = {
+			limit = { region = world_old_world_kislev_northern }
+			save_event_target_as = spring_province
+		}
+		if = {
+			limit = {
+				any_rival = {
+					has_character_flag = bulwark_nemesis
+					is_alive = yes
+					prisoner = no
+				}
+			}
+			random_rival = {
+				limit = {
+					has_character_flag = bulwark_nemesis
+					is_alive = yes
+					prisoner = no
+				}
+				save_event_target_as = spring_chieftain
+			}
+		}
+		else = {
+			random_independent_ruler = {
+				limit = {
+					OR = {
+						culture_group = kurgan_group
+						AND = {
+							religion_group = chaos_gods_group
+							capital_scope = { region = world_chaos_wastes }
+						}
+					}
+				}
+				preferred_limit = { culture_group = kurgan_group }
+				create_character = {
+					random_traits = yes
+					dynasty = random
+					religion = THIS
+					culture = THIS
+					female = no
+					age = 30
+					attributes = { martial = 12 }
+					trait = creature_human
+					trait = brave
+					trait = wroth
+				}
+				new_character = {
+					set_character_flag = bulwark_nemesis
+					set_character_flag = ai_flag_refuse_marriage
+					add_rival = ROOT
+					save_event_target_as = spring_chieftain
+				}
+			}
+		}
+		if = {
+			limit = { event_target:spring_chieftain = { always = yes } }
+			character_event = { id = bulwark.11 }
+		}
+	}
+}
+
+# bulwark.11 The Spring Driving
+# The chieftain's riders come over the river into the lord's lands. Ride
+# out to meet them (a fight, and a chance to kill him), hold the stanitsa
+# walls (a Frost Ward helps; if it holds it becomes a Stanitsa of Heroes),
+# or pay them to ride on. A burned stanitsa sends refugees south (bulwark.12).
+# Scope: ROOT is the lord; event_target:spring_chieftain the chieftain,
+# event_target:spring_province the province raided.
+character_event = {
+	id = bulwark.11
+	desc = {
+		trigger = { event_target:spring_chieftain = { has_character_flag = bulwark_nemesis_returned } }
+		text = EVTDESCbulwark11b
+	}
+	desc = {
+		trigger = { event_target:spring_chieftain = { NOT = { has_character_flag = bulwark_nemesis_returned } } }
+		text = EVTDESCbulwark11
+	}
+	picture = GFX_evt_battle_kislev_gods
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # bulwark.10
+
+	immediate = {
+		event_target:spring_chieftain = { set_character_flag = bulwark_nemesis_returned }
+	}
+
+	# Ride out
+	option = {
+		name = EVTOPTAbulwark11
+		random_list = {
+			55 = {
+				modifier = { factor = 1.5 martial = 14 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 society_member_of = circle_of_the_bear }
+				modifier = { factor = 0.6 trait = craven }
+				prestige = 75
+				random_list = {
+					35 = {
+						modifier = { factor = 1.5 combat_rating = 40 }
+						character_event = { id = bulwark.13 }
+					}
+					65 = {
+						custom_tooltip = { text = bulwark_chieftain_escapes_tt }
+					}
+				}
+			}
+			45 = {
+				prestige = -25
+				random = { chance = 30 add_trait = wounded }
+				event_target:spring_province = { add_province_modifier = { name = bulwark_stanitsa_burned years = 5 } }
+				character_event = { id = bulwark.12 days = 30 }
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.3 trait = craven }
+		}
+	}
+
+	# Hold the walls
+	option = {
+		name = EVTOPTBbulwark11
+		random_list = {
+			50 = {
+				modifier = {
+					factor = 1.6
+					event_target:spring_province = { has_province_modifier = kislevsoc_frost_ward }
+				}
+				modifier = { factor = 1.3 stewardship = 14 }
+				event_target:spring_province = { add_province_modifier = { name = bulwark_stanitsa_heroes years = 10 } }
+				prestige = 50
+			}
+			50 = {
+				event_target:spring_province = { add_province_modifier = { name = bulwark_stanitsa_burned years = 5 } }
+				character_event = { id = bulwark.12 days = 30 }
+			}
+		}
+		ai_chance = { factor = 35 }
+	}
+
+	# Pay them to ride on
+	option = {
+		name = EVTOPTCbulwark11
+		trigger = { wealth = 75 }
+		wealth = -75
+		prestige = -50
+		event_target:spring_chieftain = { prestige = 50 }
+		ai_chance = {
+			factor = 15
+			modifier = { factor = 3 trait = craven }
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+}
+
+# bulwark.12 Refugees from the north
+# The burned stanitsa's people come south with what they could carry. Settle
+# them in the lord's capital (more hands and taxes, more unrest), or turn
+# them away.
+# Scope: ROOT is the lord.
+character_event = {
+	id = bulwark.12
+	desc = EVTDESCbulwark12
+	picture = GFX_evt_kislev_town
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # bulwark.11
+
+	# Settle them
+	option = {
+		name = EVTOPTAbulwark12
+		capital_scope = { add_province_modifier = { name = bulwark_refugees_settled years = 10 } }
+		piety = 15
+		ai_chance = { factor = 70 }
+	}
+
+	# Turn them away
+	option = {
+		name = EVTOPTBbulwark12
+		prestige = -25
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+}
+
+# bulwark.13 The chieftain falls
+# The lord cuts down the chieftain who led the Spring Driving. His skull-torc
+# can be taken, once in a lifetime, and the Wastes are a little weaker.
+# Scope: ROOT is the lord; event_target:spring_chieftain the chieftain.
+character_event = {
+	id = bulwark.13
+	desc = EVTDESCbulwark13
+	picture = GFX_evt_duel_against_chaos
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # bulwark.11
+
+	immediate = {
+		event_target:spring_chieftain = {
+			clr_character_flag = bulwark_nemesis
+			death = { death_reason = death_battle killer = ROOT }
+		}
+	}
+
+	option = {
+		name = EVTOPTAbulwark13
+		prestige = 100
+		reduce_doom_progress_tiny_effect = yes
+		if = {
+			limit = {
+				NOT = { has_character_flag = bulwark_took_torc }
+				NOT = { has_artifact = bulwark_chieftain_torc }
+			}
+			set_character_flag = bulwark_took_torc
+			add_artifact = bulwark_chieftain_torc
+		}
+	}
+}
+
+###############################################################################
+# Black Crusades: the Motherland Calls
+###############################################################################
+
+# bulwark.20 The Motherland Calls
+# Hidden. A Black Crusade falls on a Kislevite realm: its ruler and every
+# Kislevite lord of the realm take heart (morale, levy reinforcement, less
+# revolt) until the war ends. The first time the Tsardom itself is the
+# target, the Oath of Karaz brings the Dwarfs (bulwark.25).
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = bulwark.20
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_started
+	only_rulers = yes
+
+	trigger = {
+		culture_group = kislevite_group
+		FROM = { religion_group = chaos_gods_group }
+		any_war = {
+			using_cb = new_crusade
+			attacker = { character = FROM }
+			defender = { character = ROOT }
+		}
+	}
+
+	immediate = {
+		set_character_flag = bulwark_motherland
+		add_character_modifier = { name = bulwark_motherland_calls years = 10 }
+		any_realm_lord = {
+			limit = { culture_group = kislevite_group }
+			add_character_modifier = { name = bulwark_motherland_calls years = 10 }
+		}
+		character_event = { id = bulwark.21 }
+		if = {
+			limit = {
+				has_landed_title = e_kislev
+				NOT = { has_global_flag = bulwark_oath_of_karaz }
+			}
+			set_global_flag = bulwark_oath_of_karaz
+			character_event = { id = bulwark.25 days = 10 }
+		}
+	}
+}
+
+# bulwark.21 The Motherland Calls
+# Notice for the ruler under the Black Crusade.
+# Scope: ROOT is the defender.
+character_event = {
+	id = bulwark.21
+	desc = EVTDESCbulwark21
+	picture = GFX_evt_kislev_warriors
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # bulwark.20
+
+	option = {
+		name = EVTOPTAbulwark21
+	}
+}
+
+# bulwark.22 The Crusade is broken
+# The Black Crusade against Kislev has failed. Great prestige, and the doom
+# of the world falls back.
+# Scope: ROOT is the defender who won, FROM the attacker.
+character_event = {
+	id = bulwark.22
+	desc = EVTDESCbulwark22
+	picture = GFX_evt_battle_kislev_gods
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # on_war_ended_defeat
+	has_character_flag = bulwark_motherland
+
+	trigger = {
+		FROM = { religion_group = chaos_gods_group }
+	}
+
+	immediate = {
+		clr_character_flag = bulwark_motherland
+		remove_character_modifier = bulwark_motherland_calls
+		any_realm_lord = { remove_character_modifier = bulwark_motherland_calls }
+	}
+
+	option = {
+		name = EVTOPTAbulwark22
+		prestige = 400
+		reduce_doom_progress_medium_effect = yes
+	}
+}
+
+# bulwark.23 The Crusade ends
+# Hidden. The war with the Black Crusade ended in its victory or a white
+# peace: the Motherland Calls ends.
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = bulwark.23
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_ended_victory, on_war_ended_whitepeace
+	has_character_flag = bulwark_motherland
+
+	trigger = {
+		FROM = { religion_group = chaos_gods_group }
+	}
+
+	immediate = {
+		clr_character_flag = bulwark_motherland
+		remove_character_modifier = bulwark_motherland_calls
+		any_realm_lord = { remove_character_modifier = bulwark_motherland_calls }
+	}
+}
+
+###############################################################################
+# The Oath of Karaz
+###############################################################################
+
+# bulwark.25 The Oath of Karaz
+# The first time a Black Crusade falls on the Tsardom, the Dwarfs of the
+# World's Edge keep the old oath for the passes near Praag: a Dwarf captain
+# and a small host come to the Tzar(ina) until the peace.
+# Scope: ROOT holds e_kislev.
+character_event = {
+	id = bulwark.25
+	desc = EVTDESCbulwark25
+	picture = GFX_evt_kislev_boyars
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # bulwark.20
+
+	immediate = {
+		create_character = {
+			random_traits = yes
+			dynasty = random
+			religion = ancestor_gods
+			culture = dwarf_main
+			female = no
+			age = 120
+			attributes = { martial = 16 }
+			trait = creature_dwarf
+			trait = stubborn
+		}
+		new_character = {
+			set_character_flag = ai_flag_refuse_marriage
+			save_event_target_as = karaz_captain
+		}
+	}
+
+	option = {
+		name = EVTOPTAbulwark25
+		capital_scope = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					owner = ROOT
+					leader = event_target:karaz_captain
+					troops = {
+						heavy_infantry = { 600 600 }
+						gunpowder = { 200 200 }
+						artillery = { 20 20 }
+					}
+					earmark = bulwark_oath_of_karaz
+					disband_on_peace = yes
+					maintenance_multiplier = 0
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# The Siege of Praag
+###############################################################################
+
+# bulwark.30 The Siege of Praag
+# Hidden. A Chaos army has Praag under siege. Praag's lord is asked about a
+# sortie (bulwark.31); the breach comes a month later (bulwark.32), and if
+# Praag still stands in half a year it holds (bulwark.34).
+# Scope: ROOT is a commander of the besieging army.
+character_event = {
+	id = bulwark.30
+	hide_window = yes
+
+	is_triggered_only = yes # on_siege_pulse
+
+	trigger = {
+		religion_group = chaos_gods_group
+		siege = { is_attacker = yes }
+		location = {
+			province_id = 182
+			owner = {
+				NOT = { religion_group = chaos_gods_group }
+				NOT = { has_character_modifier = bulwark_praag_siege_cd }
+			}
+		}
+	}
+
+	immediate = {
+		location = {
+			owner = {
+				add_character_modifier = { name = bulwark_praag_siege_cd years = 5 hidden = yes }
+				character_event = { id = bulwark.31 }
+				character_event = { id = bulwark.32 days = 30 }
+				character_event = { id = bulwark.34 days = 180 }
+			}
+		}
+	}
+}
+
+# bulwark.31 A sortie from Praag
+# The hordes are at the walls of Praag. Lead a sortie out of the north gate
+# (glory or wounds), or keep the walls.
+# Scope: ROOT holds Praag.
+character_event = {
+	id = bulwark.31
+	desc = EVTDESCbulwark31
+	picture = GFX_evt_melee
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # bulwark.30
+
+	trigger = { has_landed_title = c_praag }
+
+	# Sortie
+	option = {
+		name = EVTOPTAbulwark31
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 martial = 14 }
+				modifier = { factor = 1.3 trait = brave }
+				prestige = 100
+			}
+			40 = {
+				prestige = 25
+				add_trait = wounded
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.2 trait = craven }
+		}
+	}
+
+	# Keep the walls
+	option = {
+		name = EVTOPTBbulwark31
+		ai_chance = { factor = 50 }
+	}
+}
+
+# bulwark.32 The breach
+# The wall is down by the north gate. A hero of the court holds the
+# breach to the last (bulwark.33), or the lord fights there himself.
+# Scope: ROOT holds Praag.
+character_event = {
+	id = bulwark.32
+	desc = EVTDESCbulwark32
+	picture = GFX_evt_battle_kislev_gods
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # bulwark.30
+
+	trigger = {
+		has_landed_title = c_praag
+		182 = { has_siege = yes }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = {
+				is_adult = yes
+				is_female = no
+				prisoner = no
+				martial = 10
+				is_ruler = no
+			}
+			preferred_limit = { trait = brave }
+			save_event_target_as = praag_hero
+		}
+	}
+
+	# A hero holds the breach
+	option = {
+		name = EVTOPTAbulwark32
+		trigger = { event_target:praag_hero = { always = yes } }
+		character_event = { id = bulwark.33 }
+		ai_chance = { factor = 60 }
+	}
+
+	# I hold it myself
+	option = {
+		name = EVTOPTBbulwark32
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 martial = 14 }
+				modifier = { factor = 1.5 combat_rating = 40 }
+				prestige = 200
+			}
+			35 = { add_trait = wounded prestige = 100 }
+			15 = { add_maimed_trait_effect = yes prestige = 100 }
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0 trait = craven }
+		}
+	}
+}
+
+# bulwark.33 The last stand at the breach
+# The hero holds the breach until the wall is shored up behind him, and
+# dies there. Praag sings of him.
+# Scope: ROOT holds Praag; event_target:praag_hero the hero.
+character_event = {
+	id = bulwark.33
+	desc = EVTDESCbulwark33
+	picture = GFX_evt_duel_against_chaos
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # bulwark.32
+
+	option = {
+		name = EVTOPTAbulwark33
+		prestige = 100
+		event_target:praag_hero = {
+			death = { death_reason = death_battle }
+		}
+		reduce_doom_progress_tiny_effect = yes
+	}
+}
+
+# bulwark.34 Praag holds
+# Half a year after the Chaos siege began, Praag is still in the hands of
+# its lord and free of the siege. Great prestige, and a cut to doom.
+# Scope: ROOT is the lord who held Praag.
+character_event = {
+	id = bulwark.34
+	desc = EVTDESCbulwark34
+	picture = GFX_evt_kislev_town
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # bulwark.30
+
+	trigger = {
+		has_landed_title = c_praag
+		NOT = { religion_group = chaos_gods_group }
+		182 = {
+			has_siege = no
+			is_occupied = no
+		}
+	}
+
+	option = {
+		name = EVTOPTAbulwark34
+		prestige = 300
+		reduce_doom_progress_minor_effect = yes
+	}
+}
+
+# bulwark.35 A great city falls
+# Hidden. A Chaos army takes Kislev, Praag or Erengrad: the doom of the
+# world rises (minor; medium for Kislev itself).
+# Scope: ROOT is the owner of the winning army, FROM the holding taken.
+character_event = {
+	id = bulwark.35
+	hide_window = yes
+
+	is_triggered_only = yes # on_siege_over_winner
+
+	trigger = {
+		religion_group = chaos_gods_group
+		FROM = {
+			location = { bulwark_great_city_trigger = yes }
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { FROM = { location = { province_id = 202 } } }
+			add_doom_progress_medium_effect = yes
+		}
+		else = {
+			add_doom_progress_minor_effect = yes
+		}
+	}
+}
+
+###############################################################################
+# The Lynsk Line
+###############################################################################
+
+# bulwark.40 Chaos crosses the Lynsk
+# Hidden. A Chaos commander enters the Lynsk lands at war with the ruler of
+# the Tsardom, who must choose how to meet him (bulwark.41).
+# Scope: ROOT is the commander.
+character_event = {
+	id = bulwark.40
+	hide_window = yes
+
+	is_triggered_only = yes # on_unit_entering_province
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		in_command = yes
+		NOT = { is_sub_unit_leader = yes }
+		religion_group = chaos_gods_group
+		location = { duchy = { title = d_lynsk } }
+		e_kislev = {
+			has_holder = yes
+			holder_scope = {
+				NOT = { has_character_modifier = bulwark_lynsk_cd }
+				ROOT = { top_liege = { war_with = PREVPREV } }
+			}
+		}
+	}
+
+	immediate = {
+		e_kislev = {
+			holder_scope = {
+				add_character_modifier = { name = bulwark_lynsk_cd years = 5 hidden = yes }
+				character_event = { id = bulwark.41 }
+			}
+		}
+	}
+}
+
+# bulwark.41 The Lynsk Line
+# The hordes are across the Lynsk. Hold the river (its forts stand stronger,
+# but the levies bleed), or pull back to the cities, burn the land behind
+# you and raise a fresh host (bulwark.42).
+# Scope: ROOT holds e_kislev.
+character_event = {
+	id = bulwark.41
+	desc = EVTDESCbulwark41
+	picture = GFX_evt_kislev_lancers
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # bulwark.40
+
+	# Hold the river
+	option = {
+		name = EVTOPTAbulwark41
+		d_lynsk = {
+			any_de_jure_county = {
+				location = { add_province_modifier = { name = bulwark_lynsk_held years = 2 } }
+			}
+		}
+		add_character_modifier = { name = bulwark_lynsk_bleeding years = 2 }
+		ai_chance = { factor = 50 }
+	}
+
+	# Pull back to the cities
+	option = {
+		name = EVTOPTBbulwark41
+		prestige = -100
+		d_lynsk = {
+			any_de_jure_county = {
+				location = { add_province_modifier = { name = bulwark_scorched_earth years = 3 } }
+			}
+		}
+		character_event = { id = bulwark.42 days = 180 }
+		ai_chance = { factor = 50 }
+	}
+}
+
+# bulwark.42 A fresh host
+# Half a year after the pull-back, a fresh host is ready at the capital.
+# Scope: ROOT holds e_kislev.
+character_event = {
+	id = bulwark.42
+	desc = EVTDESCbulwark42
+	picture = GFX_evt_kislev_warriors
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # bulwark.41
+
+	trigger = {
+		has_landed_title = e_kislev
+		war = yes
+	}
+
+	option = {
+		name = EVTOPTAbulwark42
+		capital_scope = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					owner = ROOT
+					troops = {
+						knights = { 300 300 }
+						light_cavalry = { 500 500 }
+						archers = { 500 500 }
+						pikemen = { 400 400 }
+					}
+					earmark = bulwark_fresh_host
+					disband_on_peace = yes
+					maintenance_multiplier = 0.5
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# The Last Stand of the Stanitsa
+###############################################################################
+
+# bulwark.45 A stanitsa under siege
+# Hidden. A Chaos army besieges a holding in northern Kislev whose lord is a
+# Kislevite count with a liege. The liege must answer (bulwark.46).
+# Scope: ROOT is a commander of the besieging army.
+character_event = {
+	id = bulwark.45
+	hide_window = yes
+
+	is_triggered_only = yes # on_siege_pulse
+
+	trigger = {
+		religion_group = chaos_gods_group
+		siege = { is_attacker = yes }
+		location = {
+			region = world_old_world_kislev_northern
+			NOT = { province_id = 182 }
+			owner = {
+				tier = COUNT
+				independent = no
+				culture_group = kislevite_group
+				liege = {
+					NOT = { has_character_modifier = bulwark_stand_cd }
+					culture_group = kislevite_group
+				}
+			}
+		}
+	}
+
+	immediate = {
+		location = {
+			save_event_target_as = stand_province
+			owner = {
+				save_event_target_as = stand_lord
+				liege = {
+					add_character_modifier = { name = bulwark_stand_cd years = 10 hidden = yes }
+					character_event = { id = bulwark.46 }
+				}
+			}
+		}
+	}
+}
+
+# bulwark.46 The Last Stand of the Stanitsa
+# A small garrison in the north is holding against a whole horde to buy the
+# realm time. Ride to relieve it (glory or wounds, and its lord's love), or
+# let it fall (the time it bought strengthens the realm; its lord does not
+# forget).
+# Scope: ROOT is the liege; event_target:stand_lord the count,
+# event_target:stand_province the province.
+character_event = {
+	id = bulwark.46
+	desc = EVTDESCbulwark46
+	picture = GFX_evt_kislev_druzhina
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # bulwark.45
+
+	# Ride to relieve it
+	option = {
+		name = EVTOPTAbulwark46
+		event_target:stand_lord = { opinion = { who = ROOT modifier = opinion_bulwark_relief } }
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 martial = 14 }
+				modifier = { factor = 1.3 society_member_of = circle_of_the_bear }
+				prestige = 150
+				event_target:stand_province = { add_province_modifier = { name = bulwark_stanitsa_heroes years = 10 } }
+			}
+			40 = {
+				prestige = 50
+				add_trait = wounded
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.2 trait = craven }
+		}
+	}
+
+	# Let it fall
+	option = {
+		name = EVTOPTBbulwark46
+		add_character_modifier = { name = bulwark_time_bought years = 1 }
+		event_target:stand_lord = { opinion = { who = ROOT modifier = opinion_bulwark_left_to_fall } }
+		ai_chance = { factor = 50 }
+	}
+}
+
+###############################################################################
+# Rare aid
+# A Kislevite ruler at war with Chaos may get unasked help, about once in
+# forty years of war. Each kind comes at most once in five years (a flag
+# set when it comes). Troops that come leave at the peace.
+###############################################################################
+
+# bulwark.50 Dwarf rangers
+# Rangers from the World's Edge come down to fight: a small elite company.
+# Scope: ROOT is a Kislevite ruler defending against Chaos.
+character_event = {
+	id = bulwark.50
+	desc = EVTDESCbulwark50
+	picture = GFX_evt_kislev_warriors
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_yearly_pulse bulwark_aid
+	only_rulers = yes
+
+	trigger = {
+		culture_group = kislevite_group
+		higher_tier_than = COUNT
+		bulwark_defending_vs_chaos_trigger = yes
+		OR = {
+			NOT = { has_character_flag = bulwark_aid_dwarfs }
+			had_character_flag = { flag = bulwark_aid_dwarfs days = 1825 }
+		}
+	}
+
+	immediate = {
+		clr_character_flag = bulwark_aid_dwarfs
+		set_character_flag = bulwark_aid_dwarfs
+	}
+
+	option = {
+		name = EVTOPTAbulwark50
+		capital_scope = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					owner = ROOT
+					troops = {
+						heavy_infantry = { 200 200 }
+						archers = { 150 150 }
+					}
+					earmark = bulwark_aid
+					disband_on_peace = yes
+					maintenance_multiplier = 0
+				}
+			}
+		}
+	}
+}
+
+# bulwark.51 Volunteers from the Empire
+# A free company of Ostland and Talabecland men crosses the border to fight.
+# Scope: ROOT is a Kislevite ruler defending against Chaos.
+character_event = {
+	id = bulwark.51
+	desc = EVTDESCbulwark51
+	picture = GFX_evt_kislev_warriors
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_yearly_pulse bulwark_aid
+	only_rulers = yes
+
+	trigger = {
+		culture_group = kislevite_group
+		higher_tier_than = COUNT
+		bulwark_defending_vs_chaos_trigger = yes
+		OR = {
+			NOT = { has_character_flag = bulwark_aid_empire }
+			had_character_flag = { flag = bulwark_aid_empire days = 1825 }
+		}
+	}
+
+	immediate = {
+		clr_character_flag = bulwark_aid_empire
+		set_character_flag = bulwark_aid_empire
+	}
+
+	option = {
+		name = EVTOPTAbulwark51
+		capital_scope = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					owner = ROOT
+					troops = {
+						pikemen = { 300 300 }
+						light_infantry = { 300 300 }
+						gunpowder = { 100 100 }
+					}
+					earmark = bulwark_aid
+					disband_on_peace = yes
+					maintenance_multiplier = 0
+				}
+			}
+		}
+	}
+}
+
+# bulwark.52 The Gryphon Legion rides home
+# The Legion comes back from the Empire to fight for Kislev, for free.
+# Scope: ROOT is a Kislevite ruler defending against Chaos.
+character_event = {
+	id = bulwark.52
+	desc = EVTDESCbulwark52
+	picture = GFX_evt_kislev_lancers
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_yearly_pulse bulwark_aid
+	only_rulers = yes
+
+	trigger = {
+		culture_group = kislevite_group
+		higher_tier_than = DUKE
+		bulwark_defending_vs_chaos_trigger = yes
+		OR = {
+			NOT = { has_character_flag = bulwark_aid_gryphon }
+			had_character_flag = { flag = bulwark_aid_gryphon days = 1825 }
+		}
+	}
+
+	immediate = {
+		clr_character_flag = bulwark_aid_gryphon
+		set_character_flag = bulwark_aid_gryphon
+	}
+
+	option = {
+		name = EVTOPTAbulwark52
+		capital_scope = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					owner = ROOT
+					troops = {
+						knights = { 400 400 }
+					}
+					earmark = bulwark_aid
+					disband_on_peace = yes
+					maintenance_multiplier = 0
+				}
+			}
+		}
+	}
+}
+
+# bulwark.53 A wandering Grail Knight
+# A Grail Knight of Bretonnia who heard of the war rides in and offers his
+# lance. He joins the court.
+# Scope: ROOT is a Kislevite ruler defending against Chaos.
+character_event = {
+	id = bulwark.53
+	desc = EVTDESCbulwark53
+	picture = GFX_evt_duel_against_chaos
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_yearly_pulse bulwark_aid
+	only_rulers = yes
+
+	trigger = {
+		culture_group = kislevite_group
+		higher_tier_than = COUNT
+		bulwark_defending_vs_chaos_trigger = yes
+		OR = {
+			NOT = { has_character_flag = bulwark_aid_grail }
+			had_character_flag = { flag = bulwark_aid_grail days = 1825 }
+		}
+	}
+
+	immediate = {
+		clr_character_flag = bulwark_aid_grail
+		set_character_flag = bulwark_aid_grail
+		create_character = {
+			random_traits = yes
+			dynasty = random
+			religion = grail
+			culture = armoric
+			female = no
+			age = 40
+			attributes = { martial = 18 }
+			trait = creature_human
+			trait = grail_knight
+			trait = brave
+		}
+		new_character = { save_event_target_as = bulwark_grail_knight }
+	}
+
+	option = {
+		name = EVTOPTAbulwark53
+	}
+}
+
+# bulwark.54 An Ice Witch coven
+# A coven of Ice Witches freezes the camps of the enemy in the realm's
+# Kislevite lands.
+# Scope: ROOT is a Kislevite ruler defending against Chaos.
+character_event = {
+	id = bulwark.54
+	desc = EVTDESCbulwark54
+	picture = GFX_evt_kislev_ice_witch_casting
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_yearly_pulse bulwark_aid
+	only_rulers = yes
+
+	trigger = {
+		culture_group = kislevite_group
+		higher_tier_than = COUNT
+		bulwark_defending_vs_chaos_trigger = yes
+		any_realm_province = {
+			region = world_old_world_kislev
+			OR = { has_siege = yes is_occupied = yes }
+		}
+		OR = {
+			NOT = { has_character_flag = bulwark_aid_coven }
+			had_character_flag = { flag = bulwark_aid_coven days = 1825 }
+		}
+	}
+
+	immediate = {
+		clr_character_flag = bulwark_aid_coven
+		set_character_flag = bulwark_aid_coven
+	}
+
+	option = {
+		name = EVTOPTAbulwark54
+		any_realm_province = {
+			limit = {
+				region = world_old_world_kislev
+				OR = { has_siege = yes is_occupied = yes }
+			}
+			remove_province_modifier = bulwark_kislev_winter
+			add_province_modifier = { name = bulwark_called_winter days = 120 }
+		}
+	}
+}
+
+# bulwark.55 Ursun's bears
+# Wild bears come out of the woods at night and fall on the Chaos camp. The
+# enemy's commanders may be mauled.
+# Scope: ROOT is a Kislevite ruler defending against Chaos.
+character_event = {
+	id = bulwark.55
+	desc = EVTDESCbulwark55
+	picture = GFX_evt_tamed_bear
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_yearly_pulse bulwark_aid
+	only_rulers = yes
+
+	trigger = {
+		culture_group = kislevite_group
+		religion = kislev_gods
+		bulwark_defending_vs_chaos_trigger = yes
+		OR = {
+			NOT = { has_character_flag = bulwark_aid_bears }
+			had_character_flag = { flag = bulwark_aid_bears days = 1825 }
+		}
+	}
+
+	immediate = {
+		clr_character_flag = bulwark_aid_bears
+		set_character_flag = bulwark_aid_bears
+		random_war = {
+			limit = {
+				defender = { character = ROOT }
+				attacker = { religion_group = chaos_gods_group }
+			}
+			attacker = { save_event_target_as = bulwark_bear_foe }
+		}
+	}
+
+	option = {
+		name = EVTOPTAbulwark55
+		piety = 25
+		event_target:bulwark_bear_foe = {
+			any_realm_character = {
+				limit = { in_command = yes }
+				random = { chance = 30 add_trait = wounded }
+			}
+		}
+	}
+}
+
+# bulwark.56 The White Wolf company
+# The Knights of the White Star ride from Erengrad to fight beside the
+# realm. They are Ulricans, and the priests of Ursun do not like it.
+# Scope: ROOT is a Kislevite ruler defending against Chaos.
+character_event = {
+	id = bulwark.56
+	desc = EVTDESCbulwark56
+	picture = GFX_evt_kislev_lancers
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_yearly_pulse bulwark_aid
+	only_rulers = yes
+
+	trigger = {
+		culture_group = kislevite_group
+		higher_tier_than = COUNT
+		bulwark_defending_vs_chaos_trigger = yes
+		OR = {
+			NOT = { has_character_flag = bulwark_aid_white_wolf }
+			had_character_flag = { flag = bulwark_aid_white_wolf days = 1825 }
+		}
+	}
+
+	immediate = {
+		clr_character_flag = bulwark_aid_white_wolf
+		set_character_flag = bulwark_aid_white_wolf
+	}
+
+	option = {
+		name = EVTOPTAbulwark56
+		capital_scope = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					owner = ROOT
+					troops = {
+						knights = { 200 200 }
+					}
+					earmark = bulwark_aid
+					disband_on_peace = yes
+					maintenance_multiplier = 0
+				}
+			}
+		}
+		if = {
+			limit = { religion = kislev_gods }
+			piety = -15
+		}
+	}
+}
+
+# bulwark.57 A High Elf mage
+# An Asur mage who came on the Erengrad ships offers to stand with the realm
+# for the war: he joins the court, and his magic breaks the enemy's nerve.
+# Scope: ROOT is a Kislevite ruler defending against Chaos whose realm holds
+# Erengrad.
+character_event = {
+	id = bulwark.57
+	desc = EVTDESCbulwark57
+	picture = GFX_evt_kislev_town
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_yearly_pulse bulwark_aid
+	only_rulers = yes
+
+	trigger = {
+		culture_group = kislevite_group
+		higher_tier_than = COUNT
+		bulwark_defending_vs_chaos_trigger = yes
+		175 = { owner = { OR = { character = ROOT top_liege = { character = ROOT } } } }
+		OR = {
+			NOT = { has_character_flag = bulwark_aid_asur }
+			had_character_flag = { flag = bulwark_aid_asur days = 1825 }
+		}
+	}
+
+	immediate = {
+		clr_character_flag = bulwark_aid_asur
+		set_character_flag = bulwark_aid_asur
+		create_character = {
+			random_traits = yes
+			dynasty = random
+			religion = cadai
+			culture = avelorni
+			female = no
+			age = 300
+			attributes = { learning = 18 }
+			trait = creature_elf
+		}
+		new_character = { save_event_target_as = bulwark_asur_mage }
+	}
+
+	option = {
+		name = EVTOPTAbulwark57
+		capital_scope = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					owner = ROOT
+					troops = {
+						magical_spells = { 50 50 }
+					}
+					earmark = bulwark_aid
+					disband_on_peace = yes
+					maintenance_multiplier = 0
+				}
+			}
+		}
+	}
+}
+
+# bulwark.58 The Strigany warn of a night raid
+# Strigany travellers bring word of a night attack, and the realm's armies
+# are ready for it. A small favour is owed.
+# Scope: ROOT is a Kislevite ruler defending against Chaos.
+character_event = {
+	id = bulwark.58
+	desc = EVTDESCbulwark58
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_yearly_pulse bulwark_aid
+	only_rulers = yes
+
+	trigger = {
+		culture_group = kislevite_group
+		bulwark_defending_vs_chaos_trigger = yes
+		OR = {
+			NOT = { has_character_flag = bulwark_aid_strigany }
+			had_character_flag = { flag = bulwark_aid_strigany days = 1825 }
+		}
+	}
+
+	immediate = {
+		clr_character_flag = bulwark_aid_strigany
+		set_character_flag = bulwark_aid_strigany
+	}
+
+	# Pay the favour in gold
+	option = {
+		name = EVTOPTAbulwark58
+		trigger = { wealth = 25 }
+		wealth = -25
+		add_character_modifier = { name = bulwark_strigany_warning years = 1 }
+	}
+
+	# Owe them
+	option = {
+		name = EVTOPTBbulwark58
+		add_character_modifier = { name = bulwark_strigany_warning years = 1 }
+		prestige = -10
+	}
+}
+
+###############################################################################
+# The Tzar's Call
+###############################################################################
+
+# bulwark.60 The Tzar's Call
+# Envoys from Kislev (decision bulwark_tzars_call) ask a power of order for
+# help against Chaos. Join the war, send a host under a captain of your own,
+# send gold, or refuse. The AI weighs opinion, distance, its own wars, faith,
+# doom, and old debts. Helpers win the Shield of the North (Kislev's
+# opinion for thirty years) and prestige.
+# Scope: ROOT is the power, FROM the caller.
+character_event = {
+	id = bulwark.60
+	desc = EVTDESCbulwark60
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # bulwark_tzars_call
+
+	trigger = {
+		FROM = { war = yes }
+		NOT = { war_with = FROM }
+	}
+
+	# Join the war
+	option = {
+		name = EVTOPTAbulwark60
+		trigger = { war = no }
+		join_defender_wars = FROM
+		prestige = 100
+		FROM = { opinion = { who = ROOT modifier = opinion_bulwark_shield_north } }
+		FROM = { character_event = { id = bulwark.61 } }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 2 opinion = { who = FROM value >= 25 } }
+			modifier = { factor = 3 has_opinion_modifier = { name = opinion_bulwark_shield_north who = FROM } }
+			modifier = { factor = 1.5 is_doom_high_trigger = yes }
+			modifier = { factor = 2 is_doom_very_high_trigger = yes }
+			modifier = { factor = 0.3 capital_scope = { distance = { where = FROM distance > 1200 } } }
+		}
+	}
+
+	# Send a host
+	option = {
+		name = EVTOPTBbulwark60
+		trigger = { wealth = 100 }
+		wealth = -100
+		prestige = 50
+		create_character = {
+			random_traits = yes
+			dynasty = random
+			religion = ROOT
+			culture = ROOT
+			female = no
+			age = 40
+			attributes = { martial = 14 }
+		}
+		new_character = {
+			move_character = FROM
+			save_event_target_as = bulwark_host_captain
+		}
+		FROM = {
+			capital_scope = {
+				FROM = {
+					spawn_unit = {
+						province = PREV
+						owner = FROM
+						leader = event_target:bulwark_host_captain
+						troops = {
+							heavy_infantry = { 400 400 }
+							light_infantry = { 300 300 }
+							knights = { 150 150 }
+						}
+						earmark = bulwark_allied_host
+						disband_on_peace = yes
+						maintenance_multiplier = 0
+					}
+				}
+			}
+			opinion = { who = ROOT modifier = opinion_bulwark_shield_north }
+			character_event = { id = bulwark.61 }
+		}
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 2 war = yes }
+			modifier = { factor = 3 has_opinion_modifier = { name = opinion_bulwark_shield_north who = FROM } }
+			modifier = { factor = 1.5 is_doom_high_trigger = yes }
+		}
+	}
+
+	# Send gold
+	option = {
+		name = EVTOPTCbulwark60
+		trigger = { wealth = 100 }
+		wealth = -100
+		FROM = {
+			wealth = 100
+			opinion = { who = ROOT modifier = opinion_bulwark_gold_sent }
+			character_event = { id = bulwark.61 }
+		}
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 2 capital_scope = { distance = { where = FROM distance > 1200 } } }
+		}
+	}
+
+	# Refuse
+	option = {
+		name = EVTOPTDbulwark60
+		FROM = { opinion = { who = ROOT modifier = opinion_bulwark_call_refused } }
+		if = {
+			limit = { has_opinion_modifier = { name = opinion_bulwark_shield_north who = FROM } }
+			prestige = -150
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 war = yes }
+			modifier = { factor = 2 opinion = { who = FROM value < 0 } }
+			modifier = { factor = 0.3 has_opinion_modifier = { name = opinion_bulwark_shield_north who = FROM } }
+			modifier = { factor = 0.5 is_doom_very_high_trigger = yes }
+		}
+	}
+}
+
+# bulwark.61 An answer to the Call
+# Notice: a power has answered the Call with men or gold.
+# Scope: ROOT is the caller, FROM the power.
+character_event = {
+	id = bulwark.61
+	desc = EVTDESCbulwark61
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # bulwark.60
+
+	option = {
+		name = EVTOPTAbulwark61
+	}
+}
+
+###############################################################################
+# Brothers in the North, and the Emperor's call
+###############################################################################
+
+# bulwark.65 Brothers in the North
+# The ruler of Kislev offers the Emperor the old treaty (decision
+# bulwark_brothers_in_the_north): an alliance between the two crowns.
+# Accept or refuse.
+# Scope: ROOT holds e_the_empire, FROM holds e_kislev.
+character_event = {
+	id = bulwark.65
+	desc = EVTDESCbulwark65
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # bulwark_brothers_in_the_north
+
+	option = {
+		name = EVTOPTAbulwark65
+		add_alliance = { who = FROM years = 100 }
+		opinion = { who = FROM modifier = opinion_bulwark_brothers }
+		FROM = {
+			opinion = { who = ROOT modifier = opinion_bulwark_brothers }
+			character_event = { id = bulwark.66 }
+		}
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 0.3 opinion = { who = FROM value < 0 } }
+			modifier = { factor = 1.5 is_doom_high_trigger = yes }
+		}
+	}
+
+	option = {
+		name = EVTOPTBbulwark65
+		FROM = { opinion = { who = ROOT modifier = opinion_bulwark_call_refused } }
+		ai_chance = { factor = 30 }
+	}
+}
+
+# bulwark.66 The brothers are sworn
+# Notice: the Emperor has sworn the treaty.
+# Scope: ROOT holds e_kislev, FROM the Emperor.
+character_event = {
+	id = bulwark.66
+	desc = EVTDESCbulwark66
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # bulwark.65
+
+	option = {
+		name = EVTOPTAbulwark66
+		prestige = 100
+	}
+}
+
+# bulwark.67 The Emperor's call
+# The Empire faces Chaos and the Emperor calls on Kislev (decision
+# bulwark_emperors_call). Old debts make refusal costly.
+# Scope: ROOT holds e_kislev, FROM the Emperor.
+character_event = {
+	id = bulwark.67
+	desc = EVTDESCbulwark67
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # bulwark_emperors_call
+
+	trigger = {
+		FROM = { war = yes }
+		NOT = { war_with = FROM }
+	}
+
+	# Ride south
+	option = {
+		name = EVTOPTAbulwark67
+		join_defender_wars = FROM
+		prestige = 100
+		FROM = { opinion = { who = ROOT modifier = opinion_bulwark_shield_north } }
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 has_opinion_modifier = { name = opinion_bulwark_shield_north who = FROM } }
+			modifier = { factor = 2 is_allied_with = FROM }
+			modifier = { factor = 0.2 war = yes }
+		}
+	}
+
+	# Refuse
+	option = {
+		name = EVTOPTBbulwark67
+		FROM = { opinion = { who = ROOT modifier = opinion_bulwark_call_refused } }
+		if = {
+			limit = {
+				OR = {
+					has_opinion_modifier = { name = opinion_bulwark_shield_north who = FROM }
+					is_allied_with = FROM
+				}
+			}
+			prestige = -200
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 3 war = yes }
+		}
+	}
+}
+
+###############################################################################
+# Doom: champions slain, the Gate, the crown
+###############################################################################
+
+# bulwark.80 A champion of Chaos slain
+# Hidden. A Kislevite ruler or a member of the Circle of the Bear kills a
+# Chaos champion, chosen or daemon prince: the doom of the world falls back
+# a little, and the killer hears of it (bulwark.81).
+# Scope: ROOT is the dead champion; killer the slayer.
+character_event = {
+	id = bulwark.80
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+
+	trigger = {
+		is_chaos_champion_chosen_or_prince_trigger = yes
+	}
+
+	immediate = {
+		killer = {
+			if = {
+				limit = {
+					OR = {
+						AND = { is_ruler = yes culture_group = kislevite_group }
+						society_member_of = circle_of_the_bear
+					}
+				}
+				character_event = { id = bulwark.81 }
+			}
+		}
+	}
+}
+
+# bulwark.81 The champion is dead
+# Scope: ROOT is the slayer, FROM the dead champion.
+character_event = {
+	id = bulwark.81
+	desc = EVTDESCbulwark81
+	picture = GFX_evt_duel_against_chaos
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # bulwark.80
+
+	option = {
+		name = EVTOPTAbulwark81
+		prestige = 100
+		if = {
+			limit = { FROM = { is_daemon_prince_trigger = yes } }
+			reduce_doom_progress_minor_effect = yes
+		}
+		else = {
+			reduce_doom_progress_tiny_effect = yes
+		}
+		if = {
+			limit = { society_member_of = circle_of_the_bear }
+			change_society_currency = 100
+		}
+	}
+}
+
+# bulwark.85 The Gate holds
+# Once a decade, if Kislev, Praag and Erengrad are all held by Kislev's gods,
+# the wall stands and doom falls back a little.
+# Scope: ROOT holds e_kislev.
+character_event = {
+	id = bulwark.85
+	hide_window = yes
+
+	is_triggered_only = yes # on_decade_pulse
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = e_kislev
+		bulwark_gate_holds_trigger = yes
+	}
+
+	immediate = {
+		reduce_doom_progress_tiny_effect = yes
+	}
+}
+
+# bulwark.86 The Tzar falls to Chaos
+# Hidden. The ruler of Kislev is killed by a follower of Chaos: the doom of
+# the world rises, and a great boyar claims the crown.
+# Scope: ROOT is the dead ruler; killer the slayer.
+character_event = {
+	id = bulwark.86
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+
+	trigger = {
+		has_landed_title = e_kislev
+		killer = { religion_group = chaos_gods_group }
+	}
+
+	immediate = {
+		add_doom_progress_minor_effect = yes
+		random_vassal = {
+			limit = {
+				higher_tier_than = COUNT
+				culture_group = kislevite_group
+				is_adult = yes
+				prisoner = no
+			}
+			preferred_limit = { trait = ambitious }
+			add_weak_claim = e_kislev
+		}
+	}
+}

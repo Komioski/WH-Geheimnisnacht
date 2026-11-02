@@ -1,0 +1,1162 @@
+###############################################################################
+# Praag
+# Namespace: praag
+# Faction: Kislev
+#
+# Praag, the silver city: the oldest city of Kislev, its jewellers, opera and
+# Observatory. Its curse, which only comes after the city has fallen to Chaos
+# and been taken back. The Furnace, where Praag burns its dead because they
+# walk. The vampire boyars hidden among the city's nobles (Upirnov,
+# Vasilikov, Kalashinivik). The Z'ra heirs of the old Ungol rulers, who wait
+# for a weak crown. Lore from Realm of the Ice Queen (WFRP 2e), chapter VII;
+# Komi's proposal doc, segment 3.
+#
+# The fall and the curse                     praag.1 - 4
+# Life under the curse                       praag.10 - 12
+# The Furnace                                praag.20 - 22
+# The silver city                            praag.30 - 31
+# The vampire boyars                         praag.40 - 45
+# The opera season                           praag.50 - 52
+# The Z'ra heirs                             praag.60
+#
+# Fired from common/on_actions/wh_on_actions.txt: praag.1 on
+# on_siege_over_winner, praag.2 on on_new_holder, _inheritance and
+# _usurpation, praag.4 on on_five_year_pulse, the five-year list praag_life
+# (10 - 12, 20 - 22, 30, 31, 40, 44, 45, 60) and the bi-yearly list
+# praag_opera (50 - 52). decisions/WHG_praag_decisions.txt eases the curse.
+# Scripted triggers: common/scripted_triggers/wh_praag_triggers.txt
+# Event modifiers: common/event_modifiers/wh_praag_modifiers.txt
+# Opinion modifiers: common/opinion_modifiers/wh_praag_opinions.txt
+# Artifacts: common/artifacts/25_artifacts_kislev.txt
+# Loc: localisation/00_WHG_praag_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = praag
+
+###############################################################################
+# The fall and the curse
+# Praag is only cursed once it has fallen to Chaos and been taken back.
+###############################################################################
+
+# praag.1 Praag falls
+# Hidden. A servant of Chaos wins a siege of a Praag holding: the city has
+# fallen. If the curse was eased, it comes back at once.
+# Scope: ROOT owns the winning army; FROM is the taken holding.
+character_event = {
+	id = praag.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_siege_over_winner
+
+	trigger = {
+		FROM = { location = { province_id = 182 } }
+		praag_chaos_trigger = yes
+	}
+
+	immediate = {
+		set_global_flag = praag_fell_to_chaos
+		if = {
+			limit = { has_global_flag = praag_cursed }
+			182 = {
+				remove_province_modifier = praag_curse_eased
+				if = {
+					limit = { NOT = { has_province_modifier = praag_curse } }
+					add_province_modifier = { name = praag_curse duration = -1 }
+				}
+			}
+		}
+	}
+}
+
+# praag.2 Praag changes hands
+# Hidden. A servant of Chaos taking the county counts as the fall. A free
+# ruler taking it after the fall brings down the curse (praag.3).
+# Scope: ROOT is the new holder; FROM the title.
+character_event = {
+	id = praag.2
+	hide_window = yes
+
+	is_triggered_only = yes # on_new_holder, on_new_holder_inheritance, on_new_holder_usurpation
+	only_rulers = yes
+
+	trigger = {
+		FROM = { title = c_praag }
+	}
+
+	immediate = {
+		if = {
+			limit = { praag_chaos_trigger = yes }
+			set_global_flag = praag_fell_to_chaos
+		}
+		else_if = {
+			limit = {
+				has_global_flag = praag_fell_to_chaos
+				NOT = { has_global_flag = praag_cursed }
+			}
+			set_global_flag = praag_cursed
+			182 = { add_province_modifier = { name = praag_curse duration = -1 } }
+			character_event = { id = praag.3 days = 7 }
+		}
+	}
+}
+
+# praag.3 The Curse of Praag
+# The city is free again, but what the Chaos sorcerers did to it does not
+# leave. Faces in the walls, madness, and the richest craftsmen in Kislev.
+# Scope: ROOT holds c_praag.
+character_event = {
+	id = praag.3
+	desc = EVTDESCpraag3
+	picture = GFX_evt_chaos_castle
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # praag.2
+
+	option = {
+		name = EVTOPTApraag3
+		piety = 10
+	}
+}
+
+# praag.4 The curse returns
+# Hidden. Every five years: when the Duma's rebuilding has worn off, the
+# curse comes back.
+# Scope: ROOT holds c_praag.
+character_event = {
+	id = praag.4
+	hide_window = yes
+
+	is_triggered_only = yes # on_five_year_pulse
+	only_rulers = yes
+
+	trigger = {
+		has_global_flag = praag_cursed
+		has_landed_title = c_praag
+		182 = {
+			NOT = { has_province_modifier = praag_curse }
+			NOT = { has_province_modifier = praag_curse_eased }
+		}
+	}
+
+	immediate = {
+		182 = { add_province_modifier = { name = praag_curse duration = -1 } }
+	}
+}
+
+###############################################################################
+# Life under the curse
+###############################################################################
+
+# praag.10 The city takes another mind
+# A courtier who lives in cursed Praag begins to hear the walls. Send them
+# to the Ice Witches for healing, or let it run its course.
+# Scope: ROOT lives in Praag; event_target:praag_mad the courtier.
+character_event = {
+	id = praag.10
+	desc = EVTDESCpraag10
+	picture = GFX_evt_mad_spirit
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_five_year_pulse praag_life
+
+	only_rulers = yes
+
+	trigger = {
+		praag_lives_in_praag_trigger = yes
+		praag_cursed_trigger = yes
+		any_courtier = {
+			is_adult = yes
+			prisoner = no
+			NOT = { trait = lunatic_3 }
+			lunacy_can_go_mad_trigger = yes
+		}
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = {
+				is_adult = yes
+				prisoner = no
+				NOT = { trait = lunatic_3 }
+				lunacy_can_go_mad_trigger = yes
+			}
+			save_event_target_as = praag_mad
+		}
+	}
+
+	# The Ice Witches
+	option = {
+		name = EVTOPTApraag10
+		trigger = { wealth = 50 }
+		wealth = -50
+		event_target:praag_mad = { opinion = { who = ROOT modifier = opinion_grateful } }
+		ai_chance = { factor = 50 }
+	}
+
+	# It is the city
+	option = {
+		name = EVTOPTBpraag10
+		event_target:praag_mad = {
+			lunacy_counter_sync_effect = yes
+			change_variable = { which = "lunatic_counter" value = 5 }
+			lunacy_counter_check_effect = yes
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+}
+
+# praag.11 A child of the walls
+# A child is born with the mark of the curse on them. Hide them, send them
+# to the Ice Witches, or give them to the Furnace.
+# Scope: ROOT lives in Praag; event_target:praag_mutant the child.
+character_event = {
+	id = praag.11
+	desc = EVTDESCpraag11
+	picture = GFX_evt_chaos_mutant
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_five_year_pulse praag_life
+
+	only_rulers = yes
+
+	trigger = {
+		praag_lives_in_praag_trigger = yes
+		praag_cursed_trigger = yes
+		any_courtier = {
+			is_adult = no
+			NOT = { true_religion_group = chaos_gods_group }
+			NOT = { is_child_of = ROOT }
+		}
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = {
+				is_adult = no
+				NOT = { true_religion_group = chaos_gods_group }
+				NOT = { is_child_of = ROOT }
+			}
+			save_event_target_as = praag_mutant
+			mutations_table = yes
+		}
+	}
+
+	# Hide them
+	option = {
+		name = EVTOPTApraag11
+		prestige = -10
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+
+	# To the Ice Witches
+	option = {
+		name = EVTOPTBpraag11
+		piety = 10
+		event_target:praag_mutant = { banish = yes }
+		ai_chance = { factor = 40 }
+	}
+
+	# To the Furnace
+	option = {
+		name = EVTOPTCpraag11
+		piety = 20
+		event_target:praag_mutant = { death = { death_reason = death_execution_burning killer = ROOT } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = zealous }
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 0 trait = kind }
+		}
+	}
+}
+
+# praag.12 Faces in the walls
+# Agonised faces push out of the stones of the palace. Pray, wall them over,
+# or listen to what they say (a secret, and a step towards madness).
+# Scope: ROOT lives in Praag.
+character_event = {
+	id = praag.12
+	desc = EVTDESCpraag12
+	picture = GFX_evt_chaos_castle
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_five_year_pulse praag_life
+
+	only_rulers = yes
+
+	trigger = {
+		praag_lives_in_praag_trigger = yes
+		praag_cursed_trigger = yes
+	}
+
+	option = {
+		name = EVTOPTApraag12
+		piety = 15
+		ai_chance = { factor = 50 }
+	}
+	option = {
+		name = EVTOPTBpraag12
+		trigger = { wealth = 25 }
+		wealth = -25
+		prestige = 15
+		ai_chance = { factor = 40 }
+	}
+	option = {
+		name = EVTOPTCpraag12
+		add_character_modifier = { name = praag_vampire_secrets years = 5 }
+		if = {
+			limit = { lunacy_can_go_mad_trigger = yes }
+			lunacy_counter_sync_effect = yes
+			change_variable = { which = "lunatic_counter" value = 3 }
+			lunacy_counter_check_effect = yes
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 trait = paranoid }
+		}
+	}
+}
+
+###############################################################################
+# The Furnace
+# Praag burns its dead, because in Praag the dead walk.
+###############################################################################
+
+# praag.20 The Furnace men
+# The men who smash the risen dead at night ask for gold, oil and men. Help
+# them (Ashes Not Graves on the city; rarely their hammer for the ruler), or
+# send them away.
+# Scope: ROOT holds c_praag.
+character_event = {
+	id = praag.20
+	desc = EVTDESCpraag20
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_five_year_pulse praag_life
+
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = c_praag
+		182 = { NOT = { has_province_modifier = praag_ashes_not_graves } }
+	}
+
+	# Help them
+	option = {
+		name = EVTOPTApraag20
+		trigger = { wealth = 50 }
+		wealth = -50
+		182 = {
+			remove_province_modifier = praag_dead_risen
+			add_province_modifier = { name = praag_ashes_not_graves years = 20 }
+		}
+		if = {
+			limit = {
+				NOT = { has_character_flag = praag_hammer_given }
+				NOT = { has_artifact = praag_furnace_hammer }
+			}
+			random = {
+				chance = 10
+				set_character_flag = praag_hammer_given
+				add_artifact = praag_furnace_hammer
+			}
+		}
+		ai_chance = { factor = 70 }
+	}
+
+	# Send them away
+	option = {
+		name = EVTOPTBpraag20
+		set_character_flag = praag_furnace_neglected
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+}
+
+# praag.21 The dead walk in Praag
+# A district wakes to find its dead walking. Likelier when the Furnace men
+# were sent away. Lead the Furnace men yourself, pay the garrison, or close
+# the district and let it burn.
+# Scope: ROOT holds c_praag.
+character_event = {
+	id = praag.21
+	desc = EVTDESCpraag21
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_five_year_pulse praag_life
+
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = c_praag
+		182 = {
+			NOT = { has_province_modifier = praag_ashes_not_graves }
+			NOT = { has_province_modifier = praag_dead_risen }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 3 has_character_flag = praag_furnace_neglected }
+	}
+
+	immediate = {
+		clr_character_flag = praag_furnace_neglected
+	}
+
+	# Lead them yourself
+	option = {
+		name = EVTOPTApraag21
+		random_list = {
+			70 = {
+				modifier = { factor = 1.5 martial = 12 }
+				prestige = 75
+			}
+			30 = {
+				add_trait = wounded
+				prestige = 25
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0 trait = craven }
+		}
+	}
+
+	# Pay the garrison
+	option = {
+		name = EVTOPTBpraag21
+		trigger = { wealth = 40 }
+		wealth = -40
+		ai_chance = { factor = 40 }
+	}
+
+	# Let it burn
+	option = {
+		name = EVTOPTCpraag21
+		182 = { add_province_modifier = { name = praag_dead_risen years = 5 } }
+		ai_chance = { factor = 20 }
+	}
+}
+
+# praag.22 The undertaker
+# One of Praag's undertakers is found raising what he should be burning.
+# Burn him, take him into service, or drive him out.
+# Scope: ROOT holds c_praag.
+character_event = {
+	id = praag.22
+	desc = EVTDESCpraag22
+	picture = GFX_evt_witch_hunter_pyre
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_five_year_pulse praag_life
+
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = c_praag
+		182 = { NOT = { has_province_modifier = praag_ashes_not_graves } }
+	}
+
+	# Burn him
+	option = {
+		name = EVTOPTApraag22
+		piety = 25
+		ai_chance = { factor = 60 }
+	}
+
+	# A useful man
+	option = {
+		name = EVTOPTBpraag22
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = ROOT
+			culture = ungol
+			female = no
+			age = 45
+			attributes = { learning = 12 intrigue = 8 }
+			trait = creature_human
+			trait = lore_necromancy
+			trait = magic_potential_1
+		}
+		piety = -20
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 5 religion_group = necromantic_group }
+		}
+	}
+
+	# Drive him out
+	option = {
+		name = EVTOPTCpraag22
+		prestige = 5
+		ai_chance = { factor = 30 }
+	}
+}
+
+###############################################################################
+# The silver city
+###############################################################################
+
+# praag.30 The silversmiths' street
+# The jewellers of Praag offer a commission. Pay for a fine piece (one time
+# in four, once a lifetime, a Praag filigree chain), or decline.
+# Scope: ROOT holds c_praag.
+character_event = {
+	id = praag.30
+	desc = EVTDESCpraag30
+	picture = GFX_evt_market
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_five_year_pulse praag_life
+
+	only_rulers = yes
+
+	trigger = { has_landed_title = c_praag }
+
+	option = {
+		name = EVTOPTApraag30
+		trigger = { wealth = 60 }
+		wealth = -60
+		prestige = 30
+		if = {
+			limit = {
+				NOT = { has_character_flag = praag_chain_given }
+				NOT = { has_artifact = kislevsoc_praag_filigree_chain }
+			}
+			random = {
+				chance = 25
+				set_character_flag = praag_chain_given
+				add_artifact = kislevsoc_praag_filigree_chain
+			}
+		}
+		ai_chance = { factor = 50 }
+	}
+	option = {
+		name = EVTOPTBpraag30
+		ai_chance = { factor = 50 }
+	}
+}
+
+# praag.31 The Observatory
+# An astronomer of the old Observatory has read the stars over Kislev. Fund
+# the readings, or send him back to his tower.
+# Scope: ROOT holds c_praag.
+character_event = {
+	id = praag.31
+	desc = EVTDESCpraag31
+	picture = GFX_evt_start_signs
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_five_year_pulse praag_life
+
+	only_rulers = yes
+
+	trigger = { has_landed_title = c_praag }
+
+	option = {
+		name = EVTOPTApraag31
+		trigger = { wealth = 40 }
+		wealth = -40
+		add_character_modifier = { name = praag_star_reading years = 10 }
+		ai_chance = { factor = 50 }
+	}
+	option = {
+		name = EVTOPTBpraag31
+		ai_chance = { factor = 50 }
+	}
+}
+
+###############################################################################
+# The vampire boyars
+# The Upirnovs, Vasilikovs and Kalashiniviks hide among Praag's nobles. The
+# Kalashiniviks are Lahmians. A slow chain of clues (40 - 42) ends with the
+# truth (43): purge them with the Circle, bargain, or be drawn in.
+###############################################################################
+
+# praag.40 The missing servants
+# Servants of the great houses go missing in the night. Look into it (the
+# hunt begins), or let it be.
+# Scope: ROOT holds c_praag.
+character_event = {
+	id = praag.40
+	desc = EVTDESCpraag40
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_five_year_pulse praag_life
+
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = c_praag
+		praag_vampires_hidden_trigger = yes
+	}
+
+	option = {
+		name = EVTOPTApraag40
+		set_character_flag = praag_vamp_hunt
+		character_event = { id = praag.41 days = 365 random = 365 }
+		ai_chance = { factor = 60 }
+	}
+	option = {
+		name = EVTOPTBpraag40
+		ai_chance = { factor = 40 }
+	}
+}
+
+# praag.41 Never at dawn prayers
+# A boyar of the Duma never comes to the dawn prayers, and never to a
+# daytime feast. Keep watching (praag.42), or drop it.
+# Scope: ROOT holds c_praag and is on the hunt.
+character_event = {
+	id = praag.41
+	desc = EVTDESCpraag41
+	picture = GFX_evt_kislev_boyars
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # praag.40, praag.52
+
+	trigger = {
+		has_landed_title = c_praag
+		has_character_flag = praag_vamp_hunt
+	}
+
+	option = {
+		name = EVTOPTApraag41
+		character_event = { id = praag.42 days = 180 random = 180 }
+	}
+	option = {
+		name = EVTOPTBpraag41
+		clr_character_flag = praag_vamp_hunt
+	}
+}
+
+# praag.42 The portrait
+# In the boyar's house hangs a portrait of his great-grandfather. It is the
+# boyar, to the last grey hair. The truth comes out (praag.43).
+# Scope: ROOT holds c_praag and is on the hunt.
+character_event = {
+	id = praag.42
+	desc = EVTDESCpraag42
+	picture = GFX_evt_vampire_castle
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # praag.41
+
+	trigger = {
+		has_landed_title = c_praag
+		has_character_flag = praag_vamp_hunt
+	}
+
+	option = {
+		name = EVTOPTApraag42
+		character_event = { id = praag.43 days = 3 }
+	}
+}
+
+# praag.43 The boyars who do not age
+# The vampire boyars are found out: the Upirnovs (von Carstein blood) or the
+# Kalashinivik sisters (Lahmians). Purge them with the Circle of the Bear,
+# bargain for gold and secrets (one of them stays at court), or be drawn in
+# as their living thrall.
+# Scope: ROOT holds c_praag.
+character_event = {
+	id = praag.43
+	desc = {
+		trigger = { has_character_flag = praag_vamp_lahmian }
+		text = EVTDESCpraag43b
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = praag_vamp_lahmian } }
+		text = EVTDESCpraag43
+	}
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_narrative_frame_intrigue
+
+	is_triggered_only = yes # praag.42
+
+	immediate = {
+		clr_character_flag = praag_vamp_hunt
+		clr_global_flag = praag_vampires_found
+		set_global_flag = praag_vampires_found
+		random = {
+			chance = 50
+			set_character_flag = praag_vamp_lahmian
+		}
+	}
+
+	# Purge them
+	option = {
+		name = EVTOPTApraag43
+		trigger = {
+			OR = {
+				society_member_of = circle_of_the_bear
+				any_courtier = { society_member_of = circle_of_the_bear }
+				wealth = 100
+			}
+		}
+		if = {
+			limit = {
+				NOR = {
+					society_member_of = circle_of_the_bear
+					any_courtier = { society_member_of = circle_of_the_bear }
+				}
+			}
+			wealth = -100
+		}
+		prestige = 150
+		piety = 50
+		clr_character_flag = praag_vamp_lahmian
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 0 is_vampire_trigger = yes }
+		}
+	}
+
+	# Bargain
+	option = {
+		name = EVTOPTBpraag43
+		scaled_wealth = { value = 0.5 min = 100 }
+		add_character_modifier = { name = praag_vampire_secrets years = 20 }
+		if = {
+			limit = { has_character_flag = praag_vamp_lahmian }
+			create_character = {
+				random_traits = yes
+				dynasty = 31026 # Kalashinivik
+				religion = ROOT
+				culture = gospodar
+				female = yes
+				age = 25
+				attributes = { intrigue = 14 diplomacy = 12 }
+				trait = creature_human
+				trait = vampire_lahmian_hidden
+				trait = fair
+			}
+		}
+		else = {
+			create_character = {
+				random_traits = yes
+				dynasty = 31020 # Upirnov
+				religion = ROOT
+				culture = gospodar
+				female = no
+				age = 40
+				attributes = { martial = 14 intrigue = 10 }
+				trait = creature_human
+				trait = vampire_carstein_hidden
+			}
+		}
+		piety = -50
+		clr_character_flag = praag_vamp_lahmian
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 0.2 trait = zealous }
+		}
+	}
+
+	# Drawn in
+	option = {
+		name = EVTOPTCpraag43
+		trigger = {
+			NOT = { is_vampire_trigger = yes }
+			NOT = { religion_group = necromantic_group }
+		}
+		set_secret_religion = vampiric
+		add_character_modifier = { name = praag_vampire_secrets years = 20 }
+		scaled_wealth = { value = 0.3 min = 50 }
+		clr_character_flag = praag_vamp_lahmian
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0 trait = zealous }
+			modifier = { factor = 3 trait = ambitious }
+		}
+	}
+}
+
+# praag.44 The Upirnov captain
+# A pale boyar of the Upirnovs offers to keep the peace in Praag's streets.
+# He is very good at it. Take him into service (a hidden vampire at court,
+# Praag quieter for twenty years), or decline.
+# Scope: ROOT holds c_praag.
+character_event = {
+	id = praag.44
+	desc = EVTDESCpraag44
+	picture = GFX_evt_vampire_knight
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_five_year_pulse praag_life
+
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = c_praag
+		NOT = { has_global_flag = praag_upirnov_serves }
+	}
+
+	option = {
+		name = EVTOPTApraag44
+		set_global_flag = praag_upirnov_serves
+		create_character = {
+			random_traits = yes
+			dynasty = 31020 # Upirnov
+			religion = ROOT
+			culture = gospodar
+			female = no
+			age = 35
+			attributes = { martial = 16 stewardship = 8 }
+			trait = creature_human
+			trait = vampire_carstein_hidden
+			trait = brilliant_strategist
+		}
+		182 = { add_province_modifier = { name = praag_upirnov_watch years = 20 } }
+		ai_chance = { factor = 60 }
+	}
+	option = {
+		name = EVTOPTBpraag44
+		ai_chance = { factor = 40 }
+	}
+}
+
+# praag.45 A Vasilikov's claim
+# A Vasilikov arrives with a chest of old charters: his house, he says, held
+# a quarter of Praag before the Tzarina's time. Recognise the claim (he joins
+# the court with a claim on a city of Praag), refuse him, or throw him in
+# the cells.
+# Scope: ROOT holds c_praag; event_target:praag_vasilikov the claimant.
+character_event = {
+	id = praag.45
+	desc = EVTDESCpraag45
+	picture = GFX_evt_kislev_boyars
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # on_five_year_pulse praag_life
+
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = c_praag
+		NOT = { has_global_flag = praag_vasilikov_came }
+	}
+
+	immediate = {
+		set_global_flag = praag_vasilikov_came
+		create_character = {
+			random_traits = yes
+			dynasty = 31025 # Vasilikov
+			religion = ROOT
+			culture = gospodar
+			female = no
+			age = 38
+			attributes = { diplomacy = 12 intrigue = 12 }
+			trait = creature_human
+		}
+		new_character = { save_event_target_as = praag_vasilikov }
+	}
+
+	# Recognise the claim
+	option = {
+		name = EVTOPTApraag45
+		event_target:praag_vasilikov = {
+			add_claim = b_uskovic
+			opinion = { who = ROOT modifier = opinion_grateful }
+		}
+		prestige = -10
+		ai_chance = { factor = 40 }
+	}
+
+	# Refuse him
+	option = {
+		name = EVTOPTBpraag45
+		prestige = 10
+		event_target:praag_vasilikov = {
+			add_weak_claim = b_uskovic
+			opinion = { who = ROOT modifier = opinion_angry }
+		}
+		ai_chance = { factor = 40 }
+	}
+
+	# The cells
+	option = {
+		name = EVTOPTCpraag45
+		imprison = event_target:praag_vasilikov
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = paranoid }
+		}
+	}
+}
+
+###############################################################################
+# The opera season
+# Only while the Praag Opera House stands.
+###############################################################################
+
+# praag.50 An opera about the reign
+# The Opera House offers to stage an opera about the ruler. Commission it
+# (a triumph, or a scandal if the librettist mocks you), or decline.
+# Scope: ROOT holds c_praag and owns the Opera House.
+character_event = {
+	id = praag.50
+	desc = EVTDESCpraag50
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # on_bi_yearly_pulse praag_opera
+
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = c_praag
+		has_wonder = wonder_praag_opera_house # owns the Praag Opera House
+		NOT = { has_character_modifier = praag_opera_triumph }
+		NOT = { has_character_modifier = praag_opera_scandal }
+	}
+
+	option = {
+		name = EVTOPTApraag50
+		trigger = { wealth = 75 }
+		wealth = -75
+		random_list = {
+			65 = {
+				modifier = { factor = 1.5 diplomacy = 12 }
+				prestige = 100
+				add_character_modifier = { name = praag_opera_triumph years = 10 }
+			}
+			35 = {
+				modifier = { factor = 1.5 trait = cruel }
+				modifier = { factor = 1.5 trait = arbitrary }
+				add_character_modifier = { name = praag_opera_scandal years = 5 }
+			}
+		}
+		ai_chance = { factor = 60 }
+	}
+	option = {
+		name = EVTOPTBpraag50
+		ai_chance = { factor = 40 }
+	}
+}
+
+# praag.51 The diva
+# The prima donna of the season wants a patron. Invite her to court, send
+# flowers and jewels, or ignore her.
+# Scope: ROOT holds c_praag and owns the Opera House.
+character_event = {
+	id = praag.51
+	desc = EVTDESCpraag51
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # on_bi_yearly_pulse praag_opera
+
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = c_praag
+		has_wonder = wonder_praag_opera_house # owns the Praag Opera House
+	}
+
+	option = {
+		name = EVTOPTApraag51
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = ROOT
+			culture = gospodar
+			female = yes
+			age = 24
+			attributes = { diplomacy = 14 }
+			trait = creature_human
+			trait = fair
+			trait = gregarious
+		}
+		prestige = 15
+		ai_chance = { factor = 40 }
+	}
+	option = {
+		name = EVTOPTBpraag51
+		trigger = { wealth = 20 }
+		wealth = -20
+		prestige = 25
+		ai_chance = { factor = 40 }
+	}
+	option = {
+		name = EVTOPTCpraag51
+		ai_chance = { factor = 20 }
+	}
+}
+
+# praag.52 Murder in the boxes
+# A boyar is found dead in his box during the third act, drained white.
+# Investigate (a clever ruler may find the vampire boyars, praag.41), hush
+# it up, or blame the Ungols.
+# Scope: ROOT holds c_praag and owns the Opera House.
+character_event = {
+	id = praag.52
+	desc = EVTDESCpraag52
+	picture = GFX_evt_vampire_kiss
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_bi_yearly_pulse praag_opera
+
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = c_praag
+		has_wonder = wonder_praag_opera_house # owns the Praag Opera House
+	}
+
+	# Investigate
+	option = {
+		name = EVTOPTApraag52
+		if = {
+			limit = {
+				intrigue = 12
+				praag_vampires_hidden_trigger = yes
+			}
+			set_character_flag = praag_vamp_hunt
+			character_event = { id = praag.41 days = 30 }
+		}
+		else = {
+			prestige = 10
+		}
+		ai_chance = { factor = 50 }
+	}
+
+	# Hush it up
+	option = {
+		name = EVTOPTBpraag52
+		trigger = { wealth = 30 }
+		wealth = -30
+		ai_chance = { factor = 30 }
+	}
+
+	# Blame the Ungols
+	option = {
+		name = EVTOPTCpraag52
+		prestige = 10
+		any_vassal = {
+			limit = { culture = ungol }
+			opinion = { who = ROOT modifier = opinion_praag_blamed_ungols }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 0 culture = ungol }
+		}
+	}
+}
+
+###############################################################################
+# The Z'ra heirs
+###############################################################################
+
+# praag.60 The Z'ra heirs
+# When the crown of Kislev is weak, the heirs of the old Z'ra rulers come to
+# Praag's lord with Ungol swords behind them. Champion them (stand for
+# independence with the factions; a Z'ra heir joins the court), betray them
+# to the Tzar(ina) (favour, gold, and the duchy of Praag if the crown holds
+# it), or send them away.
+# Scope: ROOT holds c_praag under the crown of Kislev.
+character_event = {
+	id = praag.60
+	desc = EVTDESCpraag60
+	picture = GFX_evt_kislev_druzhina
+	border = GFX_event_narrative_frame_intrigue
+
+	is_triggered_only = yes # on_five_year_pulse praag_life
+
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = c_praag
+		NOT = { has_landed_title = e_kislev }
+		top_liege = {
+			has_landed_title = e_kislev
+			praag_crown_weak_trigger = yes
+		}
+		OR = {
+			NOT = { has_global_flag = praag_zra_rose }
+			had_global_flag = { flag = praag_zra_rose days = 10950 }
+		}
+	}
+
+	immediate = {
+		clr_global_flag = praag_zra_rose
+		set_global_flag = praag_zra_rose
+	}
+
+	# Champion them
+	option = {
+		name = EVTOPTApraag60
+		create_character = {
+			random_traits = yes
+			dynasty = 31900 # Z'ra
+			religion = ROOT
+			culture = ungol
+			female = no
+			age = 30
+			attributes = { martial = 12 diplomacy = 10 }
+			trait = creature_human
+		}
+		new_character = { opinion = { who = ROOT modifier = opinion_praag_zra_championed } }
+		join_faction = {
+			faction = faction_independence
+			faction_leader = ROOT
+			can_join_existing = yes
+		}
+		any_vassal = {
+			limit = { culture = ungol }
+			opinion = { who = ROOT modifier = opinion_praag_zra_championed }
+		}
+		prestige = 50
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 culture = ungol }
+			modifier = { factor = 2 trait = ambitious }
+			modifier = { factor = 0.5 trait = content }
+		}
+	}
+
+	# Betray them
+	option = {
+		name = EVTOPTBpraag60
+		top_liege = { opinion = { who = ROOT modifier = opinion_praag_zra_warned } }
+		wealth = 100
+		if = {
+			limit = {
+				NOT = { has_landed_title = d_praag }
+				top_liege = { has_landed_title = d_praag }
+			}
+			grant_title = d_praag
+		}
+		any_vassal = {
+			limit = { culture = ungol }
+			opinion = { who = ROOT modifier = opinion_praag_zra_betrayed }
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = content }
+			modifier = { factor = 0.5 culture = ungol }
+		}
+	}
+
+	# Send them away
+	option = {
+		name = EVTOPTCpraag60
+		ai_chance = { factor = 30 }
+	}
+}

@@ -1,0 +1,443 @@
+###############################################################################
+# Vampire bloodline society events
+# Namespace: vampsoc
+# Faction: the seven vampire bloodlines
+#
+# One society per bloodline (common/societies/wh_vampire_bloodlines.txt).
+# Every open vampire is locked into the society of their line; hidden
+# Lahmians and von Carsteins are secret members. Living thralls of a
+# necromantic faith serve at ranks 1-2. Each line has 4 ranks, a deed and a
+# trial to climb, three rank powers, a head with an ambition, a mechanic of
+# its own, flavour events, a rare artifact and a retinue.
+#
+# Startup sorting                           vampsoc.1
+# Five-year sweep and flavour driver        vampsoc.2
+# Rank-up notice                            vampsoc.5
+# Feeding                                   vampsoc.10
+# The head's aid                            vampsoc.11 - vampsoc.15
+# Thrall service                            vampsoc.13 - vampsoc.14
+#
+# Fired from common/on_actions/wh_on_actions.txt: vampsoc.1 on_startup,
+# vampsoc.2 on_five_year_pulse. The decisions in
+# decisions/wh_vampire_society_decisions.txt fire the rest.
+# Scripted triggers: common/scripted_triggers/wh_vamp_triggers.txt
+# Scripted effects: common/scripted_effects/wh_vamp_effects.txt
+# Event modifiers: common/event_modifiers/wh_vampire_modifiers.txt
+# Loc: localisation/00_WHG_vampire_society_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = vampsoc
+
+###############################################################################
+# Startup and the sweep
+###############################################################################
+
+# vampsoc.1 The bloodlines gather
+# Once per game the multiplayer host puts every vampire into the society of
+# their bloodline, ranks them by standing (kings and dukes rank 3, other
+# rulers rank 2) and makes the founders heads: Vlad von Carstein, Walach
+# Harkon, Neferata, W'soran, Shdroi So-sou and Salimata. The Strigoi start
+# without a head; reforming Strygos makes one.
+# Scope: ROOT is the host player.
+character_event = {
+	id = vampsoc.1
+	hide_window = yes
+
+	ai = no
+	only_playable = yes
+
+	is_triggered_only = yes # on_startup
+
+	trigger = {
+		NOT = { has_global_flag = vampsoc_sorted }
+		is_multiplayer_host_character = yes
+	}
+
+	immediate = {
+		set_global_flag = vampsoc_sorted
+		any_character = {
+			limit = { vamp_needs_society_trigger = yes }
+			vamp_join_bloodline_effect = yes
+		}
+		any_character = {
+			limit = {
+				vamp_society_member_trigger = yes
+				is_vampire_trigger = yes
+				is_ruler = yes
+			}
+			if = {
+				limit = { society_rank == 1 }
+				society_rank_up = 1
+			}
+			if = {
+				limit = {
+					higher_tier_than = COUNT
+					society_rank == 2
+					NOT = { trait = vampire_carstein_hidden }
+				}
+				society_rank_up = 1
+			}
+		}
+		vampsoc_set_founder_heads_effect = yes
+	}
+}
+
+# vampsoc.2 The bloodlines stir
+# Every five years: a vampire who has left their society (or was made a
+# vampire by some path that missed the join) is put back, and an open
+# vampire member may get one of their bloodline's flavour events.
+# Scope: ROOT is any character on the five-year pulse.
+character_event = {
+	id = vampsoc.2
+	hide_window = yes
+
+	is_triggered_only = yes # on_five_year_pulse
+
+	trigger = {
+		is_vampire_trigger = yes
+	}
+
+	immediate = {
+		if = {
+			limit = { vamp_needs_society_trigger = yes }
+			vamp_join_bloodline_effect = yes
+		}
+		if = {
+			limit = {
+				vamp_society_member_trigger = yes
+				prisoner = no
+				is_incapacitated_trigger = no
+			}
+			vampsoc_flavour_effect = yes
+		}
+	}
+}
+
+# vampsoc.5 Risen in the bloodline
+# A member has risen a rank.
+# Scope: ROOT is the member.
+character_event = {
+	id = vampsoc.5
+	desc = {
+		trigger = { society_member_of = carstein_court }
+		text = EVTDESCvampsoc5_carstein
+	}
+	desc = {
+		trigger = { society_member_of = ordo_draconis }
+		text = EVTDESCvampsoc5_blood
+	}
+	desc = {
+		trigger = { society_member_of = lahmian_sisterhood }
+		text = EVTDESCvampsoc5_lahmian
+	}
+	desc = {
+		trigger = { society_member_of = necrarch_brotherhood }
+		text = EVTDESCvampsoc5_necrarch
+	}
+	desc = {
+		trigger = { society_member_of = strigoi_brood }
+		text = EVTDESCvampsoc5_strigoi
+	}
+	desc = {
+		trigger = { society_member_of = jade_coil }
+		text = EVTDESCvampsoc5_jade
+	}
+	desc = {
+		trigger = { society_member_of = carrion_children }
+		text = EVTDESCvampsoc5_mahtmasi
+	}
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_rank_up
+
+	option = {
+		name = EVTOPTAvampsoc5
+	}
+}
+
+###############################################################################
+# Feeding
+###############################################################################
+
+# vampsoc.10 The hunger
+# The vampire feeds. A servant is safe. Worthy prey (a warrior of the realm)
+# feeds deeper and counts as the Strigoi's deed, but may fight back. A
+# Mahtmasi may instead answer a mortal who came asking, which is the
+# Mahtmasi deed. The Blood Dragons lose Honour for feeding on the helpless.
+# Scope: ROOT is a vampire member.
+character_event = {
+	id = vampsoc.10
+	desc = {
+		trigger = { society_member_of = ordo_draconis }
+		text = EVTDESCvampsoc10_blood
+	}
+	desc = {
+		trigger = { society_member_of = carrion_children }
+		text = EVTDESCvampsoc10_mahtmasi
+	}
+	desc = {
+		trigger = {
+			NOT = { society_member_of = ordo_draconis }
+			NOT = { society_member_of = carrion_children }
+		}
+		text = EVTDESCvampsoc10
+	}
+	picture = GFX_evt_vampire_kiss
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # vampsoc_feed
+
+	# A servant
+	option = {
+		name = EVTOPTAvampsoc10
+		trigger = { NOT = { society_member_of = carrion_children } }
+		add_character_modifier = { name = vampsoc_well_fed years = 2 }
+		if = {
+			limit = { society_member_of = ordo_draconis }
+			custom_tooltip = { text = vampsoc_feed_dishonour_tt }
+			vamp_currency_loss_small_effect = yes
+		}
+		else = {
+			vamp_currency_small_effect = yes
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.1 society_member_of = ordo_draconis }
+		}
+	}
+
+	# Worthy prey
+	option = {
+		name = EVTOPTBvampsoc10
+		trigger = { NOT = { society_member_of = carrion_children } }
+		random_list = {
+			75 = {
+				add_character_modifier = { name = vampsoc_well_fed years = 4 }
+				vamp_currency_medium_effect = yes
+				prestige = 25
+				if = {
+					limit = { society_member_of = strigoi_brood }
+					set_character_flag = vamp_deed_done
+				}
+			}
+			25 = {
+				modifier = { factor = 0.5 martial = 15 }
+				modifier = { factor = 0.5 combat_rating = 40 }
+				add_character_modifier = { name = vampsoc_well_fed years = 2 }
+				vamp_currency_small_effect = yes
+				custom_tooltip = { text = vampsoc_feed_fought_back_tt }
+				random_list = {
+					60 = { add_trait_wounded_effect = yes }
+					40 = { prestige = -25 }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 3 society_member_of = strigoi_brood }
+			modifier = { factor = 3 society_member_of = ordo_draconis }
+			modifier = { factor = 0.3 trait = craven }
+		}
+	}
+
+	# Mahtmasi: the one who asked
+	option = {
+		name = EVTOPTCvampsoc10
+		trigger = { society_member_of = carrion_children }
+		add_character_modifier = { name = vampsoc_well_fed years = 4 }
+		vamp_currency_medium_effect = yes
+		set_character_flag = vamp_deed_done
+		piety = 10
+	}
+
+	# Mahtmasi: a stranger, unasked
+	option = {
+		name = EVTOPTDvampsoc10
+		trigger = { society_member_of = carrion_children }
+		add_character_modifier = { name = vampsoc_well_fed years = 2 }
+		custom_tooltip = { text = vampsoc_feed_unasked_tt }
+		vamp_currency_loss_small_effect = yes
+		ai_chance = { factor = 10 }
+	}
+}
+
+###############################################################################
+# The head's aid
+###############################################################################
+
+# vampsoc.11 A plea from the blood
+# A member at war asks the head of the bloodline for help. The head may send
+# gold, lend the dead of their own lands, or refuse.
+# Scope: ROOT is the head; FROM is the member asking.
+letter_event = {
+	id = vampsoc.11
+	desc = EVTDESCvampsoc11
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes # vampsoc_ask_head_aid
+
+	# Gold
+	option = {
+		name = EVTOPTAvampsoc11
+		trigger = { wealth = 100 }
+		wealth = -100
+		FROM = { wealth = 100 }
+		vamp_currency_small_effect = yes
+		FROM = { character_event = { id = vampsoc.12 } }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 2 trait = charitable }
+			modifier = { factor = 0.2 trait = greedy }
+		}
+	}
+
+	# Lend the dead
+	option = {
+		name = EVTOPTBvampsoc11
+		FROM = {
+			add_character_modifier = { name = vampsoc_head_aid years = 3 }
+			character_event = { id = vampsoc.12 }
+		}
+		vamp_currency_small_effect = yes
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 2 war = no }
+		}
+	}
+
+	# Refuse
+	option = {
+		name = EVTOPTCvampsoc11
+		FROM = { letter_event = { id = vampsoc.15 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 0.2 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 3 NOT = { opinion = { who = FROM value = 0 } } }
+			modifier = { factor = 2 trait = paranoid }
+		}
+	}
+}
+
+# vampsoc.12 The head answers
+# The head of the bloodline has sent help (gold or the dead).
+# Scope: ROOT is the member who asked; FROM is the head.
+character_event = {
+	id = vampsoc.12
+	desc = EVTDESCvampsoc12
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc12
+		opinion = { who = FROM modifier = opinion_grateful years = 10 }
+	}
+}
+
+# vampsoc.15 The head refuses
+# The head of the bloodline will not help.
+# Scope: ROOT is the member who asked; FROM is the head.
+letter_event = {
+	id = vampsoc.15
+	desc = EVTDESCvampsoc15
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc15
+		opinion = { who = FROM modifier = opinion_disappointed years = 10 }
+	}
+}
+
+###############################################################################
+# Thrall service
+###############################################################################
+
+# vampsoc.13 A thrall's gift
+# A living thrall offers their blood to their vampire liege. Drinking deep
+# heals the vampire and leaves the thrall weak; drinking sparingly is kinder.
+# Either way the service counts as the thrall's deed for rank 2.
+# Scope: ROOT is the vampire liege; FROM is the thrall.
+character_event = {
+	id = vampsoc.13
+	desc = EVTDESCvampsoc13
+	picture = GFX_evt_vampire_kiss
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # vampsoc_offer_blood
+
+	# Drink deep
+	option = {
+		name = EVTOPTAvampsoc13
+		add_character_modifier = { name = vampsoc_well_fed years = 3 }
+		FROM = {
+			add_character_modifier = { name = vampsoc_drained years = 1 }
+			vamp_currency_medium_effect = yes
+			set_character_flag = vamp_deed_done
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 2 trait = gluttonous }
+		}
+	}
+
+	# Drink sparingly
+	option = {
+		name = EVTOPTBvampsoc13
+		add_character_modifier = { name = vampsoc_well_fed years = 1 }
+		FROM = {
+			vamp_currency_small_effect = yes
+			set_character_flag = vamp_deed_done
+		}
+		reverse_opinion = { who = FROM modifier = opinion_grateful years = 5 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 2 trait = temperate }
+		}
+	}
+}
+
+# vampsoc.14 A daylight errand
+# The thrall runs an errand for their master where a vampire can't go:
+# into a church, a market at noon, a guild hall. Success earns gold and
+# counts as the thrall's deed; failure leaves them suspected or hurt.
+# Scope: ROOT is the thrall.
+character_event = {
+	id = vampsoc.14
+	desc = EVTDESCvampsoc14
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # vampsoc_daylight_errand
+
+	option = {
+		name = EVTOPTAvampsoc14
+		random_list = {
+			70 = {
+				modifier = { factor = 1.5 intrigue = 12 }
+				modifier = { factor = 1.5 stewardship = 12 }
+				custom_tooltip = { text = vampsoc_errand_success_tt }
+				vamp_currency_medium_effect = yes
+				set_character_flag = vamp_deed_done
+				liege = { wealth = 50 }
+			}
+			30 = {
+				modifier = { factor = 0.6 intrigue = 15 }
+				custom_tooltip = { text = vampsoc_errand_failure_tt }
+				random_list = {
+					50 = { prestige = -30 }
+					50 = { add_trait_wounded_effect = yes }
+				}
+			}
+		}
+	}
+}

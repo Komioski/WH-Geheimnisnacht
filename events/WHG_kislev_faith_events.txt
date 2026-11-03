@@ -1,0 +1,1295 @@
+###############################################################################
+# Kislev: faith and legend
+# Namespace: ursun
+# Faction: Kislev
+#
+# The gods of Kislev in the lives of its people: the once-a-game quest for
+# the Wounded Bear, the games and insults of Waking Day, the hearth flame of
+# Dazh that must not go out, the oath sworn on Tor's thunder, the barrow of
+# the Khan-Queen Miska, the spirit-paths that lead the Ungols to Ursun, and
+# the priests who will not suffer a mutant at court. Lore from Realm of the
+# Ice Queen (WFRP 2e); Komi's proposal doc, segment 6.
+#
+# The Wounded Bear (great quest)             ursun.1 - 9
+# Waking Day                                 ursun.20 - 21
+# Dazh's Hearthfires                         ursun.30 - 32
+# Tor's Oath                                 ursun.40 - 46
+# Miska's Barrow                             ursun.50 - 51
+# The Ungol Spirit-Paths                     ursun.60 - 62
+# Tainted blood                              ursun.70
+#
+# Fired from common/on_actions/wh_on_actions.txt: the decade list
+# ursun_omens (ursun.1); the bi-yearly list
+# ursun_long_sleep (ursun.9); the five-year lists ursun_waking (20 - 21),
+# ursun_spirit_paths (60 - 62) and ursun_tainted (ursun.70); ursun.30 on_siege_over_winner;
+# ursun.40 on_war_started; ursun.42, 43 and 44 on the three war ends.
+# Decisions in decisions/WHG_kislev_faith_decisions.txt fire ursun.32 and
+# ursun.50. kislev.60 (the Dazh birth rite) skips a ruler with a cold hearth.
+# Scripted triggers: common/scripted_triggers/wh_kislev_faith_triggers.txt
+# Event modifiers: common/event_modifiers/wh_kislev_faith_modifiers.txt
+# Opinion modifiers: common/opinion_modifiers/wh_kislev_faith_opinions.txt
+# Artifacts: common/artifacts/25_artifacts_kislev.txt (ursun_tooth)
+# Loc: localisation/00_WHG_kislev_faith_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = ursun
+
+###############################################################################
+# The Wounded Bear
+###############################################################################
+
+# ursun.1 The omens
+# Once a game. The High Speaker of Ursun, or the First of the Circle of the
+# Bear, sees the signs that the Father of Bears lies wounded in the east: a
+# bear walks into the hall and lies down, the stars burn over the High Pass.
+# Heed them and send a company east (ursun.2), or dismiss them.
+# Scope: ROOT is the High Speaker or the First of the Circle.
+character_event = {
+	id = ursun.1
+	desc = EVTDESCursun1
+	picture = GFX_evt_tamed_bear
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # on_decade_pulse ursun_omens
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		ursun_quest_leader_trigger = yes
+		NOT = { has_global_flag = ursun_wounded_bear_begun }
+		NOT = { has_global_flag = ursun_wounded_bear_done }
+	}
+
+	immediate = {
+		set_global_flag = ursun_wounded_bear_begun
+	}
+
+	# Heed the omens
+	option = {
+		name = EVTOPTAursun1
+		piety = 50
+		character_event = { id = ursun.2 days = 30 }
+		ai_chance = { factor = 90 }
+	}
+
+	# Dismiss them
+	option = {
+		name = EVTOPTBursun1
+		piety = -50
+		clr_global_flag = ursun_wounded_bear_begun
+		ai_chance = { factor = 10 }
+	}
+}
+
+# ursun.2 The company rides east
+# Choose who leads the company: the best rider of the Circle at court (or a
+# champion found for the task), or the speaker in person.
+# Scope: ROOT is the quest giver.
+character_event = {
+	id = ursun.2
+	desc = EVTDESCursun2
+	picture = GFX_evt_kislev_bear_cavalry
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # ursun.1
+
+	immediate = {
+		set_variable = { which = ursun_losses value = 0 }
+	}
+
+	# Send the best rider of the Circle
+	option = {
+		name = EVTOPTAursun2
+		trigger = { wealth = 100 }
+		wealth = -100
+		if = {
+			limit = {
+				any_courtier = {
+					society_member_of = circle_of_the_bear
+					is_adult = yes
+					prisoner = no
+					is_incapable = no
+				}
+			}
+			random_courtier = {
+				limit = {
+					society_member_of = circle_of_the_bear
+					is_adult = yes
+					prisoner = no
+					is_incapable = no
+				}
+				preferred_limit = { society_rank >= 3 }
+				save_event_target_as = ursun_leader
+			}
+		}
+		else = {
+			create_character = {
+				random_traits = yes
+				dynasty = random
+				religion = ROOT
+				culture = ROOT
+				female = no
+				age = 30
+				attributes = { martial = 12 }
+				trait = creature_human
+				trait = brave
+				trait = zealous
+			}
+			new_character = {
+				save_event_target_as = ursun_leader
+			}
+		}
+		custom_tooltip = { text = ursun_company_rides_tt }
+		character_event = { id = ursun.3 months = 6 }
+		ai_chance = { factor = 70 }
+	}
+
+	# Lead it yourself
+	option = {
+		name = EVTOPTBursun2
+		trigger = { is_incapable = no }
+		save_event_target_as = ursun_leader
+		custom_tooltip = { text = ursun_company_rides_tt }
+		character_event = { id = ursun.3 months = 6 }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0 trait = craven }
+		}
+	}
+}
+
+# ursun.3 The edge of the Wastes
+# A Chaos warband crosses the company's trail. Fight (the leader's martial),
+# or hide in the snow (the leader's intrigue). A loss counts against the
+# quest; two losses or a dead leader end it in the Long Sleep (ursun.8).
+# Scope: ROOT is the quest giver; event_target:ursun_leader the leader.
+character_event = {
+	id = ursun.3
+	desc = EVTDESCursun3
+	picture = GFX_evt_duel_against_chaos
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # ursun.2
+
+	# Fight
+	option = {
+		name = EVTOPTAursun3
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 event_target:ursun_leader = { martial = 14 } }
+				modifier = { factor = 1.3 event_target:ursun_leader = { trait = brave } }
+				prestige = 50
+				custom_tooltip = { text = ursun_encounter_won_tt }
+			}
+			40 = {
+				change_variable = { which = ursun_losses value = 1 }
+				event_target:ursun_leader = {
+					random_list = {
+						70 = { add_trait_wounded_effect = yes }
+						30 = { death = { death_reason = death_battle } }
+					}
+				}
+				custom_tooltip = { text = ursun_encounter_lost_tt }
+			}
+		}
+		ai_chance = { factor = 60 }
+	}
+
+	# Hide in the snow
+	option = {
+		name = EVTOPTBursun3
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 event_target:ursun_leader = { intrigue = 12 } }
+				custom_tooltip = { text = ursun_encounter_won_tt }
+			}
+			40 = {
+				change_variable = { which = ursun_losses value = 1 }
+				custom_tooltip = { text = ursun_encounter_lost_tt }
+			}
+		}
+		ai_chance = { factor = 40 }
+	}
+
+	after = {
+		# On to the next stage, or the Long Sleep if the company is broken
+		if = {
+			limit = {
+				event_target:ursun_leader = { is_alive = yes }
+				NOT = { check_variable = { which = ursun_losses value = 2 } }
+			}
+			character_event = { id = ursun.4 months = 6 }
+		}
+		else = {
+			character_event = { id = ursun.8 days = 30 }
+		}
+	}
+}
+
+# ursun.4 The passes of the World's Edge
+# Greenskins hold the pass. Fight through, or take the long way round over
+# the ice (the leader's health and learning).
+# Scope: ROOT is the quest giver; event_target:ursun_leader the leader.
+character_event = {
+	id = ursun.4
+	desc = EVTDESCursun4
+	picture = GFX_evt_questing_mountains
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # ursun.3
+
+	# Fight through
+	option = {
+		name = EVTOPTAursun4
+		random_list = {
+			65 = {
+				modifier = { factor = 1.5 event_target:ursun_leader = { martial = 14 } }
+				prestige = 50
+				custom_tooltip = { text = ursun_encounter_won_tt }
+			}
+			35 = {
+				change_variable = { which = ursun_losses value = 1 }
+				event_target:ursun_leader = { add_trait_wounded_effect = yes }
+				custom_tooltip = { text = ursun_encounter_lost_tt }
+			}
+		}
+		ai_chance = { factor = 60 }
+	}
+
+	# The long way over the ice
+	option = {
+		name = EVTOPTBursun4
+		random_list = {
+			55 = {
+				modifier = { factor = 1.5 event_target:ursun_leader = { learning = 12 } }
+				modifier = { factor = 1.3 event_target:ursun_leader = { health = 6 } }
+				custom_tooltip = { text = ursun_encounter_won_tt }
+			}
+			45 = {
+				change_variable = { which = ursun_losses value = 1 }
+				custom_tooltip = { text = ursun_encounter_lost_tt }
+			}
+		}
+		ai_chance = { factor = 40 }
+	}
+
+	after = {
+		# On to the next stage, or the Long Sleep if the company is broken
+		if = {
+			limit = {
+				event_target:ursun_leader = { is_alive = yes }
+				NOT = { check_variable = { which = ursun_losses value = 2 } }
+			}
+			character_event = { id = ursun.5 months = 6 }
+		}
+		else = {
+			character_event = { id = ursun.8 days = 30 }
+		}
+	}
+}
+
+# ursun.5 The Ogre road
+# An Ogre tribe of the Mountains of Mourning blocks the road east. Pay their
+# toll in gold, or fight. Then on to the resting place (ursun.6), or the
+# Long Sleep (ursun.8) if the company is broken.
+# Scope: ROOT is the quest giver; event_target:ursun_leader the leader.
+character_event = {
+	id = ursun.5
+	desc = EVTDESCursun5
+	picture = GFX_evt_ogre_raiders
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # ursun.4
+
+	# Pay the toll
+	option = {
+		name = EVTOPTAursun5
+		trigger = { wealth = 150 }
+		wealth = -150
+		ai_chance = { factor = 50 }
+	}
+
+	# Fight
+	option = {
+		name = EVTOPTBursun5
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 event_target:ursun_leader = { martial = 16 } }
+				modifier = { factor = 1.3 event_target:ursun_leader = { combat_rating = 40 } }
+				prestige = 75
+				custom_tooltip = { text = ursun_encounter_won_tt }
+			}
+			50 = {
+				change_variable = { which = ursun_losses value = 1 }
+				event_target:ursun_leader = { add_trait_wounded_effect = yes }
+				custom_tooltip = { text = ursun_encounter_lost_tt }
+			}
+		}
+		ai_chance = { factor = 50 }
+	}
+
+	after = {
+		# On to the next stage, or the Long Sleep if the company is broken
+		if = {
+			limit = {
+				event_target:ursun_leader = { is_alive = yes }
+				NOT = { check_variable = { which = ursun_losses value = 2 } }
+			}
+			character_event = { id = ursun.6 months = 3 }
+		}
+		else = {
+			character_event = { id = ursun.8 days = 30 }
+		}
+	}
+}
+
+# ursun.6 The resting place
+# In a cave under the mountains the company finds a bear the size of a
+# hill, breathing slow, with a black wound in its side. Offer blood (the
+# leader's), offer a life (a prisoner), or take a tooth for a relic: the
+# Tooth of Ursun, at the risk of waking the god in rage. Success brings
+# Ursun Wakes to every lord of Kislev's gods; the relic gamble can bring
+# the Long Sleep (ursun.8).
+# Scope: ROOT is the quest giver; event_target:ursun_leader the leader.
+character_event = {
+	id = ursun.6
+	desc = EVTDESCursun6
+	picture = GFX_evt_tamed_bear
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # ursun.5
+
+	# Offer blood
+	option = {
+		name = EVTOPTAursun6
+		event_target:ursun_leader = {
+			add_trait_wounded_effect = yes
+			piety = 100
+		}
+		ursun_wakes_effect = yes
+		ai_chance = { factor = 50 }
+	}
+
+	# Offer a life
+	option = {
+		name = EVTOPTBursun6
+		trigger = { any_prisoner = { always = yes } }
+		random_prisoner = {
+			death = { death_reason = death_sacrificed }
+		}
+		ursun_wakes_effect = yes
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 0.2 trait = kind }
+		}
+	}
+
+	# Take a tooth
+	option = {
+		name = EVTOPTCursun6
+		random_list = {
+			60 = {
+				modifier = { factor = 1.3 event_target:ursun_leader = { trait = brave } }
+				if = {
+					limit = { NOT = { has_global_flag = ursun_tooth_taken } }
+					set_global_flag = ursun_tooth_taken
+					add_artifact = ursun_tooth
+				}
+				ursun_wakes_effect = yes
+			}
+			40 = {
+				event_target:ursun_leader = { death = { death_reason = death_accident_bear } }
+				character_event = { id = ursun.8 }
+			}
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = ambitious }
+		}
+	}
+
+	after = {
+		set_global_flag = ursun_wounded_bear_done
+	}
+}
+
+# ursun.7 Ursun wakes
+# Sent to every player lord of Kislev's gods when the quest succeeds: the
+# Father of Bears is awake, and for twenty-five years the realm has Ursun
+# Wakes (morale, piety, levies, a little health).
+# Scope: ROOT is a lord of Kislev's gods; FROM the quest giver.
+character_event = {
+	id = ursun.7
+	desc = EVTDESCursun7
+	picture = GFX_evt_tamed_bear
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # ursun_wakes_effect
+
+	option = {
+		name = EVTOPTAursun7
+		piety = 25
+	}
+}
+
+# ursun.8 The Long Sleep
+# The company is lost, or the god woke in pain and turned away. For
+# twenty-five years Ursun sleeps: bears turn on men (ursun.9) and the cults
+# of the Dark Gods grow bold in Kislev (doom rises a little).
+# Scope: ROOT is the quest giver.
+character_event = {
+	id = ursun.8
+	desc = EVTDESCursun8
+	picture = GFX_evt_mad_spirit
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # ursun.3 - 6
+
+	immediate = {
+		set_global_flag = ursun_wounded_bear_done
+	}
+
+	option = {
+		name = EVTOPTAursun8
+		piety = -100
+		add_doom_progress_tiny_effect = yes
+		custom_tooltip = { text = ursun_long_sleep_tt }
+		hidden_tooltip = {
+			any_character = {
+				limit = { ursun_kislev_lord_trigger = yes }
+				add_character_modifier = { name = ursun_long_sleep years = 25 }
+			}
+		}
+	}
+}
+
+# ursun.9 Bears turn on men
+# During the Long Sleep a bear comes out of the forest and mauls one of the
+# court. Kill it (a hunt) or let the priests of Ursun try to soothe it.
+# Scope: ROOT is a lord of Kislev's gods under the Long Sleep.
+character_event = {
+	id = ursun.9
+	desc = EVTDESCursun9
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_bi_yearly_pulse ursun_long_sleep
+	only_rulers = yes
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		has_character_modifier = ursun_long_sleep
+		any_courtier = { is_adult = yes prisoner = no }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { is_adult = yes prisoner = no }
+			save_event_target_as = ursun_mauled
+		}
+	}
+
+	# Hunt it down
+	option = {
+		name = EVTOPTAursun9
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 martial = 14 }
+				prestige = 25
+				event_target:ursun_mauled = { add_trait_wounded_effect = yes }
+			}
+			40 = {
+				event_target:ursun_mauled = { death = { death_reason = death_accident_bear } }
+			}
+		}
+		ai_chance = { factor = 60 }
+	}
+
+	# Let the priests soothe it
+	option = {
+		name = EVTOPTBursun9
+		piety = 25
+		random_list = {
+			50 = { }
+			50 = { event_target:ursun_mauled = { death = { death_reason = death_accident_bear } } }
+		}
+		ai_chance = { factor = 40 }
+	}
+}
+
+###############################################################################
+# Waking Day
+###############################################################################
+
+# ursun.20 The drunk boyar
+# At the Waking Day feast a boyar, deep in his cups, mocks the Father of
+# Bears in front of the whole court. Punish him, forgive him, or let him
+# wrestle a bear and see what Ursun thinks.
+# Scope: ROOT is a lord of Kislev's gods; event_target:ursun_mocker the boyar.
+character_event = {
+	id = ursun.20
+	desc = EVTDESCursun20
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_five_year_pulse ursun_waking
+	only_rulers = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		ursun_kislev_lord_trigger = yes
+		OR = {
+			any_vassal = { ursun_mocker_trigger = yes }
+			any_courtier = { ursun_mocker_trigger = yes }
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { any_vassal = { ursun_mocker_trigger = yes } }
+			random_vassal = {
+				limit = { ursun_mocker_trigger = yes }
+				preferred_limit = { trait = drunkard }
+				save_event_target_as = ursun_mocker
+			}
+		}
+		else = {
+			random_courtier = {
+				limit = { ursun_mocker_trigger = yes }
+				preferred_limit = { trait = drunkard }
+				save_event_target_as = ursun_mocker
+			}
+		}
+	}
+
+	# Punish him
+	option = {
+		name = EVTOPTAursun20
+		piety = 50
+		event_target:ursun_mocker = {
+			opinion = { who = ROOT modifier = opinion_ursun_punished years = 5 }
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = zealous }
+		}
+	}
+
+	# Forgive him
+	option = {
+		name = EVTOPTBursun20
+		piety = -25
+		event_target:ursun_mocker = {
+			opinion = { who = ROOT modifier = opinion_ursun_forgiven years = 5 }
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+
+	# Let him wrestle a bear
+	option = {
+		name = EVTOPTCursun20
+		prestige = 25
+		event_target:ursun_mocker = {
+			random_list = {
+				40 = { death = { death_reason = death_accident_bear } }
+				35 = { add_trait_wounded_effect = yes }
+				25 = {
+					modifier = { factor = 2 martial = 14 }
+					prestige = 100
+					opinion = { who = ROOT modifier = opinion_ursun_champion years = 10 }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+}
+
+# ursun.21 The strongest man in the oblast
+# A young man has won every contest of strength at Waking Day and asks to
+# serve. Take him as a champion of the court, send him to the Circle of the
+# Bear, or send him home with a purse.
+# Scope: ROOT is a lord of Kislev's gods.
+character_event = {
+	id = ursun.21
+	desc = EVTDESCursun21
+	picture = GFX_evt_kislev_warriors
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_five_year_pulse ursun_waking
+	only_rulers = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		ursun_kislev_lord_trigger = yes
+	}
+
+	immediate = {
+		create_character = {
+			random_traits = yes
+			dynasty = random
+			religion = ROOT
+			culture = ROOT
+			female = no
+			age = 19
+			attributes = { martial = 10 }
+			trait = creature_human
+			trait = strong
+			trait = brave
+		}
+		new_character = {
+			save_event_target_as = ursun_strongman
+		}
+	}
+
+	# A champion of the court
+	option = {
+		name = EVTOPTAursun21
+		prestige = 25
+		event_target:ursun_strongman = {
+			opinion = { who = ROOT modifier = opinion_ursun_champion years = 10 }
+		}
+		ai_chance = { factor = 60 }
+	}
+
+	# Send him to the Circle
+	option = {
+		name = EVTOPTBursun21
+		trigger = { religion = kislev_gods }
+		piety = 25
+		event_target:ursun_strongman = {
+			join_society = circle_of_the_bear
+		}
+		ai_chance = { factor = 30 }
+	}
+
+	# Send him home with a purse
+	option = {
+		name = EVTOPTCursun21
+		wealth = -10
+		prestige = 10
+		event_target:ursun_strongman = {
+			if = {
+				limit = { ROOT = { any_vassal = { is_ruler = yes } } }
+				ROOT = { random_vassal = { save_event_target_as = ursun_strongman_home } }
+				move_character = event_target:ursun_strongman_home
+			}
+		}
+		ai_chance = { factor = 10 }
+	}
+}
+
+###############################################################################
+# Dazh's Hearthfires
+###############################################################################
+
+# ursun.30 Hidden. A siege takes the capital of a lord of Kislev's gods, and
+# the temple flame of Dazh goes out (ursun.31 to the lord).
+# Scope: ROOT is the siege winner; FROM the title taken.
+character_event = {
+	id = ursun.30
+	hide_window = yes
+
+	is_triggered_only = yes # on_siege_over_winner
+
+	trigger = {
+		FROM = {
+			location = {
+				is_capital = yes
+				owner = {
+					religion = kislev_gods
+					is_ruler = yes
+					higher_tier_than = BARON
+					NOT = { has_character_modifier = ursun_cold_hearths }
+				}
+			}
+		}
+	}
+
+	immediate = {
+		FROM = {
+			location = {
+				owner = { character_event = { id = ursun.31 days = 3 } }
+			}
+		}
+	}
+}
+
+# ursun.31 The flame goes out
+# The capital has fallen to the enemy and the hearth of Dazh in the temple
+# is cold. Until it is relit, the realm has Cold Hearths (fewer children,
+# poorer health, no birth rites, no northern blood). Send a priest of the
+# Rota of the Dawn to carry the flame back, make the pilgrimage to the
+# temple in Kislev, or leave it for now (a decision relights it later).
+# Scope: ROOT is the lord.
+character_event = {
+	id = ursun.31
+	desc = EVTDESCursun31
+	picture = GFX_evt_stone_church_kislev_gods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # ursun.30
+
+	immediate = {
+		add_character_modifier = { name = ursun_cold_hearths duration = -1 }
+	}
+
+	# A priest of the Rota of the Dawn
+	option = {
+		name = EVTOPTAursun31
+		trigger = {
+			OR = {
+				any_courtier = { kislevsoc_dawn_trigger = yes }
+				any_vassal = { kislevsoc_dawn_trigger = yes }
+				kislevsoc_dawn_trigger = yes
+			}
+		}
+		piety = -50
+		character_event = { id = ursun.32 days = 60 }
+		ai_chance = { factor = 70 }
+	}
+
+	# The pilgrimage to Kislev
+	option = {
+		name = EVTOPTBursun31
+		trigger = { wealth = 75 }
+		wealth = -75
+		character_event = { id = ursun.32 days = 180 }
+		ai_chance = { factor = 25 }
+	}
+
+	# Not now
+	option = {
+		name = EVTOPTCursun31
+		custom_tooltip = { text = ursun_relight_later_tt }
+		ai_chance = { factor = 5 }
+	}
+}
+
+# ursun.32 The flame is lit again
+# The flame comes home from the temple in Kislev, or in a priest's iron
+# lantern, and the hearths of the realm are warm again.
+# Scope: ROOT is the lord.
+character_event = {
+	id = ursun.32
+	desc = EVTDESCursun32
+	picture = GFX_evt_stone_church_kislev_gods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # ursun.31, decision ursun_relight_hearth
+
+	trigger = {
+		has_character_modifier = ursun_cold_hearths
+	}
+
+	option = {
+		name = EVTOPTAursun32
+		clr_character_flag = ursun_flame_sent
+		remove_character_modifier = ursun_cold_hearths
+		piety = 50
+	}
+}
+
+###############################################################################
+# Tor's Oath
+###############################################################################
+
+# ursun.40 Hidden. A war begins: a lord of Kislev's gods on either side may
+# swear on Tor's thunder (ursun.41).
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = ursun.40
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_started
+
+	immediate = {
+		if = {
+			limit = { ursun_tor_oath_candidate_trigger = yes }
+			character_event = { id = ursun.41 }
+		}
+		FROM = {
+			if = {
+				limit = { ursun_tor_oath_candidate_trigger = yes }
+				character_event = { id = ursun.41 }
+			}
+		}
+	}
+}
+
+# ursun.41 Tor's Oath
+# The warriors gather before the war and the priest of Tor asks whether the
+# lord will swear on the thunder: no flight and no surrender. One who keeps
+# the oath to the end of the war gains martial; one who loses the war is
+# struck down by the thunder (rarely) or is Oathless for life.
+# Scope: ROOT is the lord.
+character_event = {
+	id = ursun.41
+	desc = EVTDESCursun41
+	picture = GFX_evt_kislev_warriors
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # ursun.40
+
+	# Swear on the thunder
+	option = {
+		name = EVTOPTAursun41
+		set_character_flag = ursun_tor_sworn
+		add_character_modifier = { name = ursun_tor_oath duration = -1 }
+		custom_tooltip = { text = ursun_tor_oath_tt }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 1.5 trait = zealous }
+			modifier = { factor = 0.2 trait = craven }
+		}
+	}
+
+	# Do not swear
+	option = {
+		name = EVTOPTBursun41
+		ai_chance = { factor = 60 }
+	}
+}
+
+# ursun.42 Hidden. The attacker won: the defender broke Tor's oath, the
+# attacker kept it.
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = ursun.42
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_ended_victory
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = ursun_tor_sworn }
+			character_event = { id = ursun.45 }
+		}
+		FROM = {
+			if = {
+				limit = { has_character_flag = ursun_tor_sworn }
+				character_event = { id = ursun.46 }
+			}
+		}
+	}
+}
+
+# ursun.43 Hidden. The defender won: the attacker broke Tor's oath, the
+# defender kept it.
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = ursun.43
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_ended_defeat
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = ursun_tor_sworn }
+			character_event = { id = ursun.46 }
+		}
+		FROM = {
+			if = {
+				limit = { has_character_flag = ursun_tor_sworn }
+				character_event = { id = ursun.45 }
+			}
+		}
+	}
+}
+
+# ursun.44 Hidden. A white peace: neither side won, and the oath is simply
+# released.
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = ursun.44
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_ended_whitepeace
+
+	immediate = {
+		clr_character_flag = ursun_tor_sworn
+		remove_character_modifier = ursun_tor_oath
+		FROM = {
+			clr_character_flag = ursun_tor_sworn
+			remove_character_modifier = ursun_tor_oath
+		}
+	}
+}
+
+# ursun.45 The oath is broken
+# The war is lost. One time in twenty the thunder comes for the oath-breaker;
+# otherwise they are Oathless for the rest of their life.
+# Scope: ROOT is the oath-breaker.
+character_event = {
+	id = ursun.45
+	desc = EVTDESCursun45
+	picture = GFX_evt_battle_kislev_gods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # ursun.42, ursun.43
+
+	immediate = {
+		clr_character_flag = ursun_tor_sworn
+		remove_character_modifier = ursun_tor_oath
+	}
+
+	option = {
+		name = EVTOPTAursun45
+		random_list = {
+			5 = {
+				death = { death_reason = death_murder_unknown_lightning }
+			}
+			95 = {
+				add_character_modifier = { name = ursun_oathless duration = -1 }
+			}
+		}
+	}
+}
+
+# ursun.46 The oath is kept
+# The war is won and the oath held. Tor's priests paint the lord's shield
+# with lightning. Martial, once a lifetime as a lasting gain; after that,
+# prestige.
+# Scope: ROOT is the oath-keeper.
+character_event = {
+	id = ursun.46
+	desc = EVTDESCursun46
+	picture = GFX_evt_kislev_warriors
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # ursun.42, ursun.43
+
+	immediate = {
+		clr_character_flag = ursun_tor_sworn
+		remove_character_modifier = ursun_tor_oath
+	}
+
+	option = {
+		name = EVTOPTAursun46
+		if = {
+			limit = { NOT = { has_character_flag = ursun_tor_kept } }
+			set_character_flag = ursun_tor_kept
+			change_martial = 1
+		}
+		prestige = 100
+	}
+}
+
+###############################################################################
+# Miska's Barrow
+###############################################################################
+
+# ursun.50 The barrow of the Khan-Queen
+# A Gospodar lord reaches the barrow of Miska on the steppe. Pray at the
+# tomb (a chance of her vision: the Heir of Miska for a woman, Miska's
+# favour for a man), or dig for the grave goods (gold and a curse). Grave
+# robbers may already be at work (ursun.51).
+# Scope: ROOT is the pilgrim.
+character_event = {
+	id = ursun.50
+	desc = EVTDESCursun50
+	picture = GFX_evt_steppe_mercenaries
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # decision ursun_miska_pilgrimage
+
+	# Pray at the tomb
+	option = {
+		name = EVTOPTAursun50
+		random_list = {
+			15 = {
+				modifier = { factor = 2 trait = zealous }
+				modifier = { factor = 1.5 is_female = yes }
+				if = {
+					limit = { is_female = yes NOT = { trait = heir_of_miska } }
+					add_trait = heir_of_miska
+				}
+				else = {
+					add_character_modifier = { name = ursun_miska_favour years = 20 }
+				}
+				custom_tooltip = { text = ursun_miska_vision_tt }
+			}
+			85 = {
+				piety = 75
+				prestige = 50
+			}
+		}
+		random = {
+			chance = 30
+			character_event = { id = ursun.51 days = 3 }
+		}
+		ai_chance = { factor = 80 }
+	}
+
+	# Dig for the grave goods
+	option = {
+		name = EVTOPTBursun50
+		wealth = 150
+		add_character_modifier = { name = ursun_miska_curse years = 10 }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = greedy }
+		}
+	}
+}
+
+# ursun.51 Grave robbers
+# The lord's guards catch men tunnelling into the barrow. Hang them, or take
+# a share of what they found and let them go (gold and the curse).
+# Scope: ROOT is the pilgrim.
+character_event = {
+	id = ursun.51
+	desc = EVTDESCursun51
+	picture = GFX_evt_bandits_kislev_gods
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # ursun.50
+
+	# Hang them
+	option = {
+		name = EVTOPTAursun51
+		piety = 25
+		prestige = 25
+		ai_chance = { factor = 80 }
+	}
+
+	# Take a share
+	option = {
+		name = EVTOPTBursun51
+		wealth = 75
+		add_character_modifier = { name = ursun_miska_curse years = 10 }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = greedy }
+		}
+	}
+}
+
+###############################################################################
+# The Ungol Spirit-Paths
+###############################################################################
+
+# ursun.60 The horse bones
+# An Ungol lord of the old gods watches the wise women read the year in
+# horse bones. Listen, or tell them to read it again.
+# Scope: ROOT is an Ungol lord on the old faith.
+character_event = {
+	id = ursun.60
+	desc = EVTDESCursun60
+	picture = GFX_evt_nomad_camp
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_five_year_pulse ursun_spirit_paths
+	only_rulers = yes
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		ursun_spirit_paths_trigger = yes
+		NOT = { has_character_flag = ursun_bones_read }
+	}
+
+	immediate = {
+		set_character_flag = ursun_bones_read
+	}
+
+	# Listen
+	option = {
+		name = EVTOPTAursun60
+		random_list = {
+			60 = { add_character_modifier = { name = ursun_good_omen years = 5 } }
+			40 = { add_character_modifier = { name = ursun_bad_omen years = 5 } }
+		}
+		ai_chance = { factor = 70 }
+	}
+
+	# Read them again
+	option = {
+		name = EVTOPTBursun60
+		piety = -25
+		add_character_modifier = { name = ursun_good_omen years = 5 }
+		ai_chance = { factor = 30 }
+	}
+}
+
+# ursun.61 The ancestors are hungry
+# The spirits of the lord's ancestors come to the wise women and ask for a
+# sacrifice: a horse, a prisoner, or nothing at all.
+# Scope: ROOT is an Ungol lord on the old faith.
+character_event = {
+	id = ursun.61
+	desc = EVTDESCursun61
+	picture = GFX_evt_mad_spirit
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_five_year_pulse ursun_spirit_paths
+	only_rulers = yes
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		ursun_spirit_paths_trigger = yes
+		NOT = { has_character_flag = ursun_ancestors_fed }
+	}
+
+	immediate = {
+		set_character_flag = ursun_ancestors_fed
+	}
+
+	# A white horse
+	option = {
+		name = EVTOPTAursun61
+		trigger = { wealth = 25 }
+		wealth = -25
+		piety = 50
+		ai_chance = { factor = 60 }
+	}
+
+	# A prisoner
+	option = {
+		name = EVTOPTBursun61
+		trigger = { any_prisoner = { always = yes } }
+		random_prisoner = {
+			death = { death_reason = death_sacrificed_ancestors }
+		}
+		piety = 100
+		ai_chance = { factor = 25 }
+	}
+
+	# Nothing
+	option = {
+		name = EVTOPTCursun61
+		add_character_modifier = { name = ursun_bad_omen years = 5 }
+		ai_chance = { factor = 15 }
+	}
+}
+
+# ursun.62 The dream of the bear
+# Once the lord has read the bones or fed the ancestors, a great bear comes
+# to them in a dream. Keep to the old ways, or turn to Ursun and the gods
+# of Kislev. Ungols turn easily; this is the story of it.
+# Scope: ROOT is an Ungol lord on the old faith.
+character_event = {
+	id = ursun.62
+	desc = EVTDESCursun62
+	picture = GFX_evt_tamed_bear
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # on_five_year_pulse ursun_spirit_paths
+	only_rulers = yes
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		ursun_spirit_paths_trigger = yes
+		OR = {
+			has_character_flag = ursun_bones_read
+			has_character_flag = ursun_ancestors_fed
+		}
+		NOT = { has_character_flag = ursun_bear_dreamt }
+	}
+
+	immediate = {
+		set_character_flag = ursun_bear_dreamt
+	}
+
+	# Turn to Ursun
+	option = {
+		name = EVTOPTAursun62
+		religion = kislev_gods
+		piety = 100
+		ai_chance = { factor = 60 }
+	}
+
+	# Keep to the old ways
+	option = {
+		name = EVTOPTBursun62
+		piety = 50
+		ai_chance = { factor = 40 }
+	}
+}
+
+###############################################################################
+# Tainted blood
+###############################################################################
+
+# ursun.70 The priests and the mutant
+# A Kislevite of the court has mutated despite the northern blood, and the
+# priests of Ursun demand they be cast out. Cast them out of the realm,
+# throw them in the dungeon, or protect them and anger the priests.
+# Scope: ROOT is a lord of Kislev's gods; event_target:ursun_tainted the
+# mutant.
+character_event = {
+	id = ursun.70
+	desc = EVTDESCursun70
+	picture = GFX_evt_stone_church_kislev_gods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_five_year_pulse ursun_tainted
+	only_rulers = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		ursun_kislev_lord_trigger = yes
+		any_courtier = { ursun_tainted_trigger = yes }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { ursun_tainted_trigger = yes }
+			save_event_target_as = ursun_tainted
+		}
+	}
+
+	# Cast them out
+	option = {
+		name = EVTOPTAursun70
+		piety = 50
+		random_independent_ruler = {
+			limit = {
+				NOT = { religion = kislev_gods }
+				NOT = { religion_group = chaos_gods_group }
+				is_adult = yes
+			}
+			event_target:ursun_tainted = { move_character = PREV }
+		}
+		ai_chance = { factor = 50 }
+	}
+
+	# The dungeon
+	option = {
+		name = EVTOPTBursun70
+		piety = 25
+		event_target:ursun_tainted = { imprison = ROOT }
+		ai_chance = { factor = 30 }
+	}
+
+	# Protect them
+	option = {
+		name = EVTOPTCursun70
+		piety = -75
+		event_target:ursun_tainted = {
+			opinion = { who = ROOT modifier = opinion_ursun_protected years = 20 }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 is_close_relative = event_target:ursun_tainted }
+		}
+	}
+}

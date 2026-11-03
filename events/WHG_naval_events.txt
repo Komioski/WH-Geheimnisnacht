@@ -1,0 +1,1092 @@
+###############################################################################
+# Ships at sea
+# Namespace: naval
+# Faction: all
+#
+# Every random event that happens to ships at sea lives here: the voyage
+# events any admiral may meet, the Erengrad Convoy's dangers, and the naval
+# battle system (old nautical_events.txt, namespace ships, moved in
+# unchanged apart from its ids and comments).
+#
+# The voyage driver                          naval.1
+# Storms and sickness                        naval.10, naval.22 - 23
+# Norscan raiders and the Norscan toll       naval.11, naval.20
+# The monster of the Sea of Claws            naval.12 - 16
+# Pirate amnesty                             naval.17 - 18
+# Elf traders                                naval.19
+# The Knights of the White Star              naval.21
+# Naval battles (old ships.0 - 5)            naval.100 - 105
+#
+# Fired from common/on_actions/nb_on_actions.txt: naval.1
+# on_unit_entering_province. naval.1 runs the naval battle check
+# (naval.100), the Erengrad Convoy's arrival (erengrad.13) and the voyage
+# roll. A Convoy run's cargo can be spoiled by the sea
+# (naval_spoil_convoy_cargo_effect); see events/WHG_erengrad_events.txt.
+# Scripted triggers: common/scripted_triggers/wh_erengrad_triggers.txt
+# Scripted effects: common/scripted_effects/wh_erengrad_effects.txt,
+# naval battle effects in the vanilla nb_ scripted effects
+# Event modifiers: common/event_modifiers/wh_erengrad_modifiers.txt
+# Opinion modifiers: common/opinion_modifiers/wh_erengrad_opinions.txt
+# Artifacts: naval_leviathan_tooth in common/artifacts/25_artifacts_kislev.txt
+# Loc: localisation/00_WHG_naval_events.csv (naval battles keep their
+# nautical.* keys)
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = naval
+
+###############################################################################
+# The voyage driver
+###############################################################################
+
+# naval.1 A unit moves
+# Hidden. Whenever a commander's unit enters a province: the Convoy Master
+# may have reached the port (erengrad.13); at sea, the naval battle check
+# runs (naval.100) and, once a year at most, one time in thirty-three a
+# voyage event comes up. The Convoy Master at sea meets them three times
+# as often.
+# Scope: ROOT is a commander whose unit entered a province.
+character_event = {
+	id = naval.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_unit_entering_province
+	min_age = 16
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		in_command = yes
+		NOT = { is_sub_unit_leader = yes }
+	}
+
+	immediate = {
+		if = {
+			limit = { erengrad_convoy_arrived_trigger = yes }
+			liege = { character_event = { id = erengrad.13 } }
+		}
+		if = {
+			limit = { is_at_sea = yes }
+			character_event = { id = naval.100 }
+			if = {
+				limit = { NOT = { has_character_modifier = naval_voyage_cd } }
+				random_list = {
+					97 = {
+						modifier = { factor = 0.33 has_minor_title = title_convoy_master }
+					}
+					3 = {
+						add_character_modifier = { name = naval_voyage_cd years = 1 hidden = yes }
+						random_list = {
+							20 = { character_event = { id = naval.10 } }
+							15 = {
+								trigger = { NOT = { has_character_modifier = naval_white_star_escort } }
+								modifier = { factor = 2 naval_sea_of_claws_trigger = yes }
+								modifier = { factor = 0 culture_group = norscan_group }
+								character_event = { id = naval.11 }
+							}
+							8 = {
+								trigger = { naval_sea_of_claws_trigger = yes }
+								character_event = { id = naval.12 }
+							}
+							8 = {
+								trigger = {
+									top_liege = {
+										is_ruler = yes
+										NOT = { has_character_flag = naval_pirate_amnesty }
+									}
+								}
+								character_event = { id = naval.17 }
+							}
+							10 = {
+								modifier = { factor = 0 culture_group = asur_group }
+								character_event = { id = naval.19 }
+							}
+							10 = {
+								trigger = {
+									naval_sea_of_claws_trigger = yes
+									NOT = { culture_group = norscan_group }
+									NOT = { has_character_modifier = naval_white_star_escort }
+								}
+								character_event = { id = naval.20 }
+							}
+							8 = {
+								trigger = {
+									naval_sea_of_claws_trigger = yes
+									NOT = { has_character_modifier = naval_white_star_escort }
+									OR = {
+										religion = kislev_gods
+										religion = ulrican
+										culture_group = kislevite_group
+									}
+								}
+								character_event = { id = naval.21 }
+							}
+							10 = { character_event = { id = naval.22 } }
+							10 = { character_event = { id = naval.23 } }
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# Storms and sickness
+###############################################################################
+
+# naval.10 Storm
+# A storm falls on the fleet; worse in the Sea of Claws. Ride it out, pray
+# to Manann, or run for the coast and lose time.
+# Scope: ROOT is the commander at sea.
+character_event = {
+	id = naval.10
+	desc = {
+		trigger = { naval_sea_of_claws_trigger = yes }
+		text = EVTDESCnaval10b
+	}
+	desc = {
+		trigger = { NOT = { naval_sea_of_claws_trigger = yes } }
+		text = EVTDESCnaval10
+	}
+	picture = GFX_evt_ship_storm
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # naval.1
+
+	# Ride it out
+	option = {
+		name = EVTOPTAnaval10
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.5 liege = { has_character_flag = erengrad_manann_blessed } }
+				prestige = 25
+			}
+			25 = {
+				modifier = { factor = 1.5 naval_sea_of_claws_trigger = yes }
+				naval_spoil_convoy_cargo_effect = yes
+			}
+			15 = {
+				modifier = { factor = 1.5 naval_sea_of_claws_trigger = yes }
+				add_trait = wounded
+				naval_spoil_convoy_cargo_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+
+	# Pray to Manann
+	option = {
+		name = EVTOPTBnaval10
+		piety = 10
+		random_list = {
+			70 = { }
+			30 = { naval_spoil_convoy_cargo_effect = yes }
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = zealous }
+		}
+	}
+
+	# Run for the coast
+	option = {
+		name = EVTOPTCnaval10
+		prestige = -15
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = craven }
+		}
+	}
+}
+
+# naval.22 Man overboard
+# A sailor goes over the side in a heavy sea. Go in after him, throw a
+# line, or leave him to Manann.
+# Scope: ROOT is the commander at sea.
+character_event = {
+	id = naval.22
+	desc = EVTDESCnaval22
+	picture = GFX_evt_merchant_ship_at_sea_republic
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # naval.1
+
+	# Dive in
+	option = {
+		name = EVTOPTAnaval22
+		random_list = {
+			70 = {
+				modifier = { factor = 1.5 trait = strong }
+				prestige = 50
+			}
+			30 = {
+				add_character_modifier = { name = naval_seasick years = 1 }
+			}
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = brave }
+		}
+	}
+
+	# Throw a line
+	option = {
+		name = EVTOPTBnaval22
+		prestige = 10
+		ai_chance = { factor = 60 }
+	}
+
+	# Leave him to Manann
+	option = {
+		name = EVTOPTCnaval22
+		piety = -10
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = cruel }
+		}
+	}
+}
+
+# naval.23 Sickness aboard
+# A fever runs through the crews. Put in at the nearest port and lose time,
+# or press on and risk it.
+# Scope: ROOT is the commander at sea.
+character_event = {
+	id = naval.23
+	desc = EVTDESCnaval23
+	picture = GFX_evt_merchant_ship_at_sea_republic
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # naval.1
+
+	# Put in to port
+	option = {
+		name = EVTOPTAnaval23
+		prestige = -10
+		ai_chance = { factor = 50 }
+	}
+
+	# Press on
+	option = {
+		name = EVTOPTBnaval23
+		random_list = {
+			60 = { prestige = 10 }
+			40 = {
+				add_character_modifier = { name = naval_seasick years = 1 }
+				naval_spoil_convoy_cargo_effect = yes
+			}
+		}
+		ai_chance = { factor = 50 }
+	}
+}
+
+###############################################################################
+# Norscans
+###############################################################################
+
+# naval.11 Longships!
+# Norscan raiders come out of the sea-mist. Fight, pay them off, or try to
+# outrun them.
+# Scope: ROOT is the commander at sea.
+character_event = {
+	id = naval.11
+	desc = EVTDESCnaval11
+	picture = GFX_evt_longships_at_sea_oldgods
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # naval.1, naval.20
+
+	# Fight
+	option = {
+		name = EVTOPTAnaval11
+		random_list = {
+			55 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.5 martial = 16 }
+				prestige = 75
+				scaled_wealth = { value = 0.1 min = 10 }
+			}
+			45 = {
+				add_trait = wounded
+				naval_spoil_convoy_cargo_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 2 martial = 14 }
+		}
+	}
+
+	# Pay them off
+	option = {
+		name = EVTOPTBnaval11
+		trigger = { wealth = 30 }
+		wealth = -30
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = craven }
+		}
+	}
+
+	# Outrun them
+	option = {
+		name = EVTOPTCnaval11
+		random_list = {
+			50 = { }
+			50 = { naval_spoil_convoy_cargo_effect = yes }
+		}
+		ai_chance = { factor = 20 }
+	}
+}
+
+# naval.20 The Norscan toll
+# A jarl's longships bar the strait and demand a toll. Pay, refuse (the
+# raiders come, naval.11), or, if the commander's lord rules, swear a
+# trade-friendship that opens a route north.
+# Scope: ROOT is the commander in the Sea of Claws.
+character_event = {
+	id = naval.20
+	desc = EVTDESCnaval20
+	picture = GFX_evt_longships_at_sea_oldgods
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # naval.1
+
+	# Pay
+	option = {
+		name = EVTOPTAnaval20
+		trigger = { wealth = 25 }
+		wealth = -25
+		ai_chance = { factor = 40 }
+	}
+
+	# Refuse
+	option = {
+		name = EVTOPTBnaval20
+		prestige = 25
+		character_event = { id = naval.11 days = 2 }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = proud }
+		}
+	}
+
+	# Trade-friendship
+	option = {
+		name = EVTOPTCnaval20
+		trigger = {
+			top_liege = {
+				is_ruler = yes
+				NOT = { has_character_modifier = naval_norscan_route }
+			}
+			OR = {
+				diplomacy = 12
+				top_liege = { character = ROOT }
+			}
+		}
+		wealth = -15
+		top_liege = { add_character_modifier = { name = naval_norscan_route years = 10 } }
+		ai_chance = { factor = 30 }
+	}
+}
+
+###############################################################################
+# The monster of the Sea of Claws
+###############################################################################
+
+# naval.12 Something in the water
+# A sea monster is sighted in the Sea of Claws. Hunt it (naval.13), or
+# steer clear.
+# Scope: ROOT is the commander in the Sea of Claws.
+character_event = {
+	id = naval.12
+	desc = EVTDESCnaval12
+	picture = GFX_evt_kraken
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # naval.1
+
+	# Hunt it
+	option = {
+		name = EVTOPTAnaval12
+		character_event = { id = naval.13 days = 3 }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 trait = brave }
+			modifier = { factor = 2 trait = hunter }
+		}
+	}
+
+	# Steer clear
+	option = {
+		name = EVTOPTBnaval12
+		ai_chance = { factor = 70 }
+	}
+}
+
+# naval.13 On its trail
+# Days of following wreckage and blood in the water. Press on (naval.14),
+# or give up the hunt.
+# Scope: ROOT is the hunter.
+character_event = {
+	id = naval.13
+	desc = EVTDESCnaval13
+	picture = GFX_evt_kraken
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # naval.12
+
+	option = {
+		name = EVTOPTAnaval13
+		character_event = { id = naval.14 days = 5 }
+		ai_chance = { factor = 70 }
+	}
+	option = {
+		name = EVTOPTBnaval13
+		prestige = -10
+		ai_chance = { factor = 30 }
+	}
+}
+
+# naval.14 The leviathan rises
+# The monster turns on the hunters. Win (naval.15) or lose (naval.16).
+# Scope: ROOT is the hunter.
+character_event = {
+	id = naval.14
+	desc = EVTDESCnaval14
+	picture = GFX_evt_kraken
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # naval.13
+
+	option = {
+		name = EVTOPTAnaval14
+		random_list = {
+			45 = {
+				modifier = { factor = 1.5 martial = 14 }
+				modifier = { factor = 1.5 combat_rating = 40 }
+				modifier = { factor = 1.3 trait = hunter }
+				character_event = { id = naval.15 }
+			}
+			55 = {
+				character_event = { id = naval.16 }
+			}
+		}
+	}
+}
+
+# naval.15 The leviathan dies
+# The hunters bring back its tooth: half the time the commander keeps one,
+# once a lifetime.
+# Scope: ROOT is the hunter.
+character_event = {
+	id = naval.15
+	desc = EVTDESCnaval15
+	picture = GFX_evt_kraken
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # naval.14
+
+	option = {
+		name = EVTOPTAnaval15
+		prestige = 200
+		if = {
+			limit = {
+				NOT = { has_character_flag = naval_tooth_given }
+				NOT = { has_artifact = naval_leviathan_tooth }
+			}
+			random = {
+				chance = 50
+				set_character_flag = naval_tooth_given
+				add_artifact = naval_leviathan_tooth
+			}
+		}
+	}
+}
+
+# naval.16 The leviathan wins
+# Ships are lost, the commander is hurt, and the beast swims free.
+# Scope: ROOT is the hunter.
+character_event = {
+	id = naval.16
+	desc = EVTDESCnaval16
+	picture = GFX_evt_kraken
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # naval.14
+
+	option = {
+		name = EVTOPTAnaval16
+		random_list = {
+			70 = { add_trait = wounded }
+			30 = { add_trait = maimed }
+		}
+		naval_spoil_convoy_cargo_effect = yes
+	}
+}
+
+###############################################################################
+# Pirate amnesty
+###############################################################################
+
+# naval.17 A pirate's offer
+# A pirate captain offers to sail under the commander's lord's flag in
+# return for amnesty. Accept (the top liege gets his ships; in some years
+# the pirate may turn, naval.18), refuse, or hang him.
+# Scope: ROOT is the commander at sea.
+character_event = {
+	id = naval.17
+	desc = EVTDESCnaval17
+	picture = GFX_evt_pirate_ship
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # naval.1
+
+	# Amnesty
+	option = {
+		name = EVTOPTAnaval17
+		top_liege = {
+			set_character_flag = naval_pirate_amnesty
+			capital_scope = {
+				spawn_fleet = {
+					province = closest
+					owner = PREV
+					cannot_inherit = yes
+					earmark = naval_pirate_ships
+					troops = { galleys = { 15 15 } }
+				}
+			}
+			character_event = { id = naval.18 days = 1825 random = 1825 }
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 0.3 trait = just }
+		}
+	}
+
+	# Send him away
+	option = {
+		name = EVTOPTBnaval17
+		ai_chance = { factor = 30 }
+	}
+
+	# Hang him
+	option = {
+		name = EVTOPTCnaval17
+		prestige = 50
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = just }
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+}
+
+# naval.18 The pirate's choice
+# Years later the pardoned pirate keeps faith (two times in three) or sails
+# off with the ships and a hold full of the realm's silver.
+# Scope: ROOT is the top liege who took the pirate in.
+character_event = {
+	id = naval.18
+	desc = {
+		trigger = { has_character_flag = naval_pirate_turned }
+		text = EVTDESCnaval18b
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = naval_pirate_turned } }
+		text = EVTDESCnaval18
+	}
+	picture = GFX_evt_pirate_ship
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # naval.17
+
+	immediate = {
+		random = {
+			chance = 33
+			set_character_flag = naval_pirate_turned
+		}
+	}
+
+	option = {
+		name = EVTOPTAnaval18
+		if = {
+			limit = { has_character_flag = naval_pirate_turned }
+			disband_event_forces = naval_pirate_ships
+			scaled_wealth = { value = -0.2 min = -50 }
+		}
+		else = {
+			prestige = 25
+		}
+		clr_character_flag = naval_pirate_turned
+		clr_character_flag = naval_pirate_amnesty
+	}
+}
+
+###############################################################################
+# Elf traders
+###############################################################################
+
+# naval.19 Elven sails
+# An Asur trading ship hails the fleet. Trade, or let an Elf mage take
+# passage. The Erengrad Convoy Master can win an Ulthuan trade deal for
+# Erengrad instead.
+# Scope: ROOT is the commander at sea.
+character_event = {
+	id = naval.19
+	desc = EVTDESCnaval19
+	picture = GFX_evt_high_elf_ship
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # naval.1
+
+	# Trade
+	option = {
+		name = EVTOPTAnaval19
+		scaled_wealth = { value = 0.1 min = 10 }
+		ai_chance = { factor = 50 }
+	}
+
+	# An Ulthuan contract for Erengrad
+	option = {
+		name = EVTOPTBnaval19
+		trigger = {
+			has_minor_title = title_convoy_master
+			liege = { has_landed_title = c_erengrad }
+		}
+		liege = {
+			c_erengrad = {
+				location = {
+					add_province_modifier = { name = erengrad_elven_trade years = 10 }
+				}
+			}
+		}
+		ai_chance = { factor = 100 }
+	}
+
+	# Give the mage passage
+	option = {
+		name = EVTOPTCnaval19
+		change_learning = 1
+		ai_chance = { factor = 20 }
+	}
+}
+
+###############################################################################
+# The Knights of the White Star
+###############################################################################
+
+# naval.21 The White Star
+# The Knights of the White Star, Ulric's knights of Erengrad, offer their
+# warships as escort through the Sea of Claws. Raiders and tolls keep away
+# for a year; the Orthodoxy of Ursun dislikes the favour to Ulric.
+# Scope: ROOT is a Kislevite or Ulrican commander in the Sea of Claws.
+character_event = {
+	id = naval.21
+	desc = EVTDESCnaval21
+	picture = GFX_evt_merchant_ship_at_sea_republic
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # naval.1
+
+	# Accept
+	option = {
+		name = EVTOPTAnaval21
+		add_character_modifier = { name = naval_white_star_escort years = 1 }
+		if = {
+			limit = { religion = kislev_gods }
+			k_cult_of_ursun = {
+				holder_scope = {
+					opinion = { who = ROOT modifier = opinion_naval_white_star }
+				}
+			}
+		}
+		ai_chance = { factor = 60 }
+	}
+
+	# Decline
+	option = {
+		name = EVTOPTBnaval21
+		piety = 10
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = zealous }
+		}
+	}
+}
+
+###############################################################################
+# Naval battles
+# Moved from nautical_events.txt (namespace ships). An admiral at sea who
+# meets a hostile fleet may engage; the outcome effects are the vanilla
+# naval battle effects (assign_naval_outcome1_effect and the rest).
+###############################################################################
+
+# naval.100 Hostile fleet nearby
+# Hidden. An admiral at sea who shares a sea zone with a hostile fleet saves
+# both sides and asks the attacker whether to engage (naval.101). Sea
+# raiders (naval_sea_raider_trigger) treat every foreign admiral as fair
+# game; everyone else only fleets they are at war with. Runs on every move
+# at sea, so it bails out early: no war and no raider means no search, and
+# both admirals get naval_battle_cd (60 days) once they have met.
+# Scope: ROOT is the admiral at sea.
+character_event = {
+	id = naval.100
+	hide_window = yes
+
+	is_triggered_only = yes # naval.1
+
+	trigger = {
+		is_at_sea = yes
+		NOT = { has_character_modifier = naval_battle_cd }
+		OR = {
+			war = yes
+			top_liege = { war = yes }
+			naval_sea_raider_trigger = yes
+		}
+	}
+
+	immediate = {
+		random_character = {
+			limit = {
+				at_location = ROOT
+				in_command = yes
+				NOT = { has_character_modifier = naval_battle_cd }
+				NOR = {
+					same_realm = ROOT
+					has_non_aggression_pact_with = ROOT
+					mercenary = yes
+					rebel = yes
+				}
+				OR = {
+					war_with = ROOT
+					ROOT = { naval_sea_raider_trigger = yes }
+				}
+			}
+			save_event_target_as = nb_defending_admiral
+			add_character_modifier = { name = naval_battle_cd days = 60 hidden = yes }
+			# The defender's side: the top liege or liege at war with ROOT, else the admiral himself
+			if = {
+				limit = { top_liege = { any_current_enemy = { character = ROOT } } }
+				top_liege = { save_event_target_as = nb_defending_liege }
+			}
+			else_if = {
+				limit = { liege = { any_current_enemy = { character = ROOT } } }
+				liege = { save_event_target_as = nb_defending_liege }
+			}
+			else = {
+				save_event_target_as = nb_defending_liege
+			}
+		}
+		if = {
+			limit = { event_target:nb_defending_admiral = { always = yes } }
+			save_event_target_as = nb_attacking_admiral
+			add_character_modifier = { name = naval_battle_cd days = 60 hidden = yes }
+			# The attacker's side, the same way round
+			if = {
+				limit = { top_liege = { any_current_enemy = { character = event_target:nb_defending_liege } } }
+				top_liege = { save_event_target_as = nb_attacking_liege }
+			}
+			else_if = {
+				limit = { liege = { any_current_enemy = { character = event_target:nb_defending_liege } } }
+				liege = { save_event_target_as = nb_attacking_liege }
+			}
+			else = {
+				save_event_target_as = nb_attacking_liege
+			}
+			character_event = { id = naval.101 }
+		}
+	}
+}
+
+# naval.101 Hostile admiral spotted (attacker)
+# Engage (naval.102), raid a fleet you are not at war with, or let the
+# defender decide (naval.104).
+# Scope: ROOT is the attacking admiral.
+character_event = {
+	id = naval.101
+	title = "nautical.1_title"
+	desc = "nautical.1_desc"
+	picture = GFX_evt_longships_at_sea_oldgods
+	sound = bell
+
+	is_triggered_only = yes
+
+	# At war with defending admiral
+	option = {
+		name = "nautical.1A"
+		trigger = {
+			war_with = event_target:nb_defending_admiral
+		}
+		ai_chance = {
+			factor = 1
+			# Unlikely if worse martial
+			modifier = {
+				factor = 0.2
+				martial < event_target:nb_defending_admiral
+			}
+		}
+		ram_end_sounds_effect = yes
+		assign_naval_outcome1_effect = yes
+
+		# Ping to reset event target
+		event_target:nb_defending_admiral = {
+			save_event_target_as = nb_defending_admiral
+		}
+		# Begin Naval Battle - Attacker
+		character_event = {
+			id = naval.102
+		}
+	}
+
+	option = {
+		name = "nautical.1B"
+		trigger = {
+			NOT = {
+				war_with = event_target:nb_defending_admiral
+			}
+		}
+		# Unlikely if worse martial
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 0.2
+				martial < event_target:nb_defending_admiral
+			}
+		}
+		ram_end_sounds_effect = yes
+		assign_naval_outcome1_effect = yes
+		if = {
+			limit = {
+				NOR = {
+					trait = viking
+					trait = pirate
+					trait = ravager
+					trait = seaking
+					trait = sea_queen
+				}
+			}
+			random = {
+				chance = 20
+				if = {
+					limit = {
+						culture_group = norscan_group
+					}
+					add_trait = viking
+				}
+				else = {
+					add_trait = pirate
+				}
+			}
+		}
+
+		reverse_opinion = {
+			who = event_target:nb_defending_admiral #The defending admiral
+			modifier = opinion_looted
+		}
+
+		event_target:nb_defending_admiral = {
+			save_event_target_as = nb_defending_admiral #The defending admiral
+		}
+		#Begin Naval Battle - Attacker
+		character_event = {
+			id = naval.102
+		}
+
+
+	}
+	option = {
+		name = "nautical.1C"
+		event_target:nb_defending_admiral = {
+			character_event = {
+				id = naval.104 #Hostile Admiral Spotted - Defender
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 0
+				martial = event_target:nb_defending_admiral #The defending admiral
+			}
+		}
+	}
+}
+
+# naval.102 Naval battle (attacker)
+# The attacker's outcome; the defending liege hears of it (naval.103).
+# Scope: ROOT is the attacking admiral.
+character_event = {
+	id = naval.102
+	title = "nautical.2_title"
+	desc = "nautical.2_desc"
+	picture = GFX_evt_longships_at_sea_oldgods
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	option = {
+		name = "nautical.2A"
+		trigger = {
+			has_character_flag = nb_naval_victor
+		}
+		naval_outcome1_effect = yes
+	}
+
+	option = {
+		name = "nautical.2B"
+		trigger = {
+			NOT = {
+				has_character_flag = nb_naval_victor
+			}
+		}
+		event_target:nb_defending_admiral = {
+			show_scope_change = no
+			naval_outcome2_effect = yes
+		}
+	}
+
+	after = {
+		event_target:nb_defending_liege = {
+			character_event = {
+				id = naval.103 #Inform opponent of the attack
+			}
+		}
+	}
+}
+
+# naval.103 News of a sea battle
+# Scope: ROOT is the defending (or attacking) liege; FROM the admiral.
+character_event = {
+	id = naval.103
+	title = "nautical.3_title"
+	desc = "nautical.3_desc"
+	picture = GFX_evt_longships_at_sea_oldgods
+
+	is_triggered_only = yes
+	sound = bell
+	hide_from = yes
+
+	option = {
+		name = "nautical.3A"
+		trigger = {
+			FROM = {
+				NOT = {
+					has_character_flag = nb_naval_victor
+				}
+			}
+		}
+		event_target:nb_defending_admiral = {
+			save_event_target_as = nb_defending_admiral #The defending admiral
+		}
+		event_target:nb_attacking_admiral = {
+			save_event_target_as = nb_attacking_admiral #The attacking admiral
+		}
+	}
+	option = {
+		name = "nautical.3B"
+		trigger = {
+			FROM = {
+				has_character_flag = nb_naval_victor
+			}
+		}
+		FROM = {
+			clr_character_flag = nb_naval_victor
+		}
+		event_target:nb_defending_admiral = {
+			save_event_target_as = nb_defending_admiral #The defending admiral
+		}
+		event_target:nb_attacking_admiral = {
+			save_event_target_as = nb_attacking_admiral #The attacking admiral
+		}
+	}
+}
+
+# naval.104 Hostile admiral spotted (defender)
+# Engage (naval.105) or slip away.
+# Scope: ROOT is the defending admiral.
+character_event = {
+	id = naval.104
+	title = "nautical.4_title"
+	desc = "nautical.4_desc"
+	picture = GFX_evt_longships_at_sea_oldgods
+
+	sound = bell
+	is_triggered_only = yes
+
+	option = {
+		name = "nautical.4A"
+		ram_end_sounds_effect = yes
+		assign_naval_outcome2_effect = yes
+		event_target:nb_attacking_admiral = {
+			save_event_target_as = nb_attacking_admiral #The attacking admiral
+		}
+		character_event = {
+			id = naval.105 #Begin Naval Battle - Defender
+		}
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 0.2
+				martial < event_target:nb_attacking_admiral #The attacking admiral
+			}
+		}
+	}
+	option = {
+		name = "nautical.4B"
+		event_target:nb_attacking_admiral = {
+			save_event_target_as = nb_attacking_admiral #The attacking admiral
+		}
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 0.2
+				martial >= event_target:nb_attacking_admiral #The attacking admiral
+			}
+		}
+	}
+}
+
+# naval.105 Naval battle (defender)
+# The defender's outcome; the attacking liege hears of it (naval.103).
+# Scope: ROOT is the defending admiral.
+character_event = {
+	id = naval.105
+	title = "nautical.5_title"
+	desc = "nautical.5_desc"
+	picture = GFX_evt_longships_at_sea_oldgods
+	is_triggered_only = yes
+	hide_from = yes
+
+	option = {
+		name = "nautical.5A"
+		trigger = {
+			has_character_flag = nb_naval_victor
+		}
+		naval_outcome2_effect = yes
+	}
+	option = {
+		name = "nautical.5B"
+		trigger = {
+			NOT = {
+				has_character_flag = nb_naval_victor
+			}
+		}
+		event_target:nb_attacking_admiral = {
+			show_scope_change = no
+			naval_outcome1_effect = yes
+		}
+	}
+	after = {
+		event_target:nb_attacking_liege = {
+			character_event = {
+				id = naval.103 #Inform opponent of the attack
+			}
+		}
+	}
+}

@@ -1,0 +1,970 @@
+###############################################################################
+# Erengrad
+# Namespace: erengrad
+# Faction: Kislev
+#
+# Kislev's port, where anything can be bought within a day or two: the
+# Erengrad Convoy and its trade runs, the guilds against the boyars, the
+# Cannoneers' Compound, the Elven, foreign and low quarters, the Temple of
+# Manann, and the city's fall and rebuilding. Lore from Realm of the Ice
+# Queen (WFRP 2e), chapter VII; Komi's proposal doc, segment 2.
+#
+# The Convoy swears                          erengrad.1
+# Convoy runs: port, cargo, sailing          erengrad.10 - 12
+# Convoy runs: arrival, the poll, failure    erengrad.13 - 15
+# Convoy runs: the AI run, Duma sponsors     erengrad.16 - 17
+# Guilds and boyars                          erengrad.20 - 23
+# The Cannoneers' Compound                   erengrad.30 - 32
+# The quarters and the Temple of Manann      erengrad.40 - 43
+# Erengrad sacked and rebuilt                erengrad.50 - 51
+#
+# Fired from common/on_actions/wh_on_actions.txt: erengrad.16 and the
+# five-year list erengrad_life (20 - 23, 30 - 32, 40 - 43) on
+# on_five_year_pulse, erengrad.50 on on_new_holder_usurpation. kislev.201
+# fires erengrad.1 when Kislev takes the city. naval.1
+# (events/WHG_naval_events.txt) fires erengrad.13 when the Convoy Master
+# docks at the chosen port. The decisions in
+# decisions/WHG_erengrad_decisions.txt fire the rest.
+# Minor title: title_convoy_master (common/minor_titles/wh_minor_titles.txt)
+# Scripted triggers: common/scripted_triggers/wh_erengrad_triggers.txt
+# Scripted effects: common/scripted_effects/wh_erengrad_effects.txt
+# Event modifiers: common/event_modifiers/wh_erengrad_modifiers.txt
+# Opinion modifiers: common/opinion_modifiers/wh_erengrad_opinions.txt
+# Artifacts: common/artifacts/25_artifacts_kislev.txt
+# Loc: localisation/00_WHG_erengrad_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = erengrad
+
+###############################################################################
+# The Convoy swears
+###############################################################################
+
+# erengrad.1 The Convoy's oath
+# Once a game: the captain of the Erengrad Convoy swears to the ruler who
+# holds Erengrad and joins their court as Convoy Master. The mercenary
+# company becomes the city's own fleet.
+# Scope: ROOT holds c_erengrad.
+character_event = {
+	id = erengrad.1
+	desc = EVTDESCerengrad1
+	picture = GFX_evt_merchant_ship_at_sea_republic
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # kislev.201, erengrad_charter_convoy
+
+	trigger = {
+		has_landed_title = c_erengrad
+		NOT = { has_global_flag = erengrad_convoy_chartered }
+	}
+
+	immediate = {
+		set_global_flag = erengrad_convoy_chartered
+		if = {
+			limit = { d_erengrad_convoy = { has_holder = yes } }
+			d_erengrad_convoy = {
+				holder_scope = { save_event_target_as = erengrad_captain }
+				destroy_landed_title = THIS
+			}
+		}
+		else = {
+			create_character = {
+				random_traits = yes
+				dynasty = random
+				religion = kislev_gods
+				culture = gospodar
+				female = no
+				age = 40
+				attributes = { martial = 10 stewardship = 12 }
+				trait = creature_human
+				trait = thrifty_clerk
+			}
+			new_character = { save_event_target_as = erengrad_captain }
+		}
+		activate_title = { title = d_erengrad_convoy status = no }
+		event_target:erengrad_captain = {
+			move_character = ROOT
+			give_minor_title = title_convoy_master
+		}
+	}
+
+	option = {
+		name = EVTOPTAerengrad1
+		prestige = 50
+	}
+}
+
+###############################################################################
+# Convoy runs
+# A player picks a port and a cargo; the Convoy sails from Erengrad, and
+# only pays when the Convoy Master brings it into that port.
+###############################################################################
+
+# erengrad.10 Where shall the Convoy sail?
+# Pick the port. Each market pays best for two of the five cargoes
+# (erengrad_cargo_suits_port_trigger). Far ports pay more.
+# Scope: ROOT holds Erengrad and the charter.
+character_event = {
+	id = erengrad.10
+	desc = EVTDESCerengrad10
+	picture = GFX_evt_merchant_ship_at_sea_republic
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # erengrad_convoy_run
+
+	option = {
+		name = EVTOPTAerengrad10
+		set_character_flag = erengrad_dest_marienburg
+		character_event = { id = erengrad.11 }
+	}
+	option = {
+		name = EVTOPTBerengrad10
+		set_character_flag = erengrad_dest_salzenmund
+		character_event = { id = erengrad.11 }
+	}
+	option = {
+		name = EVTOPTCerengrad10
+		set_character_flag = erengrad_dest_languille
+		character_event = { id = erengrad.11 }
+	}
+	option = {
+		name = EVTOPTDerengrad10
+		set_character_flag = erengrad_dest_norsca
+		character_event = { id = erengrad.11 }
+	}
+	option = {
+		name = EVTOPTEerengrad10
+		set_character_flag = erengrad_dest_sudenburg
+		character_event = { id = erengrad.11 }
+	}
+	option = {
+		name = EVTOPTFerengrad10
+		set_character_flag = erengrad_dest_ulthuan
+		character_event = { id = erengrad.11 }
+	}
+}
+
+# erengrad.11 What shall the Convoy carry?
+# Pick the cargo, then the Convoy sails (erengrad.12).
+# Scope: ROOT holds Erengrad and the charter.
+character_event = {
+	id = erengrad.11
+	desc = EVTDESCerengrad11
+	picture = GFX_evt_market
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # erengrad.10
+
+	option = {
+		name = EVTOPTAerengrad11
+		set_character_flag = erengrad_cargo_furs
+		character_event = { id = erengrad.12 }
+	}
+	option = {
+		name = EVTOPTBerengrad11
+		set_character_flag = erengrad_cargo_timber
+		character_event = { id = erengrad.12 }
+	}
+	option = {
+		name = EVTOPTCerengrad11
+		set_character_flag = erengrad_cargo_silver
+		character_event = { id = erengrad.12 }
+	}
+	option = {
+		name = EVTOPTDerengrad11
+		set_character_flag = erengrad_cargo_amber
+		character_event = { id = erengrad.12 }
+	}
+	option = {
+		name = EVTOPTEerengrad11
+		set_character_flag = erengrad_cargo_grain
+		character_event = { id = erengrad.12 }
+	}
+}
+
+# erengrad.12 The Convoy sails
+# Forty galleys put out from Erengrad. The player must put the Convoy Master
+# in command and sail to the chosen port within three years. A blessing at
+# the Temple of Manann (free while the temple is in the ruler's debt) makes
+# storms kinder.
+# Scope: ROOT holds Erengrad and the charter.
+character_event = {
+	id = erengrad.12
+	desc = EVTDESCerengrad12
+	picture = GFX_evt_merchant_ship_at_sea_republic
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # erengrad.11
+
+	immediate = {
+		set_character_flag = erengrad_on_run
+		add_character_modifier = { name = erengrad_run_cd years = 3 hidden = yes }
+		175 = {
+			spawn_fleet = {
+				province = closest
+				owner = ROOT
+				cannot_inherit = yes
+				earmark = erengrad_convoy_run
+				troops = { galleys = { 40 40 } }
+			}
+		}
+		character_event = { id = erengrad.14 days = 30 }
+	}
+
+	# Bless the ships
+	option = {
+		name = EVTOPTAerengrad12
+		trigger = {
+			OR = {
+				wealth = 25
+				c_erengrad = { location = { has_province_modifier = erengrad_manann_favour } }
+			}
+		}
+		if = {
+			limit = { NOT = { c_erengrad = { location = { has_province_modifier = erengrad_manann_favour } } } }
+			wealth = -25
+		}
+		set_character_flag = erengrad_manann_blessed
+		piety = 10
+	}
+
+	# Sail
+	option = {
+		name = EVTOPTBerengrad12
+	}
+}
+
+# erengrad.13 The Convoy makes port
+# The Convoy Master has brought the fleet into the chosen port. The pay
+# depends on the cargo suiting the market, the cargo's state and the
+# distance; sometimes Erengrad booms, and rarely an Elven sea chart comes
+# home. The ships are laid up and the Convoy Master comes home.
+# Scope: ROOT sent the Convoy.
+character_event = {
+	id = erengrad.13
+	desc = {
+		trigger = { has_character_flag = erengrad_dest_marienburg }
+		text = EVTDESCerengrad13a
+	}
+	desc = {
+		trigger = { has_character_flag = erengrad_dest_salzenmund }
+		text = EVTDESCerengrad13b
+	}
+	desc = {
+		trigger = { has_character_flag = erengrad_dest_languille }
+		text = EVTDESCerengrad13c
+	}
+	desc = {
+		trigger = { has_character_flag = erengrad_dest_norsca }
+		text = EVTDESCerengrad13d
+	}
+	desc = {
+		trigger = { has_character_flag = erengrad_dest_sudenburg }
+		text = EVTDESCerengrad13e
+	}
+	desc = {
+		trigger = { has_character_flag = erengrad_dest_ulthuan }
+		text = EVTDESCerengrad13f
+	}
+	picture = GFX_evt_market
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # naval.1, erengrad.14
+
+	trigger = {
+		has_character_flag = erengrad_on_run
+	}
+
+	immediate = {
+		clr_character_flag = erengrad_on_run
+	}
+
+	option = {
+		name = EVTOPTAerengrad13
+		if = {
+			limit = {
+				erengrad_cargo_suits_port_trigger = yes
+				NOT = { has_character_flag = erengrad_cargo_spoiled }
+			}
+			scaled_wealth = { value = 0.6 min = 150 }
+		}
+		else_if = {
+			limit = { erengrad_cargo_suits_port_trigger = yes }
+			scaled_wealth = { value = 0.3 min = 75 }
+		}
+		else_if = {
+			limit = { NOT = { has_character_flag = erengrad_cargo_spoiled } }
+			scaled_wealth = { value = 0.35 min = 90 }
+		}
+		else = {
+			scaled_wealth = { value = 0.15 min = 40 }
+		}
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = erengrad_dest_sudenburg
+					has_character_flag = erengrad_dest_ulthuan
+				}
+			}
+			scaled_wealth = { value = 0.2 min = 50 }
+		}
+		prestige = 50
+		if = {
+			limit = { has_landed_title = c_erengrad }
+			random = {
+				chance = 25
+				c_erengrad = {
+					location = { add_province_modifier = { name = erengrad_trade_boom years = 5 } }
+				}
+			}
+		}
+		erengrad_sea_chart_effect = yes
+		erengrad_end_run_effect = yes
+	}
+}
+
+# erengrad.14 The Convoy at sea
+# Hidden. Every thirty days while the Convoy is out: has the Convoy Master
+# made port (erengrad.13)? After three years the run fails (erengrad.15).
+# Scope: ROOT sent the Convoy.
+character_event = {
+	id = erengrad.14
+	hide_window = yes
+
+	is_triggered_only = yes # erengrad.12, erengrad.14
+
+	trigger = {
+		has_character_flag = erengrad_on_run
+	}
+
+	immediate = {
+		if = {
+			limit = { any_courtier = { erengrad_convoy_arrived_trigger = yes } }
+			character_event = { id = erengrad.13 }
+		}
+		else_if = {
+			limit = {
+				OR = {
+					had_character_flag = { flag = erengrad_on_run days = 1095 }
+					NOT = { erengrad_has_convoy_master_trigger = yes }
+				}
+			}
+			character_event = { id = erengrad.15 }
+		}
+		else = {
+			character_event = { id = erengrad.14 days = 30 }
+		}
+	}
+}
+
+# erengrad.15 The Convoy is lost
+# Three years and no port, or no Convoy Master: the cargo rots and the
+# ships come home empty.
+# Scope: ROOT sent the Convoy.
+character_event = {
+	id = erengrad.15
+	desc = EVTDESCerengrad15
+	picture = GFX_evt_ship_storm
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # erengrad.14
+
+	option = {
+		name = EVTOPTAerengrad15
+		prestige = -50
+		erengrad_end_run_effect = yes
+	}
+}
+
+# erengrad.16 The Convoy's season
+# Hidden. Every five years an AI ruler with the Convoy and a Convoy Master
+# sends it out without the sailing: gold, prestige and sometimes a trade
+# boom.
+# Scope: ROOT is any character (five-year pulse).
+character_event = {
+	id = erengrad.16
+	hide_window = yes
+
+	is_triggered_only = yes # on_five_year_pulse
+	ai = yes
+	only_rulers = yes
+
+	trigger = {
+		erengrad_convoy_holder_trigger = yes
+		erengrad_has_convoy_master_trigger = yes
+		war = no
+	}
+
+	immediate = {
+		random_list = {
+			70 = {
+				scaled_wealth = { value = 0.4 min = 100 }
+				prestige = 25
+				random = {
+					chance = 25
+					c_erengrad = {
+						location = { add_province_modifier = { name = erengrad_trade_boom years = 5 } }
+					}
+				}
+			}
+			30 = { }
+		}
+	}
+}
+
+# erengrad.17 The sponsor's share
+# Two years after a Duma member sponsored a Convoy run: the share comes
+# home, three times in four with a profit.
+# Scope: ROOT is the sponsor.
+character_event = {
+	id = erengrad.17
+	desc = {
+		trigger = { has_character_flag = erengrad_sponsor_lost }
+		text = EVTDESCerengrad17b
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = erengrad_sponsor_lost } }
+		text = EVTDESCerengrad17
+	}
+	picture = GFX_evt_merchant_ship_at_sea_republic
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # kislevsoc_sponsor_convoy
+
+	immediate = {
+		random = {
+			chance = 25
+			set_character_flag = erengrad_sponsor_lost
+		}
+	}
+
+	option = {
+		name = EVTOPTAerengrad17
+		if = {
+			limit = { NOT = { has_character_flag = erengrad_sponsor_lost } }
+			wealth = 175
+		}
+		clr_character_flag = erengrad_sponsor_lost
+	}
+}
+
+###############################################################################
+# Guilds and boyars
+# The guilds are slowly taking Erengrad from the boyars.
+###############################################################################
+
+# erengrad.20 The guild master's ambition
+# A rich guild master asks to be raised to the druzhina and seated in the
+# Duma. Grant it (gold and a new Duma member; the boyars sulk), or refuse.
+# Scope: ROOT holds c_erengrad.
+character_event = {
+	id = erengrad.20
+	desc = EVTDESCerengrad20
+	picture = GFX_evt_kislev_druzhina
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_five_year_pulse erengrad_life
+
+	only_rulers = yes
+
+	trigger = { has_landed_title = c_erengrad }
+
+	# Raise him
+	option = {
+		name = EVTOPTAerengrad20
+		scaled_wealth = { value = 0.2 min = 25 }
+		create_character = {
+			random_traits = yes
+			dynasty = random
+			religion = ROOT
+			culture = gospodar
+			female = no
+			age = 45
+			attributes = { stewardship = 14 diplomacy = 8 }
+			trait = creature_human
+			trait = midas_touched
+		}
+		new_character = {
+			set_character_flag = kislevsoc_druzhina_raised
+			join_society = boyar_duma
+			opinion = { who = ROOT modifier = opinion_erengrad_guild_favoured }
+		}
+		any_vassal = {
+			limit = {
+				society_member_of = boyar_duma
+				society_rank >= 2
+			}
+			opinion = { who = ROOT modifier = opinion_kislevsoc_upstart_raised }
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+
+	# Refuse
+	option = {
+		name = EVTOPTBerengrad20
+		prestige = 15
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = proud }
+		}
+	}
+}
+
+# erengrad.21 The burning warehouse
+# Boyars' men burn a guild warehouse on the docks. Punish the boyars, pay
+# the guild for the damage, or let it lie (and lose trade for years).
+# Scope: ROOT holds c_erengrad.
+character_event = {
+	id = erengrad.21
+	desc = EVTDESCerengrad21
+	picture = GFX_evt_burning_house
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_five_year_pulse erengrad_life
+
+	only_rulers = yes
+
+	trigger = { has_landed_title = c_erengrad }
+
+	# Punish the boyars
+	option = {
+		name = EVTOPTAerengrad21
+		prestige = 25
+		random_vassal = {
+			limit = { culture_group = kislevite_group is_patrician = no }
+			opinion = { who = ROOT modifier = opinion_erengrad_guild_slighted }
+		}
+		ai_chance = { factor = 40 }
+	}
+
+	# Pay the guild
+	option = {
+		name = EVTOPTBerengrad21
+		trigger = { wealth = 50 }
+		wealth = -50
+		ai_chance = { factor = 30 }
+	}
+
+	# Let it lie
+	option = {
+		name = EVTOPTCerengrad21
+		c_erengrad = {
+			location = { add_province_modifier = { name = erengrad_warehouse_burned years = 5 } }
+		}
+		ai_chance = { factor = 30 }
+	}
+}
+
+# erengrad.22 A guild's gift
+# A guild leaves a purse and asks for a lighter harbour tax. Take it, or
+# send it back.
+# Scope: ROOT holds c_erengrad.
+character_event = {
+	id = erengrad.22
+	desc = EVTDESCerengrad22
+	picture = GFX_evt_market
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_five_year_pulse erengrad_life
+
+	only_rulers = yes
+
+	trigger = { has_landed_title = c_erengrad }
+
+	option = {
+		name = EVTOPTAerengrad22
+		scaled_wealth = { value = 0.3 min = 40 }
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 0.2 trait = honest }
+		}
+	}
+	option = {
+		name = EVTOPTBerengrad22
+		prestige = 25
+		ai_chance = { factor = 40 }
+	}
+}
+
+# erengrad.23 Silver and old blood
+# An old boyar house will marry its daughter to a guild master's son, if
+# the ruler blesses it. Bless it (the city thrives), or forbid it.
+# Scope: ROOT holds c_erengrad.
+character_event = {
+	id = erengrad.23
+	desc = EVTDESCerengrad23
+	picture = GFX_evt_kislev_boyars
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # on_five_year_pulse erengrad_life
+
+	only_rulers = yes
+
+	trigger = { has_landed_title = c_erengrad }
+
+	option = {
+		name = EVTOPTAerengrad23
+		prestige = 25
+		scaled_wealth = { value = 0.1 min = 15 }
+		ai_chance = { factor = 70 }
+	}
+	option = {
+		name = EVTOPTBerengrad23
+		prestige = 10
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = proud }
+		}
+	}
+}
+
+###############################################################################
+# The Cannoneers' Compound
+# One of the few cannon foundries outside Nuln. Erengrad guns are cheaper
+# and lighter, which suits ships.
+###############################################################################
+
+# erengrad.30 The foundry burns
+# A casting goes wrong in the Compound. Pay for the damage, or let the
+# cannoneers sort it out themselves.
+# Scope: ROOT holds c_erengrad.
+character_event = {
+	id = erengrad.30
+	desc = EVTDESCerengrad30
+	picture = GFX_evt_great_cannon
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_five_year_pulse erengrad_life
+
+	only_rulers = yes
+
+	trigger = { has_landed_title = c_erengrad }
+
+	option = {
+		name = EVTOPTAerengrad30
+		trigger = { wealth = 40 }
+		wealth = -40
+		prestige = 15
+		ai_chance = { factor = 60 }
+	}
+	option = {
+		name = EVTOPTBerengrad30
+		c_erengrad = {
+			location = { add_province_modifier = { name = erengrad_warehouse_burned years = 2 } }
+		}
+		ai_chance = { factor = 40 }
+	}
+}
+
+# erengrad.31 The man from Nuln
+# A Nuln guild agent is caught copying the Compound's secrets. Hang him,
+# ransom him back to Nuln, or let him go with a false copy.
+# Scope: ROOT holds c_erengrad.
+character_event = {
+	id = erengrad.31
+	desc = EVTDESCerengrad31
+	picture = GFX_evt_great_cannon
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_five_year_pulse erengrad_life
+
+	only_rulers = yes
+
+	trigger = { has_landed_title = c_erengrad }
+
+	option = {
+		name = EVTOPTAerengrad31
+		prestige = 25
+		ai_chance = { factor = 40 }
+	}
+	option = {
+		name = EVTOPTBerengrad31
+		scaled_wealth = { value = 0.2 min = 30 }
+		ai_chance = { factor = 40 }
+	}
+	option = {
+		name = EVTOPTCerengrad31
+		trigger = { intrigue = 10 }
+		prestige = 10
+		scaled_wealth = { value = 0.1 min = 15 }
+		ai_chance = { factor = 20 }
+	}
+}
+
+# erengrad.32 The Dwarf engineer
+# A Dwarf engineer offers to improve the Compound's guns, for a price.
+# Pay (a ruler with an Erengrad battery gets a better one; rarely an
+# engraved swivel gun for the treasury), or send him back to the mountains.
+# Scope: ROOT holds c_erengrad.
+character_event = {
+	id = erengrad.32
+	desc = EVTDESCerengrad32
+	picture = GFX_evt_dwarf_cannon
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_five_year_pulse erengrad_life
+
+	only_rulers = yes
+
+	trigger = { has_landed_title = c_erengrad }
+
+	# Pay him
+	option = {
+		name = EVTOPTAerengrad32
+		trigger = { wealth = 75 }
+		wealth = -75
+		if = {
+			limit = { has_character_modifier = erengrad_battery }
+			remove_character_modifier = erengrad_battery
+			add_character_modifier = { name = erengrad_battery_improved duration = -1 }
+		}
+		else = {
+			prestige = 50
+		}
+		if = {
+			limit = {
+				NOT = { has_character_flag = erengrad_gun_given }
+				NOT = { has_artifact = erengrad_swivel_gun }
+			}
+			random = {
+				chance = 10
+				set_character_flag = erengrad_gun_given
+				add_artifact = erengrad_swivel_gun
+			}
+		}
+		ai_chance = { factor = 50 }
+	}
+
+	# Send him away
+	option = {
+		name = EVTOPTBerengrad32
+		ai_chance = { factor = 50 }
+	}
+}
+
+###############################################################################
+# The quarters
+###############################################################################
+
+# erengrad.40 The Elven Quarter
+# One of the largest Elven quarters in the Old World. An Asur mage asks to
+# serve at court, or the traders offer an Ulthuan contract.
+# Scope: ROOT holds c_erengrad.
+character_event = {
+	id = erengrad.40
+	desc = EVTDESCerengrad40
+	picture = GFX_evt_high_elf_ship
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # on_five_year_pulse erengrad_life
+
+	only_rulers = yes
+
+	trigger = { has_landed_title = c_erengrad }
+
+	# Take the mage
+	option = {
+		name = EVTOPTAerengrad40
+		create_character = {
+			random_traits = yes
+			dynasty = random
+			religion = cadai
+			culture = eatainian
+			female = no
+			age = 220
+			attributes = { learning = 16 }
+			trait = creature_elf
+			trait = lore_high_magic
+			trait = magic_potential_3
+		}
+		ai_chance = { factor = 40 }
+	}
+
+	# The Ulthuan contract
+	option = {
+		name = EVTOPTBerengrad40
+		trigger = { wealth = 50 }
+		wealth = -50
+		c_erengrad = {
+			location = { add_province_modifier = { name = erengrad_elven_trade years = 10 } }
+		}
+		ai_chance = { factor = 40 }
+	}
+
+	# Neither
+	option = {
+		name = EVTOPTCerengrad40
+		ai_chance = { factor = 20 }
+	}
+}
+
+# erengrad.41 The foreign quarters
+# Tilean, Bretonnian and Empire merchants quarrel over the best wharf.
+# Favour one, and its homeland's ruler thinks better of you.
+# Scope: ROOT holds c_erengrad.
+character_event = {
+	id = erengrad.41
+	desc = EVTDESCerengrad41
+	picture = GFX_evt_market
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # on_five_year_pulse erengrad_life
+
+	only_rulers = yes
+
+	trigger = { has_landed_title = c_erengrad }
+
+	option = {
+		name = EVTOPTAerengrad41
+		e_the_empire = {
+			holder_scope = { opinion = { who = ROOT modifier = opinion_erengrad_quarter_favoured } }
+		}
+		scaled_wealth = { value = 0.1 min = 15 }
+	}
+	option = {
+		name = EVTOPTBerengrad41
+		e_bretonnia = {
+			holder_scope = { opinion = { who = ROOT modifier = opinion_erengrad_quarter_favoured } }
+		}
+		scaled_wealth = { value = 0.1 min = 15 }
+	}
+	option = {
+		name = EVTOPTCerengrad41
+		e_tilea = {
+			holder_scope = { opinion = { who = ROOT modifier = opinion_erengrad_quarter_favoured } }
+		}
+		scaled_wealth = { value = 0.1 min = 15 }
+	}
+}
+
+# erengrad.42 The Low City
+# Refugees from the north crowd into the tents of the Low City. Let them
+# stay (more money, more unrest and plague), or clear the tents.
+# Scope: ROOT holds c_erengrad.
+character_event = {
+	id = erengrad.42
+	desc = EVTDESCerengrad42
+	picture = GFX_evt_kislev_town
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_five_year_pulse erengrad_life
+
+	only_rulers = yes
+
+	trigger = { has_landed_title = c_erengrad }
+
+	option = {
+		name = EVTOPTAerengrad42
+		c_erengrad = {
+			location = { add_province_modifier = { name = erengrad_low_city years = 10 } }
+		}
+		ai_chance = { factor = 60 }
+	}
+	option = {
+		name = EVTOPTBerengrad42
+		prestige = -10
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+}
+
+# erengrad.43 The Temple of Manann
+# The ship-shaped temple that floated free when the city burned asks for
+# gold. Give (Manann's favour on the city: a free sea blessing for every
+# Convoy run, a steadier garrison), or refuse.
+# Scope: ROOT holds c_erengrad.
+character_event = {
+	id = erengrad.43
+	desc = EVTDESCerengrad43
+	picture = GFX_evt_merchant_ship_at_sea_republic
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_five_year_pulse erengrad_life
+
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = c_erengrad
+		NOT = { c_erengrad = { location = { has_province_modifier = erengrad_manann_favour } } }
+	}
+
+	option = {
+		name = EVTOPTAerengrad43
+		trigger = { wealth = 50 }
+		wealth = -50
+		c_erengrad = {
+			location = { add_province_modifier = { name = erengrad_manann_favour years = 20 } }
+		}
+		ai_chance = { factor = 50 }
+	}
+	option = {
+		name = EVTOPTBerengrad43
+		ai_chance = { factor = 50 }
+	}
+}
+
+###############################################################################
+# Erengrad sacked and rebuilt
+###############################################################################
+
+# erengrad.50 Erengrad sacked
+# Hidden. When Erengrad is won by war or usurpation, at most once in twenty
+# years, the guilds flee to their manors and the city is sacked. The Duma
+# or the holder can rebuild it (decision erengrad_rebuild, erengrad.51).
+# Scope: ROOT is the new holder; FROM the title.
+character_event = {
+	id = erengrad.50
+	hide_window = yes
+
+	is_triggered_only = yes # on_new_holder_usurpation
+
+	trigger = {
+		FROM = { title = c_erengrad }
+		OR = {
+			NOT = { has_global_flag = erengrad_sacked_recently }
+			had_global_flag = { flag = erengrad_sacked_recently days = 7300 }
+		}
+	}
+
+	immediate = {
+		clr_global_flag = erengrad_sacked_recently
+		set_global_flag = erengrad_sacked_recently
+		c_erengrad = {
+			location = {
+				remove_province_modifier = erengrad_rebuilt
+				add_province_modifier = { name = erengrad_sacked years = 30 }
+			}
+		}
+	}
+}
+
+# erengrad.51 Erengrad rises
+# The rebuilding is done with salvaged stone and traders' timber, and the
+# guild district comes back faster than anyone hoped.
+# Scope: ROOT paid for the rebuilding.
+character_event = {
+	id = erengrad.51
+	desc = EVTDESCerengrad51
+	picture = GFX_evt_kislev_town
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # erengrad_rebuild
+
+	option = {
+		name = EVTOPTAerengrad51
+		prestige = 100
+		c_erengrad = {
+			location = {
+				remove_province_modifier = erengrad_sacked
+				add_province_modifier = { name = erengrad_rebuilt years = 20 }
+			}
+		}
+	}
+}

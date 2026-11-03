@@ -1,0 +1,230 @@
+###############################################################################
+# Erengrad decisions
+# Events: events/WHG_erengrad_events.txt (namespace erengrad).
+# Triggers/effects: wh_erengrad_triggers.txt, wh_erengrad_effects.txt.
+#
+#   erengrad_charter_convoy    Charter the Erengrad Convoy (erengrad.1)
+#   erengrad_convoy_run        Send the Convoy on a trade run (erengrad.10)
+#   erengrad_call_convoy       Call the Convoy's warships to a war
+#   kislevsoc_sponsor_convoy   A Duma boyar buys a share of a run (erengrad.17)
+#   erengrad_buy_battery       Buy a battery from the Cannoneers' Compound
+#   erengrad_rebuild           Rebuild sacked Erengrad (erengrad.51)
+###############################################################################
+
+decisions = {
+	# Charter the Convoy. Kislev's taking of the city fires the same oath
+	# (kislev.201); this covers a Kislevite who wins Erengrad another way.
+	erengrad_charter_convoy = {
+		ai_check_interval = 24
+
+		potential = {
+			has_landed_title = c_erengrad
+			NOT = { has_global_flag = erengrad_convoy_chartered }
+			OR = {
+				culture_group = kislevite_group
+				religion = kislev_gods
+			}
+		}
+
+		allow = {
+			prisoner = no
+			war = no
+			wealth = 100
+		}
+
+		effect = {
+			wealth = -100
+			character_event = { id = erengrad.1 }
+		}
+
+		ai_will_do = { factor = 1 }
+	}
+
+	# Send the Convoy on a trade run. The fleet sails from Erengrad, and the
+	# player must sail it, with the Convoy Master in command, to the port.
+	# AI rulers run the Convoy through erengrad.16.
+	erengrad_convoy_run = {
+		ai = no
+
+		potential = {
+			erengrad_convoy_holder_trigger = yes
+		}
+
+		allow = {
+			custom_tooltip = {
+				text = erengrad_has_master_tt
+				erengrad_has_convoy_master_trigger = yes
+			}
+			custom_tooltip = {
+				text = erengrad_not_on_run_tt
+				NOT = { has_character_flag = erengrad_on_run }
+			}
+			NOT = { has_character_modifier = erengrad_run_cd }
+			prisoner = no
+		}
+
+		effect = {
+			character_event = { id = erengrad.10 }
+		}
+	}
+
+	# Call the Convoy's warships to a war: forty galleys until the peace,
+	# once in ten years.
+	erengrad_call_convoy = {
+		ai_check_interval = 12
+
+		potential = {
+			erengrad_convoy_holder_trigger = yes
+		}
+
+		allow = {
+			war = yes
+			custom_tooltip = {
+				text = erengrad_has_master_tt
+				erengrad_has_convoy_master_trigger = yes
+			}
+			custom_tooltip = {
+				text = erengrad_not_on_run_tt
+				NOT = { has_character_flag = erengrad_on_run }
+			}
+			NOT = { has_character_modifier = erengrad_call_cd }
+			wealth = 50
+		}
+
+		effect = {
+			wealth = -50
+			add_character_modifier = { name = erengrad_call_cd years = 10 }
+			175 = {
+				spawn_fleet = {
+					province = closest
+					owner = ROOT
+					disband_on_peace = yes
+					earmark = erengrad_convoy_war
+					troops = { galleys = { 40 40 } }
+				}
+			}
+		}
+
+		ai_will_do = {
+			factor = 1
+			modifier = { factor = 0 NOT = { wealth = 150 } }
+		}
+	}
+
+	# A Duma boyar buys a share in another lord's Convoy run: Duma standing
+	# now, the share (most times with profit) in two years.
+	kislevsoc_sponsor_convoy = {
+		ai_check_interval = 24
+
+		potential = {
+			society_member_of = boyar_duma
+			society_rank >= 2
+			c_erengrad = {
+				holder_scope = {
+					NOT = { character = ROOT }
+					erengrad_convoy_holder_trigger = yes
+				}
+			}
+		}
+
+		allow = {
+			wealth = 100
+			NOT = { has_character_modifier = erengrad_sponsor_cd }
+			prisoner = no
+		}
+
+		effect = {
+			wealth = -100
+			change_society_currency = 150
+			add_character_modifier = { name = erengrad_sponsor_cd years = 5 }
+			c_erengrad = {
+				holder_scope = { opinion = { who = ROOT modifier = opinion_erengrad_sponsored_run } }
+			}
+			character_event = { id = erengrad.17 days = 730 }
+		}
+
+		ai_will_do = {
+			factor = 1
+			modifier = { factor = 0 NOT = { wealth = 250 } }
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+
+	# Buy a battery from the Cannoneers' Compound: faster sieges for good.
+	erengrad_buy_battery = {
+		ai_check_interval = 24
+
+		potential = {
+			is_ruler = yes
+			culture_group = kislevite_group
+			OR = {
+				has_landed_title = c_erengrad
+				AND = {
+					has_landed_title = e_kislev
+					c_erengrad = { holder_scope = { top_liege = { character = ROOT } } }
+				}
+			}
+			NOT = { has_character_modifier = erengrad_battery }
+			NOT = { has_character_modifier = erengrad_battery_improved }
+		}
+
+		allow = {
+			wealth = 200
+			prisoner = no
+		}
+
+		effect = {
+			wealth = -200
+			add_character_modifier = { name = erengrad_battery duration = -1 }
+		}
+
+		ai_will_do = {
+			factor = 1
+			modifier = { factor = 0 NOT = { wealth = 400 } }
+		}
+	}
+
+	# Rebuild sacked Erengrad. The holder, or a senior Duma boyar of Kislev
+	# (who gains Duma standing for it).
+	erengrad_rebuild = {
+		ai_check_interval = 24
+
+		potential = {
+			c_erengrad = { location = { has_province_modifier = erengrad_sacked } }
+			OR = {
+				has_landed_title = c_erengrad
+				AND = {
+					society_member_of = boyar_duma
+					society_rank >= 2
+					c_erengrad = {
+						holder_scope = {
+							OR = {
+								has_landed_title = e_kislev
+								top_liege = { has_landed_title = e_kislev }
+							}
+						}
+					}
+				}
+			}
+		}
+
+		allow = {
+			wealth = 300
+			prisoner = no
+		}
+
+		effect = {
+			wealth = -300
+			if = {
+				limit = { society_member_of = boyar_duma }
+				change_society_currency = 300
+			}
+			character_event = { id = erengrad.51 }
+		}
+
+		ai_will_do = {
+			factor = 1
+			modifier = { factor = 0 NOT = { wealth = 500 } }
+		}
+	}
+}

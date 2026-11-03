@@ -1,0 +1,3707 @@
+###############################################################################
+# Vampire bloodline society events
+# Namespace: vampsoc
+# Faction: Vampires
+#
+# One society per bloodline (common/societies/wh_vampire_bloodlines.txt).
+# Every open vampire is locked into the society of their line; hidden
+# Lahmians and von Carsteins are secret members. Living thralls of a
+# necromantic faith serve at ranks 1-2. Each line has 4 ranks, a deed and a
+# trial to climb, three rank powers, a head with an ambition, a mechanic of
+# its own, flavour events, a rare artifact and a retinue.
+#
+# Startup sorting                           vampsoc.1
+# Five-year sweep and flavour driver        vampsoc.2
+# Rank-up notice                            vampsoc.5
+# Feeding                                   vampsoc.10
+# The head's aid                            vampsoc.11, 12, 15
+# Thrall service                            vampsoc.13 - vampsoc.14
+# von Carstein: Night of Blood, the mask    vampsoc.100 - vampsoc.105
+# von Carstein: Feud of the Counts          vampsoc.110 - vampsoc.113
+# von Carstein: flavour                     vampsoc.120 - vampsoc.126
+# von Carstein: Sylvania Reborn             vampsoc.130 - vampsoc.131
+# Ordo Draconis: duels, the code            vampsoc.150 - vampsoc.160
+# Ordo Draconis: flavour                    vampsoc.170 - vampsoc.176
+# Ordo Draconis: trail of Abhorash          vampsoc.180 - vampsoc.182
+# Lahmians: mortals and the tithe           vampsoc.200 - vampsoc.205
+# Lahmians: flavour                         vampsoc.220 - vampsoc.226
+# Lahmians: the Great Web                   vampsoc.230 - vampsoc.231
+# Necrarchs: Magnum Opus, relic, Wight King vampsoc.250 - vampsoc.260
+# Necrarchs: flavour                        vampsoc.270 - vampsoc.276
+# Necrarchs: Recipe for Nagash              vampsoc.280 - vampsoc.281
+# Strigoi: ghoul court, the curse           vampsoc.300 - vampsoc.310
+# Strigoi: flavour                          vampsoc.320 - vampsoc.326
+# Strigoi: Strygos Reborn                   vampsoc.330 - vampsoc.331
+# Jade: examination, skin, coils            vampsoc.355 - vampsoc.365
+# Jade: flavour                             vampsoc.370 - vampsoc.376
+# Jade: Celestial Gaze                      vampsoc.380 - vampsoc.381
+# Mahtmasi: Beloved, vigil, devour, dream   vampsoc.400 - vampsoc.412
+# Mahtmasi: flavour                         vampsoc.420 - vampsoc.426
+# Mahtmasi: the Westerlanders               vampsoc.430 - vampsoc.431
+# Between the bloodlines                    vampsoc.450
+#
+# Fired from common/on_actions/wh_on_actions.txt: vampsoc.1 on_startup,
+# vampsoc.2 on_five_year_pulse, vampsoc.110 on_death. vampsoc.2 runs the
+# flavour driver (vampsoc_flavour_effect), which fires each line's driver
+# event (120, 170, 220, 270, 320, 370, 420) or vampsoc.450. The decisions
+# in decisions/wh_vampire_society_decisions.txt fire the trials, powers and
+# ambitions. Hooks elsewhere: vamp_bquest_trophy_effect (Blood Quest
+# victories), vamp.426, 427 and 452 (Lahmian missions), vamp.125 - 127 and
+# 132 - 138 (Jade visions), reform_strygos (the first Heir of Ushoran).
+# Scripted triggers: common/scripted_triggers/wh_vamp_triggers.txt
+# Scripted effects: common/scripted_effects/wh_vamp_effects.txt
+# Event modifiers: common/event_modifiers/wh_vampire_modifiers.txt
+# Artifacts: common/artifacts/24_artifacts_vamp.txt (vampsoc_bloodline_artifact_effect)
+# Retinues: common/retinue_subunits/wh_vampire_society_retinues.txt
+# Loc: localisation/00_WHG_vampire_society_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = vampsoc
+
+###############################################################################
+# Startup and the sweep
+###############################################################################
+
+# vampsoc.1 The bloodlines gather
+# Once per game the multiplayer host puts every vampire into the society of
+# their bloodline, ranks them by standing (kings and dukes rank 3, other
+# rulers rank 2), moves Mahtmasi rulers to the Carrion Court government and
+# makes the founders heads: Vlad von Carstein, Walach
+# Harkon, Neferata, W'soran, Shdroi So-sou and Salimata. The Strigoi start
+# without a head; reforming Strygos makes one.
+# Scope: ROOT is the host player.
+character_event = {
+	id = vampsoc.1
+	hide_window = yes
+
+	ai = no
+	only_playable = yes
+
+	is_triggered_only = yes # on_startup
+
+	trigger = {
+		NOT = { has_global_flag = vampsoc_sorted }
+		is_multiplayer_host_character = yes
+	}
+
+	immediate = {
+		set_global_flag = vampsoc_sorted
+		any_character = {
+			limit = { vamp_needs_society_trigger = yes }
+			vamp_join_bloodline_effect = yes
+		}
+		any_character = {
+			limit = {
+				vamp_society_member_trigger = yes
+				is_vampire_trigger = yes
+				is_ruler = yes
+			}
+			if = {
+				limit = { society_rank == 1 }
+				society_rank_up = 1
+			}
+			if = {
+				limit = {
+					higher_tier_than = COUNT
+					society_rank == 2
+					NOT = { trait = vampire_carstein_hidden }
+				}
+				society_rank_up = 1
+			}
+		}
+		vampsoc_set_founder_heads_effect = yes
+		vampsoc_mahtmasi_government_effect = yes
+	}
+}
+
+# vampsoc.2 The bloodlines stir
+# Every five years: a vampire who has left their society (or was made a
+# vampire by some path that missed the join) is put back, a member may get
+# one of their bloodline's flavour events, and the head of the Court of
+# Sylvania ends the Feud of the Counts once it is twenty years old.
+# Scope: ROOT is any character on the five-year pulse.
+character_event = {
+	id = vampsoc.2
+	hide_window = yes
+
+	is_triggered_only = yes # on_five_year_pulse
+
+	trigger = {
+		is_vampire_trigger = yes
+	}
+
+	immediate = {
+		if = {
+			limit = { vamp_needs_society_trigger = yes }
+			vamp_join_bloodline_effect = yes
+		}
+		if = {
+			limit = {
+				trait = vampire_mahtmasi_visible
+				is_ruler = yes
+				government = vampiric_government
+			}
+			set_government_type = mahtmasi_government
+		}
+		if = {
+			limit = {
+				vamp_society_member_trigger = yes
+				prisoner = no
+				is_incapacitated_trigger = no
+			}
+			vampsoc_flavour_effect = yes
+		}
+		# The Feud of the Counts ends after twenty years
+		if = {
+			limit = {
+				had_global_flag = { flag = vampsoc_feud_active days = 7300 }
+				society_member_of = carstein_court
+				society_rank == 4
+			}
+			clr_global_flag = vampsoc_feud_active
+			character_event = { id = vampsoc.112 }
+		}
+	}
+}
+
+# vampsoc.5 Risen in the bloodline
+# A member has risen a rank.
+# Scope: ROOT is the member.
+character_event = {
+	id = vampsoc.5
+	desc = {
+		trigger = { society_member_of = carstein_court }
+		text = EVTDESCvampsoc5_carstein
+	}
+	desc = {
+		trigger = { society_member_of = ordo_draconis }
+		text = EVTDESCvampsoc5_blood
+	}
+	desc = {
+		trigger = { society_member_of = lahmian_sisterhood }
+		text = EVTDESCvampsoc5_lahmian
+	}
+	desc = {
+		trigger = { society_member_of = necrarch_brotherhood }
+		text = EVTDESCvampsoc5_necrarch
+	}
+	desc = {
+		trigger = { society_member_of = strigoi_brood }
+		text = EVTDESCvampsoc5_strigoi
+	}
+	desc = {
+		trigger = { society_member_of = jade_coil }
+		text = EVTDESCvampsoc5_jade
+	}
+	desc = {
+		trigger = { society_member_of = carrion_children }
+		text = EVTDESCvampsoc5_mahtmasi
+	}
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_rank_up
+
+	option = {
+		name = EVTOPTAvampsoc5
+	}
+}
+
+###############################################################################
+# Feeding
+###############################################################################
+
+# vampsoc.10 The hunger
+# The vampire feeds. A servant is safe. Worthy prey (a warrior of the realm)
+# feeds deeper and counts as the Strigoi's deed, but may fight back. A
+# Mahtmasi may instead answer a mortal who came asking, which is the
+# Mahtmasi deed. The Blood Dragons lose Honour for feeding on the helpless.
+# Scope: ROOT is a vampire member.
+character_event = {
+	id = vampsoc.10
+	desc = {
+		trigger = { society_member_of = ordo_draconis }
+		text = EVTDESCvampsoc10_blood
+	}
+	desc = {
+		trigger = { society_member_of = carrion_children }
+		text = EVTDESCvampsoc10_mahtmasi
+	}
+	desc = {
+		trigger = {
+			NOT = { society_member_of = ordo_draconis }
+			NOT = { society_member_of = carrion_children }
+		}
+		text = EVTDESCvampsoc10
+	}
+	picture = GFX_evt_vampire_kiss
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # vampsoc_feed
+
+	# A servant
+	option = {
+		name = EVTOPTAvampsoc10
+		trigger = { NOT = { society_member_of = carrion_children } }
+		add_character_modifier = { name = vampsoc_well_fed years = 2 }
+		if = {
+			limit = { society_member_of = ordo_draconis }
+			custom_tooltip = { text = vampsoc_feed_dishonour_tt }
+			vampsoc_honour_loss_small_effect = yes
+		}
+		else = {
+			vamp_currency_small_effect = yes
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.1 society_member_of = ordo_draconis }
+		}
+	}
+
+	# Worthy prey
+	option = {
+		name = EVTOPTBvampsoc10
+		trigger = { NOT = { society_member_of = carrion_children } }
+		random_list = {
+			75 = {
+				add_character_modifier = { name = vampsoc_well_fed years = 4 }
+				vamp_currency_medium_effect = yes
+				prestige = 25
+				if = {
+					limit = { society_member_of = strigoi_brood }
+					set_character_flag = vamp_deed_done
+				}
+			}
+			25 = {
+				modifier = { factor = 0.5 martial = 15 }
+				modifier = { factor = 0.5 combat_rating = 40 }
+				add_character_modifier = { name = vampsoc_well_fed years = 2 }
+				vamp_currency_small_effect = yes
+				custom_tooltip = { text = vampsoc_feed_fought_back_tt }
+				random_list = {
+					60 = { add_trait_wounded_effect = yes }
+					40 = { prestige = -25 }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 3 society_member_of = strigoi_brood }
+			modifier = { factor = 3 society_member_of = ordo_draconis }
+			modifier = { factor = 0.3 trait = craven }
+		}
+	}
+
+	# Mahtmasi: the one who asked
+	option = {
+		name = EVTOPTCvampsoc10
+		trigger = { society_member_of = carrion_children }
+		add_character_modifier = { name = vampsoc_well_fed years = 4 }
+		vamp_currency_medium_effect = yes
+		set_character_flag = vamp_deed_done
+		piety = 10
+	}
+
+	# Mahtmasi: a stranger, unasked
+	option = {
+		name = EVTOPTDvampsoc10
+		trigger = { society_member_of = carrion_children }
+		add_character_modifier = { name = vampsoc_well_fed years = 2 }
+		custom_tooltip = { text = vampsoc_feed_unasked_tt }
+		vamp_currency_loss_small_effect = yes
+		ai_chance = { factor = 10 }
+	}
+}
+
+###############################################################################
+# The head's aid
+###############################################################################
+
+# vampsoc.11 A plea from the blood
+# A member at war asks the head of the bloodline for help. The head may send
+# gold, lend the dead of their own lands, or refuse.
+# Scope: ROOT is the head; FROM is the member asking.
+letter_event = {
+	id = vampsoc.11
+	desc = EVTDESCvampsoc11
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes # vampsoc_ask_head_aid
+
+	# Gold
+	option = {
+		name = EVTOPTAvampsoc11
+		trigger = { wealth = 100 }
+		wealth = -100
+		FROM = { wealth = 100 }
+		vamp_currency_small_effect = yes
+		FROM = { character_event = { id = vampsoc.12 } }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 2 trait = charitable }
+			modifier = { factor = 0.2 trait = greedy }
+		}
+	}
+
+	# Lend the dead
+	option = {
+		name = EVTOPTBvampsoc11
+		FROM = {
+			add_character_modifier = { name = vampsoc_head_aid years = 3 }
+			character_event = { id = vampsoc.12 }
+		}
+		vamp_currency_small_effect = yes
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 2 war = no }
+		}
+	}
+
+	# Refuse
+	option = {
+		name = EVTOPTCvampsoc11
+		FROM = { letter_event = { id = vampsoc.15 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 0.2 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 3 NOT = { opinion = { who = FROM value = 0 } } }
+			modifier = { factor = 2 trait = paranoid }
+		}
+	}
+}
+
+# vampsoc.12 The head answers
+# The head of the bloodline has sent help (gold or the dead).
+# Scope: ROOT is the member who asked; FROM is the head.
+character_event = {
+	id = vampsoc.12
+	desc = EVTDESCvampsoc12
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc12
+		opinion = { who = FROM modifier = opinion_grateful years = 10 }
+	}
+}
+
+# vampsoc.15 The head refuses
+# The head of the bloodline will not help.
+# Scope: ROOT is the member who asked; FROM is the head.
+letter_event = {
+	id = vampsoc.15
+	desc = EVTDESCvampsoc15
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc15
+		opinion = { who = FROM modifier = opinion_disappointed years = 10 }
+	}
+}
+
+###############################################################################
+# Thrall service
+###############################################################################
+
+# vampsoc.13 A thrall's gift
+# A living thrall offers their blood to their vampire liege. Drinking deep
+# heals the vampire and leaves the thrall weak; drinking sparingly is kinder.
+# Either way the service counts as the thrall's deed for rank 2.
+# Scope: ROOT is the vampire liege; FROM is the thrall.
+character_event = {
+	id = vampsoc.13
+	desc = EVTDESCvampsoc13
+	picture = GFX_evt_vampire_kiss
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # vampsoc_offer_blood
+
+	# Drink deep
+	option = {
+		name = EVTOPTAvampsoc13
+		add_character_modifier = { name = vampsoc_well_fed years = 3 }
+		FROM = {
+			add_character_modifier = { name = vampsoc_drained years = 1 }
+			vamp_currency_medium_effect = yes
+			set_character_flag = vamp_deed_done
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 2 trait = gluttonous }
+		}
+	}
+
+	# Drink sparingly
+	option = {
+		name = EVTOPTBvampsoc13
+		add_character_modifier = { name = vampsoc_well_fed years = 1 }
+		FROM = {
+			vamp_currency_small_effect = yes
+			set_character_flag = vamp_deed_done
+		}
+		reverse_opinion = { who = FROM modifier = opinion_grateful years = 5 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 2 trait = temperate }
+		}
+	}
+}
+
+# vampsoc.14 A daylight errand
+# The thrall runs an errand for their master where a vampire can't go:
+# into a church, a market at noon, a guild hall. Success earns gold and
+# counts as the thrall's deed; failure leaves them suspected or hurt.
+# Scope: ROOT is the thrall.
+character_event = {
+	id = vampsoc.14
+	desc = EVTDESCvampsoc14
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # vampsoc_daylight_errand
+
+	option = {
+		name = EVTOPTAvampsoc14
+		random_list = {
+			70 = {
+				modifier = { factor = 1.5 intrigue = 12 }
+				modifier = { factor = 1.5 stewardship = 12 }
+				custom_tooltip = { text = vampsoc_errand_success_tt }
+				vamp_currency_medium_effect = yes
+				set_character_flag = vamp_deed_done
+				liege = { wealth = 50 }
+			}
+			30 = {
+				modifier = { factor = 0.6 intrigue = 15 }
+				custom_tooltip = { text = vampsoc_errand_failure_tt }
+				random_list = {
+					50 = { prestige = -30 }
+					50 = { add_trait_wounded_effect = yes }
+				}
+			}
+		}
+	}
+}
+
+
+###############################################################################
+# Court of Sylvania (von Carstein)
+# Hidden von Carsteins wear the mask up to rank 2 and can throw it off. The
+# Night of Blood is the trial for rank 3. Powers raise the dead, the Grave
+# Guard and the Night Court. When Vlad falls for good, the Feud of the
+# Counts runs for twenty years. Ambition: Sylvania Reborn.
+###############################################################################
+
+# vampsoc.100 The Night of Blood
+# The trial of the Court: on one night the vampire must raise the dead of a
+# graveyard and drown a village in terror, unseen by the witch hunters. A
+# month later: vampsoc.101.
+# Scope: ROOT is a von Carstein of rank 2 on trial.
+character_event = {
+	id = vampsoc.100
+	desc = EVTDESCvampsoc100
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_begin_trial
+
+	# The village of a rival
+	option = {
+		name = EVTOPTAvampsoc100
+		set_character_flag = vampsoc_night_bold
+		hidden_effect = { character_event = { id = vampsoc.101 days = 30 random = 30 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+
+	# A village of your own, quietly
+	option = {
+		name = EVTOPTBvampsoc100
+		hidden_effect = { character_event = { id = vampsoc.101 days = 30 random = 30 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = craven }
+		}
+	}
+}
+
+# vampsoc.101 The night ends
+# The bold choice pays more and fails more often. Success passes the trial;
+# failure means waiting five years to try again.
+# Scope: ROOT is a von Carstein on trial.
+character_event = {
+	id = vampsoc.101
+	desc = {
+		trigger = { has_character_flag = vampsoc_trial_passed }
+		text = EVTDESCvampsoc101
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = vampsoc_trial_passed } }
+		text = EVTDESCvampsoc101b
+	}
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = vamp_on_trial }
+
+	immediate = {
+		random_list = {
+			60 = {
+				modifier = { factor = 0.6 has_character_flag = vampsoc_night_bold }
+				modifier = { factor = 1.3 martial = 12 }
+				modifier = { factor = 1.3 intrigue = 12 }
+				modifier = { factor = 1.3 trait = lore_necromancy }
+				set_character_flag = vampsoc_trial_passed
+			}
+			40 = { }
+		}
+	}
+
+	option = {
+		name = {
+			trigger = { has_character_flag = vampsoc_trial_passed }
+			text = EVTOPTAvampsoc101
+		}
+		name = {
+			trigger = { NOT = { has_character_flag = vampsoc_trial_passed } }
+			text = EVTOPTAvampsoc101b
+		}
+		clr_character_flag = vamp_on_trial
+		if = {
+			limit = { has_character_flag = vampsoc_trial_passed }
+			set_character_flag = vamp_trial_done
+			custom_tooltip = { text = vampsoc_trial_passed_tt }
+			if = {
+				limit = { has_character_flag = vampsoc_night_bold }
+				vamp_currency_large_effect = yes
+			}
+			else = {
+				vamp_currency_medium_effect = yes
+			}
+		}
+		else = {
+			custom_tooltip = { text = vampsoc_trial_failed_tt }
+			add_character_modifier = { name = vampsoc_trial_cooldown years = 5 hidden = yes }
+			prestige = -50
+			if = {
+				limit = {
+					has_character_flag = vampsoc_night_bold
+					trait = vampire_carstein_hidden
+				}
+				random = {
+					chance = 30
+					custom_tooltip = { text = vampsoc_exposed_tt }
+					vamp_expose_effect = yes
+				}
+			}
+		}
+		clr_character_flag = vampsoc_trial_passed
+		clr_character_flag = vampsoc_night_bold
+	}
+}
+
+# vampsoc.105 Throw off the mask
+# A hidden von Carstein reveals what they are to their court.
+# Scope: ROOT is the vampire, now open.
+character_event = {
+	id = vampsoc.105
+	desc = EVTDESCvampsoc105
+	picture = GFX_evt_carstein
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_throw_off_mask
+
+	option = {
+		name = EVTOPTAvampsoc105
+	}
+}
+
+# vampsoc.110 The Feud of the Counts
+# Vlad von Carstein is dead for good. His get turn on one another: for
+# twenty years every Vampire Lord of the Court is a rival of the others, and
+# the Feud flavour (vampsoc.113) offers claims on each other's lands.
+# Scope: ROOT is the dead Vlad.
+character_event = {
+	id = vampsoc.110
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+
+	has_character_flag = vlad_von_carstein
+
+	trigger = {
+		NOT = { has_global_flag = vampsoc_feud_begun }
+	}
+
+	immediate = {
+		set_global_flag = vampsoc_feud_begun
+		set_global_flag = vampsoc_feud_active
+		any_society_member = {
+			limit = {
+				society_member_of = carstein_court
+				is_vampire_trigger = yes
+				society_rank >= 2
+				NOT = { character = ROOT }
+			}
+			character_event = { id = vampsoc.111 days = 7 }
+		}
+	}
+}
+
+# vampsoc.111 Vlad is dead
+# Every Vampire Count and Lord hears that the master is gone. The Lords
+# become rivals of each other.
+# Scope: ROOT is a von Carstein of rank 2 or more; FROM is the dead Vlad.
+character_event = {
+	id = vampsoc.111
+	desc = EVTDESCvampsoc111
+	picture = GFX_evt_carstein
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc111
+		if = {
+			limit = { society_rank >= 3 }
+			add_character_modifier = { name = vampsoc_feud_claimant years = 20 }
+			hidden_effect = {
+				any_society_member = {
+					limit = {
+						society_member_of = carstein_court
+						society_rank >= 3
+						NOT = { character = ROOT }
+						NOT = { is_rival = ROOT }
+					}
+					add_rival = ROOT
+				}
+			}
+		}
+		vamp_currency_small_effect = yes
+	}
+}
+
+# vampsoc.112 The Feud ends
+# Twenty years on, the Feud of the Counts is over. Whoever leads the Court
+# now leads it in earnest.
+# Scope: ROOT is the head of the Court of Sylvania (from the five-year
+# sweep).
+character_event = {
+	id = vampsoc.112
+	desc = EVTDESCvampsoc112
+	picture = GFX_evt_carstein
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc112
+		prestige = 300
+		vamp_currency_large_effect = yes
+	}
+}
+
+# vampsoc.113 A rival Count
+# During the Feud, a rival Vampire Lord holds lands you could take. Press a
+# claim, or make a pact against the others.
+# Scope: ROOT is a Vampire Lord in the Feud; event_target:vampsoc_rival is
+# a rival von Carstein ruler.
+character_event = {
+	id = vampsoc.113
+	desc = EVTDESCvampsoc113
+	picture = GFX_evt_carstein
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		any_society_member = {
+			society_member_of = carstein_court
+			society_rank >= 2
+			is_landed = yes
+			NOT = { character = ROOT }
+			is_within_diplo_range = ROOT
+		}
+	}
+
+	immediate = {
+		random_society_member = {
+			limit = {
+				society_member_of = carstein_court
+				society_rank >= 2
+				is_landed = yes
+				NOT = { character = ROOT }
+				is_within_diplo_range = ROOT
+			}
+			save_event_target_as = vampsoc_rival
+		}
+	}
+
+	option = {
+		name = EVTOPTAvampsoc113
+		event_target:vampsoc_rival = {
+			primary_title = { save_event_target_as = vampsoc_rival_title }
+		}
+		add_claim = event_target:vampsoc_rival_title
+		vamp_currency_small_effect = yes
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = ambitious }
+		}
+	}
+
+	option = {
+		name = EVTOPTBvampsoc113
+		opinion = { who = event_target:vampsoc_rival modifier = opinion_friend years = 10 }
+		reverse_opinion = { who = event_target:vampsoc_rival modifier = opinion_friend years = 10 }
+		ai_chance = { factor = 40 }
+	}
+}
+
+# vampsoc.120 von Carstein flavour
+# Picks one Court of Sylvania flavour event (vampsoc.121 - vampsoc.126,
+# and the Feud, vampsoc.113).
+# Scope: ROOT is a member of the Court of Sylvania.
+character_event = {
+	id = vampsoc.120
+	hide_window = yes
+
+	is_triggered_only = yes # vampsoc_flavour_effect
+
+	immediate = {
+		random_list = {
+			10 = {
+				trigger = {
+					society_rank >= 2
+					is_ruler = yes
+				}
+				character_event = { id = vampsoc.121 }
+			}
+			10 = {
+				trigger = { is_landed = yes }
+				character_event = { id = vampsoc.122 }
+			}
+			10 = {
+				trigger = { trait = vampire_carstein_hidden }
+				character_event = { id = vampsoc.123 }
+			}
+			10 = {
+				trigger = {
+					society_rank < 4
+					is_ruler = yes
+					society = { leader = { NOT = { character = ROOT } } }
+				}
+				character_event = { id = vampsoc.124 }
+			}
+			10 = {
+				trigger = {
+					is_vampire_trigger = yes
+					society_rank >= 2
+				}
+				character_event = { id = vampsoc.125 }
+			}
+			10 = {
+				trigger = { is_ruler = yes }
+				character_event = { id = vampsoc.126 }
+			}
+			30 = {
+				trigger = {
+					has_global_flag = vampsoc_feud_active
+					society_rank >= 3
+				}
+				character_event = { id = vampsoc.113 }
+			}
+		}
+	}
+}
+
+# vampsoc.121 A hungry Count
+# A lesser vampire of the Court covets your lands and has been courting
+# your vassals. Pay him off in Blood, or humble him in public.
+# Scope: ROOT is a von Carstein ruler of rank 2 or more.
+character_event = {
+	id = vampsoc.121
+	desc = EVTDESCvampsoc121
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc121
+		trigger = { society_currency >= 50 }
+		vamp_currency_loss_small_effect = yes
+		ai_chance = { factor = 40 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc121
+		random_list = {
+			65 = {
+				modifier = { factor = 1.5 martial = 15 }
+				modifier = { factor = 1.5 trait = impaler }
+				prestige = 50
+				vamp_currency_small_effect = yes
+			}
+			35 = {
+				prestige = -50
+				add_trait_wounded_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = proud }
+		}
+	}
+}
+
+# vampsoc.122 The restless graveyard
+# The dead of a village graveyard stir on their own. Bind them to your
+# levies, or let them sleep.
+# Scope: ROOT is a landed von Carstein.
+character_event = {
+	id = vampsoc.122
+	desc = EVTDESCvampsoc122
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc122
+		add_character_modifier = { name = vampsoc_restless_dead years = 10 }
+		vamp_currency_small_effect = yes
+		if = {
+			limit = { trait = vampire_carstein_hidden }
+			random = {
+				chance = 15
+				custom_tooltip = { text = vampsoc_exposed_tt }
+				vamp_expose_effect = yes
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTBvampsoc122
+		piety = 10
+	}
+}
+
+# vampsoc.123 The priest who would not drink
+# A priest at your court has noticed that you never take the sacrament and
+# never stand in the sun. Silence him, or wait.
+# Scope: ROOT is a hidden von Carstein.
+character_event = {
+	id = vampsoc.123
+	desc = EVTDESCvampsoc123
+	picture = GFX_evt_whispers
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc123
+		add_character_modifier = { name = vampsoc_well_fed years = 2 }
+		random_list = {
+			75 = {
+				modifier = { factor = 1.5 intrigue = 15 }
+				custom_tooltip = { text = vampsoc_hunter_killed_tt }
+			}
+			25 = {
+				custom_tooltip = { text = vampsoc_exposed_tt }
+				vamp_expose_effect = yes
+			}
+		}
+		ai_chance = { factor = 60 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc123
+		random = {
+			chance = 40
+			custom_tooltip = { text = vampsoc_exposed_tt }
+			vamp_expose_effect = yes
+		}
+		ai_chance = { factor = 20 }
+	}
+
+	option = {
+		name = EVTOPTCvampsoc123
+		custom_tooltip = { text = vampsoc_mask_off_tt }
+		vamp_expose_effect = yes
+		character_event = { id = vampsoc.105 }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = proud }
+		}
+	}
+}
+
+# vampsoc.124 Tribute to Drakenhof
+# The Master of Court demands tribute from every Count. Pay, or refuse and
+# be remembered for it.
+# Scope: ROOT is a von Carstein ruler below the head.
+character_event = {
+	id = vampsoc.124
+	desc = EVTDESCvampsoc124
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes
+
+	immediate = {
+		society = { leader = { save_event_target_as = vampsoc_head } }
+	}
+
+	option = {
+		name = EVTOPTAvampsoc124
+		trigger = { wealth = 75 }
+		wealth = -75
+		event_target:vampsoc_head = { wealth = 75 }
+		vamp_currency_medium_effect = yes
+		ai_chance = { factor = 70 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc124
+		vamp_currency_loss_small_effect = yes
+		event_target:vampsoc_head = { opinion = { who = ROOT modifier = opinion_disappointed years = 10 } }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 has_global_flag = vampsoc_feud_active }
+		}
+	}
+}
+
+# vampsoc.125 A mortal begs the kiss
+# A mortal noble at your court begs to be made one of the undying. Bind
+# him with the promise, or turn him down.
+# Scope: ROOT is a von Carstein vampire of rank 2 or more.
+character_event = {
+	id = vampsoc.125
+	desc = EVTDESCvampsoc125
+	picture = GFX_evt_vampire_kiss
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc125
+		vamp_currency_medium_effect = yes
+		add_character_modifier = { name = vampsoc_well_fed years = 2 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc125
+		prestige = 10
+	}
+}
+
+# vampsoc.126 An envoy returns
+# Your envoy comes home from a mortal court with a treaty, and perhaps the
+# Seal of Drakenhof.
+# Scope: ROOT is a von Carstein ruler.
+character_event = {
+	id = vampsoc.126
+	desc = EVTDESCvampsoc126
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc126
+		vamp_currency_small_effect = yes
+		prestige = 25
+		vampsoc_bloodline_artifact_effect = yes
+	}
+}
+
+# vampsoc.130 Sylvania Reborn
+# The Master of Court works the great ritual over the land of Sylvania. Two
+# to three years later: vampsoc.131.
+# Scope: ROOT is the head of the Court of Sylvania.
+character_event = {
+	id = vampsoc.130
+	desc = EVTDESCvampsoc130
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_sylvania_reborn
+
+	option = {
+		name = EVTOPTAvampsoc130
+		custom_tooltip = { text = vampsoc_sylvania_tt }
+		hidden_effect = { character_event = { id = vampsoc.131 days = 730 random = 365 } }
+	}
+}
+
+# vampsoc.131 The land answers
+# Every county of Sylvania held by the Master or their vassals is bound to
+# the dead, and the Master is bound to the land. For life.
+# Scope: ROOT is the head of the Court of Sylvania.
+character_event = {
+	id = vampsoc.131
+	desc = EVTDESCvampsoc131
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = vampsoc_reviving_sylvania
+		has_landed_title = k_sylvania
+	}
+
+	option = {
+		name = EVTOPTAvampsoc131
+		clr_character_flag = vampsoc_reviving_sylvania
+		set_character_flag = vampsoc_sylvania_done
+		add_character_modifier = { name = vampsoc_lord_of_sylvania duration = -1 }
+		prestige = 500
+		custom_tooltip = { text = vampsoc_sylvania_land_tt }
+		hidden_effect = {
+			k_sylvania = {
+				any_de_jure_vassal_title = {
+					limit = {
+						tier = COUNT
+						holder_scope = {
+							OR = {
+								character = ROOT
+								is_vassal_or_below_of = ROOT
+							}
+						}
+					}
+					location = {
+						add_province_modifier = { name = vampsoc_sylvania_reborn_mod duration = -1 }
+					}
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# Ordo Draconis (Blood Dragons)
+# Duels for rank 2, the Blood Quest for rank 3, a challenge to the Grand
+# Master for rank 4. The code of Abhorash: a knight with no Honour left is
+# cast down among the squires. Ambition: retake the Blood Keep and walk the
+# trail of Abhorash.
+###############################################################################
+
+# vampsoc.150 A champion's challenge
+# The Blood Dragon rides out to challenge a famed mortal champion. A win
+# earns Honour (and for a squire, counts as the deed for rank 2); a loss
+# costs Honour and blood.
+# Scope: ROOT is a member of the Ordo Draconis.
+character_event = {
+	id = vampsoc.150
+	desc = EVTDESCvampsoc150
+	picture = GFX_evt_joust
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # vampsoc_challenge_champion
+
+	# Fight with honour
+	option = {
+		name = EVTOPTAvampsoc150
+		vampsoc_fight_effect = yes
+		if = {
+			limit = { has_character_flag = vampsoc_won }
+			custom_tooltip = { text = vampsoc_duel_won_tt }
+			vamp_currency_medium_effect = yes
+			prestige = 50
+			if = {
+				limit = { society_rank == 1 }
+				set_character_flag = vamp_deed_done
+			}
+			vampsoc_bloodline_artifact_effect = yes
+		}
+		else = {
+			custom_tooltip = { text = vampsoc_duel_lost_tt }
+			add_trait_wounded_effect = yes
+			vampsoc_honour_loss_small_effect = yes
+		}
+		ai_chance = { factor = 80 }
+	}
+
+	# Let the thirst fight for you
+	option = {
+		name = EVTOPTBvampsoc150
+		add_character_modifier = { name = vampsoc_well_fed years = 2 }
+		vampsoc_honour_loss_small_effect = yes
+		prestige = 10
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = wroth }
+			modifier = { factor = 0.2 trait = honest }
+		}
+	}
+}
+
+# vampsoc.155 Challenge to the Grand Master
+# A Blood Dragon Lord challenges the Grand Master before the knights of the
+# Order. The victor leads the Ordo Draconis.
+# Scope: ROOT is the challenger (rank 3); event_target:vampsoc_foe is the
+# Grand Master, saved by vampsoc_challenge_grand_master.
+character_event = {
+	id = vampsoc.155
+	desc = EVTDESCvampsoc155
+	picture = GFX_evt_joust
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # vampsoc_challenge_grand_master
+
+	option = {
+		name = EVTOPTAvampsoc155
+		vampsoc_fight_effect = yes
+		if = {
+			limit = { has_character_flag = vampsoc_won }
+			custom_tooltip = { text = vampsoc_grand_master_won_tt }
+			set_character_flag = vamp_grand_master_victor
+			prestige = 300
+			event_target:vampsoc_foe = {
+				set_society_grandmaster = no
+				character_event = { id = vampsoc.156 }
+			}
+			set_society_grandmaster = yes
+		}
+		else = {
+			custom_tooltip = { text = vampsoc_grand_master_lost_tt }
+			prestige = -100
+			add_trait_wounded_effect = yes
+			vampsoc_honour_loss_medium_effect = yes
+			event_target:vampsoc_foe = { prestige = 100 }
+		}
+	}
+}
+
+# vampsoc.156 Unseated
+# The Grand Master has lost the challenge and the Order.
+# Scope: ROOT is the old Grand Master; FROM is the victor.
+character_event = {
+	id = vampsoc.156
+	desc = EVTDESCvampsoc156
+	picture = GFX_evt_joust
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc156
+		prestige = -200
+		add_trait_wounded_effect = yes
+		opinion = { who = FROM modifier = opinion_humiliated_me years = 20 }
+	}
+}
+
+# vampsoc.160 The code of Abhorash
+# A knight with no Honour left to lose is stripped of rank and sent back
+# among the squires to earn it again.
+# Scope: ROOT is a disgraced member of the Ordo Draconis.
+character_event = {
+	id = vampsoc.160
+	desc = EVTDESCvampsoc160
+	picture = GFX_evt_vampire_knight
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # vampsoc_honour_loss_*_effect
+
+	immediate = {
+		while = {
+			limit = { society_rank > 1 }
+			society_rank_down = 1
+		}
+		clr_character_flag = vamp_trial_done
+		clr_character_flag = vamp_deed_done
+	}
+
+	option = {
+		name = EVTOPTAvampsoc160
+		prestige = -100
+	}
+}
+
+# vampsoc.170 Blood Dragon flavour
+# Picks one Ordo Draconis flavour event (vampsoc.171 - vampsoc.176).
+# Scope: ROOT is a member of the Ordo Draconis.
+character_event = {
+	id = vampsoc.170
+	hide_window = yes
+
+	is_triggered_only = yes # vampsoc_flavour_effect
+
+	immediate = {
+		random_list = {
+			10 = {
+				trigger = { is_ruler = yes }
+				character_event = { id = vampsoc.171 }
+			}
+			10 = { character_event = { id = vampsoc.172 } }
+			10 = {
+				trigger = { war = yes }
+				character_event = { id = vampsoc.173 }
+			}
+			10 = { character_event = { id = vampsoc.174 } }
+			10 = {
+				trigger = {
+					society_rank < 4
+					society = { leader = { NOT = { character = ROOT } } }
+				}
+				character_event = { id = vampsoc.175 }
+			}
+			10 = { character_event = { id = vampsoc.176 } }
+		}
+	}
+}
+
+# vampsoc.171 A squire's oath
+# A young mortal knight begs to serve the Blood Dragon and one day earn the
+# blood. Training him takes time and gives Honour; turning him away is
+# safe.
+# Scope: ROOT is a landed member of the Ordo Draconis.
+character_event = {
+	id = vampsoc.171
+	desc = EVTDESCvampsoc171
+	picture = GFX_evt_vampire_knight
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		society = { leader = { save_event_target_as = vampsoc_head } }
+	}
+
+	option = {
+		name = EVTOPTAvampsoc171
+		vamp_currency_small_effect = yes
+		create_character = {
+			age = 18
+			female = no
+			culture = ROOT
+			religion = ROOT
+			dynasty = random
+			attributes = { martial = 10 }
+			trait = creature_human
+			trait = brave
+			trait = skilled_tactician
+		}
+		ai_chance = { factor = 60 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc171
+		prestige = -10
+		ai_chance = { factor = 40 }
+	}
+}
+
+# vampsoc.172 An insult at court
+# A mortal knight mocks the Order at a feast. A Blood Dragon cannot let it
+# pass: fight him, or let a lesser knight take the insult for the Order.
+# Scope: ROOT is a member of the Ordo Draconis.
+character_event = {
+	id = vampsoc.172
+	desc = EVTDESCvampsoc172
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc172
+		vampsoc_fight_effect = yes
+		if = {
+			limit = { has_character_flag = vampsoc_won }
+			custom_tooltip = { text = vampsoc_duel_won_tt }
+			vamp_currency_small_effect = yes
+			prestige = 25
+		}
+		else = {
+			custom_tooltip = { text = vampsoc_duel_lost_tt }
+			add_trait_wounded_effect = yes
+			prestige = -25
+		}
+		ai_chance = { factor = 80 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc172
+		vampsoc_honour_loss_small_effect = yes
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = craven }
+		}
+	}
+}
+
+# vampsoc.173 The red thirst
+# After a battle the thirst rises. Master it as Abhorash taught, or glut
+# yourself on the dying.
+# Scope: ROOT is a member of the Ordo Draconis at war.
+character_event = {
+	id = vampsoc.173
+	desc = EVTDESCvampsoc173
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc173
+		vamp_currency_medium_effect = yes
+		add_character_modifier = { name = vampsoc_iron_will years = 5 }
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = temperate }
+		}
+	}
+
+	option = {
+		name = EVTOPTBvampsoc173
+		add_character_modifier = { name = vampsoc_well_fed years = 5 }
+		vampsoc_honour_loss_small_effect = yes
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = gluttonous }
+			modifier = { factor = 2 trait = wroth }
+		}
+	}
+}
+
+# vampsoc.174 A worthy foe falls
+# Word comes of a great champion slain by the Blood Dragon's hand, or by a
+# knight of their household. The Order honours the deed; there is a small
+# chance of the Dragon Plate of the Order.
+# Scope: ROOT is a member of the Ordo Draconis.
+character_event = {
+	id = vampsoc.174
+	desc = EVTDESCvampsoc174
+	picture = GFX_evt_vampire_knight
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc174
+		vamp_currency_medium_effect = yes
+		prestige = 30
+		vampsoc_bloodline_artifact_effect = yes
+	}
+}
+
+# vampsoc.175 The tourney at the Blood Keep
+# The Grand Master summons the knights of the Order to the lists. Attending
+# earns Honour and the Grand Master's regard, at the risk of a wound.
+# Scope: ROOT is a member below rank 4; the Grand Master is someone else.
+character_event = {
+	id = vampsoc.175
+	desc = EVTDESCvampsoc175
+	picture = GFX_evt_joust
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc175
+		vampsoc_fight_effect = yes
+		if = {
+			limit = { has_character_flag = vampsoc_won }
+			custom_tooltip = { text = vampsoc_duel_won_tt }
+			vamp_currency_medium_effect = yes
+			prestige = 50
+			society = { leader = { opinion = { who = ROOT modifier = opinion_impressed years = 10 } } }
+		}
+		else = {
+			custom_tooltip = { text = vampsoc_duel_lost_tt }
+			vamp_currency_small_effect = yes
+			random = { chance = 40 add_trait_wounded_effect = yes }
+		}
+		ai_chance = { factor = 80 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc175
+		vampsoc_honour_loss_small_effect = yes
+		ai_chance = { factor = 20 }
+	}
+}
+
+# vampsoc.176 The dream of Abhorash
+# In the day-sleep the Blood Dragon dreams of Abhorash, who mastered the
+# thirst on the peaks of the World's Edge. Patience or fury.
+# Scope: ROOT is a member of the Ordo Draconis.
+character_event = {
+	id = vampsoc.176
+	desc = EVTDESCvampsoc176
+	picture = GFX_evt_vampire_knight
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc176
+		add_character_modifier = { name = vampsoc_abhorash_patience years = 10 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc176
+		add_character_modifier = { name = vampsoc_abhorash_fury years = 10 }
+	}
+}
+
+# vampsoc.180 The trail of Abhorash
+# The Grand Master leaves the Blood Keep to find the founder's trail in the
+# World's Edge Mountains. Two to three years later: vampsoc.181.
+# Scope: ROOT is the Grand Master.
+character_event = {
+	id = vampsoc.180
+	desc = EVTDESCvampsoc180
+	picture = GFX_evt_vampire_knight
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # vampsoc_trail_of_abhorash
+
+	option = {
+		name = EVTOPTAvampsoc180
+		custom_tooltip = { text = vampsoc_trail_tt }
+		hidden_effect = { character_event = { id = vampsoc.181 days = 730 random = 365 } }
+	}
+}
+
+# vampsoc.181 The dragon of the peaks
+# High in the mountains the Grand Master faces the beast Abhorash himself
+# once fought. Win, and the trail leads on (vampsoc.182); lose, and the
+# quest ends with wounds and shame.
+# Scope: ROOT is the Grand Master on the trail.
+character_event = {
+	id = vampsoc.181
+	desc = EVTDESCvampsoc181
+	picture = GFX_evt_dragon
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = vampsoc_on_trail }
+
+	option = {
+		name = EVTOPTAvampsoc181
+		vampsoc_fight_effect = yes
+		if = {
+			limit = { has_character_flag = vampsoc_won }
+			custom_tooltip = { text = vampsoc_trail_won_tt }
+			prestige = 200
+			hidden_effect = { character_event = { id = vampsoc.182 days = 180 random = 90 } }
+		}
+		else = {
+			custom_tooltip = { text = vampsoc_trail_lost_tt }
+			clr_character_flag = vampsoc_on_trail
+			add_trait_wounded_effect = yes
+			prestige = -100
+		}
+	}
+}
+
+# vampsoc.182 Abhorash's peak
+# The Grand Master reaches the peak where Abhorash conquered the thirst, and
+# there learns his secret. A blessing for life, and every knight of the
+# Order gains Honour.
+# Scope: ROOT is the Grand Master.
+character_event = {
+	id = vampsoc.182
+	desc = EVTDESCvampsoc182
+	picture = GFX_evt_vampire_knight
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = vampsoc_on_trail }
+
+	option = {
+		name = EVTOPTAvampsoc182
+		clr_character_flag = vampsoc_on_trail
+		set_character_flag = vampsoc_trail_done
+		add_character_modifier = { name = vampsoc_abhorash_secret duration = -1 }
+		prestige = 500
+		custom_tooltip = { text = vampsoc_trail_order_tt }
+		hidden_effect = {
+			any_society_member = {
+				limit = {
+					society_member_of = ordo_draconis
+					NOT = { character = ROOT }
+				}
+				vamp_currency_medium_effect = yes
+			}
+		}
+	}
+}
+
+###############################################################################
+# Lahmian Sisterhood
+# The seduction missions are the trial for rank 3. Sisters stay hidden up to
+# rank 3 and can slip back into hiding once exposed (the Veil of Lahmia).
+# Assisting Mortals spins mortal rulers into the web; the Queen of
+# Mysteries takes the Tithe of the Houses. Ambition: the Silver Pinnacle and
+# the Great Web.
+###############################################################################
+
+# vampsoc.200 Assisting mortals
+# A Lahmian Queen helps a mortal ruler at war, with gold or with sellswords
+# under her own banner. The mortal is caught in the web of the Sisterhood
+# (the Tithe of the Houses counts them).
+# Scope: ROOT is the Lahmian; event_target:vampsoc_mortal is the ruler.
+character_event = {
+	id = vampsoc.200
+	desc = EVTDESCvampsoc200
+	picture = GFX_evt_vampiress1
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # vampsoc_assist_mortals
+
+	# Gold
+	option = {
+		name = EVTOPTAvampsoc200
+		trigger = { wealth = 100 }
+		wealth = -100
+		event_target:vampsoc_mortal = {
+			wealth = 100
+			opinion = { who = ROOT modifier = opinion_vampsoc_lahmian_aid years = 20 }
+			add_character_modifier = { name = vampsoc_lahmian_web years = 20 hidden = yes }
+		}
+		vamp_currency_medium_effect = yes
+		ai_chance = { factor = 50 }
+	}
+
+	# Sellswords
+	option = {
+		name = EVTOPTBvampsoc200
+		trigger = { wealth = 150 }
+		wealth = -150
+		event_target:vampsoc_mortal = {
+			opinion = { who = ROOT modifier = opinion_vampsoc_lahmian_aid years = 20 }
+			add_character_modifier = { name = vampsoc_lahmian_web years = 20 hidden = yes }
+			character_event = { id = vampsoc.201 }
+		}
+		vamp_currency_medium_effect = yes
+		ai_chance = { factor = 50 }
+	}
+
+	# Think better of it
+	option = {
+		name = EVTOPTCvampsoc200
+		ai_chance = { factor = 0 }
+	}
+}
+
+# vampsoc.201 Sellswords from a friend
+# The sellswords paid for by the Lahmian arrive at the mortal's capital and
+# serve until the peace.
+# Scope: ROOT is the mortal ruler; FROM is the Lahmian.
+character_event = {
+	id = vampsoc.201
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		capital_scope = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					owner = ROOT
+					troops = {
+						heavy_infantry = { 150 150 }
+						pikemen = { 150 150 }
+						archers = { 100 100 }
+					}
+					disband_on_peace = yes
+					maintenance_multiplier = 0.5
+				}
+			}
+		}
+	}
+}
+
+# vampsoc.205 The Tithe of the Houses
+# Every Lahmian house and every mortal in the web pays the Queen of
+# Mysteries her due.
+# Scope: ROOT is the head of the Lahmian Sisterhood.
+character_event = {
+	id = vampsoc.205
+	desc = EVTDESCvampsoc205
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # vampsoc_tithe_of_houses
+
+	option = {
+		name = EVTOPTAvampsoc205
+		custom_tooltip = { text = vampsoc_tithe_tt }
+		hidden_effect = {
+			any_society_member = {
+				limit = {
+					society_member_of = lahmian_sisterhood
+					is_ruler = yes
+					NOT = { character = ROOT }
+					wealth = 50
+				}
+				wealth = -50
+				ROOT = { wealth = 50 }
+			}
+			any_province = {
+				limit = { has_province_modifier = lahmian_presence }
+				ROOT = { wealth = 25 }
+			}
+			any_character = {
+				limit = { has_character_modifier = vampsoc_lahmian_web }
+				ROOT = { wealth = 25 }
+			}
+		}
+		vamp_currency_medium_effect = yes
+	}
+}
+
+# vampsoc.220 Lahmian flavour
+# Picks one Lahmian Sisterhood flavour event (vampsoc.221 - vampsoc.226).
+# Scope: ROOT is a member of the Lahmian Sisterhood.
+character_event = {
+	id = vampsoc.220
+	hide_window = yes
+
+	is_triggered_only = yes # vampsoc_flavour_effect
+
+	immediate = {
+		random_list = {
+			10 = {
+				trigger = { trait = vampire_lahmian_hidden }
+				character_event = { id = vampsoc.221 }
+			}
+			10 = {
+				trigger = { society_rank >= 2 }
+				character_event = { id = vampsoc.222 }
+			}
+			10 = {
+				trigger = {
+					society_rank < 4
+					society = { leader = { NOT = { character = ROOT } } }
+				}
+				character_event = { id = vampsoc.223 }
+			}
+			10 = { character_event = { id = vampsoc.224 } }
+			10 = {
+				trigger = { is_ruler = yes }
+				character_event = { id = vampsoc.225 }
+			}
+			10 = {
+				trigger = {
+					trait = vampire_lahmian_hidden
+					age >= 60
+				}
+				character_event = { id = vampsoc.226 }
+			}
+		}
+	}
+}
+
+# vampsoc.221 A witch hunter asks questions
+# A witch hunter has heard rumours about the beautiful lady who is never
+# seen by day. Mislead him with Favour, have him killed (risky), or flee
+# the court for a while.
+# Scope: ROOT is a hidden Lahmian.
+character_event = {
+	id = vampsoc.221
+	desc = EVTDESCvampsoc221
+	picture = GFX_evt_whispers
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	# Mislead him
+	option = {
+		name = EVTOPTAvampsoc221
+		trigger = { society_currency >= 150 }
+		vamp_currency_loss_medium_effect = yes
+		ai_chance = { factor = 50 }
+	}
+
+	# Have him killed
+	option = {
+		name = EVTOPTBvampsoc221
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 intrigue = 15 }
+				modifier = { factor = 1.5 intrigue = 20 }
+				custom_tooltip = { text = vampsoc_hunter_killed_tt }
+				vamp_currency_small_effect = yes
+			}
+			40 = {
+				custom_tooltip = { text = vampsoc_exposed_tt }
+				vamp_expose_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+
+	# Leave court for a season
+	option = {
+		name = EVTOPTCvampsoc221
+		prestige = -50
+		add_character_modifier = { name = vampsoc_in_seclusion years = 1 }
+		ai_chance = { factor = 20 }
+	}
+}
+
+# vampsoc.222 A rival Sister
+# Another Sister has been whispering against you to the Queen. Outwit her,
+# or buy her silence.
+# Scope: ROOT is a Lahmian of rank 2 or more.
+character_event = {
+	id = vampsoc.222
+	desc = EVTDESCvampsoc222
+	picture = GFX_evt_vampiress1
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc222
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 intrigue = 15 }
+				modifier = { factor = 1.5 diplomacy = 15 }
+				custom_tooltip = { text = vampsoc_outwitted_tt }
+				vamp_currency_medium_effect = yes
+			}
+			40 = {
+				custom_tooltip = { text = vampsoc_outwitted_by_tt }
+				vamp_currency_loss_small_effect = yes
+				prestige = -25
+			}
+		}
+		ai_chance = { factor = 60 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc222
+		trigger = { wealth = 50 }
+		wealth = -50
+		ai_chance = { factor = 40 }
+	}
+}
+
+# vampsoc.223 A letter from the Silver Pinnacle
+# The Queen of Mysteries asks a service: gold for a bribe in a distant
+# court. Obey for Favour, or ignore her at a cost.
+# Scope: ROOT is a Lahmian below the head.
+character_event = {
+	id = vampsoc.223
+	desc = EVTDESCvampsoc223
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	immediate = {
+		society = { leader = { save_event_target_as = vampsoc_head } }
+	}
+
+	option = {
+		name = EVTOPTAvampsoc223
+		trigger = { wealth = 75 }
+		wealth = -75
+		event_target:vampsoc_head = { wealth = 75 }
+		vamp_currency_medium_effect = yes
+		ai_chance = { factor = 70 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc223
+		vamp_currency_loss_small_effect = yes
+		event_target:vampsoc_head = { opinion = { who = ROOT modifier = opinion_disappointed years = 10 } }
+		ai_chance = { factor = 30 }
+	}
+}
+
+# vampsoc.224 An admirer
+# A mortal admirer begs for the honour of feeding you. Drink, or toy with
+# them for the court's amusement.
+# Scope: ROOT is a member of the Lahmian Sisterhood.
+character_event = {
+	id = vampsoc.224
+	desc = EVTDESCvampsoc224
+	picture = GFX_evt_vampire_kiss
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc224
+		add_character_modifier = { name = vampsoc_well_fed years = 3 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc224
+		vamp_currency_small_effect = yes
+		prestige = 15
+	}
+}
+
+# vampsoc.225 The masked ball
+# You host a masked ball, and the princes of the realm dance with you until
+# dawn. Favour, and a small chance of the Cameo of Neferata.
+# Scope: ROOT is a landed Lahmian.
+character_event = {
+	id = vampsoc.225
+	desc = EVTDESCvampsoc225
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc225
+		trigger = { wealth = 50 }
+		wealth = -50
+		vamp_currency_medium_effect = yes
+		prestige = 50
+		vampsoc_bloodline_artifact_effect = yes
+		ai_chance = { factor = 70 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc225
+		ai_chance = { factor = 30 }
+	}
+}
+
+# vampsoc.226 The portrait
+# A courtier has found an old portrait of you, painted sixty years ago, and
+# you have not aged a day. Bribe them, kill them, or let them talk.
+# Scope: ROOT is a hidden Lahmian.
+character_event = {
+	id = vampsoc.226
+	desc = EVTDESCvampsoc226
+	picture = GFX_evt_whispers
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc226
+		trigger = { wealth = 50 }
+		wealth = -50
+		ai_chance = { factor = 50 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc226
+		add_character_modifier = { name = vampsoc_well_fed years = 2 }
+		random = {
+			chance = 20
+			custom_tooltip = { text = vampsoc_exposed_tt }
+			vamp_expose_effect = yes
+		}
+		ai_chance = { factor = 40 }
+	}
+
+	option = {
+		name = EVTOPTCvampsoc226
+		random = {
+			chance = 60
+			custom_tooltip = { text = vampsoc_exposed_tt }
+			vamp_expose_effect = yes
+		}
+		ai_chance = { factor = 10 }
+	}
+}
+
+# vampsoc.230 The Great Web
+# The Queen of Mysteries sets out to bind the courts of the Old World to the
+# Silver Pinnacle. Three to five years later: vampsoc.231.
+# Scope: ROOT is the head of the Lahmian Sisterhood.
+character_event = {
+	id = vampsoc.230
+	desc = EVTDESCvampsoc230
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # vampsoc_great_web
+
+	option = {
+		name = EVTOPTAvampsoc230
+		custom_tooltip = { text = vampsoc_web_tt }
+		hidden_effect = { character_event = { id = vampsoc.231 days = 1095 random = 730 } }
+	}
+}
+
+# vampsoc.231 The web is spun
+# Every Sister gains Favour and the Queen rules the courts from her bed and
+# her letters. For life.
+# Scope: ROOT is the head of the Lahmian Sisterhood.
+character_event = {
+	id = vampsoc.231
+	desc = EVTDESCvampsoc231
+	picture = GFX_evt_vampiress1
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = vampsoc_weaving_web }
+
+	option = {
+		name = EVTOPTAvampsoc231
+		clr_character_flag = vampsoc_weaving_web
+		set_character_flag = vampsoc_web_done
+		add_character_modifier = { name = vampsoc_great_web_mod duration = -1 }
+		prestige = 500
+		custom_tooltip = { text = vampsoc_web_order_tt }
+		hidden_effect = {
+			any_society_member = {
+				limit = {
+					society_member_of = lahmian_sisterhood
+					NOT = { character = ROOT }
+				}
+				vamp_currency_medium_effect = yes
+			}
+		}
+	}
+}
+
+###############################################################################
+# Necrarch Brotherhood
+# The Magnum Opus is the trial for rank 3; a relic of Nagash opens a seat
+# among the three Lords of the Dark Tower. Apprentices, wights and the
+# experiments of Nagash. Every twenty years or so a breakthrough. Ambition:
+# the Recipe for Nagash.
+###############################################################################
+
+# vampsoc.250 The Magnum Opus
+# The Necrarch begins the great work of their unlife. Two to four years
+# later: vampsoc.251.
+# Scope: ROOT is a Necrarch of rank 2 on trial.
+character_event = {
+	id = vampsoc.250
+	desc = EVTDESCvampsoc250
+	picture = GFX_evt_lab
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_begin_trial
+
+	option = {
+		name = EVTOPTAvampsoc250
+		set_character_flag = vampsoc_opus_anatomy
+		hidden_effect = { character_event = { id = vampsoc.251 days = 730 random = 730 } }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc250
+		set_character_flag = vampsoc_opus_spirit
+		hidden_effect = { character_event = { id = vampsoc.251 days = 730 random = 730 } }
+	}
+
+	option = {
+		name = EVTOPTCvampsoc250
+		set_character_flag = vampsoc_opus_stars
+		hidden_effect = { character_event = { id = vampsoc.251 days = 730 random = 730 } }
+	}
+}
+
+# vampsoc.251 The work is done
+# Learning decides the result. Success passes the trial with a reward by
+# field; failure costs five years.
+# Scope: ROOT is a Necrarch on trial.
+character_event = {
+	id = vampsoc.251
+	desc = {
+		trigger = { has_character_flag = vampsoc_trial_passed }
+		text = EVTDESCvampsoc251
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = vampsoc_trial_passed } }
+		text = EVTDESCvampsoc251b
+	}
+	picture = GFX_evt_lab
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = vamp_on_trial }
+
+	immediate = {
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 learning = 15 }
+				modifier = { factor = 1.5 learning = 20 }
+				modifier = { factor = 1.5 trait = lore_necromancy }
+				modifier = { factor = 1.3 trait = scholar }
+				set_character_flag = vampsoc_trial_passed
+			}
+			50 = {
+				modifier = { factor = 0.7 trait = patient }
+			}
+		}
+	}
+
+	option = {
+		name = {
+			trigger = { has_character_flag = vampsoc_trial_passed }
+			text = EVTOPTAvampsoc251
+		}
+		name = {
+			trigger = { NOT = { has_character_flag = vampsoc_trial_passed } }
+			text = EVTOPTAvampsoc251b
+		}
+		clr_character_flag = vamp_on_trial
+		if = {
+			limit = { has_character_flag = vampsoc_trial_passed }
+			set_character_flag = vamp_trial_done
+			set_character_flag = vamp_magnum_opus_done
+			custom_tooltip = { text = vampsoc_trial_passed_tt }
+			vamp_currency_medium_effect = yes
+			if = {
+				limit = { has_character_flag = vampsoc_opus_anatomy }
+				add_character_modifier = { name = vampsoc_opus_anatomy duration = -1 }
+			}
+			else_if = {
+				limit = { has_character_flag = vampsoc_opus_spirit }
+				add_character_modifier = { name = vampsoc_opus_spirit duration = -1 }
+			}
+			else = {
+				add_character_modifier = { name = vampsoc_opus_stars duration = -1 }
+			}
+		}
+		else = {
+			custom_tooltip = { text = vampsoc_trial_failed_tt }
+			add_character_modifier = { name = vampsoc_trial_cooldown years = 5 hidden = yes }
+		}
+		clr_character_flag = vampsoc_trial_passed
+		clr_character_flag = vampsoc_opus_anatomy
+		clr_character_flag = vampsoc_opus_spirit
+		clr_character_flag = vampsoc_opus_stars
+	}
+}
+
+# vampsoc.255 The hunt for a relic of Nagash
+# A Master Necrarch sends an expedition into the deserts of Nehekhara for a
+# relic of the Great Necromancer. Two to three years later: vampsoc.256.
+# Scope: ROOT is a Master Necrarch.
+character_event = {
+	id = vampsoc.255
+	desc = EVTDESCvampsoc255
+	picture = GFX_evt_lab
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_seek_nagashi_relic
+
+	option = {
+		name = EVTOPTAvampsoc255
+		hidden_effect = { character_event = { id = vampsoc.256 days = 730 random = 365 } }
+	}
+}
+
+# vampsoc.256 The expedition returns
+# The relic is found (a seat in the Dark Tower can now be claimed), the
+# Tomb Kings drive the expedition off, or the desert takes it.
+# Scope: ROOT is a Master Necrarch.
+character_event = {
+	id = vampsoc.256
+	desc = {
+		trigger = { has_character_flag = vampsoc_relic_roll_found }
+		text = EVTDESCvampsoc256
+	}
+	desc = {
+		trigger = { has_character_flag = vampsoc_relic_roll_tombkings }
+		text = EVTDESCvampsoc256b
+	}
+	desc = {
+		trigger = {
+			NOT = { has_character_flag = vampsoc_relic_roll_found }
+			NOT = { has_character_flag = vampsoc_relic_roll_tombkings }
+		}
+		text = EVTDESCvampsoc256c
+	}
+	picture = GFX_evt_lab
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_list = {
+			40 = {
+				modifier = { factor = 1.5 learning = 18 }
+				modifier = { factor = 1.3 intrigue = 14 }
+				set_character_flag = vampsoc_relic_roll_found
+			}
+			30 = { set_character_flag = vampsoc_relic_roll_tombkings }
+			30 = { }
+		}
+	}
+
+	option = {
+		name = EVTOPTAvampsoc256
+		if = {
+			limit = { has_character_flag = vampsoc_relic_roll_found }
+			set_character_flag = vamp_nagashi_relic
+			custom_tooltip = { text = vampsoc_relic_found_tt }
+			vamp_currency_medium_effect = yes
+			vampsoc_bloodline_artifact_effect = yes
+		}
+		else_if = {
+			limit = { has_character_flag = vampsoc_relic_roll_tombkings }
+			prestige = -50
+			wealth = -50
+		}
+		else = {
+			vamp_currency_small_effect = yes
+		}
+		clr_character_flag = vampsoc_relic_roll_found
+		clr_character_flag = vampsoc_relic_roll_tombkings
+	}
+}
+
+# vampsoc.258 A Wight King rises
+# A Master Necrarch binds the spirit of a barrow king back into his bones: a
+# Wight King who serves as a commander (wight_rise_effect). He may bring his
+# tomb blade (wight_tomb_blade_effect).
+# Scope: ROOT is a Master Necrarch.
+character_event = {
+	id = vampsoc.258
+	desc = EVTDESCvampsoc258
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_raise_wight
+
+	option = {
+		name = EVTOPTAvampsoc258
+		set_character_flag = undead_raise_king
+		wight_rise_effect = yes
+		wight_tomb_blade_effect = yes
+	}
+}
+
+# vampsoc.260 A breakthrough
+# Every twenty years or so a Necrarch's long labour bears fruit.
+# Scope: ROOT is a member of the Necrarch Brotherhood.
+character_event = {
+	id = vampsoc.260
+	desc = EVTDESCvampsoc260
+	picture = GFX_evt_lab
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = vampsoc_breakthrough
+	}
+
+	option = {
+		name = EVTOPTAvampsoc260
+		change_learning = 1
+		vamp_currency_small_effect = yes
+	}
+
+	option = {
+		name = EVTOPTBvampsoc260
+		vamp_currency_large_effect = yes
+	}
+
+	option = {
+		name = EVTOPTCvampsoc260
+		trigger = { is_vampire_trigger = yes }
+		add_character_modifier = { name = vampsoc_necrarch_vigour years = 20 }
+	}
+}
+
+# vampsoc.270 Necrarch flavour
+# The breakthrough when it is due (vampsoc.260), else one Necrarch flavour
+# event (vampsoc.271 - vampsoc.276).
+# Scope: ROOT is a member of the Necrarch Brotherhood.
+character_event = {
+	id = vampsoc.270
+	hide_window = yes
+
+	is_triggered_only = yes # vampsoc_flavour_effect
+
+	immediate = {
+		if = {
+			limit = {
+				OR = {
+					AND = {
+						NOT = { has_character_flag = vampsoc_breakthrough }
+						days_in_society > 7300
+					}
+					had_character_flag = { flag = vampsoc_breakthrough days = 8000 }
+				}
+			}
+			clr_character_flag = vampsoc_breakthrough
+			character_event = { id = vampsoc.260 }
+		}
+		else = {
+			random_list = {
+				10 = { character_event = { id = vampsoc.271 } }
+				10 = {
+					trigger = { any_courtier = { has_character_modifier = vampsoc_apprentice } }
+					character_event = { id = vampsoc.272 }
+				}
+				10 = {
+					trigger = { is_landed = yes }
+					character_event = { id = vampsoc.273 }
+				}
+				10 = {
+					trigger = { society_rank >= 2 }
+					character_event = { id = vampsoc.274 }
+				}
+				10 = { character_event = { id = vampsoc.275 } }
+				10 = {
+					trigger = { is_landed = yes }
+					character_event = { id = vampsoc.276 }
+				}
+			}
+		}
+	}
+}
+
+# vampsoc.271 A letter from the Tower
+# Another Necrarch writes to dispute a point of necromantic theory. Answer
+# at length, or ignore them.
+# Scope: ROOT is a member of the Necrarch Brotherhood.
+character_event = {
+	id = vampsoc.271
+	desc = EVTDESCvampsoc271
+	picture = GFX_evt_lab
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc271
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 learning = 16 }
+				vamp_currency_medium_effect = yes
+			}
+			40 = {
+				vamp_currency_loss_small_effect = yes
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTBvampsoc271
+	}
+}
+
+# vampsoc.272 The apprentice
+# Your apprentice has made progress, or a terrible mistake.
+# Scope: ROOT is a Necrarch with an apprentice at court.
+character_event = {
+	id = vampsoc.272
+	desc = EVTDESCvampsoc272
+	picture = GFX_evt_lab
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_courtier = {
+			limit = { has_character_modifier = vampsoc_apprentice }
+			save_event_target_as = vampsoc_apprentice
+		}
+	}
+
+	option = {
+		name = EVTOPTAvampsoc272
+		random_list = {
+			70 = {
+				vamp_currency_medium_effect = yes
+				event_target:vampsoc_apprentice = { change_learning = 1 }
+			}
+			30 = {
+				event_target:vampsoc_apprentice = {
+					add_trait_wounded_effect = yes
+				}
+				vamp_currency_small_effect = yes
+			}
+		}
+	}
+}
+
+# vampsoc.273 Grave robbing
+# Your servants need fresh bodies for your work. Rob your own graveyards,
+# or buy corpses from beyond the border.
+# Scope: ROOT is a landed Necrarch.
+character_event = {
+	id = vampsoc.273
+	desc = EVTDESCvampsoc273
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc273
+		vamp_currency_medium_effect = yes
+		capital_scope = { add_province_modifier = { name = vampsoc_robbed_graves years = 5 } }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc273
+		trigger = { wealth = 50 }
+		wealth = -50
+		vamp_currency_small_effect = yes
+	}
+}
+
+# vampsoc.274 The tower grows
+# You add a new floor to your tower: a laboratory, an ossuary, a library.
+# Scope: ROOT is a Necrarch of rank 2 or more.
+character_event = {
+	id = vampsoc.274
+	desc = EVTDESCvampsoc274
+	picture = GFX_evt_lab
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc274
+		trigger = { wealth = 100 }
+		wealth = -100
+		add_character_modifier = { name = vampsoc_necrarch_tower duration = -1 }
+		vamp_currency_small_effect = yes
+	}
+
+	option = {
+		name = EVTOPTBvampsoc274
+	}
+}
+
+# vampsoc.275 Forgotten notes
+# In an old chest you find your own notes from three centuries ago, and
+# perhaps a copy of a page of the Liber Mortis.
+# Scope: ROOT is a member of the Necrarch Brotherhood.
+character_event = {
+	id = vampsoc.275
+	desc = EVTDESCvampsoc275
+	picture = GFX_evt_lab
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc275
+		vamp_currency_small_effect = yes
+		vampsoc_bloodline_artifact_effect = yes
+	}
+}
+
+# vampsoc.276 The peasants complain
+# The peasants say the tower's lights burn all night and their dead do not
+# stay buried. Placate them, or ignore them.
+# Scope: ROOT is a landed Necrarch.
+character_event = {
+	id = vampsoc.276
+	desc = EVTDESCvampsoc276
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc276
+		trigger = { wealth = 30 }
+		wealth = -30
+	}
+
+	option = {
+		name = EVTOPTBvampsoc276
+		vamp_currency_small_effect = yes
+		capital_scope = { add_province_modifier = { name = vampsoc_peasant_dread years = 5 } }
+	}
+}
+
+# vampsoc.280 The Recipe for Nagash
+# A Lord of the Dark Tower holding a relic of Nagash begins to reconstruct
+# the Great Necromancer's work. Three to five years later: vampsoc.281.
+# Scope: ROOT is a Lord of the Dark Tower.
+character_event = {
+	id = vampsoc.280
+	desc = EVTDESCvampsoc280
+	picture = GFX_evt_lab
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_recipe_for_nagash
+
+	option = {
+		name = EVTOPTAvampsoc280
+		custom_tooltip = { text = vampsoc_recipe_tt }
+		hidden_effect = { character_event = { id = vampsoc.281 days = 1095 random = 730 } }
+	}
+}
+
+# vampsoc.281 The recipe is complete
+# The Lord has reconstructed the Recipe for Nagash. A permanent mastery of
+# death, and every Necrarch gains Lore.
+# Scope: ROOT is a Lord of the Dark Tower.
+character_event = {
+	id = vampsoc.281
+	desc = EVTDESCvampsoc281
+	picture = GFX_evt_lab
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = vampsoc_writing_recipe }
+
+	option = {
+		name = EVTOPTAvampsoc281
+		clr_character_flag = vampsoc_writing_recipe
+		set_character_flag = vampsoc_recipe_done
+		add_character_modifier = { name = vampsoc_recipe_for_nagash_mod duration = -1 }
+		prestige = 500
+		custom_tooltip = { text = vampsoc_recipe_order_tt }
+		hidden_effect = {
+			any_society_member = {
+				limit = {
+					society_member_of = necrarch_brotherhood
+					NOT = { character = ROOT }
+				}
+				vamp_currency_medium_effect = yes
+			}
+		}
+	}
+}
+
+###############################################################################
+# Heirs of Strygos (Strigoi)
+# The ghoul court is the trial for rank 3; reforming Strygos makes the first
+# Heir of Ushoran. A Strigoi who goes hungry falls into frenzy (the curse of
+# Ushoran). The other bloodlines despise them. Ambition: Strygos Reborn.
+###############################################################################
+
+# vampsoc.300 The ghoul court
+# The trial of the Strigoi: gather a court of ghouls, the cannibal wretches
+# who live among the graves. One to two years later: vampsoc.301.
+# Scope: ROOT is a Strigoi of rank 2 on trial.
+character_event = {
+	id = vampsoc.300
+	desc = EVTDESCvampsoc300
+	picture = GFX_evt_strigoi_lord
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_begin_trial
+
+	option = {
+		name = EVTOPTAvampsoc300
+		set_character_flag = vampsoc_ghouls_poor
+		hidden_effect = { character_event = { id = vampsoc.301 days = 365 random = 365 } }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc300
+		hidden_effect = { character_event = { id = vampsoc.301 days = 365 random = 365 } }
+	}
+}
+
+# vampsoc.301 The court gathers
+# The starving poor make a large court that is hard to hold; the
+# graveyard-eaters make a small one that holds. Success passes the trial.
+# Scope: ROOT is a Strigoi on trial.
+character_event = {
+	id = vampsoc.301
+	desc = {
+		trigger = { has_character_flag = vampsoc_trial_passed }
+		text = EVTDESCvampsoc301
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = vampsoc_trial_passed } }
+		text = EVTDESCvampsoc301b
+	}
+	picture = GFX_evt_strigoi_lord
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = vamp_on_trial }
+
+	immediate = {
+		random_list = {
+			60 = {
+				modifier = { factor = 0.7 has_character_flag = vampsoc_ghouls_poor }
+				modifier = { factor = 1.3 martial = 12 }
+				modifier = { factor = 1.3 combat_rating = 30 }
+				set_character_flag = vampsoc_trial_passed
+			}
+			40 = { }
+		}
+	}
+
+	option = {
+		name = {
+			trigger = { has_character_flag = vampsoc_trial_passed }
+			text = EVTOPTAvampsoc301
+		}
+		name = {
+			trigger = { NOT = { has_character_flag = vampsoc_trial_passed } }
+			text = EVTOPTAvampsoc301b
+		}
+		clr_character_flag = vamp_on_trial
+		if = {
+			limit = { has_character_flag = vampsoc_trial_passed }
+			set_character_flag = vamp_trial_done
+			custom_tooltip = { text = vampsoc_trial_passed_tt }
+			vamp_currency_medium_effect = yes
+			if = {
+				limit = { has_character_flag = vampsoc_ghouls_poor }
+				add_character_modifier = { name = vampsoc_ghoul_court_large duration = -1 }
+			}
+			else = {
+				add_character_modifier = { name = vampsoc_ghoul_court duration = -1 }
+			}
+		}
+		else = {
+			custom_tooltip = { text = vampsoc_trial_failed_tt }
+			add_character_modifier = { name = vampsoc_trial_cooldown years = 5 hidden = yes }
+		}
+		clr_character_flag = vampsoc_trial_passed
+		clr_character_flag = vampsoc_ghouls_poor
+	}
+}
+
+# vampsoc.310 The curse of Ushoran
+# A Strigoi who has gone hungry loses control and becomes the beast.
+# Scope: ROOT is a hungry Strigoi.
+character_event = {
+	id = vampsoc.310
+	desc = EVTDESCvampsoc310
+	picture = GFX_evt_strigoi_lord
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc310
+		vamp_currency_medium_effect = yes
+		add_character_modifier = { name = vampsoc_well_fed years = 2 }
+		prestige = -50
+		hidden_effect = {
+			random_courtier = {
+				limit = {
+					is_vampire_trigger = no
+					NOT = { is_close_relative = ROOT }
+					is_ruler = no
+				}
+				death = { death_reason = death_murder killer = ROOT }
+			}
+		}
+		custom_tooltip = { text = vampsoc_frenzy_tt }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc310
+		trigger = { learning = 10 }
+		add_character_modifier = { name = vampsoc_starving years = 2 }
+	}
+}
+
+# vampsoc.320 Strigoi flavour
+# A hungry Strigoi may fall into frenzy (vampsoc.310); otherwise one Strigoi
+# flavour event (vampsoc.321 - vampsoc.326).
+# Scope: ROOT is a member of the Heirs of Strygos.
+character_event = {
+	id = vampsoc.320
+	hide_window = yes
+
+	is_triggered_only = yes # vampsoc_flavour_effect
+
+	immediate = {
+		if = {
+			limit = {
+				is_vampire_trigger = yes
+				NOT = { has_character_modifier = vampsoc_well_fed }
+				NOT = { has_character_modifier = vampsoc_fed_recently }
+				NOT = { trait = resting }
+			}
+			character_event = { id = vampsoc.310 }
+		}
+		else = {
+			random_list = {
+				10 = {
+					trigger = { is_vampire_trigger = yes }
+					character_event = { id = vampsoc.321 }
+				}
+				10 = { character_event = { id = vampsoc.322 } }
+				10 = {
+					trigger = { is_vampire_trigger = yes }
+					character_event = { id = vampsoc.323 }
+				}
+				10 = {
+					trigger = { is_vampire_trigger = yes }
+					character_event = { id = vampsoc.324 }
+				}
+				10 = { character_event = { id = vampsoc.325 } }
+				10 = { character_event = { id = vampsoc.326 } }
+			}
+		}
+	}
+}
+
+# vampsoc.321 Scorned by the blood
+# A vampire of another bloodline has called the Strigoi beasts and
+# grave-eaters before witnesses. Swallow it, or answer in blood.
+# Scope: ROOT is a Strigoi vampire.
+character_event = {
+	id = vampsoc.321
+	desc = EVTDESCvampsoc321
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc321
+		prestige = -25
+		vamp_currency_small_effect = yes
+	}
+
+	option = {
+		name = EVTOPTBvampsoc321
+		vampsoc_fight_effect = yes
+		if = {
+			limit = { has_character_flag = vampsoc_won }
+			custom_tooltip = { text = vampsoc_duel_won_tt }
+			prestige = 50
+			vamp_currency_medium_effect = yes
+		}
+		else = {
+			custom_tooltip = { text = vampsoc_duel_lost_tt }
+			add_trait_wounded_effect = yes
+		}
+	}
+}
+
+# vampsoc.322 The caravan comes
+# A Strigany caravan arrives with news, stolen goods and a cart of
+# volunteers for the Strigoi's table.
+# Scope: ROOT is a member of the Heirs of Strygos.
+character_event = {
+	id = vampsoc.322
+	desc = EVTDESCvampsoc322
+	picture = GFX_evt_wandering_strigany
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc322
+		wealth = 50
+		vamp_currency_small_effect = yes
+	}
+
+	option = {
+		name = EVTOPTBvampsoc322
+		trigger = { is_vampire_trigger = yes }
+		add_character_modifier = { name = vampsoc_well_fed years = 3 }
+	}
+}
+
+# vampsoc.323 The crypt feast
+# The ghouls have dug up a fresh graveyard. Join the feast, or keep your
+# dignity.
+# Scope: ROOT is a Strigoi vampire.
+character_event = {
+	id = vampsoc.323
+	desc = EVTDESCvampsoc323
+	picture = GFX_evt_strigoi_lord
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc323
+		add_character_modifier = { name = vampsoc_well_fed years = 4 }
+		vamp_currency_small_effect = yes
+		prestige = -20
+	}
+
+	option = {
+		name = EVTOPTBvampsoc323
+		prestige = 20
+	}
+}
+
+# vampsoc.324 The dream of Strygos
+# In the day-sleep you walk the marble halls of Strygos before it fell, and
+# Ushoran speaks to you.
+# Scope: ROOT is a Strigoi vampire.
+character_event = {
+	id = vampsoc.324
+	desc = EVTDESCvampsoc324
+	picture = GFX_evt_strigoi_lord
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc324
+		add_character_modifier = { name = vampsoc_ushoran_pride years = 10 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc324
+		add_character_modifier = { name = vampsoc_ushoran_hunger years = 10 }
+	}
+}
+
+# vampsoc.325 Digging in the ruins
+# Your servants dig in the ruins of a Strygan city. Old gold, and perhaps
+# the Bone Crown of Strygos.
+# Scope: ROOT is a member of the Heirs of Strygos.
+character_event = {
+	id = vampsoc.325
+	desc = EVTDESCvampsoc325
+	picture = GFX_evt_strigoi_lord
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc325
+		wealth = 30
+		vamp_currency_small_effect = yes
+		vampsoc_bloodline_artifact_effect = yes
+	}
+}
+
+# vampsoc.326 Hunters on the trail
+# Vampire hunters have tracked you to your lair. Fight them, or move on.
+# Scope: ROOT is a member of the Heirs of Strygos.
+character_event = {
+	id = vampsoc.326
+	desc = EVTDESCvampsoc326
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc326
+		vampsoc_fight_effect = yes
+		if = {
+			limit = { has_character_flag = vampsoc_won }
+			custom_tooltip = { text = vampsoc_duel_won_tt }
+			vamp_currency_medium_effect = yes
+			add_character_modifier = { name = vampsoc_well_fed years = 2 }
+		}
+		else = {
+			custom_tooltip = { text = vampsoc_duel_lost_tt }
+			add_trait_wounded_effect = yes
+			vamp_currency_loss_small_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTBvampsoc326
+		prestige = -25
+	}
+}
+
+# vampsoc.330 Strygos Reborn
+# The Heir of Ushoran calls the scattered Strigoi to rebuild the court of
+# Strygos. Three to four years later: vampsoc.331.
+# Scope: ROOT is the Heir of Ushoran.
+character_event = {
+	id = vampsoc.330
+	desc = EVTDESCvampsoc330
+	picture = GFX_evt_strigoi_lord
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_strygos_reborn
+
+	option = {
+		name = EVTOPTAvampsoc330
+		custom_tooltip = { text = vampsoc_strygos_tt }
+		hidden_effect = { character_event = { id = vampsoc.331 days = 1095 random = 365 } }
+	}
+}
+
+# vampsoc.331 The court of Ushoran
+# Strygos lives again in its king. For life, and every Strigoi gains
+# Hunger.
+# Scope: ROOT is the Heir of Ushoran.
+character_event = {
+	id = vampsoc.331
+	desc = EVTDESCvampsoc331
+	picture = GFX_evt_strigoi_lord
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = vampsoc_rebuilding_strygos }
+
+	option = {
+		name = EVTOPTAvampsoc331
+		clr_character_flag = vampsoc_rebuilding_strygos
+		set_character_flag = vampsoc_strygos_done
+		add_character_modifier = { name = vampsoc_king_of_strygos duration = -1 }
+		prestige = 500
+		custom_tooltip = { text = vampsoc_strygos_order_tt }
+		hidden_effect = {
+			any_society_member = {
+				limit = {
+					society_member_of = strigoi_brood
+					NOT = { character = ROOT }
+				}
+				vamp_currency_medium_effect = yes
+				opinion = { who = ROOT modifier = opinion_impressed years = 20 }
+			}
+		}
+	}
+}
+
+###############################################################################
+# The Jade Coil
+# Serpent-kin of the east, poisoned by the Dragon Emperor and kept alive by
+# the Dark Crystals: an evil mirror of Cathay. A true vision in the crystal
+# is the trial for rank 3; the Scribe's Examination marks the heir of the
+# Serpent Sage. Shedding the skin clears the jade decay. Ambition: the
+# Celestial Gaze, which never touches the Dragon Throne.
+###############################################################################
+
+# vampsoc.355 The Scribe's Examination
+# A Crystal Mandarin sits the examination of the Coil, a cruel mirror of the
+# Imperial examinations: three days of questions put by the Sage's
+# serpents.
+# Scope: ROOT is a Crystal Mandarin.
+character_event = {
+	id = vampsoc.355
+	desc = EVTDESCvampsoc355
+	picture = GFX_evt_vampire_jade_eyes
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_scribe_examination
+
+	option = {
+		name = EVTOPTAvampsoc355
+		random_list = {
+			40 = {
+				modifier = { factor = 1.5 learning = 16 }
+				modifier = { factor = 1.5 learning = 20 }
+				modifier = { factor = 1.3 stewardship = 14 }
+				custom_tooltip = { text = vampsoc_exam_passed_tt }
+				set_character_flag = vamp_scribe_exam_done
+				vamp_currency_large_effect = yes
+				prestige = 100
+			}
+			60 = {
+				custom_tooltip = { text = vampsoc_exam_failed_tt }
+				prestige = -50
+			}
+		}
+	}
+}
+
+# vampsoc.360 Shedding the skin
+# The Jade vampire coils in the dark of the crystal chamber and sheds the
+# old skin, and the jade decay with it.
+# Scope: ROOT is a Jade vampire.
+character_event = {
+	id = vampsoc.360
+	desc = EVTDESCvampsoc360
+	picture = GFX_evt_vampire_jade_basking
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_shed_skin
+
+	option = {
+		name = EVTOPTAvampsoc360
+		remove_character_modifier = jade_degradation_1
+		remove_character_modifier = jade_degradation_2
+		remove_character_modifier = jade_degradation_3
+		remove_character_modifier = jade_degradation_4
+		add_character_modifier = { name = vampsoc_new_skin years = 5 }
+	}
+}
+
+# vampsoc.365 The Serpent's Coils
+# The Serpent Sage winds a mortal ruler in the coils of the Jade Court:
+# tribute now, and a lasting fascination.
+# Scope: ROOT is the mortal ruler; FROM is the Serpent Sage.
+character_event = {
+	id = vampsoc.365
+	desc = EVTDESCvampsoc365
+	picture = GFX_evt_vampire_jade_eyes
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # vampsoc_serpent_coils
+
+	option = {
+		name = EVTOPTAvampsoc365
+		if = {
+			limit = { wealth = 100 }
+			wealth = -100
+			FROM = { wealth = 100 }
+		}
+		opinion = { who = FROM modifier = opinion_vampsoc_coiled years = 20 }
+		add_character_modifier = { name = vampsoc_serpent_coiled years = 20 }
+	}
+}
+
+# vampsoc.370 Jade flavour
+# Picks one Jade Coil flavour event (vampsoc.371 - vampsoc.376).
+# Scope: ROOT is a member of the Jade Coil.
+character_event = {
+	id = vampsoc.370
+	hide_window = yes
+
+	is_triggered_only = yes # vampsoc_flavour_effect
+
+	immediate = {
+		random_list = {
+			10 = {
+				trigger = {
+					is_vampire_trigger = yes
+					is_ruler = yes
+				}
+				character_event = { id = vampsoc.371 }
+			}
+			10 = {
+				trigger = { is_vampire_trigger = yes }
+				character_event = { id = vampsoc.372 }
+			}
+			10 = { character_event = { id = vampsoc.373 } }
+			10 = {
+				trigger = { society_rank >= 2 }
+				character_event = { id = vampsoc.374 }
+			}
+			10 = { character_event = { id = vampsoc.375 } }
+			10 = {
+				trigger = { is_vampire_trigger = yes }
+				character_event = { id = vampsoc.376 }
+			}
+		}
+	}
+}
+
+# vampsoc.371 The Imperial Scribe
+# An Imperial Scribe arrives to count the taxes of the province. The Jade
+# Coil has always found scribes delicious.
+# Scope: ROOT is a Jade vampire ruler.
+character_event = {
+	id = vampsoc.371
+	desc = EVTDESCvampsoc371
+	picture = GFX_evt_vampire_jade_eyes
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc371
+		add_character_modifier = { name = vampsoc_well_fed years = 3 }
+		vamp_currency_medium_effect = yes
+		random = {
+			chance = 20
+			prestige = -50
+			custom_tooltip = { text = vampsoc_scribe_missed_tt }
+		}
+	}
+
+	option = {
+		name = EVTOPTBvampsoc371
+		trigger = { wealth = 50 }
+		wealth = -50
+		vamp_currency_small_effect = yes
+	}
+}
+
+# vampsoc.372 The itch beneath the scales
+# The old skin grows tight. Bask by the crystal, or ignore it.
+# Scope: ROOT is a Jade vampire.
+character_event = {
+	id = vampsoc.372
+	desc = EVTDESCvampsoc372
+	picture = GFX_evt_vampire_jade_basking
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc372
+		add_character_modifier = { name = vampsoc_basking years = 2 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc372
+		vamp_currency_small_effect = yes
+	}
+}
+
+# vampsoc.373 The crystal hums
+# A small vision in the Dark Crystal: a lesson, or a hunger.
+# Scope: ROOT is a member of the Jade Coil.
+character_event = {
+	id = vampsoc.373
+	desc = EVTDESCvampsoc373
+	picture = GFX_evt_vampire_dark_crystal
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc373
+		random = { chance = 30 change_learning = 1 }
+		vamp_currency_small_effect = yes
+	}
+
+	option = {
+		name = EVTOPTBvampsoc373
+		vamp_currency_medium_effect = yes
+		random = { chance = 20 add_trait = lunatic_1 }
+	}
+}
+
+# vampsoc.374 A rival Coil
+# Another Jade vampire tries to hypnotise your servants. A duel of stares.
+# Scope: ROOT is a Jade member of rank 2 or more.
+character_event = {
+	id = vampsoc.374
+	desc = EVTDESCvampsoc374
+	picture = GFX_evt_vampire_jade_eyes
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc374
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 learning = 15 }
+				modifier = { factor = 1.5 intrigue = 15 }
+				custom_tooltip = { text = vampsoc_outwitted_tt }
+				vamp_currency_medium_effect = yes
+			}
+			40 = {
+				custom_tooltip = { text = vampsoc_outwitted_by_tt }
+				vamp_currency_loss_small_effect = yes
+			}
+		}
+	}
+}
+
+# vampsoc.375 A crystal shard
+# A servant brings a sliver of dark crystal found in a mountain stream:
+# perhaps the Shard of the Dark Crystal.
+# Scope: ROOT is a member of the Jade Coil.
+character_event = {
+	id = vampsoc.375
+	desc = EVTDESCvampsoc375
+	picture = GFX_evt_vampire_dark_crystal
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc375
+		vamp_currency_small_effect = yes
+		vampsoc_bloodline_artifact_effect = yes
+	}
+}
+
+# vampsoc.376 The Emperor's hunters
+# Agents of the Dragon Emperor are hunting the serpents again. Fight them
+# in the dark, or slither away.
+# Scope: ROOT is a Jade vampire.
+character_event = {
+	id = vampsoc.376
+	desc = EVTDESCvampsoc376
+	picture = GFX_evt_heavenly_dragon
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc376
+		vampsoc_fight_effect = yes
+		if = {
+			limit = { has_character_flag = vampsoc_won }
+			custom_tooltip = { text = vampsoc_duel_won_tt }
+			vamp_currency_medium_effect = yes
+		}
+		else = {
+			custom_tooltip = { text = vampsoc_duel_lost_tt }
+			add_trait_wounded_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTBvampsoc376
+		prestige = -25
+	}
+}
+
+# vampsoc.380 The Celestial Gaze
+# The Serpent Sage coils around the greatest of the Dark Crystals and gazes
+# at the whole of the heavens. Three to four years later: vampsoc.381.
+# Scope: ROOT is the Serpent Sage.
+character_event = {
+	id = vampsoc.380
+	desc = EVTDESCvampsoc380
+	picture = GFX_evt_vampire_dark_crystal
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_celestial_gaze
+
+	option = {
+		name = EVTOPTAvampsoc380
+		custom_tooltip = { text = vampsoc_gaze_tt }
+		hidden_effect = { character_event = { id = vampsoc.381 days = 1095 random = 365 } }
+	}
+}
+
+# vampsoc.381 The heavens seen
+# The Sage has seen everything under heaven. For life, and every Coil gains
+# Venom.
+# Scope: ROOT is the Serpent Sage.
+character_event = {
+	id = vampsoc.381
+	desc = EVTDESCvampsoc381
+	picture = GFX_evt_vampire_dark_crystal
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = vampsoc_gazing }
+
+	option = {
+		name = EVTOPTAvampsoc381
+		clr_character_flag = vampsoc_gazing
+		set_character_flag = vampsoc_gaze_done
+		add_character_modifier = { name = vampsoc_celestial_gaze_mod duration = -1 }
+		prestige = 500
+		custom_tooltip = { text = vampsoc_gaze_order_tt }
+		hidden_effect = {
+			any_society_member = {
+				limit = {
+					society_member_of = jade_coil
+					NOT = { character = ROOT }
+				}
+				vamp_currency_medium_effect = yes
+			}
+		}
+	}
+}
+
+###############################################################################
+# The Carrion Children (Mahtmasi)
+# The Beloved is the trial for rank 3: love a mortal who asked, then devour
+# them. The Vigil at Gwingui marks the next Big Bokor, keeper of the gate.
+# The Mahtmasi feed on those who ask, eat their own kind, become the swarm,
+# and fear fire, sunlight and running water. Ambition: cast the
+# Westerlanders out of Sudenburg.
+###############################################################################
+
+# vampsoc.400 The Beloved
+# The trial of the Carrion Children: a mortal has asked for you. Love them
+# for a year, and then devour them. A year later: vampsoc.401.
+# Scope: ROOT is a Mahtmasi of rank 2 on trial.
+character_event = {
+	id = vampsoc.400
+	desc = EVTDESCvampsoc400
+	picture = GFX_evt_mahtmasi_vampire
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # vampsoc_begin_trial
+
+	option = {
+		name = EVTOPTAvampsoc400
+		add_character_modifier = { name = vampsoc_beloved years = 1 }
+		hidden_effect = { character_event = { id = vampsoc.401 days = 365 random = 60 } }
+	}
+}
+
+# vampsoc.401 The end of love
+# Devour the Beloved and pass the trial, or spare them and fail it.
+# Scope: ROOT is a Mahtmasi on trial.
+character_event = {
+	id = vampsoc.401
+	desc = EVTDESCvampsoc401
+	picture = GFX_evt_mahtmasi_vampire
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = vamp_on_trial }
+
+	option = {
+		name = EVTOPTAvampsoc401
+		clr_character_flag = vamp_on_trial
+		set_character_flag = vamp_trial_done
+		custom_tooltip = { text = vampsoc_trial_passed_tt }
+		vamp_currency_large_effect = yes
+		add_character_modifier = { name = vampsoc_well_fed years = 5 }
+		ai_chance = { factor = 80 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc401
+		clr_character_flag = vamp_on_trial
+		custom_tooltip = { text = vampsoc_trial_failed_tt }
+		add_character_modifier = { name = vampsoc_trial_cooldown years = 5 hidden = yes }
+		piety = 25
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = kind }
+		}
+	}
+}
+
+# vampsoc.405 The Vigil at Gwingui
+# An Elder of the Swarm keeps vigil at the gate of Gwingui, where the
+# shadow realm touches the world. One to two years later: vampsoc.406.
+# Scope: ROOT is an Elder of the Swarm.
+character_event = {
+	id = vampsoc.405
+	desc = EVTDESCvampsoc405
+	picture = GFX_evt_voodoo_shaman
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # vampsoc_gwingui_vigil
+
+	option = {
+		name = EVTOPTAvampsoc405
+		hidden_effect = { character_event = { id = vampsoc.406 days = 365 random = 365 } }
+	}
+}
+
+# vampsoc.406 What came through the gate
+# The vigil ends. The gate has accepted the Elder (the mark of the next Big
+# Bokor) or spat them out.
+# Scope: ROOT is an Elder of the Swarm.
+character_event = {
+	id = vampsoc.406
+	desc = {
+		trigger = { has_character_flag = vampsoc_trial_passed }
+		text = EVTDESCvampsoc406
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = vampsoc_trial_passed } }
+		text = EVTDESCvampsoc406b
+	}
+	picture = GFX_evt_voodoo_shaman
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 learning = 15 }
+				modifier = { factor = 1.5 trait = lore_shadows }
+				set_character_flag = vampsoc_trial_passed
+			}
+			50 = { }
+		}
+	}
+
+	option = {
+		name = EVTOPTAvampsoc406
+		if = {
+			limit = { has_character_flag = vampsoc_trial_passed }
+			set_character_flag = vamp_gate_vigil
+			custom_tooltip = { text = vampsoc_vigil_passed_tt }
+			vamp_currency_large_effect = yes
+		}
+		else = {
+			custom_tooltip = { text = vampsoc_vigil_failed_tt }
+			add_trait_wounded_effect = yes
+		}
+		clr_character_flag = vampsoc_trial_passed
+	}
+}
+
+# vampsoc.410 Devouring kin
+# The Mahtmasi eats another vampire, as the Carrion Children do.
+# Scope: ROOT is the Mahtmasi; event_target:vampsoc_kin is the prisoner.
+character_event = {
+	id = vampsoc.410
+	desc = EVTDESCvampsoc410
+	picture = GFX_evt_mahtmasi_vampire
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # vampsoc_devour_kin
+
+	option = {
+		name = EVTOPTAvampsoc410
+		vamp_currency_large_effect = yes
+		add_character_modifier = { name = vampsoc_devoured_kin years = 10 }
+		event_target:vampsoc_kin = {
+			death = { death_reason = death_murder killer = ROOT }
+		}
+	}
+}
+
+# vampsoc.412 A dream sent
+# The Mahtmasi sends a dream to a mortal ruler. They wake longing, and may
+# come asking; or they wake screaming.
+# Scope: ROOT is the Mahtmasi; event_target:vampsoc_dreamer is the ruler.
+character_event = {
+	id = vampsoc.412
+	desc = EVTDESCvampsoc412
+	picture = GFX_evt_mahtmasi_vampire
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # vampsoc_send_dream
+
+	option = {
+		name = EVTOPTAvampsoc412
+		event_target:vampsoc_dreamer = {
+			opinion = { who = ROOT modifier = opinion_vampsoc_dreamt years = 10 }
+		}
+		vamp_currency_medium_effect = yes
+		set_character_flag = vamp_deed_done
+	}
+
+	option = {
+		name = EVTOPTBvampsoc412
+		event_target:vampsoc_dreamer = {
+			add_character_modifier = { name = vampsoc_night_terrors years = 2 }
+		}
+		vamp_currency_small_effect = yes
+	}
+}
+
+# vampsoc.420 Mahtmasi flavour
+# Picks one Carrion Children flavour event (vampsoc.421 - vampsoc.426).
+# Scope: ROOT is a member of the Carrion Children.
+character_event = {
+	id = vampsoc.420
+	hide_window = yes
+
+	is_triggered_only = yes # vampsoc_flavour_effect
+
+	immediate = {
+		random_list = {
+			10 = {
+				trigger = { is_vampire_trigger = yes }
+				character_event = { id = vampsoc.421 }
+			}
+			10 = {
+				trigger = {
+					is_vampire_trigger = yes
+					is_landed = yes
+				}
+				character_event = { id = vampsoc.422 }
+			}
+			10 = { character_event = { id = vampsoc.423 } }
+			10 = {
+				trigger = { is_vampire_trigger = yes }
+				character_event = { id = vampsoc.424 }
+			}
+			10 = {
+				trigger = { is_vampire_trigger = yes }
+				character_event = { id = vampsoc.425 }
+			}
+			10 = { character_event = { id = vampsoc.426 } }
+		}
+	}
+}
+
+# vampsoc.421 The swarm
+# You come apart into flies and carrion birds and drift over the land,
+# hearing everything.
+# Scope: ROOT is a Mahtmasi vampire.
+character_event = {
+	id = vampsoc.421
+	desc = EVTDESCvampsoc421
+	picture = GFX_evt_mahtmasi_vampire
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc421
+		add_character_modifier = { name = vampsoc_swarm_eyes years = 5 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc421
+		add_character_modifier = { name = vampsoc_well_fed years = 2 }
+	}
+}
+
+# vampsoc.422 Fire in the night
+# The villagers have found your resting place and come with torches. The
+# Mahtmasi fear fire above all.
+# Scope: ROOT is a landed Mahtmasi vampire.
+character_event = {
+	id = vampsoc.422
+	desc = EVTDESCvampsoc422
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc422
+		prestige = -25
+		capital_scope = { add_province_modifier = { name = vampsoc_burned_shrine years = 5 } }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc422
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 martial = 14 }
+				vamp_currency_medium_effect = yes
+				add_character_modifier = { name = vampsoc_well_fed years = 2 }
+			}
+			50 = {
+				add_trait = scarred
+				add_trait_wounded_effect = yes
+			}
+		}
+	}
+}
+
+# vampsoc.423 A plea at the altar
+# A mortal has left an offering at your altar and asks for gold, a child or
+# a dead rival.
+# Scope: ROOT is a member of the Carrion Children.
+character_event = {
+	id = vampsoc.423
+	desc = EVTDESCvampsoc423
+	picture = GFX_evt_voodoo_shaman
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc423
+		trigger = { wealth = 30 }
+		wealth = -30
+		vamp_currency_medium_effect = yes
+		set_character_flag = vamp_deed_done
+	}
+
+	option = {
+		name = EVTOPTBvampsoc423
+		vamp_currency_small_effect = yes
+	}
+}
+
+# vampsoc.424 Maatmeses in dreams
+# The first of the Mahtmasi, who lives now only in dreams, speaks to you.
+# Scope: ROOT is a Mahtmasi vampire.
+character_event = {
+	id = vampsoc.424
+	desc = EVTDESCvampsoc424
+	picture = GFX_evt_shadow
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc424
+		add_character_modifier = { name = vampsoc_maatmeses_wisdom years = 10 }
+	}
+
+	option = {
+		name = EVTOPTBvampsoc424
+		vamp_currency_medium_effect = yes
+	}
+}
+
+# vampsoc.425 Running water
+# Your road crosses a river, and running water burns the Mahtmasi. Go the
+# long way around, or be carried across.
+# Scope: ROOT is a Mahtmasi vampire.
+character_event = {
+	id = vampsoc.425
+	desc = EVTDESCvampsoc425
+	picture = GFX_evt_mahtmasi_vampire
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc425
+		prestige = -10
+	}
+
+	option = {
+		name = EVTOPTBvampsoc425
+		random_list = {
+			70 = { vamp_currency_small_effect = yes }
+			30 = { add_trait_wounded_effect = yes }
+		}
+	}
+}
+
+# vampsoc.426 The bokor's gift
+# A bokor brings a fetish from the gate of Gwingui: perhaps the Bokor's
+# Fetish itself.
+# Scope: ROOT is a member of the Carrion Children.
+character_event = {
+	id = vampsoc.426
+	desc = EVTDESCvampsoc426
+	picture = GFX_evt_voodoo_shaman
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvampsoc426
+		vamp_currency_small_effect = yes
+		vampsoc_bloodline_artifact_effect = yes
+	}
+}
+
+# vampsoc.430 Cast out the Westerlanders
+# The Big Bokor turns the shadow realm against the Westerlanders of
+# Sudenburg and the witch hunters of Samur. Two to three years later:
+# vampsoc.431.
+# Scope: ROOT is the Big Bokor.
+character_event = {
+	id = vampsoc.430
+	desc = EVTDESCvampsoc430
+	picture = GFX_evt_voodoo_shaman
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # vampsoc_cast_out_westerlanders
+
+	option = {
+		name = EVTOPTAvampsoc430
+		custom_tooltip = { text = vampsoc_westerlanders_tt }
+		hidden_effect = { character_event = { id = vampsoc.431 days = 730 random = 365 } }
+	}
+}
+
+# vampsoc.431 The shadows take Sudenburg
+# The Westerlanders' hold on Sudenburg is broken. The lands of Sudenburg held
+# by the Big Bokor or their vassals are haunted for good; every Mahtmasi
+# gains Offerings.
+# Scope: ROOT is the Big Bokor.
+character_event = {
+	id = vampsoc.431
+	desc = EVTDESCvampsoc431
+	picture = GFX_evt_shadow
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = vampsoc_casting_out
+		has_landed_title = k_sudenburg
+	}
+
+	option = {
+		name = EVTOPTAvampsoc431
+		clr_character_flag = vampsoc_casting_out
+		set_character_flag = vampsoc_westerlanders_done
+		add_character_modifier = { name = vampsoc_shadow_of_sudenburg duration = -1 }
+		prestige = 500
+		custom_tooltip = { text = vampsoc_westerlanders_order_tt }
+		hidden_effect = {
+			k_sudenburg = {
+				any_de_jure_vassal_title = {
+					limit = {
+						tier = COUNT
+						holder_scope = {
+							OR = {
+								character = ROOT
+								is_vassal_or_below_of = ROOT
+							}
+						}
+					}
+					location = {
+						add_province_modifier = { name = vampsoc_shadow_haunted duration = -1 }
+					}
+				}
+			}
+			any_society_member = {
+				limit = {
+					society_member_of = carrion_children
+					NOT = { character = ROOT }
+				}
+				vamp_currency_medium_effect = yes
+			}
+		}
+	}
+}
+
+###############################################################################
+# Between the bloodlines
+###############################################################################
+
+# vampsoc.450 Another bloodline
+# A vampire ruler of another bloodline holds lands nearby. The bloodlines
+# have hated each other since Lahmia fell, but a pact can serve both.
+# Scope: ROOT is a vampire ruler in a bloodline society;
+# event_target:vampsoc_other is a vampire ruler of another bloodline.
+character_event = {
+	id = vampsoc.450
+	desc = EVTDESCvampsoc450
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # vampsoc_flavour_effect
+
+	trigger = {
+		is_ruler = yes
+		any_neighbor_independent_ruler = {
+			vampsoc_other_bloodline_trigger = yes
+		}
+	}
+
+	immediate = {
+		random_neighbor_independent_ruler = {
+			limit = { vampsoc_other_bloodline_trigger = yes }
+			save_event_target_as = vampsoc_other
+		}
+	}
+
+	# A pact
+	option = {
+		name = EVTOPTAvampsoc450
+		opinion = { who = event_target:vampsoc_other modifier = opinion_friend years = 10 }
+		reverse_opinion = { who = event_target:vampsoc_other modifier = opinion_friend years = 10 }
+		vamp_currency_small_effect = yes
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+
+	# A feud
+	option = {
+		name = EVTOPTBvampsoc450
+		event_target:vampsoc_other = {
+			primary_title = { save_event_target_as = vampsoc_other_title }
+		}
+		add_claim = event_target:vampsoc_other_title
+		reverse_opinion = { who = event_target:vampsoc_other modifier = opinion_insulted years = 10 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = ambitious }
+			modifier = { factor = 2 society_member_of = strigoi_brood }
+		}
+	}
+}

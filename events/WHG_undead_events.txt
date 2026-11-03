@@ -1,0 +1,553 @@
+###############################################################################
+# Shared undead events
+# Namespace: undead
+# Faction: Vampires
+#
+# Undead content shared by every master of the dead, vampire or necromancer,
+# whatever their bloodline. Based on Komi's DoW-PoD submod.
+#
+# The Geheimnisnacht Ball                   undead.1 - undead.3
+# Wights: raising, the leash, dust          undead.10 - undead.13
+# The Cursed Company's wight captain        undead.14
+# The Dark Enchantment                      undead.50 - undead.52
+#
+# Fired from common/on_actions/wh_on_actions.txt: undead.1 on_startup,
+# undead.11 on_five_year_pulse, undead.12 on_death, undead.14
+# on_new_holder and on_new_holder_inheritance. The decisions in
+# decisions/wh_undead_decisions.txt fire the rest. The Necrarch Wight King
+# is vampsoc.258 (events/WHG_vampire_society_events.txt).
+# Scripted triggers: common/scripted_triggers/wh_undead_triggers.txt
+# Scripted effects: common/scripted_effects/wh_undead_effects.txt
+# Event modifiers: common/event_modifiers/wh_undead_modifiers.txt
+# Opinion modifiers: opinion_undead_* in common/opinion_modifiers/wh_opinion_modifiers.txt
+# Artifacts: common/artifacts/25_artifacts_undead.txt
+# Loc: localisation/00_WHG_undead_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = undead
+
+###############################################################################
+# The Geheimnisnacht Ball
+# On Geheimnisnacht of 2010 Vlad von Carstein gathers the living lords of
+# Sylvania at Drakenhof and offers each the Blood Kiss. Most take it; some
+# kneel as thralls; a few refuse.
+###############################################################################
+
+# undead.1 The Geheimnisnacht Ball
+# On startup, once a game (also curses the Cursed Company's first captain,
+# undead.14): in a 2010 start, every living Sylvanian lord of Vlad's realm gets
+# his invitation (undead.2). Vlad, if a player, hears how the night went
+# (undead.3).
+# Scope: ROOT is the host player.
+character_event = {
+	id = undead.1
+	hide_window = yes
+
+	ai = no
+	only_playable = yes
+
+	is_triggered_only = yes # on_startup
+
+	trigger = {
+		NOT = { has_global_flag = undead_ball_held }
+		is_multiplayer_host_character = yes
+	}
+
+	immediate = {
+		set_global_flag = undead_ball_held
+		d_the_cursed_company = {
+			holder_scope = { character_event = { id = undead.14 } }
+		}
+		e_sylvania = {
+			holder_scope = {
+				if = {
+					limit = {
+						has_artifact = carstein_ring
+						NOT = { year = 2011 } # only for a 2010 start, not a later custom date
+					}
+					any_realm_lord = {
+						limit = {
+							culture = sylvanian
+							trait = creature_human
+							is_vampire_trigger = no
+							is_adult = yes
+							prisoner = no
+						}
+						character_event = { id = undead.2 }
+					}
+					if = {
+						limit = { ai = no }
+						character_event = { id = undead.3 days = 2 }
+					}
+				}
+			}
+		}
+	}
+}
+
+# undead.2 An invitation to Drakenhof
+# A living lord of Sylvania attends Vlad's ball. He may take the Blood Kiss
+# and become a von Carstein (from_makes_root_vampire_effect), kneel as a
+# living thrall of the Court of Sylvania, or refuse.
+# Scope: ROOT is the lord; FROM is Vlad.
+character_event = {
+	id = undead.2
+	desc = EVTDESCundead2
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # undead.1
+
+	# The Blood Kiss
+	option = {
+		name = EVTOPTAundead2
+		from_makes_root_vampire_effect = yes
+		opinion = { who = FROM modifier = opinion_undead_took_kiss }
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 1.5 trait = ambitious }
+			modifier = { factor = 1.5 trait = cruel }
+			modifier = { factor = 0.5 trait = zealous }
+			modifier = { factor = 0.5 trait = kind }
+		}
+	}
+
+	# A thrall, living
+	option = {
+		name = EVTOPTBundead2
+		religion = vampiric
+		if = {
+			limit = {
+				vamp_carstein_thrall_trigger = yes
+				is_in_society = no
+			}
+			join_society = carstein_court
+			vamp_thrall_joined_effect = yes
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 1.5 trait = craven }
+			modifier = { factor = 1.5 trait = content }
+		}
+	}
+
+	# Refuse
+	option = {
+		name = EVTOPTCundead2
+		FROM = { opinion = { who = ROOT modifier = opinion_undead_refused_kiss } }
+		prestige = 50
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 trait = zealous }
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+}
+
+# undead.3 The ball is over
+# Vlad, a player, hears how the night went.
+# Scope: ROOT is Vlad.
+character_event = {
+	id = undead.3
+	desc = EVTDESCundead3
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # undead.1
+
+	option = {
+		name = EVTOPTAundead3
+	}
+}
+
+###############################################################################
+# Wights
+# A wight is a dead champion bound back into his bones (trait
+# creature_wight). He serves only while a vampire or a necromancer holds his
+# leash; when the master dies and the heir is no master of the dead, he falls
+# back into dust.
+###############################################################################
+
+# undead.10 The barrow opens
+# A master of the dead breaks open an old barrow and calls its champion back.
+# One time in twenty the barrow held a king: a Wight King, who may bring his
+# tomb blade.
+# Scope: ROOT is a vampire or a necromancer.
+character_event = {
+	id = undead.10
+	desc = {
+		trigger = { NOT = { has_character_flag = undead_raise_king } }
+		text = EVTDESCundead10
+	}
+	desc = {
+		trigger = { has_character_flag = undead_raise_king }
+		text = EVTDESCundead10b
+	}
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # undead_raise_wight
+
+	immediate = {
+		random = {
+			chance = 5
+			set_character_flag = undead_raise_king
+		}
+	}
+
+	option = {
+		name = EVTOPTAundead10
+		if = {
+			limit = { has_character_flag = undead_raise_king }
+			wight_rise_effect = yes
+			wight_tomb_blade_effect = yes
+		}
+		else = {
+			wight_rise_effect = yes
+		}
+	}
+}
+
+# undead.11 The leash breaks
+# A wight whose employer is no master of the dead, and serves none, falls
+# back into dust (the captain of the Cursed Company is cursed, not bound,
+# and lasts). Fired a day after a master dies (undead.12), so the wight
+# is already at the heir's court, and every five years as a sweep.
+# Scope: ROOT is any character on the five-year pulse, or a wight.
+character_event = {
+	id = undead.11
+	hide_window = yes
+
+	is_triggered_only = yes # on_five_year_pulse, undead.12
+
+	trigger = {
+		trait = creature_wight
+		undead_wight_held_trigger = no
+		NOT = { has_landed_title = d_the_cursed_company }
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				employer = {
+					ai = no
+					NOT = { character = ROOT }
+				}
+			}
+			employer = { character_event = { id = undead.13 } }
+		}
+		death = { death_reason = death_wight_unbound }
+	}
+}
+
+# undead.12 A master of the dead dies
+# The wights of his court are checked a day later (undead.11).
+# Scope: ROOT is the dead character.
+character_event = {
+	id = undead.12
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+
+	trigger = {
+		has_character_flag = undead_wight_master
+	}
+
+	immediate = {
+		any_courtier = {
+			limit = { trait = creature_wight }
+			character_event = { id = undead.11 days = 1 }
+		}
+	}
+}
+
+# undead.13 Dust
+# The new master learns that a wight of the court has fallen into dust.
+# Scope: ROOT is the wight's employer; FROM is the wight.
+character_event = {
+	id = undead.13
+	desc = EVTDESCundead13
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # undead.11
+
+	option = {
+		name = EVTOPTAundead13
+	}
+}
+
+# undead.14 The captain of the Cursed Company
+# Whoever leads the Cursed Company is a wight: the curse takes him the day
+# he takes the banner. Fired for a new holder of d_the_cursed_company and at
+# startup (undead.1).
+# Scope: ROOT is the captain.
+character_event = {
+	id = undead.14
+	hide_window = yes
+
+	is_triggered_only = yes # on_new_holder, on_new_holder_inheritance, undead.1
+
+	trigger = {
+		has_landed_title = d_the_cursed_company
+		NOT = { trait = creature_wight }
+	}
+
+	immediate = {
+		remove_race_trait_effect = yes
+		add_trait = creature_wight
+		set_graphical_culture = wight
+	}
+}
+
+###############################################################################
+# The Dark Enchantment
+# A lord of a necromantic faith has a fine weapon or suit of armour bound
+# with death magic (undead_dark_enchantment). He can work the spell himself
+# if he is a great necromancer, pay a necromancer of his realm, or pay far
+# more for a Necrarch, whose work never fails and leans to the finer pieces.
+###############################################################################
+
+# undead.50 Who will work the enchantment?
+# Finds a necromancer of the realm and a Necrarch of the Brotherhood, then
+# lets the lord choose. The work takes two weeks, two months or four months
+# (undead.51).
+# Scope: ROOT is the lord.
+character_event = {
+	id = undead.50
+	desc = EVTDESCundead50
+	picture = GFX_evt_mage_lore_necromancy
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # undead_dark_enchantment
+
+	immediate = {
+		undead_enchant_clear_effect = yes
+		random_realm_character = {
+			limit = {
+				trait = lore_necromancy
+				is_adult = yes
+				is_incapable = no
+				prisoner = no
+				NOT = { character = ROOT }
+			}
+			save_event_target_as = undead_enchanter_necromancer
+		}
+		necrarch_brotherhood = {
+			random_society_member = {
+				limit = {
+					society_rank >= 2
+					is_vampire_trigger = yes
+					is_incapable = no
+					prisoner = no
+					NOT = { character = ROOT }
+				}
+				save_event_target_as = undead_enchanter_necrarch
+			}
+		}
+	}
+
+	# I will work it myself
+	option = {
+		name = EVTOPTAundead50
+		trigger = {
+			undead_self_enchanter_trigger = yes
+			piety = 300
+		}
+		piety = -300
+		set_character_flag = undead_enchant_self
+		character_event = { id = undead.51 days = 14 }
+		ai_chance = { factor = 100 }
+	}
+
+	# A necromancer of my realm
+	option = {
+		name = EVTOPTBundead50
+		trigger = {
+			event_target:undead_enchanter_necromancer = { always = yes }
+			piety = 200
+			wealth = 100
+		}
+		piety = -200
+		wealth = -100
+		set_character_flag = undead_enchant_necromancer
+		event_target:undead_enchanter_necromancer = { show_portrait = yes }
+		character_event = { id = undead.51 days = 60 }
+		ai_chance = { factor = 50 }
+	}
+
+	# A Necrarch of the Brotherhood
+	option = {
+		name = EVTOPTCundead50
+		trigger = {
+			event_target:undead_enchanter_necrarch = { always = yes }
+			piety = 100
+			wealth = 250
+		}
+		piety = -100
+		wealth = -250
+		set_character_flag = undead_enchant_necrarch
+		event_target:undead_enchanter_necrarch = { show_portrait = yes }
+		character_event = { id = undead.51 days = 120 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 wealth = 600 }
+		}
+	}
+
+	# Not now
+	option = {
+		name = EVTOPTDundead50
+		remove_character_modifier = employ_a_smith_cd
+		ai_chance = { factor = 1 }
+	}
+}
+
+# undead.51 The ritual is ready
+# The lord chooses what to bind: a weapon or a suit of armour. The result
+# follows at once (undead.52).
+# Scope: ROOT is the lord.
+character_event = {
+	id = undead.51
+	desc = {
+		trigger = { has_character_flag = undead_enchant_self }
+		text = EVTDESCundead51
+	}
+	desc = {
+		trigger = { has_character_flag = undead_enchant_necromancer }
+		text = EVTDESCundead51b
+	}
+	desc = {
+		trigger = { has_character_flag = undead_enchant_necrarch }
+		text = EVTDESCundead51c
+	}
+	picture = GFX_evt_necromancer_study
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes
+
+	# A weapon
+	option = {
+		name = EVTOPTAundead51
+		trigger = {
+			any_artifact = { undead_enchantable_weapon_trigger = yes }
+		}
+		random_artifact = {
+			limit = { undead_enchantable_weapon_trigger = yes }
+			save_event_target_as = undead_old_item
+		}
+		set_character_flag = undead_enchant_weapon
+		character_event = { id = undead.52 }
+		ai_chance = {
+			factor = 10
+			modifier = {
+				factor = 0
+				any_artifact = {
+					has_artifact_flag = combat_weapon
+					has_artifact_flag = necromantic_item
+				}
+			}
+		}
+	}
+
+	# A suit of armour
+	option = {
+		name = EVTOPTBundead51
+		trigger = {
+			any_artifact = { undead_enchantable_armour_trigger = yes }
+		}
+		random_artifact = {
+			limit = { undead_enchantable_armour_trigger = yes }
+			save_event_target_as = undead_old_item
+		}
+		character_event = { id = undead.52 }
+		ai_chance = {
+			factor = 10
+			modifier = {
+				factor = 0
+				any_artifact = {
+					has_artifact_flag = armor
+					has_artifact_flag = necromantic_item
+				}
+			}
+		}
+	}
+
+	# The item is gone; the work is wasted
+	option = {
+		name = EVTOPTCundead51
+		trigger = {
+			NOT = {
+				any_artifact = {
+					OR = {
+						undead_enchantable_weapon_trigger = yes
+						undead_enchantable_armour_trigger = yes
+					}
+				}
+			}
+		}
+		undead_enchant_clear_effect = yes
+		ai_chance = { factor = 1 }
+	}
+}
+
+# undead.52 The binding
+# A Necrarch never fails. A necromancer of the realm fails one time in ten,
+# the lord himself one time in seven: the item survives, but the spell is
+# lost. On success the item becomes a necromantic one of its kind
+# (undead_enchant_weapon_effect, undead_enchant_armour_effect).
+# Scope: ROOT is the lord.
+character_event = {
+	id = undead.52
+	desc = {
+		trigger = { NOT = { has_character_flag = undead_enchant_failed } }
+		text = EVTDESCundead52
+	}
+	desc = {
+		trigger = { has_character_flag = undead_enchant_failed }
+		text = EVTDESCundead52b
+	}
+	picture = GFX_evt_necrarch_book
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = undead_enchant_failed
+		if = {
+			limit = { has_character_flag = undead_enchant_self }
+			random = {
+				chance = 15
+				set_character_flag = undead_enchant_failed
+			}
+		}
+		else_if = {
+			limit = { has_character_flag = undead_enchant_necromancer }
+			random = {
+				chance = 10
+				set_character_flag = undead_enchant_failed
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAundead52
+		trigger = { NOT = { has_character_flag = undead_enchant_failed } }
+		if = {
+			limit = { has_character_flag = undead_enchant_weapon }
+			undead_enchant_weapon_effect = yes
+		}
+		else = {
+			undead_enchant_armour_effect = yes
+		}
+		undead_enchant_clear_effect = yes
+	}
+
+	option = {
+		name = EVTOPTBundead52
+		trigger = { has_character_flag = undead_enchant_failed }
+		clr_character_flag = undead_enchant_failed
+		undead_enchant_clear_effect = yes
+	}
+}

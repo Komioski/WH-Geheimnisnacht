@@ -24,7 +24,8 @@
 # Sources: WFRP 4E Dwarf Player's Guide (Book of Grudges p.32-33, Slayers in
 # Karaz Ankor p.23, Dwarf Slayer p.59, Grimnir p.139, Khazalid p.70-73,
 # coming of age p.31, food and ale p.35, crafts and stonemasons p.57,
-# Brewer p.62, Hammerer p.68, Ironbreaker p.70).
+# Brewer p.62, Hammerer p.68, Ironbreaker p.70, the Day of Grudgement
+# p.33).
 #
 # Grudges                                  dawi.1 - dawi.16
 # Demanding compensation                   dawi.20 - dawi.29
@@ -34,6 +35,7 @@
 # Deeds of the hold's warriors             dawi.70 - dawi.71
 # Delving the deeps                        dawi.72 - dawi.84
 # The Council of Kings                     dawi.100 - dawi.106
+# The Day of Grudgement                    dawi.110 - dawi.118
 # Ale and the long table                   dawi.130 - dawi.136
 # The wealth of the hold                   dawi.140 - dawi.141
 # Masons                                   dawi.150 - dawi.178
@@ -48,8 +50,8 @@
 #     dawi.12 on_divorce, dawi.16 CALL_ALLY_INTERACTION_DECLINE_EVENT, dawi.43
 #     on_new_holder_inheritance, dawi.73 yearly pulse, dawi.30, dawi.40,
 #     dawi.42 and dawi.50 bi-yearly pulse (dawi.70 and dawi.71 on its random
-#     list), dawi.25 five-year pulse, dawi.151 and dawi.201 bi-yearly
-#     pulse, dawi_hold_life bi-yearly random list (dawi.130, 131, 135, 136,
+#     list), dawi.25 five-year pulse, dawi.110 on_decade_pulse, dawi.151
+#     and dawi.201 bi-yearly pulse, dawi_hold_life bi-yearly random list (dawi.130, 131, 135, 136,
 #     140, 141, 170, 173, 180, 220, 221, 222), dawi_battle on_combat_pulse
 #     list (dawi.211, 212, 214, 216, 218), dawi.200 on_birth.
 #   decisions/wh_dawi_decisions.txt: dawi.5, dawi.20, dawi.72, dawi.100,
@@ -58,6 +60,7 @@
 #   title_hammerer (common/minor_titles/wh_minor_titles.txt): dawi.209,
 #     dawi.210.
 #   The settle_grudge CB (common/cb_types/cb_types_dwarf.txt): dawi.6.
+#   dawi_great_book_effect (wh_dawi_effects.txt): dawi.116, dawi.117.
 #   plot_events, job_spymaster and on_action_events: dawi.9.
 # Scripted triggers: common/scripted_triggers/wh_dawi_triggers.txt
 # Scripted effects: common/scripted_effects/wh_dawi_effects.txt
@@ -2618,6 +2621,384 @@ character_event = {
 		FROM = {
 			opinion = { who = ROOT modifier = highking_candidate_squabble_opinion years = 25 }
 		}
+	}
+}
+
+###############################################################################
+# The Day of Grudgement
+# Twice every century the High King calls the Day of Grudgement: the kings of
+# every hold travel to Karaz-a-Karak to report new grudges for the Dammaz
+# Kron, the Great Book of Grudges, and the settling of old ones (Dwarf
+# Player's Guide p.33). The host is the High King, or the lord of
+# Karaz-a-Karak while the throne of the Karaz Ankor stands empty. A king
+# who refuses the summons may be written down for the slight. At the Day
+# each king is honoured for the grudges his clan struck out since the last
+# Day (the dawi_grudges_settled variable, counted by
+# dawi_grudge_remembered_effect) and shamed for Blood Grudges he still
+# leaves open. One grudge each Day may go into the Great Book itself, held
+# by every Dawi ruler (dawi_great_book_effect, also used when Karag Dum
+# falls in WHG_chaos_horde_events).
+###############################################################################
+
+# dawi.110 The Day of Grudgement is called
+# Every 50 years at most (the dawi_day_of_grudgement global flag).
+# Scope: ROOT is the High King or the lord of Karaz-a-Karak.
+character_event = {
+	id = dawi.110
+	desc = EVTDESCdawi110
+	picture = GFX_evt_dwarf_grudge_book
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # on_decade_pulse
+	only_rulers = yes
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		dawi_grudgement_host_trigger = yes
+		OR = {
+			NOT = { has_global_flag = dawi_day_of_grudgement }
+			had_global_flag = { flag = dawi_day_of_grudgement days = 18250 }
+		}
+	}
+
+	immediate = {
+		clr_global_flag = dawi_day_of_grudgement
+		set_global_flag = dawi_day_of_grudgement
+		save_event_target_as = dawi_grudgement_host
+		clr_character_flag = dawi_great_book_written
+	}
+
+	option = { # Send the summons to every hold
+		name = EVTOPTAdawi110
+		wealth = -50
+		custom_tooltip = { text = dawi_grudgement_called_tt }
+		hidden_effect = {
+			any_ruler = {
+				limit = {
+					NOT = { character = ROOT }
+					higher_tier_than = COUNT
+					dawi_grudge_keeper_trigger = yes
+					prisoner = no
+					OR = { independent = yes top_liege = { character = ROOT } }
+				}
+				character_event = { id = dawi.111 days = 10 random = 10 }
+			}
+			character_event = { id = dawi.113 days = 90 }
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { # These are no days for feasting
+		name = EVTOPTBdawi110
+		trigger = { ai = no }
+		prestige = -250
+		piety = -50
+	}
+}
+
+# dawi.111 Summoned to the Day of Grudgement
+# Scope: ROOT is a Dawi king or lord, event_target:dawi_grudgement_host the
+# host.
+character_event = {
+	id = dawi.111
+	desc = EVTDESCdawi111
+	picture = GFX_evt_dwarf_king
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawi.110
+
+	trigger = {
+		event_target:dawi_grudgement_host = { is_alive = yes }
+	}
+
+	option = { # Take the road to Karaz-a-Karak
+		name = EVTOPTAdawi111
+		wealth = -25
+		set_character_flag = dawi_grudgement_guest
+		custom_tooltip = { text = dawi_grudgement_guest_tt }
+		ai_chance = { factor = 90 }
+	}
+	option = { # Send word that the hold cannot spare its king
+		name = EVTOPTBdawi111
+		custom_tooltip = { text = dawi_grudgement_refused_tt }
+		hidden_effect = {
+			event_target:dawi_grudgement_host = { character_event = { id = dawi.112 } }
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 5 war = yes }
+			modifier = { factor = 3 trait = proud }
+			modifier = {
+				factor = 0.3
+				top_liege = { character = event_target:dawi_grudgement_host }
+			}
+			modifier = {
+				factor = 3
+				NOT = { opinion = { who = event_target:dawi_grudgement_host value = 0 } }
+			}
+		}
+	}
+}
+
+# dawi.112 A king refuses the summons
+# Scope: ROOT is the host, FROM the king who stayed at home.
+character_event = {
+	id = dawi.112
+	desc = EVTDESCdawi112
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawi.111
+
+	immediate = {
+		FROM = { save_event_target_as = grudge_offender }
+	}
+
+	option = { # Write it down as a slight
+		name = EVTOPTAdawi112
+		dawi_enter_slight_grudge_effect = yes
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 1.5 trait = wroth }
+			modifier = { factor = 0.2 FROM = { war = yes } }
+			modifier = { factor = 0.2 is_friend = FROM }
+			modifier = { factor = 0.5 trait = kind }
+		}
+	}
+	option = { # His hold is beset, let it pass
+		name = EVTOPTBdawi112
+		prestige = -25
+		FROM = { opinion = { who = ROOT modifier = opinion_grateful years = 10 } }
+		ai_chance = { factor = 30 }
+	}
+}
+
+# dawi.113 The Day of Grudgement
+# The kings gather and the Great Book is read, for weeks.
+# Scope: ROOT is the host.
+character_event = {
+	id = dawi.113
+	desc = EVTDESCdawi113
+	picture = GFX_evt_dwarf_seated_book
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawi.110
+
+	option = { # Open the Great Book
+		name = EVTOPTAdawi113
+		prestige = 100
+		if = {
+			limit = { any_ruler = { has_character_flag = dawi_grudgement_guest count = 5 } }
+			prestige = 150
+			piety = 50
+		}
+		hidden_effect = {
+			any_ruler = {
+				limit = { has_character_flag = dawi_grudgement_guest }
+				character_event = { id = dawi.114 days = 3 random = 10 }
+			}
+		}
+		set_character_flag = dawi_grudgement_guest
+		character_event = { id = dawi.114 days = 15 }
+	}
+}
+
+# dawi.114 Before the High King
+# A king's reckoning: his clan's settled grudges are struck out of the Great
+# Book, his open Blood Grudges shame him, and he may ask that one grudge be
+# written into the Dammaz Kron itself.
+# Scope: ROOT is a guest king or the host, event_target:dawi_grudgement_host
+# the host.
+character_event = {
+	id = dawi.114
+	desc = {
+		trigger = { check_variable = { which = dawi_grudges_settled value = 3 } }
+		text = EVTDESCdawi114a
+	}
+	desc = {
+		trigger = {
+			check_variable = { which = dawi_grudges_settled value = 1 }
+			NOT = { check_variable = { which = dawi_grudges_settled value = 3 } }
+		}
+		text = EVTDESCdawi114b
+	}
+	desc = {
+		trigger = { NOT = { check_variable = { which = dawi_grudges_settled value = 1 } } }
+		text = EVTDESCdawi114c
+	}
+	picture = GFX_evt_dwarf_king_seated
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawi.113
+
+	trigger = {
+		has_character_flag = dawi_grudgement_guest
+		event_target:dawi_grudgement_host = { is_alive = yes }
+	}
+
+	immediate = {
+		clr_character_flag = dawi_grudgement_guest
+		if = {
+			limit = {
+				any_character = {
+					dawi_blood_grudge_against_trigger = yes
+					NOT = { has_character_flag = dawi_in_great_book }
+				}
+			}
+			random_character = {
+				limit = {
+					dawi_blood_grudge_against_trigger = yes
+					NOT = { has_character_flag = dawi_in_great_book }
+				}
+				save_event_target_as = grudge_offender
+			}
+			set_character_flag = dawi_grudgement_petition
+		}
+		else_if = {
+			limit = {
+				any_character = {
+					dawi_grudge_against_trigger = yes
+					dawi_race_grudge_trigger = no
+					NOT = { has_character_flag = dawi_in_great_book }
+				}
+			}
+			random_character = {
+				limit = {
+					dawi_grudge_against_trigger = yes
+					dawi_race_grudge_trigger = no
+					NOT = { has_character_flag = dawi_in_great_book }
+				}
+				save_event_target_as = grudge_offender
+			}
+			set_character_flag = dawi_grudgement_petition
+		}
+	}
+
+	option = { # Ask that the grudge be written in the Great Book
+		name = EVTOPTAdawi114
+		trigger = {
+			has_character_flag = dawi_grudgement_petition
+			event_target:dawi_grudgement_host = {
+				NOT = { has_character_flag = dawi_great_book_written }
+				NOT = { character = event_target:grudge_offender }
+			}
+		}
+		dawi_grudgement_reckoning_effect = yes
+		if = {
+			limit = { character = event_target:dawi_grudgement_host }
+			set_character_flag = dawi_great_book_written
+			dawi_great_book_effect = yes
+		}
+		else = {
+			custom_tooltip = { text = dawi_great_book_petition_tt }
+			event_target:dawi_grudgement_host = { character_event = { id = dawi.115 } }
+		}
+		ai_chance = { factor = 60 }
+	}
+	option = { # Hear the book read, and go home
+		name = EVTOPTBdawi114
+		dawi_grudgement_reckoning_effect = yes
+		ai_chance = { factor = 40 }
+	}
+
+	after = {
+		clr_character_flag = dawi_grudgement_petition
+	}
+}
+
+# dawi.115 A king asks for a page in the Great Book
+# Scope: ROOT is the host, FROM the king, event_target:grudge_offender the
+# one he would have written down.
+character_event = {
+	id = dawi.115
+	desc = EVTDESCdawi115
+	picture = GFX_evt_dwarf_grudge_book
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawi.114
+
+	trigger = {
+		event_target:grudge_offender = { is_alive = yes }
+	}
+
+	option = { # Write it in the Dammaz Kron
+		name = EVTOPTAdawi115
+		trigger = { NOT = { has_character_flag = dawi_great_book_written } }
+		set_character_flag = dawi_great_book_written
+		prestige = 50
+		FROM = { opinion = { who = ROOT modifier = opinion_grateful years = 20 } }
+		dawi_great_book_effect = yes
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 2 trait = just }
+			modifier = { factor = 1.5 is_friend = FROM }
+			modifier = { factor = 0.3 is_rival = FROM }
+			modifier = {
+				factor = 0.1
+				OR = {
+					is_friend = event_target:grudge_offender
+					is_allied_with = event_target:grudge_offender
+					dynasty = event_target:grudge_offender
+					event_target:grudge_offender = { is_liege_or_above = ROOT }
+				}
+			}
+		}
+	}
+	option = { # This is a matter for his clan alone
+		name = EVTOPTBdawi115
+		FROM = {
+			opinion = { who = ROOT modifier = opinion_disappointed years = 10 }
+			character_event = { id = dawi.118 }
+		}
+		ai_chance = { factor = 30 }
+	}
+}
+
+# dawi.116 Written in the Great Book
+# Every Dawi ruler now holds the grudge. Players only.
+# Scope: ROOT is a Dawi ruler, event_target:grudge_offender the one named.
+character_event = {
+	id = dawi.116
+	desc = EVTDESCdawi116
+	picture = GFX_evt_dwarf_grudge_book
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # dawi_great_book_effect
+
+	option = { # Every Dawi will remember
+		name = EVTOPTAdawi116
+	}
+}
+
+# dawi.117 Named in the Great Book
+# The offender learns that every hold of the Karaz Ankor counts him a foe.
+# Players only.
+# Scope: ROOT is the offender.
+character_event = {
+	id = dawi.117
+	desc = EVTDESCdawi117
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # dawi_great_book_effect
+
+	option = { # Let them come
+		name = EVTOPTAdawi117
+	}
+}
+
+# dawi.118 The High King will not write it
+# Scope: ROOT is the king who asked, FROM the host.
+character_event = {
+	id = dawi.118
+	desc = EVTDESCdawi118
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawi.115
+
+	option = { # It stays in our own book, then
+		name = EVTOPTAdawi118
 	}
 }
 

@@ -1,0 +1,709 @@
+###############################################################################
+# Empire events
+# Namespace: empire (was unification, EVTweaponry, DR_imperial and NARFLA in
+# wh_empire_events.txt)
+# Faction: Empire
+#
+# The Empire of Sigmar: a claimant crowned by acclaim who asks the Electors
+# to kneel, the Hammer of Sigmar, the great cults' long feud and their peace
+# in the face of a common foe, the Arch-Lectors, and the game start
+# narrative for the claimants.
+#
+# Lore: since 1359 IC the Empire has had rival claimants and no crowned
+# Emperor. Ottilia of Talabecland crowned herself with the Ulricans behind
+# her and named Sigmar a false god, and each of the great cults has backed a
+# claimant of its own ever since. In 1979 IC the Grand Theogonist refused to
+# crown Magritta of Marienburg, and the Electors stopped electing anyone at
+# all. Magnus the Pious ends the Age of Three Emperors after the Great War
+# Against Chaos. Ghal Maraz, the hammer of Sigmar, goes with the crown.
+#
+# Reunification                          empire.1 - empire.6
+# The great cults                        empire.10 - empire.14
+# The Arch-Lectors                       empire.20 - empire.21
+# Game start                             empire.30 - empire.31
+#
+# Callers:
+#   decisions/wh_empire_decisions.txt: claim_the_throne fires empire.1.
+#   common/on_actions/wh_on_actions.txt: empire.20 on on_death, empire.30
+#     on on_startup.
+#   common/cb_types/wh_cb_types.txt: the vampires' great war fires
+#     empire.12 on success. common/cb_types/00_cb_types.txt: a Black
+#     Crusade on the Empire fires empire.12 when it is declared.
+#   empire.10 and empire.21 have no caller yet (see their comments).
+# Scripted effects: common/scripted_effects/wh_empire_effects.txt
+# Scripted triggers: common/scripted_triggers/wh_empire_triggers.txt
+# Opinions: common/opinion_modifiers/wh_empire_opinions.txt
+# Loc: localisation/00_WHG_empire_events.csv
+###############################################################################
+
+namespace = empire
+
+###############################################################################
+# Reunification
+# An Elector of great renown and piety claims the throne by acclaim
+# (claim_the_throne). A week later he is crowned and given Ghal Maraz; a
+# month later every independent Elector of the Empire must kneel or refuse.
+# Those who kneel bring their realms into the Empire. Those who refuse give
+# the Emperor claims on their crowns, and the gentler of their own vassals
+# think less of them for it.
+###############################################################################
+
+# empire.1 Proclaim the claim?
+# Scope: ROOT is the claimant.
+character_event = {
+	id = empire.1
+	desc = EVTDESCempire1
+	picture = GFX_evt_rival_rulers
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # claim_the_throne
+
+	option = { # Proclaim it
+		name = EVTOPTAempire1
+		set_character_flag = claimed_empire
+		custom_tooltip = { text = empire_claim_tt }
+		hidden_effect = {
+			character_event = { id = empire.2 days = 7 }
+			any_independent_ruler = {
+				limit = { empire_elector_to_ask_trigger = yes }
+				character_event = { id = empire.3 days = 30 }
+			}
+		}
+	}
+	option = { # Not yet
+		name = EVTOPTBempire1
+		trigger = { ai = no }
+	}
+}
+
+# empire.2 The coronation
+# The claimant is crowned, the old rival crowns are put aside and the Grand
+# Theogonist gives him Ghal Maraz, if no one else has it.
+# Scope: ROOT is the new Emperor.
+character_event = {
+	id = empire.2
+	desc = EVTDESCempire2
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # empire.1
+
+	trigger = {
+		NOT = { has_global_flag = united_empire }
+		e_the_empire = { has_holder = no }
+	}
+
+	immediate = {
+		set_global_flag = united_empire
+		remove_trait = crowned_by_priest
+		remove_trait = crowned_by_bishop
+		remove_trait = crowned_by_pope
+		remove_trait = crowned_by_myself
+		remove_trait = crowned_by_priest_rd
+		remove_trait = crowned_by_bishop_rd
+		remove_trait = crowned_by_pope_rd
+		remove_character_modifier = crowned_in_barn
+		remove_character_modifier = extravagant_coronation
+	}
+
+	option = {
+		name = EVTOPTAempire2
+		create_bloodline = { type = magnus }
+		e_the_empire = {
+			grant_title = ROOT
+			add_law = { law = succ_hre_elective cooldown = no opinion_effect = no }
+			add_law = { law = true_cognatic_succession cooldown = no opinion_effect = no }
+		}
+		empire_destroy_contender_titles_effect = yes
+		if = {
+			limit = { NOT = { any_character = { has_artifact = ghal_maraz } } }
+			add_artifact = ghal_maraz
+			piety = 150
+		}
+	}
+}
+
+# empire.3 A new Emperor asks for the Elector's knee
+# Scope: ROOT is the Elector, FROM is the new Emperor.
+character_event = {
+	id = empire.3
+	desc = EVTDESCempire3
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # empire.1
+
+	trigger = {
+		independent = yes
+		FROM = { has_landed_title = e_the_empire }
+	}
+
+	option = { # Kneel
+		name = EVTOPTAempire3
+		custom_tooltip = { text = empire_kneel_tt }
+		hidden_effect = { FROM = { character_event = { id = empire.4 days = 7 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 1.5 trait = honest }
+			modifier = { factor = 2 trait = just }
+			modifier = { factor = 2 trait = humble }
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 1.5 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 2 opinion = { who = FROM value = 50 } }
+			modifier = { factor = 2 opinion = { who = FROM value = 75 } }
+			modifier = { factor = 2 FROM = { diplomacy = 15 } }
+			modifier = { factor = 2 FROM = { trait = grey_eminence } }
+			modifier = { factor = 1.5 FROM = { trait = charismatic_negotiator } }
+			modifier = { factor = 1.5 FROM = { trait = brilliant_strategist } }
+			modifier = { factor = 2 is_doom_high_trigger = yes }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBempire3
+		character_event = { id = empire.5 }
+		FROM = { character_event = { id = empire.6 days = 7 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 0.5 trait = just }
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 1.5 trait = ambitious }
+			modifier = { factor = 1.5 trait = cruel }
+			modifier = { factor = 2 empire_holds_contender_crown_trigger = yes }
+			modifier = { factor = 1.5 NOT = { opinion = { who = FROM value = 0 } } }
+			modifier = { factor = 2 NOT = { opinion = { who = FROM value = -50 } } }
+			modifier = { factor = 2 FROM = { trait = naive_appeaser } }
+			modifier = { factor = 1.5 FROM = { trait = amateurish_plotter } }
+		}
+	}
+}
+
+# empire.4 An Elector kneels
+# The Elector puts aside any rival crown and brings his realm into the
+# Empire.
+# Scope: ROOT is the Emperor, FROM is the Elector.
+character_event = {
+	id = empire.4
+	desc = EVTDESCempire4
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # empire.3
+
+	trigger = {
+		has_landed_title = e_the_empire
+		FROM = { independent = yes }
+	}
+
+	option = {
+		name = EVTOPTAempire4
+		FROM = { empire_destroy_contender_titles_effect = yes set_defacto_liege = ROOT }
+	}
+}
+
+# empire.5 The Elector's vassals grumble
+# Scope: ROOT is the Elector who refused.
+character_event = {
+	id = empire.5
+	desc = EVTDESCempire5
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # empire.3
+
+	option = {
+		name = EVTOPTAempire5
+		any_vassal = {
+			limit = {
+				OR = { trait = kind trait = just trait = honest trait = craven trait = humble }
+			}
+			opinion = { who = ROOT modifier = opinion_refused_the_emperor }
+		}
+	}
+}
+
+# empire.6 An Elector refuses
+# The Emperor gains a claim on each of the Elector's Imperial crowns, his
+# own and his kingly vassals'.
+# Scope: ROOT is the Emperor, FROM is the Elector.
+character_event = {
+	id = empire.6
+	desc = EVTDESCempire6
+	picture = GFX_evt_rival_rulers
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # empire.3
+
+	option = {
+		name = EVTOPTAempire6
+		FROM = {
+			any_demesne_title = {
+				limit = { tier = KING de_jure_liege = e_the_empire }
+				add_claim = ROOT
+			}
+			any_vassal = {
+				limit = { higher_tier_than = DUKE controls_religion = no }
+				any_demesne_title = {
+					limit = { tier = KING de_jure_liege = e_the_empire }
+					add_claim = ROOT
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# The great cults
+# The cults of Sigmar, Ulric, Taal, Morr and Manann have backed rival
+# claimants since 1359 IC. When the vampires win a great war in the Empire,
+# or a Black Crusade marches on it, the Grand Theogonist makes peace among
+# them (empire.12): their faithful may marry one another again, and every
+# ruler of the cults must accept the peace, or seek allies against the foe,
+# or refuse it.
+###############################################################################
+
+# empire.10 One faith triumphant
+# The ruler's cult is set over the others, which become its branches, and
+# every ruler of the other cults must choose whether to convert.
+# No caller: the line in claim_the_throne that fired it was commented out
+# long ago, and it would make Ulric a heresy of Sigmar. Kept until Komi
+# decides whether it should come back.
+# Scope: ROOT is the triumphant ruler.
+narrative_event = {
+	id = empire.10
+	title = EVTTITLEempire10
+	desc = EVTDESCempire10
+	picture = GFX_evt_icon
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # no caller
+
+	immediate = {
+		k_cult_of_sigmar = { holder_scope = { character_event = { id = empire.12 days = 7 } } }
+	}
+
+	option = {
+		name = EVTOPTAempire10
+		empire_cults_under_my_faith_effect = yes
+		if = { limit = { religion = sigmarite } give_nickname = nick_the_pious }
+		set_global_flag = imperial_churches_unified
+		hidden_effect = {
+			any_playable_ruler = {
+				limit = {
+					empire_imperial_cult_trigger = yes
+					NOT = { religion = ROOT }
+					controls_religion = no
+				}
+				narrative_event = { id = empire.11 }
+			}
+			religion_authority = { modifier = faith_triumphant }
+		}
+	}
+}
+
+# empire.11 Convert to the triumphant faith?
+# Scope: ROOT is a ruler of another cult, FROM is the triumphant ruler.
+narrative_event = {
+	id = empire.11
+	title = EVTTITLEempire11
+	desc = EVTDESCempire11
+	picture = GFX_evt_icon
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # empire.10
+
+	option = { # Convert
+		name = EVTOPTAempire11
+		religion = FROM
+		any_courtier = { religion = FROM }
+		capital_scope = { religion = FROM }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 5 any_liege = { religion = FROM } }
+			modifier = { factor = 5 trait = cynical }
+			modifier = { factor = 10 dynasty = FROM }
+			modifier = { factor = 0.1 trait = zealous }
+			modifier = { factor = 0.5 trait = content }
+		}
+	}
+	option = { # Keep the old faith
+		name = EVTOPTBempire11
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = content }
+			modifier = { factor = 5 trait = zealous }
+			modifier = { # Middenland's Ulricans are the most stubborn of all
+				factor = 8
+				religion = ulrican
+				capital_scope = { kingdom = { title = k_middenland } }
+			}
+		}
+	}
+}
+
+# empire.12 The Grand Theogonist makes peace among the cults
+# Once a game. The cults' faithful may marry one another again, the high
+# priests debate their dogma, and every ruler of the cults hears of the
+# peace.
+# Scope: ROOT is the Grand Theogonist.
+character_event = {
+	id = empire.12
+	hide_window = yes
+	is_triggered_only = yes # wh_cb_types (vampires), 00_cb_types (Black Crusade), empire.10
+
+	trigger = {
+		NOT = { has_global_flag = imperial_churches_peace }
+		NOT = { has_global_flag = imperial_churches_unified }
+	}
+
+	immediate = {
+		set_global_flag = imperial_churches_peace
+		remove_trait = zealous
+		sigmarite = { add_intermarry = taalite add_intermarry = ulrican }
+		ulrican = { add_intermarry = taalite add_intermarry = sigmarite add_intermarry = manannite }
+		taalite = { add_intermarry = ulrican add_intermarry = sigmarite }
+		manannite = { add_intermarry = ulrican }
+		religion_authority = { modifier = theology_debates }
+		k_cult_of_taal_and_rhya = {
+			holder_scope = { religion_authority = { modifier = theology_debates } }
+		}
+		k_cult_of_ulric = {
+			holder_scope = { religion_authority = { modifier = theology_debates } }
+		}
+		k_cult_of_morr = { holder_scope = { religion_authority = { modifier = theology_debates } } }
+		any_playable_ruler = {
+			limit = { empire_imperial_cult_trigger = yes controls_religion = no }
+			narrative_event = { id = empire.13 }
+		}
+	}
+}
+
+# empire.13 The peace of the cults
+# With a common foe at the gates, a claimant may also seek allies: a rival
+# claimant, a Dawi king, or the King of Bretonnia. In peace, accepting costs
+# piety and refusing earns it.
+# Scope: ROOT is a ruler of the cults, FROM is the Grand Theogonist.
+narrative_event = {
+	id = empire.13
+	title = EVTTITLEempire13
+	desc = {
+		trigger = { k_cult_of_sigmar = { has_title_flag = vampire_invasion } }
+		text = EVTDESCempire13a
+	}
+	desc = {
+		trigger = {
+			k_cult_of_sigmar = {
+				has_title_flag = black_crusade_invasion
+				NOT = { has_title_flag = vampire_invasion }
+			}
+		}
+		text = EVTDESCempire13b
+	}
+	desc = { trigger = { empire_common_foe_trigger = no } text = EVTDESCempire13c }
+	picture = GFX_evt_icon
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # empire.12
+
+	immediate = {
+		if = {
+			limit = { empire_holds_contender_crown_trigger = yes empire_common_foe_trigger = yes }
+			random_independent_ruler = {
+				limit = {
+					empire_holds_contender_crown_trigger = yes
+					NOT = { character = ROOT }
+					NOT = { is_allied_with = ROOT }
+				}
+				save_event_target_as = imperial_ally_candidate
+			}
+			random_independent_ruler = {
+				limit = {
+					OR = {
+						has_landed_title = k_the_vaults
+						has_landed_title = k_grey_mountains
+						has_landed_title = k_zhufbarak
+						has_landed_title = k_kadrin_ankor
+						has_landed_title = k_everpeak
+					}
+					NOT = { is_allied_with = ROOT }
+				}
+				save_event_target_as = imperial_ally_dwarf_candidate
+			}
+			e_bretonnia = {
+				holder_scope = {
+					if = {
+						limit = { NOT = { is_allied_with = ROOT } }
+						save_event_target_as = imperial_ally_bretonnia_candidate
+					}
+				}
+			}
+		}
+	}
+
+	option = { # Accept the peace
+		name = EVTOPTAempire13
+		if = {
+			limit = { empire_common_foe_trigger = yes }
+			capital_scope = { add_province_modifier = { name = troops_increases years = 3 } }
+		}
+		else = { piety = -100 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 5 any_liege = { religion = FROM } }
+			modifier = { factor = 0.1 empire_holds_contender_crown_trigger = yes }
+			modifier = { factor = 0.1 trait = zealous }
+			modifier = { factor = 0.5 trait = content }
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 2 trait = craven }
+		}
+	}
+	option = { # Seek allies among the Empire and the Dawi
+		name = EVTOPTBempire13
+		trigger = {
+			empire_holds_contender_crown_trigger = yes
+			empire_common_foe_trigger = yes
+			OR = {
+				event_target:imperial_ally_candidate = { always = yes }
+				event_target:imperial_ally_dwarf_candidate = { always = yes }
+			}
+		}
+		capital_scope = { add_province_modifier = { name = troops_increases years = 3 } }
+		prestige = -250
+		piety = -100
+		event_target:imperial_ally_candidate = {
+			show_portrait = yes
+			character_event = { id = empire.14 days = 30 }
+		}
+		event_target:imperial_ally_dwarf_candidate = {
+			show_portrait = yes
+			character_event = { id = empire.14 days = 7 }
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 5 trait = cynical }
+			modifier = { factor = 0.1 trait = zealous }
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 2 trait = just }
+			modifier = { factor = 0.7 trait = proud }
+		}
+	}
+	option = { # Plead with Bretonnia
+		name = EVTOPTCempire13
+		trigger = {
+			empire_holds_contender_crown_trigger = yes
+			empire_common_foe_trigger = yes
+			event_target:imperial_ally_bretonnia_candidate = { always = yes }
+		}
+		capital_scope = { add_province_modifier = { name = troops_increases years = 3 } }
+		prestige = -500
+		piety = -250
+		event_target:imperial_ally_bretonnia_candidate = {
+			show_portrait = yes
+			character_event = { id = empire.14 days = 25 }
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 5 trait = cynical }
+			modifier = { factor = 0.1 trait = zealous }
+			modifier = { factor = 0.7 trait = proud }
+		}
+	}
+	option = { # Refuse the peace
+		name = EVTOPTDempire13
+		if = {
+			limit = { empire_common_foe_trigger = yes }
+			capital_scope = { add_province_modifier = { name = inspired_warriors years = 2 } }
+			add_trait = zealous
+			piety = -50
+		}
+		else = { piety = 250 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = content }
+			modifier = { factor = 5 trait = zealous }
+			modifier = { # Middenland's Ulricans are the most stubborn of all
+				factor = 8
+				religion = ulrican
+				capital_scope = { kingdom = { title = k_middenland } }
+			}
+		}
+	}
+}
+
+# empire.14 A plea for alliance against the common foe
+# Scope: ROOT is the ruler asked, FROM is the claimant.
+character_event = {
+	id = empire.14
+	title = EVTTITLEempire14
+	desc = {
+		trigger = {
+			k_cult_of_sigmar = { has_title_flag = vampire_invasion }
+			NOT = { culture_group = imperial_group }
+		}
+		text = EVTDESCempire14a
+	}
+	desc = {
+		trigger = {
+			k_cult_of_sigmar = { has_title_flag = vampire_invasion }
+			culture_group = imperial_group
+		}
+		text = EVTDESCempire14b
+	}
+	desc = {
+		trigger = {
+			k_cult_of_sigmar = {
+				has_title_flag = black_crusade_invasion
+				NOT = { has_title_flag = vampire_invasion }
+			}
+		}
+		text = EVTDESCempire14c
+	}
+	picture = GFX_evt_icon
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # empire.13
+
+	option = { # Accept
+		name = EVTOPTAempire14
+		add_alliance = { who = FROM years = 10 }
+		ai_chance = { factor = 10 modifier = { factor = 0.5 culture_group = imperial_group } }
+	}
+	option = { # Decline
+		name = EVTOPTBempire14
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 3 culture_group = imperial_group trait = ambitious }
+		}
+	}
+}
+
+###############################################################################
+# The Arch-Lectors
+###############################################################################
+
+# empire.20 An Arch-Lector dies
+# His heir in the Arch-Lectory takes the Lector's title, lays aside any
+# witch hunter's vocation and is welcomed with piety.
+# Scope: ROOT is the dead Arch-Lector.
+character_event = {
+	id = empire.20
+	hide_window = yes
+	is_triggered_only = yes # on_death
+
+	trigger = {
+		OR = { has_landed_title = d_arch_lectory_talabheim has_landed_title = d_arch_lectory_nuln }
+	}
+
+	immediate = {
+		current_heir = {
+			give_minor_title = title_lector
+			if = { limit = { is_hunter_culture_trigger = yes } culture = ROOT }
+			if = {
+				limit = { is_witch_hunter_trigger = yes }
+				remove_trait = witch_hunter
+				remove_trait = inquisitor
+				remove_trait = solkan_templar
+			}
+			piety = 500
+		}
+	}
+}
+
+# empire.21 A Lector takes an empty Arch-Lectory
+# If the Arch-Lectory of Talabheim, or else of Nuln, has no living holder
+# outside the Grand Theogonist, the Lector takes it with its temple
+# barony. No caller: the religious title hook that fired it is commented
+# out in common/religious_titles/00_religious_titles.txt.
+# Scope: ROOT is the Lector.
+character_event = {
+	id = empire.21
+	hide_window = yes
+	is_triggered_only = yes # no caller
+
+	immediate = {
+		if = {
+			limit = {
+				d_arch_lectory_talabheim = {
+					OR = { has_holder = no holder_scope = { controls_religion = yes } }
+				}
+			}
+			d_arch_lectory_talabheim = { grant_title = ROOT }
+			b_vateresche = { grant_title = ROOT }
+		}
+		else_if = {
+			limit = {
+				d_arch_lectory_nuln = {
+					OR = { has_holder = no holder_scope = { controls_religion = yes } }
+				}
+			}
+			d_arch_lectory_nuln = { grant_title = ROOT }
+			b_tempel_quarter = { grant_title = ROOT }
+		}
+	}
+}
+
+###############################################################################
+# Game start
+###############################################################################
+
+# empire.30 The game start narratives
+# Once a game, from the multiplayer host's start: the claimants to the
+# Imperial throne are told of the Age of Three Emperors, and Valka the
+# Serpent's tale begins (slaanesh.470).
+# Scope: ROOT is the host player.
+character_event = {
+	id = empire.30
+	hide_window = yes
+	is_triggered_only = yes # on_startup
+	only_playable = yes
+	ai = no
+
+	trigger = {
+		is_multiplayer_host_character = yes
+		NOT = { has_global_flag = narrative_flavor }
+	}
+
+	immediate = {
+		set_global_flag = narrative_flavor
+		any_player = {
+			limit = {
+				OR = {
+					has_landed_title = k_westerland
+					has_landed_title = k_reikland
+					has_landed_title = k_talabecland
+				}
+				has_claim = e_the_empire
+			}
+			narrative_event = { id = empire.31 days = 2 }
+		}
+		c_25022 = { narrative_event = { id = slaanesh.470 days = 2 } }
+	}
+}
+
+# empire.31 The Imperial throne
+# For a claimant player at the start. Westerland hears of Magritta's
+# refused coronation as a wrong, the others as a wrong put right. Talabecland
+# may set the claim aside for the war with the vampires.
+# Scope: ROOT is the claimant.
+narrative_event = {
+	id = empire.31
+	title = EVTTITLEempire31
+	desc = { trigger = { has_landed_title = k_westerland } text = EVTDESCempire31a }
+	desc = { trigger = { NOT = { has_landed_title = k_westerland } } text = EVTDESCempire31b }
+	picture = GFX_evt_bishop
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes # empire.30
+	only_playable = yes
+	hide_from = yes
+
+	option = { # The Empire is mine by right
+		name = EVTOPTAempire31
+		prestige = 50
+	}
+	option = { # The vampires first
+		name = EVTOPTBempire31
+		trigger = { has_landed_title = k_talabecland NOT = { religion = vampiric } }
+		piety = 100
+	}
+}

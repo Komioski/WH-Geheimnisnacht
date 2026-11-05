@@ -24,21 +24,34 @@
 # Sources: WFRP 4E Dwarf Player's Guide (Steel and Fire, p.87-90; Dwarf
 # Engineer career, p.56), Arcane Journal: Empire of Man (Nuln, Steam Tank).
 #
+# The guild has three homes, and every member belongs to one branch (a
+# character modifier, engineer.7): the Dawi, of the holds or of the manling
+# cities; the Imperial Engineers School of Altdorf, with the Tileans; and
+# the Imperial Gunnery School of Nuln, which the Dawi exiles founded and
+# which still pays the guild its tithe (WFRP Companion p.99-102).
+#
 # Joining and AI recruits                engineer.1 - engineer.6
+# The guild's branches                   engineer.7 - engineer.9
 # Experiments and masterworks            engineer.10 - engineer.18
 # Becoming an engineer                   engineer.19, engineer.24
 # Zhufbar's call                         engineer.20 - engineer.22
 # Hiring an engineer                     engineer.30 - engineer.32
-# War machines                           engineer.33 - engineer.35
+# War machines                           engineer.33 - engineer.36
 # The Imperial Engineers School          engineer.40
+# Life in the branches                   engineer.50 - engineer.58
+# The branch powers                      engineer.60 - engineer.73
 #
 # Fired from common/on_actions/wh_on_actions.txt: engineer.1 on
-# on_character_ask_to_join_society, engineer.5 and engineer.20 on the
-# five-year pulse, engineer.24 on the bi-yearly pulse.
-# Decisions in decisions/WHG_engineer_decisions.txt: the society powers,
-# hire_engineer (.30), hire_imperial_engineer (.32), commission_war_machine
-# (.33), found_imperial_engineer_school (.40). engineer.34 and .35 are
-# delayed from .33.
+# on_character_ask_to_join_society, engineer.7 on on_character_join_society
+# and the society bi-yearly pulse, engineer.9 on on_character_leave_society,
+# engineer.5 and engineer.20 on the five-year pulse, engineer.24 on the
+# bi-yearly pulse, engineer.50 - .58 on the society bi-yearly pulse list
+# engineer_branch_life.
+# Decisions in decisions/WHG_engineer_decisions.txt: the society powers
+# (branch powers fire .60, .63, .65, .70), hire_engineer (.30),
+# hire_imperial_engineer (.32), commission_war_machine (.33),
+# found_imperial_engineer_school (.40). engineer.34 - .36 are delayed from
+# .33.
 # Scripted triggers: common/scripted_triggers/wh_engineer_triggers.txt
 # Event modifiers: common/event_modifiers/wh_engineer_modifiers.txt
 # Loc: localisation/00_WHG_engineer_events.csv
@@ -140,6 +153,116 @@ character_event = {
 				join_society = engineers_guild
 			}
 		}
+	}
+}
+
+###############################################################################
+# The guild's branches
+# Every member belongs to one branch, a character modifier that lasts while
+# he stays in the guild. Dawi go to the holds or, if they live among
+# manlings, to the clans of the manling cities. Tileans go to the Engineers
+# School. An Imperial manling picks the Engineers School of Altdorf or the
+# Gunnery School of Nuln, whichever is open; a player chooses when both are.
+###############################################################################
+
+# engineer.7 A new member's branch
+# Also on the society bi-yearly pulse, for members who joined at game start.
+# Scope: ROOT is the member.
+character_event = {
+	id = engineer.7
+	hide_window = yes
+	is_triggered_only = yes # on_character_join_society, on_society_bi_yearly_pulse
+
+	trigger = {
+		society_member_of = engineers_guild
+		engineer_has_branch_trigger = no
+	}
+
+	immediate = {
+		if = {
+			limit = { trait = creature_dwarf }
+			if = {
+				limit = { engineer_dawi_among_manlings_trigger = yes }
+				add_character_modifier = { name = engineer_branch_manling_dawi duration = -1 }
+			}
+			else = { add_character_modifier = { name = engineer_branch_hold duration = -1 } }
+		}
+		else_if = {
+			limit = { has_character_flag = engineer_from_gunnery }
+			add_character_modifier = { name = engineer_branch_gunnery duration = -1 }
+		}
+		else_if = {
+			limit = {
+				OR = { has_character_flag = engineer_from_school culture_group = tilean_group }
+			}
+			add_character_modifier = { name = engineer_branch_school duration = -1 }
+		}
+		else_if = {
+			limit = {
+				engineer_gunnery_school_open_trigger = yes
+				engineer_school_open_trigger = yes
+			}
+			character_event = { id = engineer.8 }
+		}
+		else_if = {
+			limit = { engineer_school_open_trigger = yes }
+			add_character_modifier = { name = engineer_branch_school duration = -1 }
+		}
+		else = { add_character_modifier = { name = engineer_branch_gunnery duration = -1 } }
+		clr_character_flag = engineer_from_gunnery
+		clr_character_flag = engineer_from_school
+	}
+}
+
+# engineer.8 Altdorf or Nuln?
+# An Imperial manling with both schools open picks one.
+# Scope: ROOT is the member.
+character_event = {
+	id = engineer.8
+	desc = EVTDESCengineer8
+	picture = GFX_evt_empire_master_engineer
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # engineer.7
+
+	option = { # The Engineers School of Altdorf
+		name = EVTOPTAengineer8
+		add_character_modifier = { name = engineer_branch_school duration = -1 }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 learning = 15 }
+			modifier = { factor = 1.5 trait = genius }
+		}
+	}
+	option = { # The Gunnery School of Nuln
+		name = EVTOPTBengineer8
+		add_character_modifier = { name = engineer_branch_gunnery duration = -1 }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 martial = 12 }
+			modifier = { factor = 1.5 trait = brave }
+		}
+	}
+}
+
+# engineer.9 A member leaves the guild
+# His branch goes with his membership.
+# Scope: ROOT is the former member.
+character_event = {
+	id = engineer.9
+	hide_window = yes
+	is_triggered_only = yes # on_character_leave_society
+
+	trigger = {
+		engineer_has_branch_trigger = yes
+		NOT = { society_member_of = engineers_guild }
+	}
+
+	immediate = {
+		remove_character_modifier = engineer_branch_hold
+		remove_character_modifier = engineer_branch_manling_dawi
+		remove_character_modifier = engineer_branch_school
+		remove_character_modifier = engineer_branch_gunnery
 	}
 }
 
@@ -536,14 +659,29 @@ character_event = {
 }
 
 # engineer.32 A manling engineer for the court
-# From hire_imperial_engineer. A Tilean court hires one of its own; any
-# other court gets an engineer of the Imperial school, and part of the fee
-# goes to the lord of Altdorf, who keeps the school.
+# From hire_imperial_engineer. A Tilean court hires one of its own. Any
+# other court gets an engineer of the Imperial Engineers School if it is
+# open, and part of the fee goes to the lord of Altdorf, who keeps it.
+# Otherwise a gunner of the Gunnery School comes, and the fee's share goes
+# to the lord of Nuln.
 # Scope: ROOT is the ruler.
 character_event = {
 	id = engineer.32
 	desc = { trigger = { culture_group = tilean_group } text = EVTDESCengineer32a }
-	desc = { trigger = { NOT = { culture_group = tilean_group } } text = EVTDESCengineer32b }
+	desc = {
+		trigger = {
+			NOT = { culture_group = tilean_group }
+			has_global_flag = imperial_engineering_school
+		}
+		text = EVTDESCengineer32b
+	}
+	desc = {
+		trigger = {
+			NOT = { culture_group = tilean_group }
+			NOT = { has_global_flag = imperial_engineering_school }
+		}
+		text = EVTDESCengineer32c
+	}
 	picture = GFX_evt_empire_master_engineer
 	border = GFX_event_normal_frame_economy
 
@@ -578,14 +716,25 @@ character_event = {
 			move_character = ROOT
 			change_stewardship = 3
 			change_martial = 2
-			if = { limit = { can_join_society = engineers_guild } join_society = engineers_guild }
 		}
 		if = {
 			limit = {
 				NOT = { culture_group = tilean_group }
-				c_altdorf = { holder_scope = { NOT = { character = ROOT } } }
+				has_global_flag = imperial_engineering_school
 			}
-			c_altdorf = { holder_scope = { wealth = 50 } }
+			event_target:engineer_hired = { set_character_flag = engineer_from_school }
+			c_altdorf = {
+				holder_scope = { if = { limit = { NOT = { character = ROOT } } wealth = 50 } }
+			}
+		}
+		else_if = {
+			limit = { NOT = { culture_group = tilean_group } }
+			event_target:engineer_hired = { set_character_flag = engineer_from_gunnery }
+			309 = { owner = { if = { limit = { NOT = { character = ROOT } } wealth = 50 } } }
+		}
+		event_target:engineer_hired = {
+			# engineer.7 reads and clears the school flag when he joins.
+			if = { limit = { can_join_society = engineers_guild } join_society = engineers_guild }
 		}
 	}
 
@@ -618,6 +767,14 @@ character_event = {
 		capital_scope = { add_province_modifier = { name = engineer_working_artillery years = 1 } }
 		hidden_effect = { character_event = { id = engineer.34 days = 365 } }
 		ai_chance = { factor = 10 }
+	}
+	option = { # A Nuln battery: mortars, a Hellblaster and the gunners
+		name = EVTOPTDengineer33
+		trigger = { engineer_has_gunnery_engineer_trigger = yes wealth = 150 }
+		wealth = -150
+		capital_scope = { add_province_modifier = { name = engineer_working_artillery years = 1 } }
+		hidden_effect = { character_event = { id = engineer.36 days = 365 } }
+		ai_chance = { factor = 15 modifier = { factor = 0 NOT = { wealth = 300 } } }
 	}
 	option = { # A Steam Tank
 		name = EVTOPTBengineer33
@@ -722,14 +879,61 @@ character_event = {
 	}
 }
 
+# engineer.36 The Nuln battery is cast
+# The court's gunner of Nuln has cast mortars and a Hellblaster Volley Gun,
+# and trained the crews to serve them.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = engineer.36
+	desc = { trigger = { engineer_has_gunnery_engineer_trigger = yes } text = EVTDESCengineer36a }
+	desc = { trigger = { engineer_has_gunnery_engineer_trigger = no } text = EVTDESCengineer36b }
+	picture = GFX_evt_great_cannon
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # engineer.33
+
+	trigger = {
+		is_landed = yes
+	}
+
+	immediate = {
+		any_demesne_province = {
+			limit = { has_province_modifier = engineer_working_artillery }
+			remove_province_modifier = engineer_working_artillery
+		}
+	}
+
+	option = {
+		name = EVTOPTAengineer36
+		if = {
+			limit = { engineer_has_gunnery_engineer_trigger = yes }
+			custom_tooltip = { text = engineer_nuln_battery_tt }
+			hidden_effect = {
+				capital_scope = {
+					ROOT = {
+						spawn_unit = {
+							owner = ROOT
+							home = PREV
+							province = PREV
+							attrition = 1.0
+							troops = { artillery = { 25 25 } gunpowder = { 100 100 } }
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 ###############################################################################
 # The Imperial Engineers School
 ###############################################################################
 
 # engineer.40 The Imperial Engineers School
 # From found_imperial_engineer_school. A Tilean genius or a Dawi master of
-# the Nuln clans heads the school in Altdorf; a year later Imperial humans may join the
-# guild (the society's can_join_society reads the global flag).
+# the Nuln clans heads the school in Altdorf, and the school is added to
+# Altdorf's great works. A year later Imperial manlings may join the
+# guild's Engineers School branch (engineer_school_open_trigger).
 # Scope: ROOT is the founder.
 character_event = {
 	id = engineer.40
@@ -741,6 +945,18 @@ character_event = {
 
 	immediate = {
 		set_global_flag = imperial_engineering_school
+		# The school stands on Altdorf's great works, the City of Spires.
+		299 = {
+			owner = {
+				random_realm_wonder = {
+					limit = {
+						location = { province = 299 }
+						NOT = { has_wonder_upgrade = upgrade_imperial_engineers_school }
+					}
+					add_wonder_upgrade = upgrade_imperial_engineers_school
+				}
+			}
+		}
 	}
 
 	option = { # A Tilean genius
@@ -755,7 +971,11 @@ character_event = {
 			trait = engineer
 			trait = genius
 		}
-		new_character = { move_character = ROOT join_society = engineers_guild }
+		new_character = {
+			set_character_flag = engineer_from_school
+			move_character = ROOT
+			join_society = engineers_guild
+		}
 	}
 	option = { # A Dawi master of the Nuln clans
 		name = EVTOPTBengineer40
@@ -769,5 +989,660 @@ character_event = {
 			trait = dwarf_engineer_master
 		}
 		new_character = { move_character = ROOT join_society = engineers_guild }
+	}
+}
+
+###############################################################################
+# Life in the branches
+# On the society bi-yearly pulse, the engineer_branch_life random list in
+# common/on_actions/wh_on_actions.txt. Each event is for one branch.
+#   The holds              engineer.50 - .51
+#   The manling cities     engineer.52 - .53
+#   The Gunnery School     engineer.54 - .56
+#   The Engineers School   engineer.57 - .58
+###############################################################################
+
+# engineer.50 The Elders and the new
+# An apprentice of the hold has built a device the guild's books do not
+# know. The Elders want it broken up; the apprentice wants it tested.
+# Scope: ROOT is a Dawi engineer of the holds.
+character_event = {
+	id = engineer.50
+	desc = EVTDESCengineer50
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse, engineer_branch_life
+	culture_group = dwarf_group
+
+	trigger = {
+		engineer_branch_pulse_trigger = yes
+		has_character_modifier = engineer_branch_hold
+	}
+
+	option = { # The Elders are right. Break it up.
+		name = EVTOPTAengineer50
+		prestige = 25
+		change_society_currency = 25
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 2 trait = stubborn }
+			modifier = { factor = 1.5 trait = humble }
+		}
+	}
+	option = { # Speak for the apprentice
+		name = EVTOPTBengineer50
+		change_society_currency = -25
+		add_character_modifier = { name = engineer_radical_ideas years = 5 }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = genius }
+			modifier = { factor = 2 trait = ambitious }
+		}
+	}
+}
+
+# engineer.51 The steam borer
+# A borer is set to a new seam deep under the hold.
+# Scope: ROOT is a Dawi engineer of the holds.
+character_event = {
+	id = engineer.51
+	desc = EVTDESCengineer51
+	picture = GFX_evt_dwarf_engineer
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse, engineer_branch_life
+	culture_group = dwarf_group
+
+	trigger = {
+		engineer_branch_pulse_trigger = yes
+		has_character_modifier = engineer_branch_hold
+	}
+
+	option = { # Full pressure. Drive it through.
+		name = EVTOPTAengineer51
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 learning = 15 }
+				modifier = { factor = 1.5 trait = dwarf_engineer_master }
+				wealth = 60
+				change_society_currency = 25
+			}
+			40 = { modifier = { factor = 0.7 trait = patient } add_trait_wounded_effect = yes }
+		}
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = brave } }
+	}
+	option = { # Slow and careful, as the Elders taught
+		name = EVTOPTBengineer51
+		wealth = 20
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = patient } }
+	}
+}
+
+# engineer.52 The guild's tithe
+# The Dawi of the manling cities pay the guild a tithe for the right to sell
+# their craft to manlings. The collector from Zhufbar is at the door.
+# Scope: ROOT is a Dawi engineer of the manling cities.
+character_event = {
+	id = engineer.52
+	desc = EVTDESCengineer52
+	picture = GFX_evt_dwarf_seated_book
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse, engineer_branch_life
+	culture_group = dwarf_group
+
+	trigger = {
+		engineer_branch_pulse_trigger = yes
+		has_character_modifier = engineer_branch_manling_dawi
+	}
+
+	option = { # Pay it, to the last penny
+		name = EVTOPTAengineer52
+		trigger = { wealth = 30 }
+		wealth = -30
+		prestige = 25
+		change_society_currency = 50
+		d_zhufbar = {
+			holder_scope = { if = { limit = { NOT = { character = ROOT } } wealth = 15 } }
+		}
+		ai_chance = { factor = 3 }
+	}
+	option = { # Tell him it will come with the next caravan
+		name = EVTOPTBengineer52
+		change_society_currency = -50
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = greedy }
+			modifier = { factor = 10 NOT = { wealth = 30 } }
+		}
+	}
+}
+
+# engineer.53 A manling asks about the runes
+# A manling apprentice has seen the marks on a Dawi gun and wants to know
+# what they mean. The guild lets manlings learn the craft, never the runes.
+# Scope: ROOT is a Dawi engineer of the manling cities.
+character_event = {
+	id = engineer.53
+	desc = EVTDESCengineer53
+	picture = GFX_evt_dwarf_engineer
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse, engineer_branch_life
+	culture_group = dwarf_group
+
+	trigger = {
+		engineer_branch_pulse_trigger = yes
+		has_character_modifier = engineer_branch_manling_dawi
+	}
+
+	option = { # Runes are not for manlings
+		name = EVTOPTAengineer53
+		prestige = 25
+		ai_chance = { factor = 3 }
+	}
+	option = { # Tell him a little. Only a little.
+		name = EVTOPTBengineer53
+		change_society_currency = 50
+		random = {
+			chance = 30
+			add_character_modifier = { name = engineer_elders_rebuke years = 5 }
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = gregarious }
+			modifier = { factor = 0.2 trait = stubborn }
+		}
+	}
+}
+
+# engineer.54 The Iron Silence
+# A new gun is set to cool. The Silence Bells ring and Nuln goes quiet, for
+# any loud noise could put a flaw in the cooling metal.
+# Scope: ROOT is a gunner of Nuln.
+character_event = {
+	id = engineer.54
+	desc = EVTDESCengineer54
+	picture = GFX_evt_great_cannon
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse, engineer_branch_life
+	culture_group = imperial_group
+
+	trigger = {
+		engineer_branch_pulse_trigger = yes
+		has_character_modifier = engineer_branch_gunnery
+	}
+
+	option = { # Keep the silence
+		name = EVTOPTAengineer54
+		add_character_modifier = { name = engineer_iron_silence years = 2 }
+		ai_chance = { factor = 2 }
+	}
+	option = { # There is a war on. Keep the drills going.
+		name = EVTOPTBengineer54
+		random_list = {
+			50 = { military_techpoints = 25 }
+			50 = { modifier = { factor = 0.7 learning = 15 } change_society_currency = -50 }
+		}
+		ai_chance = { factor = 1 modifier = { factor = 3 war = yes } }
+	}
+}
+
+# engineer.55 Black Powder Week
+# The season's last powder is wrapped into firecrackers and given away at
+# the gates of the Gunnery School, before it grows old and unstable.
+# Scope: ROOT is a gunner of Nuln.
+character_event = {
+	id = engineer.55
+	desc = EVTDESCengineer55
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse, engineer_branch_life
+	culture_group = imperial_group
+
+	trigger = {
+		engineer_branch_pulse_trigger = yes
+		has_character_modifier = engineer_branch_gunnery
+	}
+
+	option = { # Hand them out myself
+		name = EVTOPTAengineer55
+		add_character_modifier = { name = engineer_black_powder_week years = 1 }
+		random = {
+			chance = 10
+			modifier = { factor = 0.5 trait = patient }
+			add_trait_wounded_effect = yes
+		}
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 2 trait = gregarious }
+			modifier = { factor = 0.5 trait = shy }
+		}
+	}
+	option = { # Keep the powder in the stores
+		name = EVTOPTBengineer55
+		change_society_currency = 25
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = greedy } }
+	}
+}
+
+# engineer.56 A Son of the Guns
+# The Gunnery School takes in Nuln's orphan boys and teaches them a trade.
+# One of them shows real promise, if someone will pay his way.
+# Scope: ROOT is a gunner of Nuln.
+character_event = {
+	id = engineer.56
+	desc = EVTDESCengineer56
+	picture = GFX_evt_child_play
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse, engineer_branch_life
+	culture_group = imperial_group
+
+	trigger = {
+		engineer_branch_pulse_trigger = yes
+		has_character_modifier = engineer_branch_gunnery
+		wealth = 25
+	}
+
+	option = { # Pay his way and take him into service
+		name = EVTOPTAengineer56
+		wealth = -25
+		create_character = {
+			random_traits = yes
+			culture = ROOT
+			religion = ROOT
+			female = no
+			age = 16
+			trait = creature_human
+		}
+		new_character = { change_martial = 3 change_learning = 2 move_character = ROOT }
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = kind } }
+	}
+	option = { # The school will see to him
+		name = EVTOPTBengineer56
+		change_society_currency = 10
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = greedy } }
+	}
+}
+
+# engineer.57 Altdorf against Nuln
+# A pamphlet from the Gunnery School mocks the Engineers School's latest
+# machine. Altdorf's masters want an answer.
+# Scope: ROOT is an engineer of the Engineers School.
+character_event = {
+	id = engineer.57
+	desc = EVTDESCengineer57
+	picture = GFX_evt_empire_master_engineer
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse, engineer_branch_life
+
+	trigger = {
+		engineer_branch_pulse_trigger = yes
+		has_character_modifier = engineer_branch_school
+		engineer_gunnery_school_open_trigger = yes
+	}
+
+	option = { # Answer in print, and sharper
+		name = EVTOPTAengineer57
+		prestige = 25
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = proud } }
+	}
+	option = { # Write to Nuln's masters and mend it
+		name = EVTOPTBengineer57
+		change_society_currency = 25
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = kind } }
+	}
+}
+
+# engineer.58 The flying machine
+# A drawing in the school's archive, in Leonardo's mirror hand: wings of
+# canvas, a frame of ash, a pedal crank. Someone has built it.
+# Scope: ROOT is an engineer of the Engineers School.
+character_event = {
+	id = engineer.58
+	desc = EVTDESCengineer58
+	picture = GFX_evt_machines_of_war
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse, engineer_branch_life
+
+	trigger = {
+		engineer_branch_pulse_trigger = yes
+		has_character_modifier = engineer_branch_school
+	}
+
+	option = { # Climb in. Someone must.
+		name = EVTOPTAengineer58
+		random_list = {
+			40 = { add_trait_wounded_effect = yes }
+			30 = { prestige = 100 change_society_currency = 50 }
+			30 = { prestige = 10 }
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = brave }
+			modifier = { factor = 0.2 trait = craven }
+		}
+	}
+	option = { # Sell the drawing to a Tilean
+		name = EVTOPTBengineer58
+		wealth = 40
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = greedy } }
+	}
+}
+
+###############################################################################
+# The branch powers
+#   engineer_hold_petition        engineer.60 - .62
+#   engineer_dawi_teach_manlings  engineer.63
+#   engineer_gun_christening      engineer.65 - .68
+#   engineer_school_notebooks     engineer.70 - .73
+###############################################################################
+
+# engineer.60 The Elders weigh the design (roll)
+# A month after engineer_hold_petition.
+# Scope: ROOT is a Dawi engineer of the holds.
+character_event = {
+	id = engineer.60
+	hide_window = yes
+	is_triggered_only = yes # engineer_hold_petition
+
+	immediate = {
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 learning = 18 }
+				modifier = { factor = 1.5 trait = dwarf_engineer_master }
+				modifier = { factor = 1.3 trait = stubborn }
+				modifier = { factor = 1.3 society_rank >= 3 }
+				character_event = { id = engineer.61 }
+			}
+			50 = {
+				modifier = { factor = 1.5 trait = genius }
+				modifier = { factor = 1.5 has_character_modifier = engineer_radical_ideas }
+				character_event = { id = engineer.62 }
+			}
+		}
+	}
+}
+
+# engineer.61 The Elders approve
+# Scope: ROOT is a Dawi engineer of the holds.
+character_event = {
+	id = engineer.61
+	desc = EVTDESCengineer61
+	picture = GFX_evt_dwarf_king_seated
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # engineer.60
+
+	option = {
+		name = EVTOPTAengineer61
+		prestige = 100
+		add_society_currency_major_effect = yes
+		add_character_modifier = { name = engineer_elders_favour years = 5 }
+	}
+}
+
+# engineer.62 The Elders throw it out
+# Too new. The Elders of Zhufbar would see it broken up. In the lore, the
+# Dawi expelled for such ideas went to the manling cities and built the
+# Empire's first guns.
+# Scope: ROOT is a Dawi engineer of the holds.
+character_event = {
+	id = engineer.62
+	desc = EVTDESCengineer62
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # engineer.60
+
+	option = { # Bow to the Elders
+		name = EVTOPTAengineer62
+		add_society_currency_minor_effect = yes
+		ai_chance = { factor = 3 modifier = { factor = 2 trait = humble } }
+	}
+	option = { # Take the design to the manling cities
+		name = EVTOPTBengineer62
+		prestige = -50
+		remove_character_modifier = engineer_branch_hold
+		add_character_modifier = { name = engineer_branch_manling_dawi duration = -1 }
+		add_character_modifier = { name = engineer_radical_ideas years = 10 }
+		custom_tooltip = { text = engineer_go_to_nuln_tt }
+		hidden_effect = {
+			if = {
+				limit = {
+					is_ruler = no
+					309 = { owner = { trait = creature_human NOT = { character = ROOT } } }
+				}
+				309 = { owner = { save_event_target_as = engineer_new_lord } }
+				move_character = event_target:engineer_new_lord
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = ambitious }
+			modifier = { factor = 2 trait = genius }
+			modifier = { factor = 0 is_ruler = yes }
+		}
+	}
+}
+
+# engineer.63 A manling pupil
+# From engineer_dawi_teach_manlings. The ablest manling of the court (his
+# own, or his liege's) learns the craft. The tithe goes to Zhufbar.
+# Scope: ROOT is a Dawi engineer of the manling cities.
+character_event = {
+	id = engineer.63
+	desc = EVTDESCengineer63
+	picture = GFX_evt_dwarf_engineer
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # engineer_dawi_teach_manlings
+
+	immediate = {
+		if = {
+			limit = { any_courtier = { engineer_manling_pupil_trigger = yes } }
+			random_courtier = {
+				limit = { engineer_manling_pupil_trigger = yes }
+				preferred_limit = { learning = 14 }
+				save_event_target_as = engineer_pupil
+			}
+		}
+		else = {
+			liege = {
+				random_courtier = {
+					limit = { engineer_manling_pupil_trigger = yes }
+					preferred_limit = { learning = 14 }
+					save_event_target_as = engineer_pupil
+				}
+			}
+		}
+		d_zhufbar = {
+			holder_scope = { if = { limit = { NOT = { character = ROOT } } wealth = 25 } }
+		}
+	}
+
+	option = { # The craft, and not one rune
+		name = EVTOPTAengineer63
+		event_target:engineer_pupil = {
+			add_trait = engineer
+			opinion = { who = ROOT modifier = opinion_grateful years = 10 }
+		}
+		add_society_currency_minor_effect = yes
+	}
+}
+
+# engineer.65 The gun christening
+# From engineer_gun_christening. The ruler's name for the gun has been cut
+# into the barrel, and the Guildmaster pours the sacred oil.
+# Scope: ROOT is a gunner of Nuln.
+character_event = {
+	id = engineer.65
+	desc = EVTDESCengineer65
+	picture = GFX_evt_great_cannon
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # engineer_gun_christening
+
+	option = {
+		name = EVTOPTAengineer65
+		custom_tooltip = {
+			text = engineer_christening_roll_tt
+			hidden_effect = {
+				random_list = {
+					45 = { character_event = { id = engineer.66 } }
+					45 = { character_event = { id = engineer.67 } }
+					10 = {
+						modifier = { factor = 0.5 learning = 15 }
+						modifier = { factor = 0.7 trait = engineer }
+						character_event = { id = engineer.68 }
+					}
+				}
+			}
+		}
+	}
+}
+
+# engineer.66 The oil runs right: a siege gun
+# Scope: ROOT is a gunner of Nuln.
+character_event = {
+	id = engineer.66
+	desc = EVTDESCengineer66
+	picture = GFX_evt_great_cannon
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # engineer.65
+
+	option = {
+		name = EVTOPTAengineer66
+		add_character_modifier = { name = engineer_gun_for_sieges years = 5 }
+	}
+}
+
+# engineer.67 The oil runs left: a battle gun
+# Scope: ROOT is a gunner of Nuln.
+character_event = {
+	id = engineer.67
+	desc = EVTDESCengineer67
+	picture = GFX_evt_great_cannon
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # engineer.65
+
+	option = {
+		name = EVTOPTAengineer67
+		add_character_modifier = { name = engineer_gun_for_battle years = 5 }
+	}
+}
+
+# engineer.68 The oil pools on the barrel
+# Disaster is foretold: a flawed gun that will kill its own crew.
+# Scope: ROOT is a gunner of Nuln.
+character_event = {
+	id = engineer.68
+	desc = EVTDESCengineer68
+	picture = GFX_evt_burning_house
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # engineer.65
+
+	option = { # Melt it down
+		name = EVTOPTAengineer68
+		change_society_currency = -50
+		ai_chance = { factor = 2 }
+	}
+	option = { # Send it to the front anyway
+		name = EVTOPTBengineer68
+		add_character_modifier = { name = engineer_gun_ill_omen years = 5 }
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = greedy } }
+	}
+}
+
+# engineer.70 The notebooks (roll)
+# Two years after engineer_school_notebooks.
+# Scope: ROOT is an engineer of the Engineers School.
+character_event = {
+	id = engineer.70
+	hide_window = yes
+	is_triggered_only = yes # engineer_school_notebooks
+
+	immediate = {
+		remove_character_modifier = busy_engineer
+		remove_character_modifier = engineer_reading_notebooks
+		random_list = {
+			35 = {
+				modifier = { factor = 2 trait = genius }
+				modifier = { factor = 1.5 learning = 20 }
+				modifier = { factor = 0.3 has_character_flag = engineer_read_notebooks }
+				character_event = { id = engineer.71 }
+			}
+			35 = { character_event = { id = engineer.72 } }
+			30 = {
+				modifier = { factor = 0.7 learning = 18 }
+				character_event = { id = engineer.73 }
+			}
+		}
+	}
+}
+
+# engineer.71 A secret in the notebooks
+# Once in a lifetime the engineer learns for good what Leonardo knew.
+# Scope: ROOT is an engineer of the Engineers School.
+character_event = {
+	id = engineer.71
+	desc = EVTDESCengineer71
+	picture = GFX_evt_library
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # engineer.70
+
+	option = {
+		name = EVTOPTAengineer71
+		military_techpoints = 75
+		prestige = 100
+		add_society_currency_major_effect = yes
+		if = {
+			limit = { NOT = { has_character_flag = engineer_read_notebooks } }
+			set_character_flag = engineer_read_notebooks
+			add_character_modifier = { name = engineer_read_the_notebooks duration = -1 }
+		}
+	}
+}
+
+# engineer.72 A war engine on paper
+# Scope: ROOT is an engineer of the Engineers School.
+character_event = {
+	id = engineer.72
+	desc = EVTDESCengineer72
+	picture = GFX_evt_steam_tank
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # engineer.70
+
+	option = {
+		name = EVTOPTAengineer72
+		military_techpoints = 50
+		add_society_currency_minor_effect = yes
+	}
+}
+
+# engineer.73 The cipher holds
+# Scope: ROOT is an engineer of the Engineers School.
+character_event = {
+	id = engineer.73
+	desc = EVTDESCengineer73
+	picture = GFX_evt_library
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # engineer.70
+
+	option = {
+		name = EVTOPTAengineer73
+		add_society_currency_trivial_effect = yes
 	}
 }

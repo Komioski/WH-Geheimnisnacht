@@ -5,8 +5,9 @@
 #
 # The universities of men: Altdorf, Nuln, Streissen, Praag, Remas,
 # Miragliano, Magritta and Martek. A young noble may ask to study, or a
-# parent may send a child (send_son_to_university). The student studies
-# for four years and comes home changed: learned, drunk, worn out, married,
+# parent may send a child (send_son_to_university). The student lives at
+# the court of the university's Rector for four years, writes home halfway,
+# and comes home changed: learned, drunk, worn out, married,
 # sick, bookish, debauched, or, in Araby, a sorcerer of the flame.
 # A university is closed while its city is held by Chaos, the dead or the
 # greenskins. Bretonnia's Grail faiths do not send their children; Araby's
@@ -14,12 +15,16 @@
 #
 # Asking and sending                     university.1 - university.5
 # Graduation                             university.10 - university.18
+# The letter home                        university.20 - university.21
+# The Rectors                            university.30 - university.32
 #
 # Callers:
 #   common/on_actions/wh_on_actions.txt: university.1 on the five-year pulse
 #     list university_wish.
+#   common/on_actions/wh_on_actions.txt: university.30 on on_startup,
+#     university.31 on on_death.
 #   decisions/wh_empire_decisions.txt: send_son_to_university fires
-#     university.4.
+#     university.4. decisions/WHG_university_decisions.txt: endow_university.
 # Scripted effects: common/scripted_effects/wh_university_effects.txt
 # Scripted triggers: common/scripted_triggers/wh_university_triggers.txt
 # Event modifiers: common/event_modifiers/wh_university_modifiers.txt
@@ -317,25 +322,39 @@ character_event = {
 			event_target:university_parent = { save_event_target_as = university_home }
 		}
 		else_if = {
-			limit = { is_ruler = no liege = { NOT = { character = ROOT } } }
-			liege = { save_event_target_as = university_home }
+			limit = {
+				event_target:university_home_title = {
+					has_holder = yes
+					holder_scope = { NOT = { character = ROOT } }
+				}
+			}
+			event_target:university_home_title = {
+				holder_scope = { save_event_target_as = university_home }
+			}
 		}
 		else = { save_event_target_as = university_home }
 		random_list = {
 			10 = { # Drunkard
 				modifier = { factor = 0 trait = drunkard }
+				modifier = { factor = 1.5 has_character_flag = university_funded }
 				modifier = { factor = 1.33 trait = gluttonous }
 				modifier = { factor = 0.8 trait = temperate }
 				event_target:university_home = { character_event = { id = university.11 } }
 			}
 			10 = { # Better educated
 				modifier = { factor = 0 university_can_improve_education_trigger = no }
+				modifier = { factor = 1.5 has_character_flag = university_funded }
+				modifier = {
+					factor = 1.25
+					location = { has_province_modifier = university_endowed }
+				}
 				modifier = { factor = 1.33 trait = diligent }
 				modifier = { factor = 0.8 trait = slothful }
 				event_target:university_home = { character_event = { id = university.12 } }
 			}
 			10 = { # Worn out
 				modifier = { factor = 0 trait = depressed }
+				modifier = { factor = 1.5 has_character_flag = university_frugal }
 				modifier = { factor = 1.33 trait = kind }
 				modifier = { factor = 0.8 trait = envious }
 				event_target:university_home = { character_event = { id = university.13 } }
@@ -354,12 +373,18 @@ character_event = {
 			}
 			10 = { # Scholar
 				modifier = { factor = 0 trait = scholar }
+				modifier = { factor = 1.25 has_character_flag = university_frugal }
+				modifier = {
+					factor = 1.25
+					location = { has_province_modifier = university_endowed }
+				}
 				modifier = { factor = 1.33 trait = shy }
 				modifier = { factor = 0.8 trait = gregarious }
 				event_target:university_home = { character_event = { id = university.16 } }
 			}
 			10 = { # Hedonist
 				modifier = { factor = 0 trait = hedonist }
+				modifier = { factor = 1.5 has_character_flag = university_funded }
 				modifier = { factor = 1.33 trait = lustful }
 				modifier = { factor = 0.8 trait = chaste }
 				event_target:university_home = { character_event = { id = university.17 } }
@@ -377,6 +402,8 @@ character_event = {
 				event_target:university_home = { character_event = { id = university.16 } }
 			}
 		}
+		clr_character_flag = university_funded
+		clr_character_flag = university_frugal
 	}
 }
 
@@ -599,6 +626,199 @@ character_event = {
 			}
 			magic_power_random_effect = yes
 			enable_magic_xp_effect = yes
+		}
+	}
+}
+
+###############################################################################
+# The letter home
+# Two years into his studies the student writes home. The parent may send
+# money, which makes better learning and worse vices likelier alike, or
+# tell him to live on what he has, which makes him a harder scholar and
+# more often worn out. The flags are read at graduation (university.10).
+###############################################################################
+
+# university.20 Halfway through (dispatch)
+# Scope: ROOT is the student.
+character_event = {
+	id = university.20
+	hide_window = yes
+	is_triggered_only = yes # university_enrol_effect
+
+	trigger = {
+		has_character_flag = university_student
+		event_target:university_parent = { is_alive = yes NOT = { character = ROOT } }
+	}
+
+	immediate = {
+		save_event_target_as = university_student
+		event_target:university_parent = { letter_event = { id = university.21 } }
+	}
+}
+
+# university.21 A letter from the university
+# Each university writes of its own city.
+# Scope: ROOT is the parent, FROM is the student. event_target:university
+# is the university.
+letter_event = {
+	id = university.21
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_altdorf } }
+		text = EVTDESCuniversity21_altdorf
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_nuln } }
+		text = EVTDESCuniversity21_nuln
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_streissen } }
+		text = EVTDESCuniversity21_streissen
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_praag } }
+		text = EVTDESCuniversity21_praag
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_remas } }
+		text = EVTDESCuniversity21_remas
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_miragliano } }
+		text = EVTDESCuniversity21_miragliano
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_magritta } }
+		text = EVTDESCuniversity21_magritta
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_martek } }
+		text = EVTDESCuniversity21_martek
+	}
+
+	is_triggered_only = yes # university.20
+
+	option = { # Send a purse of silver
+		name = EVTOPTAuniversity21
+		scaled_wealth = -0.05
+		FROM = { set_character_flag = university_funded }
+		custom_tooltip = { text = university_funded_tt }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0.2 NOT = { wealth = 100 } }
+			modifier = { factor = 0.3 trait = greedy }
+			modifier = { factor = 2 trait = charitable }
+		}
+	}
+	option = { # He must learn to live within his means
+		name = EVTOPTBuniversity21
+		FROM = { set_character_flag = university_frugal }
+		custom_tooltip = { text = university_frugal_tt }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 1.5 trait = temperate }
+		}
+	}
+}
+
+###############################################################################
+# The Rectors
+# Every university is held by a Rector, and the students live at his court.
+# The Rectors are created at the game start and replaced by a scholar of the
+# same faith and people when they die (wh_university_effects.txt).
+###############################################################################
+
+# university.30 The Rectors take their chairs
+# Once a game, from the multiplayer host's start.
+# Scope: ROOT is the host player.
+character_event = {
+	id = university.30
+	hide_window = yes
+	is_triggered_only = yes # on_startup
+	only_playable = yes
+	ai = no
+
+	trigger = {
+		is_multiplayer_host_character = yes
+		NOT = { has_global_flag = university_rectors_seated }
+	}
+
+	immediate = {
+		set_global_flag = university_rectors_seated
+		university_rectors_all_effect = yes
+	}
+}
+
+# university.31 A Rector dies
+# A scholar of his faith and people is chosen and takes all his
+# university chairs (university.32).
+# Scope: ROOT is the dead Rector.
+character_event = {
+	id = university.31
+	hide_window = yes
+	is_triggered_only = yes # on_death
+	only_playable = yes
+
+	trigger = {
+		any_demesne_title = { university_title_trigger = yes }
+	}
+
+	immediate = {
+		random_list = {
+			80 = {
+				modifier = { factor = 0 religion = ormazd }
+				create_character = {
+					random_traits = yes
+					dynasty = RANDOM
+					religion = ROOT
+					culture = ROOT
+					female = no
+					age = 52
+					attributes = { learning = 12 }
+				}
+			}
+			20 = {
+				modifier = { factor = 0 religion = ormazd }
+				create_character = {
+					random_traits = yes
+					dynasty = RANDOM
+					religion = ROOT
+					culture = ROOT
+					female = yes
+					age = 49
+					attributes = { learning = 12 }
+				}
+			}
+			10 = {
+				modifier = { factor = 0 NOT = { religion = ormazd } }
+				create_character = {
+					random_traits = yes
+					dynasty = RANDOM
+					religion = ROOT
+					culture = ROOT
+					female = no
+					age = 55
+					attributes = { learning = 12 }
+				}
+			}
+		}
+		new_character = {
+			university_rector_traits_effect = yes
+			character_event = { id = university.32 }
+		}
+	}
+}
+
+# university.32 The new Rector takes the chair
+# Scope: ROOT is the new Rector, FROM the dead one.
+character_event = {
+	id = university.32
+	hide_window = yes
+	is_triggered_only = yes # university.31
+
+	immediate = {
+		FROM = {
+			any_demesne_title = { limit = { university_title_trigger = yes } grant_title = ROOT }
 		}
 	}
 }

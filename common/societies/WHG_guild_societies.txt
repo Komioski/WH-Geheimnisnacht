@@ -8,10 +8,11 @@
 #   daemonsmiths_society  Hashut's daemonsmiths. Switched off (active has
 #                         always = no): no loc yet and its five powers
 #                         (daemonsmith_*) are not written.
-#   engineers_guild       Dawi, Tilean and (after the Imperial engineering
-#                         school opens) Empire engineers. Switched off: three
-#                         powers (military_engineering, engineer_masterwork,
-#                         grandmaster_society_wonder_upgrade) are not written.
+#   engineers_guild       Dawi, Tilean and (a year after the lord of Altdorf
+#                         founds the Imperial Engineers School) Empire
+#                         engineers. Events: events/WHG_engineer_events.txt
+#                         (engineer); decisions:
+#                         decisions/WHG_engineer_decisions.txt.
 #   boyar_duma            The Boyar Duma of Kislev: nobles and Erengrad guild
 #                         masters, politics, favours and trade.
 #                         Events: events/WHG_kislev_society_events.txt
@@ -20,6 +21,11 @@
 #                         triggers/effects: wh_kislev_society_triggers.txt,
 #                         wh_kislev_society_effects.txt. Borrows
 #                         interface/wh_kislev_societies.gfx art.
+#   dawi_elder_council    The Council of Elders of the Dawi: kings, thanes and
+#                         Longbeards, law, feuds, debts and the sagas.
+#                         Events: events/WHG_dawi_elder_events.txt
+#                         (dawielder); decisions:
+#                         decisions/WHG_dawi_elder_decisions.txt.
 #
 # Every society here is indestructible with a startup_populate that checks
 # is_in_society = no (the game uses it to fill starting ranks and pick heads).
@@ -363,7 +369,19 @@ daemonsmiths_society = {
 }
 
 ###############################################################################
-# Engineers Guild (Dawi, Tilea, Empire) - switched off, unfinished
+# Engineers Guild (Dawi, Tilea, Empire)
+# One guild with three homes. Each member belongs to a branch, a character
+# modifier set when he joins (engineer.7 in events/WHG_engineer_events.txt):
+#   - the Dawi: the crafts halls of the holds (Zhufbar), or the Imperial
+#     Dwarf clans of the manling cities (Nuln, Altdorf), who teach manlings
+#     the craft but never the runes and pay the guild its tithe;
+#   - the Imperial Engineers School of Altdorf, with the Tilean masters
+#     (opened by the found_imperial_engineer_school decision);
+#   - the Imperial Gunnery School of Nuln, open to Imperial manlings while
+#     its wonder upgrade stands in Nuln and Nuln is in Imperial hands.
+# Each branch has its own power and its own life events. Powers:
+# decisions/WHG_engineer_decisions.txt. Lore: Dwarf Player's Guide p.87-90,
+# WFRP Companion p.99-102 (the Gunnery School).
 ###############################################################################
 engineers_guild = {
 	primary_attribute = learning
@@ -372,7 +390,7 @@ engineers_guild = {
 	opinion_per_rank_above = +5
 	sound = hermetic_society_interface
 
-	active = { has_dlc = "Mystics" always = no }
+	active = { has_dlc = "Mystics" }
 	indestructible = yes
 
 	can_join_society = {
@@ -386,7 +404,10 @@ engineers_guild = {
 			custom_tooltip = {
 				text = engineers_no_imperial_school_tt
 				culture_group = imperial_group
-				had_global_flag = { flag = imperial_engineering_school months >= 12 }
+				OR = {
+					engineer_gunnery_school_open_trigger = yes
+					engineer_school_open_trigger = yes
+				}
 			}
 		}
 		learning = 10
@@ -413,7 +434,6 @@ engineers_guild = {
 			culture_group = imperial_group
 		}
 		age = 16
-		#If something else is added here, it could break apprenticeship. Create an event if they can get kicked out. title_hermetics_apprentice
 	}
 
 	society_rank = {
@@ -422,7 +442,6 @@ engineers_guild = {
 		startup_limit = 10
 		modifier = {
 			learning = 1
-			#church_opinion = -10
 		}
 		decisions = { engineer_experiment }
 	}
@@ -434,9 +453,15 @@ engineers_guild = {
 		modifier = {
 			learning = 1
 			stewardship = 1
-			#church_opinion = -10
 		}
-		decisions = { engineer_training economic_engineering military_engineering }
+		decisions = {
+			engineer_training
+			economic_engineering
+			military_engineering
+			engineer_hold_petition
+			engineer_dawi_teach_manlings
+			engineer_gun_christening
+		}
 	}
 
 	society_rank = {
@@ -446,10 +471,9 @@ engineers_guild = {
 		modifier = {
 			learning = 2
 			stewardship = 1
-			#church_opinion = -10
 			build_time_modifier = -0.10
 		}
-		decisions = { deploy_war_machines dwarf_master_engineer_training }
+		decisions = { deploy_war_machines dwarf_master_engineer_training engineer_school_notebooks }
 	}
 
 	society_rank = {
@@ -459,10 +483,9 @@ engineers_guild = {
 		modifier = {
 			learning = 3
 			stewardship = 1
-			#church_opinion = -10
 			build_time_modifier = -0.25
 		}
-		decisions = { engineer_masterwork grandmaster_society_wonder_upgrade }
+		decisions = { engineer_masterwork }
 	}
 
 	plots = { }
@@ -485,10 +508,6 @@ engineers_guild = {
 		has_trait = { value = 1 trait = quick }
 		has_trait = { value = 1 trait = brilliant }
 		has_trait = { value = 1 trait = shrewd }
-		# has_trait = {
-		# value = 1
-		# trait = just
-		# }
 		society_rank = { rank = 4 value = 10 }
 	}
 
@@ -520,7 +539,11 @@ engineers_guild = {
 			is_adult = yes
 			is_in_society = no
 			is_dumb_trigger = no
-			OR = { culture_group = dwarf_group culture_group = tilean_group }
+			OR = {
+				culture_group = dwarf_group
+				culture_group = tilean_group
+				AND = { culture_group = imperial_group engineer_gunnery_school_open_trigger = yes }
+			}
 			NOT = { is_priest = yes }
 		}
 	}
@@ -637,5 +660,150 @@ boyar_duma = {
 		modifier = { factor = 1.5 stewardship = 15 }
 		modifier = { factor = 1.5 is_patrician = yes }
 		modifier = { factor = 0.1 has_landed_title = e_kislev }
+	}
+}
+
+###############################################################################
+# Council of Elders (Dawi)
+# The elders of the clans: kings, thanes and Longbeards together. A Dawi has a
+# seat by right of age (a Longbeard, or 200 years) or as head of a clan (any
+# ruler). Learning first, with diplomacy beside it: the elders keep the
+# Books of Grudges and Debt, judge breaches of Dwarf law, end feuds between
+# clans, give nicknames and set the holy days. Lore: Dwarf Player's Guide
+# p.29-37 and 54. Powers: decisions/WHG_dawi_elder_decisions.txt. Events:
+# events/WHG_dawi_elder_events.txt (dawielder).
+###############################################################################
+dawi_elder_council = {
+	primary_attribute = learning
+	opinion_to_other_members = 10
+	opinion_per_rank_above = 10
+	sound = hermetic_society_interface
+	society_ranks_gfx = generic_ranks
+	non_interference = { always = yes }
+
+	active = { has_dlc = "Mystics" }
+	indestructible = yes
+
+	can_join_society = {
+		hidden_trigger = {
+			NAND = { ai = yes is_society_rank_full = { society = dawi_elder_council rank = 1 } }
+		}
+		hidden_trigger = { mercenary = no holy_order = no }
+		dawielder_can_sit_trigger = yes
+		custom_tooltip = {
+			text = dawielder_old_enough_tt
+			dawielder_old_enough_trigger = yes
+		}
+		custom_tooltip = {
+			text = did_not_betray_society
+			NOT = { has_character_flag = betrayed_dawi_elder_council }
+		}
+	}
+
+	show_society = { religion_group = dwarf_gods_group }
+
+	potential = {
+		religion_group = dwarf_gods_group
+		NOR = { trait = dwarf_slayer trait = dwarf_slayer_king }
+	}
+
+	society_rank = { # Clan Elder
+		level = 1
+		limit = 60
+		startup_limit = 15
+		modifier = {
+			learning = 1
+			diplomacy = 1
+			monthly_character_prestige = 0.1
+			dwarf_gods_group_opinion = 5
+		}
+		decisions = { dawielder_tell_the_sagas }
+	}
+
+	society_rank = { # Great Beard
+		level = 2
+		limit = 30
+		startup_limit = 8
+		modifier = {
+			learning = 1
+			diplomacy = 1
+			vassal_opinion = 3
+			monthly_character_prestige = 0.2
+			dwarf_gods_group_opinion = 10
+		}
+		decisions = { dawielder_bestow_nickname dawielder_day_of_remembrance dawielder_book_of_debt }
+	}
+
+	society_rank = { # Chief Elder
+		level = 3
+		limit = 12
+		startup_limit = 4
+		modifier = {
+			learning = 2
+			diplomacy = 2
+			vassal_opinion = 5
+			monthly_character_prestige = 0.3
+			dwarf_gods_group_opinion = 15
+		}
+		decisions = { dawielder_sit_in_judgement dawielder_end_a_feud dawielder_lead_the_longbeards }
+	}
+
+	society_rank = { # Elder Loremaster
+		level = 4
+		limit = 4
+		startup_limit = 1
+		modifier = {
+			learning = 3
+			diplomacy = 2
+			vassal_opinion = 10
+			monthly_character_prestige = 0.5
+			dwarf_gods_group_opinion = 25
+		}
+		decisions = { dawielder_write_the_annals dawielder_call_the_council }
+	}
+
+	plots = { }
+
+	monthly_currency_gain = {
+		name = currency_name_dawi_elder_council
+
+		per_attribute = { name = learning value = 0.4 }
+		per_attribute = { name = diplomacy value = 0.4 }
+		has_trait = { trait = longbeard value = 3 }
+		has_trait = { trait = patient value = 2 }
+		has_trait = { trait = just value = 2 }
+		has_trait = { trait = stubborn value = 1 }
+		has_trait = { trait = humble value = 1 }
+		has_trait = { trait = diligent value = 1 }
+		has_trait = { trait = scholar value = 1 }
+		has_trait = { trait = grey_eminence value = 2 }
+		has_trait = { trait = charismatic_negotiator value = 1 }
+		society_rank = { rank = 4 value = 10 }
+	}
+
+	member_score_per_attribute = 3
+	member_score_per_rank = 100
+
+	# The High King leads the elders of the Karaz Ankor when there is one.
+	member_score = {
+		value = 10
+		modifier = { factor = 10 has_landed_title = e_karak_ankor }
+		modifier = { factor = 2 is_ruler = yes }
+		modifier = { factor = 2 higher_tier_than = COUNT }
+		modifier = { factor = 1.5 trait = longbeard }
+		modifier = { factor = 1.3 trait = patient }
+		modifier = { factor = 1.2 trait = just }
+		modifier = { factor = 0.5 trait = infirm }
+	}
+
+	startup_populate = {
+		trigger = {
+			dawielder_can_sit_trigger = yes
+			dawielder_old_enough_trigger = yes
+			is_in_society = no
+			controls_religion = no
+			prisoner = no
+			NOR = { mercenary = yes holy_order = yes }
+		}
 	}
 }

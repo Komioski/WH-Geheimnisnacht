@@ -1,0 +1,1459 @@
+###############################################################################
+# Dawi events
+# Namespace: dawi (was DR_dwarfs in DR_dwarfs_events.txt)
+# Faction: Dwarfs
+#
+# The life of the Dawi of the Karaz Ankor: the Book of Grudges and the
+# settling of grudges, and the Slayers who seek a death to wipe out their
+# shame.
+#
+# Lore: every Dwarf king keeps a Dammaz Kron, a Book of Grudges, for every
+# wrong done to his hold or clan; a grudge is struck out only when amends
+# are made or vengeance taken, and an unsettled grudge passes to the heirs.
+# The greenskins, the Skaven and the Chaos Dwarfs are already written down as
+# whole races in the High King's Great Book. A Dawi who dishonours himself
+# goes to the temple of Grimnir for the Slayer ritual (Drengidumar): his head
+# shaved to an orange crest, his shame tattooed on his skin, and no more
+# armour, wealth or clan until he finds a death worthy of Grimnir. Karak
+# Kadrin, home of the Shrine of Grimnir, is ruled by the Slayer Kings. An
+# oathbreaker who will not take the Slayer's path is Unbaraki, the worst
+# thing a Dwarf can be.
+# Sources: WFRP 4E Dwarf Player's Guide (Book of Grudges p.32-33, Slayers in
+# Karaz Ankor p.23, Dwarf Slayer p.59, Grimnir p.139, Khazalid p.70-73).
+#
+# Grudges                                  dawi.1 - dawi.16
+# Demanding compensation                   dawi.20 - dawi.25
+# Unsettled grudges                        dawi.30
+# The Slayer's path                        dawi.40 - dawi.43
+# Slayers at large                         dawi.50 - dawi.60
+#
+# Fired from common/on_actions/wh_on_actions.txt: dawi.1 on_adulthood,
+# dawi.2 on_war_ended_victory, dawi.4 on_war_ended_defeat, dawi.10 on_death,
+# dawi.12 on_divorce, dawi.16 on
+# CALL_ALLY_INTERACTION_DECLINE_EVENT, dawi.43 on_new_holder_inheritance, dawi.25 on the
+# five-year pulse, dawi.30, dawi.40, dawi.42 and dawi.50 on the bi-yearly
+# pulse. dawi.6 from the settle_grudge CB (cb_types_dwarf.txt); dawi.5 and
+# dawi.20 from decisions/wh_dawi_decisions.txt; dawi.9 from plot_events,
+# job_spymaster and on_action_events.
+# Scripted triggers: common/scripted_triggers/wh_dawi_triggers.txt
+# Scripted effects: common/scripted_effects/wh_dawi_effects.txt
+# Loc: localisation/00_WHG_dwarf_events.csv
+###############################################################################
+
+namespace = dawi
+
+###############################################################################
+# Grudges
+# Every grudge is the opinion modifier opinion_dwarf_grudge held by the wronged
+# Dawi and the kin who take it up. dawi_enter_grudge_effect writes it,
+# dawi_settle_grudge_effect strikes it out; both read the offender from
+# event_target:grudge_offender.
+###############################################################################
+
+# dawi.1 The clan's book is read to a new adult
+# A young Dawi of a clan takes up the grudges his parents hold.
+# Scope: ROOT is the new adult.
+character_event = {
+	id = dawi.1
+	desc = EVTDESCdawi1
+	picture = GFX_evt_dwarf_grudge_book
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_adulthood
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		dawi_grudge_keeper_trigger = yes
+		OR = {
+			father_even_if_dead = {
+				dynasty = ROOT
+				any_opinion_modifier_target = {
+					is_alive = yes
+					reverse_has_opinion_modifier = {
+						who = PREVPREV
+						modifier = opinion_dwarf_grudge
+					}
+				}
+			}
+			mother_even_if_dead = {
+				dynasty = ROOT
+				any_opinion_modifier_target = {
+					is_alive = yes
+					reverse_has_opinion_modifier = {
+						who = PREVPREV
+						modifier = opinion_dwarf_grudge
+					}
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAdawi1
+		custom_tooltip = {
+			text = dawi_inherit_grudges_tt
+			hidden_effect = {
+				father_even_if_dead = {
+					limit = { dynasty = ROOT }
+					any_opinion_modifier_target = {
+						limit = {
+							is_alive = yes
+							NOT = { character = ROOT }
+							reverse_has_opinion_modifier = {
+								who = PREVPREV
+								modifier = opinion_dwarf_grudge
+							}
+						}
+						reverse_opinion = {
+							who = ROOT
+							modifier = opinion_dwarf_grudge
+							months = 12000
+						}
+					}
+				}
+				mother_even_if_dead = {
+					limit = { dynasty = ROOT }
+					any_opinion_modifier_target = {
+						limit = {
+							is_alive = yes
+							NOT = { character = ROOT }
+							reverse_has_opinion_modifier = {
+								who = PREVPREV
+								modifier = opinion_dwarf_grudge
+							}
+						}
+						reverse_opinion = {
+							who = ROOT
+							modifier = opinion_dwarf_grudge
+							months = 12000
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# dawi.2 A grudge for a lost war
+# A Dawi of a clan lost a war to FROM, as defender (on_war_ended_victory) or
+# as attacker (through dawi.4). The grudge is written.
+# Scope: ROOT is the Dawi who lost, FROM the winner.
+character_event = {
+	id = dawi.2
+	desc = EVTDESCdawi2
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_war_ended_victory, dawi.4
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		dawi_grudge_keeper_trigger = yes
+		FROM = { is_alive = yes dawi_race_grudge_trigger = no dawi_grudge_against_trigger = no }
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = grudge_offender }
+	}
+
+	option = {
+		name = EVTOPTAdawi2
+		dawi_enter_grudge_effect = yes
+	}
+}
+
+# dawi.3 Kin take up the grudge
+# Scope: ROOT is a kinsman, FROM the Dawi who wrote the grudge.
+character_event = {
+	id = dawi.3
+	desc = EVTDESCdawi3
+	picture = GFX_evt_dwarf_grudge_book
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # dawi_enter_grudge_effect
+
+	option = {
+		name = EVTOPTAdawi3
+		event_target:grudge_offender = {
+			reverse_opinion = { who = ROOT modifier = opinion_dwarf_grudge months = 12000 }
+		}
+		piety = 10
+	}
+}
+
+# dawi.4 An attacking Dawi lost his war
+# Passes the grudge on to the attacker, with the defender as FROM.
+# Scope: ROOT is the defender who won, FROM the Dawi attacker.
+character_event = {
+	id = dawi.4
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_ended_defeat
+
+	trigger = {
+		dawi_race_grudge_trigger = no
+		FROM = { dawi_grudge_keeper_trigger = yes }
+	}
+
+	immediate = {
+		FROM = { character_event = { id = dawi.2 } }
+	}
+}
+
+# dawi.5 The Book of Grudges
+# From the open_book_of_grudges decision: lists everyone the clan's book
+# names who still lives.
+# Scope: ROOT is the Dawi ruler.
+character_event = {
+	id = dawi.5
+	desc = {
+		text = EVTDESCdawi5
+		trigger = {
+			any_opinion_modifier_target = {
+				is_alive = yes
+				reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCdawi5b
+		trigger = {
+			NOT = {
+				any_opinion_modifier_target = {
+					is_alive = yes
+					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+				}
+			}
+		}
+	}
+	picture = GFX_evt_dwarf_grudge_book
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # open_book_of_grudges
+
+	option = {
+		name = EVTOPTAdawi5
+		any_opinion_modifier_target = {
+			limit = {
+				is_alive = yes
+				reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+			}
+			custom_tooltip = { text = dawi_grudge_entry_tt }
+		}
+	}
+}
+
+# dawi.6 The grudge war is won
+# The winner of a settle_grudge war takes amends from event_target:
+# grudge_offender (the enemy ruler or one of his vassals): his treasury, his
+# kin as hostages, or his head. Any of them strikes out the grudge.
+# Scope: ROOT is the Dawi who won the war.
+character_event = {
+	id = dawi.6
+	desc = EVTDESCdawi6
+	picture = GFX_evt_dwarf_grudge_war
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # settle_grudge CB on_success
+
+	trigger = {
+		event_target:grudge_offender = { is_alive = yes }
+	}
+
+	option = { # Empty his treasury
+		name = EVTOPTAdawi6
+		event_target:grudge_offender = { transfer_scaled_wealth = { to = ROOT value = 4 } }
+		piety = 50
+		dawi_settle_grudge_effect = yes
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 3 trait = greedy }
+			modifier = { factor = 2 trait = content }
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+	option = { # Take his kin as hostages
+		name = EVTOPTBdawi6
+		event_target:grudge_offender = {
+			any_courtier = { limit = { dynasty = event_target:grudge_offender } imprison = ROOT }
+		}
+		piety = 50
+		dawi_settle_grudge_effect = yes
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 trait = patient }
+			modifier = { factor = 2 trait = deceitful }
+		}
+	}
+	option = { # His head
+		name = EVTOPTCdawi6
+		piety = 100
+		dawi_settle_grudge_effect = yes
+		event_target:grudge_offender = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_execution killer = ROOT } }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 4 trait = wroth }
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 0.2 trait = kind }
+		}
+	}
+}
+
+# dawi.7 Your name in a Book of Grudges
+# Scope: ROOT is the offender, FROM the Dawi who wrote the grudge.
+character_event = {
+	id = dawi.7
+	desc = EVTDESCdawi7
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # dawi_enter_grudge_effect
+
+	option = {
+		name = EVTOPTAdawi7
+	}
+}
+
+# dawi.8 Cast out of the clan
+# A clansman who wronged his own clan is struck from it and founds his own.
+# Scope: ROOT is the outcast, FROM the Dawi who wrote the grudge.
+character_event = {
+	id = dawi.8
+	desc = EVTDESCdawi8
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # dawi_enter_grudge_effect
+
+	option = {
+		name = EVTOPTAdawi8
+	}
+}
+
+# dawi.9 A plot uncovered
+# FROM plotted against ROOT (dwarf_grudge_plot_discovered), or murdered one of
+# ROOT's kin (dwarf_grudge_plot_discovered_dead_relative). The grudge is
+# written.
+# Scope: ROOT is the wronged Dawi, FROM the plotter.
+character_event = {
+	id = dawi.9
+	desc = {
+		text = EVTDESCdawi9
+		trigger = { NOT = { has_character_flag = dwarf_grudge_plot_discovered_dead_relative } }
+	}
+	desc = {
+		text = EVTDESCdawi9b
+		trigger = { has_character_flag = dwarf_grudge_plot_discovered_dead_relative }
+	}
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # plot_events, job_spymaster, on_action_events
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		dawi_grudge_keeper_trigger = yes
+		FROM = { is_alive = yes dawi_race_grudge_trigger = no }
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = grudge_offender }
+	}
+
+	option = {
+		name = EVTOPTAdawi9
+		if = {
+			limit = { FROM = { dawi_grudge_against_trigger = no } }
+			dawi_enter_grudge_effect = yes
+		}
+		clr_character_flag = dwarf_grudge_plot_discovered
+		clr_character_flag = dwarf_grudge_plot_discovered_dead_relative
+	}
+}
+
+# dawi.10 A Dawi is slain
+# The killer of a Dawi of a clan is passed to the heir, if the heir is of the
+# same clan and the killer is not.
+# Scope: ROOT is the dead Dawi.
+character_event = {
+	id = dawi.10
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		dawi_grudge_keeper_trigger = yes
+		killer = { dawi_race_grudge_trigger = no NOT = { dynasty = ROOT } }
+		current_heir = { dynasty = ROOT }
+	}
+
+	immediate = {
+		killer = { save_event_target_as = grudge_offender }
+		current_heir = { character_event = { id = dawi.11 } }
+	}
+}
+
+# dawi.11 The heir swears vengeance
+# Scope: ROOT is the heir, FROM the slain Dawi.
+character_event = {
+	id = dawi.11
+	desc = EVTDESCdawi11
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # dawi.10
+
+	trigger = {
+		event_target:grudge_offender = { is_alive = yes NOT = { character = ROOT } }
+	}
+
+	option = {
+		name = EVTOPTAdawi11
+		dawi_enter_grudge_effect = yes
+	}
+}
+
+# dawi.12 Oathgold for a broken marriage
+# A Dawi of a clan has been divorced: by Dawi law the one who broke the
+# marriage oath owes oathgold, or the clan writes a grudge.
+# Scope: ROOT is the divorced Dawi, FROM the divorcer.
+character_event = {
+	id = dawi.12
+	desc = EVTDESCdawi12
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_divorce
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		dawi_grudge_keeper_trigger = yes
+		FROM = { is_alive = yes NOT = { dynasty = ROOT } }
+	}
+
+	option = {
+		name = EVTOPTAdawi12
+		custom_tooltip = { text = dawi_oathgold_demanded_tt }
+		FROM = { character_event = { id = dawi.13 } }
+		if = { limit = { is_lover = FROM } remove_lover = FROM }
+	}
+}
+
+# dawi.13 Oathgold demanded
+# The divorcer pays (more the higher his rank) or refuses.
+# Scope: ROOT is the divorcer, FROM the divorced Dawi.
+character_event = {
+	id = dawi.13
+	desc = EVTDESCdawi13
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # dawi.12
+
+	option = { # Pay
+		name = EVTOPTAdawi13
+		trigger = {
+			OR = {
+				AND = { is_ruler = no wealth = 50 }
+				AND = { tier = BARON wealth = 100 }
+				AND = { tier = COUNT wealth = 250 }
+				AND = { tier = DUKE wealth = 500 }
+				AND = { tier = KING wealth = 750 }
+				AND = { tier = EMPEROR wealth = 1000 }
+			}
+		}
+		if = { limit = { is_ruler = no } wealth = -50 FROM = { wealth = 50 } }
+		else_if = { limit = { tier = BARON } wealth = -100 FROM = { wealth = 100 } }
+		else_if = { limit = { tier = COUNT } wealth = -250 FROM = { wealth = 250 } }
+		else_if = { limit = { tier = DUKE } wealth = -500 FROM = { wealth = 500 } }
+		else_if = { limit = { tier = KING } wealth = -750 FROM = { wealth = 750 } }
+		else = { wealth = -1000 FROM = { wealth = 1000 } }
+		FROM = { character_event = { id = dawi.14 } }
+		ai_chance = {
+			factor = 55
+			modifier = { factor = 1.5 trait = kind }
+			modifier = { factor = 1.5 trait = charitable }
+			modifier = { factor = 1.5 trait = humble }
+			modifier = { factor = 1.5 trait = craven }
+			modifier = { factor = 2 trait = creature_dwarf }
+			modifier = { factor = 0.5 trait = greedy }
+			modifier = { factor = 0.5 trait = proud }
+			modifier = { factor = 0.5 is_rival = FROM }
+			modifier = { factor = 1.5 opinion = { who = FROM value = 50 } }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBdawi13
+		custom_tooltip = { text = dawi_oathgold_refused_tt }
+		FROM = { character_event = { id = dawi.15 } }
+		ai_chance = {
+			factor = 45
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 1.5 trait = stubborn }
+			modifier = { factor = 1.5 trait = greedy }
+			modifier = { factor = 1.5 trait = ambitious }
+		}
+	}
+}
+
+# dawi.14 The oathgold is paid
+# Scope: ROOT is the divorced Dawi, FROM the divorcer.
+character_event = {
+	id = dawi.14
+	desc = EVTDESCdawi14
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # dawi.13
+
+	option = {
+		name = EVTOPTAdawi14
+	}
+}
+
+# dawi.15 The oathgold is refused
+# Scope: ROOT is the divorced Dawi, FROM the divorcer.
+character_event = {
+	id = dawi.15
+	desc = EVTDESCdawi15
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # dawi.13
+
+	immediate = {
+		FROM = { save_event_target_as = grudge_offender }
+	}
+
+	option = {
+		name = EVTOPTAdawi15
+		if = {
+			limit = { FROM = { dawi_grudge_against_trigger = no } }
+			dawi_enter_grudge_effect = yes
+		}
+	}
+}
+
+# dawi.16 An ally refuses the call to arms
+# Scope: ROOT is the Dawi who called, FROM the ally who refused.
+character_event = {
+	id = dawi.16
+	desc = EVTDESCdawi16
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # CALL_ALLY_INTERACTION_DECLINE_EVENT
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		dawi_grudge_keeper_trigger = yes
+		FROM = {
+			is_alive = yes
+			NOT = { character = ROOT }
+			dawi_race_grudge_trigger = no
+			dawi_grudge_against_trigger = no
+		}
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = grudge_offender }
+	}
+
+	option = { # Write it down
+		name = EVTOPTAdawi16
+		dawi_enter_grudge_effect = yes
+		ai_chance = { factor = 90 }
+	}
+	option = { # They had their reasons
+		name = EVTOPTBdawi16
+		piety = -25
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 is_friend = FROM }
+			modifier = { factor = 3 is_married = FROM }
+		}
+	}
+}
+
+###############################################################################
+# Demanding compensation
+# A Dawi ruler may send a Reckoner to the offender to demand amends for a
+# grudge (grudge_demand_compensation decision, or dawi.25 for the AI): gold,
+# or a hold. Amends strike out the grudge; a refusal leaves it in the book.
+###############################################################################
+
+# dawi.20 Sending the Reckoner
+# Scope: ROOT is the Dawi ruler, event_target:grudge_offender the offender.
+character_event = {
+	id = dawi.20
+	desc = EVTDESCdawi20
+	picture = GFX_evt_dwarf_grudge_war
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # grudge_demand_compensation, dawi.25
+
+	option = { # Gold
+		name = EVTOPTAdawi20
+		event_target:grudge_offender = { character_event = { id = dawi.21 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 3 trait = greedy }
+			modifier = { factor = 2 trait = content }
+		}
+	}
+	option = { # A hold
+		name = EVTOPTBdawi20
+		trigger = {
+			event_target:grudge_offender = {
+				trait = creature_dwarf
+				religion_group = dwarf_gods_group
+				any_demesne_title = { tier = COUNT count = 2 }
+			}
+		}
+		event_target:grudge_offender = { character_event = { id = dawi.22 } }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 2 trait = ambitious }
+		}
+	}
+	option = { # Let it lie
+		name = EVTOPTCdawi20
+		clr_character_flag = demanding_grudge_compensation
+		ai_chance = { factor = 0 }
+	}
+}
+
+# dawi.21 A Reckoner asks for gold
+# Scope: ROOT is the offender, FROM the Dawi ruler.
+character_event = {
+	id = dawi.21
+	desc = EVTDESCdawi21
+	picture = GFX_evt_dwarf_grudge_war
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawi.20
+
+	option = { # Pay
+		name = EVTOPTAdawi21
+		transfer_scaled_wealth = { to = FROM value = 3 }
+		FROM = { set_character_flag = dawi_grudge_paid_gold character_event = { id = dawi.23 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 3 trait = humble }
+			modifier = { factor = 2 trait = content }
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 2 FROM = { relative_power = { who = ROOT power = 2 } } }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBdawi21
+		FROM = { character_event = { id = dawi.24 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 3 trait = greedy }
+			modifier = { factor = 3 trait = proud }
+			modifier = { factor = 2 trait = ambitious }
+		}
+	}
+}
+
+# dawi.22 A Reckoner asks for a hold
+# One county that is not the capital; two if the offender holds six or more.
+# Scope: ROOT is the offender, FROM the Dawi ruler.
+character_event = {
+	id = dawi.22
+	desc = EVTDESCdawi22
+	picture = GFX_evt_dwarf_grudge_war
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawi.20
+
+	option = { # Give it up
+		name = EVTOPTAdawi22
+		random_demesne_title = {
+			limit = { tier = COUNT is_primary_holder_title = no location = { is_capital = no } }
+			grant_title = FROM
+		}
+		if = {
+			limit = { any_demesne_title = { tier = COUNT count = 5 } }
+			random_demesne_title = {
+				limit = { tier = COUNT is_primary_holder_title = no location = { is_capital = no } }
+				grant_title = FROM
+			}
+		}
+		FROM = { set_character_flag = dawi_grudge_paid_land character_event = { id = dawi.23 } }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 trait = humble }
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 3 FROM = { relative_power = { who = ROOT power = 2 } } }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBdawi22
+		FROM = { character_event = { id = dawi.24 } }
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 3 trait = greedy }
+			modifier = { factor = 3 trait = proud }
+			modifier = { factor = 2 trait = ambitious }
+		}
+	}
+}
+
+# dawi.23 Amends are made
+# Scope: ROOT is the Dawi ruler, FROM the offender.
+character_event = {
+	id = dawi.23
+	desc = { text = EVTDESCdawi23 trigger = { has_character_flag = dawi_grudge_paid_gold } }
+	desc = {
+		text = EVTDESCdawi23b
+		trigger = { NOT = { has_character_flag = dawi_grudge_paid_gold } }
+	}
+	picture = GFX_evt_dwarf_grudge_book
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawi.21, dawi.22
+
+	option = {
+		name = EVTOPTAdawi23
+		clr_character_flag = demanding_grudge_compensation
+		clr_character_flag = dawi_grudge_paid_gold
+		clr_character_flag = dawi_grudge_paid_land
+		dawi_settle_grudge_effect = yes
+	}
+}
+
+# dawi.24 Amends are refused
+# Scope: ROOT is the Dawi ruler, FROM the offender.
+character_event = {
+	id = dawi.24
+	desc = EVTDESCdawi24
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # dawi.21, dawi.22
+
+	option = {
+		name = EVTOPTAdawi24
+		clr_character_flag = demanding_grudge_compensation
+		prestige = 25
+	}
+}
+
+# dawi.25 The AI sends a Reckoner
+# Every five years an AI Dawi ruler may demand amends from one living ruler
+# his clan book names (the decision is player-only: the AI cannot search
+# the whole world for targets).
+# Scope: ROOT is an AI Dawi ruler.
+character_event = {
+	id = dawi.25
+	hide_window = yes
+
+	is_triggered_only = yes # on_five_year_pulse
+	only_playable = yes
+	religion_group = dwarf_gods_group
+	ai = yes
+	prisoner = no
+
+	trigger = {
+		dawi_grudge_keeper_trigger = yes
+		war = no
+		NOT = { has_character_flag = demanding_grudge_compensation }
+		any_opinion_modifier_target = {
+			is_alive = yes
+			is_ruler = yes
+			prisoner = no
+			reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+		}
+	}
+
+	immediate = {
+		random = {
+			chance = 40
+			random_opinion_modifier_target = {
+				limit = {
+					is_alive = yes
+					is_ruler = yes
+					prisoner = no
+					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+				}
+				save_event_target_as = grudge_offender
+			}
+			set_character_flag = demanding_grudge_compensation
+			character_event = { id = dawi.20 }
+		}
+	}
+}
+
+###############################################################################
+# Unsettled grudges
+###############################################################################
+
+# dawi.30 The weight of the book
+# A Dawi ruler's unsettled grudges weigh on his honour and on the regard of
+# other Dawi: unfulfilled_grudges_1 - 5, by how many living foes the book
+# names.
+# Scope: ROOT is a Dawi ruler.
+character_event = {
+	id = dawi.30
+	hide_window = yes
+
+	is_triggered_only = yes # on_bi_yearly_pulse
+	only_rulers = yes
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		trait = creature_dwarf
+	}
+
+	immediate = {
+		remove_character_modifier = unfulfilled_grudges_1
+		remove_character_modifier = unfulfilled_grudges_2
+		remove_character_modifier = unfulfilled_grudges_3
+		remove_character_modifier = unfulfilled_grudges_4
+		remove_character_modifier = unfulfilled_grudges_5
+		if = {
+			limit = {
+				any_opinion_modifier_target = {
+					count = 5
+					is_alive = yes
+					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+				}
+			}
+			add_character_modifier = { name = unfulfilled_grudges_5 duration = -1 }
+		}
+		else_if = {
+			limit = {
+				any_opinion_modifier_target = {
+					count = 4
+					is_alive = yes
+					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+				}
+			}
+			add_character_modifier = { name = unfulfilled_grudges_4 duration = -1 }
+		}
+		else_if = {
+			limit = {
+				any_opinion_modifier_target = {
+					count = 3
+					is_alive = yes
+					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+				}
+			}
+			add_character_modifier = { name = unfulfilled_grudges_3 duration = -1 }
+		}
+		else_if = {
+			limit = {
+				any_opinion_modifier_target = {
+					count = 2
+					is_alive = yes
+					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+				}
+			}
+			add_character_modifier = { name = unfulfilled_grudges_2 duration = -1 }
+		}
+		else_if = {
+			limit = {
+				any_opinion_modifier_target = {
+					is_alive = yes
+					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+				}
+			}
+			add_character_modifier = { name = unfulfilled_grudges_1 duration = -1 }
+		}
+	}
+}
+
+###############################################################################
+# The Slayer's path
+# A Dawi ruler whose honour (piety) falls below -100 must take the Slayer's
+# path or live as Unbaraki. A landed, independent Slayer is a Slayer King;
+# his heir may take up the same doom.
+###############################################################################
+
+# dawi.40 Dishonour
+# Scope: ROOT is a Dawi ruler.
+character_event = {
+	id = dawi.40
+	desc = EVTDESCdawi40
+	picture = GFX_evt_dwarf_thinking
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_bi_yearly_pulse
+	only_rulers = yes
+	religion_group = dwarf_gods_group
+	prisoner = no
+
+	trigger = {
+		trait = creature_dwarf
+		NOT = { piety = -100 }
+		NOR = { trait = dwarf_slayer trait = dwarf_slayer_king trait = dwarf_oathbreaker }
+	}
+
+	option = { # The Slayer's path
+		name = EVTOPTAdawi40
+		custom_tooltip = { text = dawi_become_slayer_tt }
+		add_trait = dwarf_slayer
+		piety = 200
+		any_spouse = { remove_spouse = PREV }
+		any_consort = { remove_consort = PREV }
+		remove_character_modifier = follower_of_grungni
+		remove_character_modifier = follower_of_valaya
+		add_character_modifier = { name = follower_of_grimnir duration = -1 }
+		set_special_character_title = SLAYER_DWARF_TITLE
+		hidden_effect = { set_graphical_culture = dwarf_slayer_culture }
+		if = {
+			limit = { is_ruler = yes current_heir = { always = yes } }
+			current_heir = {
+				ROOT = { transfer_scaled_wealth = { to = PREV value = 10 } }
+				character_event = { id = dawi.41 days = 1 }
+			}
+			abdicate = yes
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 2 trait = wroth }
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 0.3 trait = craven }
+			modifier = { factor = 0.5 trait = ambitious }
+			modifier = { factor = 0.5 tier = KING }
+			modifier = { factor = 0.5 tier = EMPEROR }
+		}
+	}
+	option = { # Unbaraki
+		name = EVTOPTBdawi40
+		custom_tooltip = { text = dawi_become_oathbreaker_tt }
+		add_trait = dwarf_oathbreaker
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 2 trait = ambitious }
+			modifier = { factor = 1.5 trait = cynical }
+			modifier = { factor = 0.3 trait = zealous }
+		}
+	}
+}
+
+# dawi.41 The new lord of a Slayer's hold
+# Scope: ROOT is the heir, FROM the new Slayer.
+character_event = {
+	id = dawi.41
+	desc = EVTDESCdawi41
+	picture = GFX_evt_dwarf_slayer
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # dawi.40
+
+	option = {
+		name = EVTOPTAdawi41
+	}
+}
+
+# dawi.42 A Slayer King
+# A Slayer who rules his own realm is a Slayer King, like the lords of Karak
+# Kadrin.
+# Scope: ROOT is a landed Slayer.
+character_event = {
+	id = dawi.42
+	hide_window = yes
+
+	is_triggered_only = yes # on_bi_yearly_pulse
+	only_independent = yes
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		trait = dwarf_slayer
+		is_landed = yes
+	}
+
+	immediate = {
+		remove_trait = dwarf_slayer
+		add_trait = dwarf_slayer_king
+	}
+}
+
+# dawi.43 The Slayer King's doom passes down
+# The heir of a Slayer King of his own clan may take up the unfinished doom.
+# Scope: ROOT is the heir, FROM the title, FROMFROM the dead Slayer King.
+character_event = {
+	id = dawi.43
+	desc = EVTDESCdawi43
+	picture = GFX_evt_dwarf_slayer
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_new_holder_inheritance
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		trait = creature_dwarf
+		NOT = { trait = dwarf_slayer_king }
+		NOT = { has_character_flag = dawi_slayer_king_asked }
+		FROMFROM = { trait = dwarf_slayer_king dynasty = ROOT }
+	}
+
+	immediate = {
+		set_character_flag = dawi_slayer_king_asked
+		FROMFROM = { save_event_target_as = old_slayer_king }
+	}
+
+	option = { # Take up the doom
+		name = EVTOPTAdawi43
+		add_trait = dwarf_slayer_king
+		remove_trait = dwarf_warrior
+		remove_trait = longbeard
+		remove_trait = thunderer
+		remove_trait = ironbreaker
+		remove_trait = quarreller
+		remove_trait = runesmith
+		remove_trait = runelord
+		piety = 100
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 trait = zealous }
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.2 trait = craven }
+		}
+	}
+	option = { # Let it end
+		name = EVTOPTBdawi43
+		ai_chance = { factor = 10 }
+	}
+}
+
+###############################################################################
+# Slayers at large
+# Every two years an unlanded Slayer goes hunting: monsters in his lord's own
+# lands first, else he wanders to a neighbouring realm, and walks into the
+# hall of any greenskin, Skaven, Beastman, vampire or Chaos ruler he finds
+# to kill him in single combat (the duel engine, HFP.10095). A Slayer who
+# survives grows in renown: Troll, Giant, Dragon and at last Daemon Slayer.
+###############################################################################
+
+# dawi.50 The Slayer goes hunting
+# Scope: ROOT is an unlanded Slayer.
+character_event = {
+	id = dawi.50
+	hide_window = yes
+
+	is_triggered_only = yes # on_bi_yearly_pulse
+	religion_group = dwarf_gods_group
+	prisoner = no
+	only_capable = yes
+	min_age = 16
+
+	trigger = {
+		trait = dwarf_slayer
+		is_landed = no
+		in_command = no
+		NOT = { has_character_modifier = recent_slayer_work }
+		liege = { NOT = { character = ROOT } }
+	}
+
+	immediate = {
+		add_character_modifier = { name = recent_slayer_work duration = 365 hidden = yes }
+		if = {
+			limit = { liege = { any_demesne_province = { dawi_monster_province_trigger = yes } } }
+			liege = {
+				random_demesne_province = {
+					limit = { dawi_monster_province_trigger = yes }
+					save_event_target_as = slayer_hunting_ground
+				}
+			}
+			random_list = {
+				80 = {
+					event_target:slayer_hunting_ground = { province_event = { id = dawi.51 } }
+					character_event = { id = dawi.54 }
+				}
+				10 = {
+					event_target:slayer_hunting_ground = { province_event = { id = dawi.51 } }
+					add_trait_wounded_effect = yes
+				}
+				10 = {
+					modifier = { factor = 0.5 martial = 15 }
+					modifier = { factor = 0 is_invincible_trigger = yes }
+					liege = { character_event = { id = dawi.53 } }
+					death = { death_reason = death_battle }
+				}
+			}
+		}
+		else = { random = { chance = 50 liege = { character_event = { id = dawi.55 } } } }
+	}
+}
+
+# dawi.51 The beasts are cleared
+# Scope: ROOT is the province, FROM the Slayer.
+province_event = {
+	id = dawi.51
+	hide_window = yes
+
+	is_triggered_only = yes # dawi.50
+
+	immediate = {
+		remove_province_modifier = greenskin_population_bad
+		remove_province_modifier = beastmen_scourging_1
+		remove_province_modifier = beastmen_scourging_2
+		remove_province_modifier = beastmen_scourging_3
+		remove_province_modifier = beastman_herdstone
+		add_province_modifier = { name = monster_purge duration = 365 hidden = yes }
+		owner = { letter_event = { id = dawi.52 } }
+	}
+}
+
+# dawi.52 A Slayer's letter
+# Scope: ROOT is the lord, FROM the province, FROMFROM the Slayer.
+letter_event = {
+	id = dawi.52
+	desc = EVTDESCdawi52
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes # dawi.51
+	show_from_from = yes
+
+	option = {
+		name = EVTOPTAdawi52
+	}
+}
+
+# dawi.53 The Slayer does not come back
+# Scope: ROOT is the lord, FROM the Slayer.
+character_event = {
+	id = dawi.53
+	desc = EVTDESCdawi53
+	picture = GFX_evt_dwarf_slayer_angry
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # dawi.50, dawi.60
+
+	option = {
+		name = EVTOPTAdawi53
+	}
+}
+
+# dawi.54 A Slayer's renown grows
+# Troll Slayer, then Giant, Dragon and Daemon Slayer.
+# Scope: ROOT is the Slayer.
+character_event = {
+	id = dawi.54
+	hide_window = yes
+
+	is_triggered_only = yes # dawi.50, dawi.60
+
+	immediate = {
+		prestige = 50
+		if = {
+			limit = { has_character_modifier = dwarf_dragon_slayer }
+			remove_character_modifier = dwarf_dragon_slayer
+			add_character_modifier = { name = dwarf_daemon_slayer duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = dwarf_giant_slayer }
+			remove_character_modifier = dwarf_giant_slayer
+			add_character_modifier = { name = dwarf_dragon_slayer duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = dwarf_troll_slayer }
+			remove_character_modifier = dwarf_troll_slayer
+			add_character_modifier = { name = dwarf_giant_slayer duration = -1 }
+		}
+		else_if = {
+			limit = { NOT = { has_character_modifier = dwarf_daemon_slayer } }
+			add_character_modifier = { name = dwarf_troll_slayer duration = -1 }
+		}
+	}
+}
+
+# dawi.55 The Slayer walks out of the gate
+# Scope: ROOT is the lord, FROM the Slayer.
+character_event = {
+	id = dawi.55
+	desc = EVTDESCdawi55
+	picture = GFX_evt_dwarf_slayer
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # dawi.50
+
+	option = {
+		name = EVTOPTAdawi55
+		custom_tooltip = { text = dawi_slayer_will_leave_tt }
+		FROM = { character_event = { id = dawi.56 } }
+	}
+}
+
+# dawi.56 Where the Slayer goes
+# To a neighbouring foe ruler to kill him; else to a neighbouring realm with
+# monster trouble; else to any neighbouring realm.
+# Scope: ROOT is the Slayer.
+character_event = {
+	id = dawi.56
+	hide_window = yes
+
+	is_triggered_only = yes # dawi.55, dawi.57
+
+	immediate = {
+		liege = { save_event_target_as = slayer_old_lord }
+		if = {
+			limit = {
+				event_target:slayer_old_lord = {
+					any_demesne_province = {
+						any_neighbor_province = {
+							has_owner = yes
+							owner = {
+								NOT = { character = event_target:slayer_old_lord }
+								dawi_slayer_foe_trigger = yes
+							}
+						}
+					}
+				}
+			}
+			event_target:slayer_old_lord = {
+				random_demesne_province = {
+					limit = {
+						any_neighbor_province = {
+							has_owner = yes
+							owner = {
+								NOT = { character = event_target:slayer_old_lord }
+								dawi_slayer_foe_trigger = yes
+							}
+						}
+					}
+					random_neighbor_province = {
+						limit = {
+							has_owner = yes
+							owner = {
+								NOT = { character = event_target:slayer_old_lord }
+								dawi_slayer_foe_trigger = yes
+							}
+						}
+						owner = { save_event_target_as = slayer_quarry }
+					}
+				}
+			}
+			event_target:slayer_quarry = { reverse_banish = ROOT }
+			character_event = { id = dawi.58 days = 1 }
+		}
+		else_if = {
+			limit = {
+				event_target:slayer_old_lord = {
+					any_demesne_province = {
+						any_neighbor_province = {
+							has_owner = yes
+							dawi_monster_province_trigger = yes
+							owner = {
+								NOT = { character = event_target:slayer_old_lord }
+								dawi_slayer_foe_trigger = no
+							}
+						}
+					}
+				}
+			}
+			event_target:slayer_old_lord = {
+				random_demesne_province = {
+					limit = {
+						any_neighbor_province = {
+							has_owner = yes
+							dawi_monster_province_trigger = yes
+							owner = {
+								NOT = { character = event_target:slayer_old_lord }
+								dawi_slayer_foe_trigger = no
+							}
+						}
+					}
+					random_neighbor_province = {
+						limit = {
+							has_owner = yes
+							dawi_monster_province_trigger = yes
+							owner = {
+								NOT = { character = event_target:slayer_old_lord }
+								dawi_slayer_foe_trigger = no
+							}
+						}
+						owner = { reverse_banish = ROOT character_event = { id = dawi.57 } }
+					}
+				}
+			}
+		}
+		else = {
+			event_target:slayer_old_lord = {
+				random_demesne_province = {
+					limit = {
+						any_neighbor_province = {
+							has_owner = yes
+							owner = {
+								NOT = { character = event_target:slayer_old_lord }
+								dawi_slayer_foe_trigger = no
+							}
+						}
+					}
+					random_neighbor_province = {
+						limit = {
+							has_owner = yes
+							owner = {
+								NOT = { character = event_target:slayer_old_lord }
+								dawi_slayer_foe_trigger = no
+							}
+						}
+						owner = { reverse_banish = ROOT character_event = { id = dawi.57 } }
+					}
+				}
+			}
+		}
+	}
+}
+
+# dawi.57 A Slayer at the gate
+# Scope: ROOT is the new lord, FROM the Slayer.
+character_event = {
+	id = dawi.57
+	desc = EVTDESCdawi57
+	picture = GFX_evt_dwarf_slayer
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # dawi.56, dawi.60
+
+	option = { # Let him stay
+		name = EVTOPTAdawi57
+		ai_chance = { factor = 10 modifier = { factor = 2 trait = creature_dwarf } }
+	}
+	option = { # Send him on
+		name = EVTOPTBdawi57
+		FROM = { character_event = { id = dawi.56 } }
+		ai_chance = { factor = 3 }
+	}
+}
+
+# dawi.58 The Slayer walks into the foe's hall
+# He challenges the foe ruler to single combat: the duel engine cannot be
+# fled.
+# Scope: ROOT is the Slayer, event_target:slayer_quarry the foe ruler.
+character_event = {
+	id = dawi.58
+	hide_window = yes
+
+	is_triggered_only = yes # dawi.56
+
+	trigger = {
+		event_target:slayer_quarry = { is_alive = yes prisoner = no }
+	}
+
+	immediate = {
+		add_character_modifier = { modifier = recent_duel_timer duration = 720 hidden = yes }
+		save_event_target_as = combatant_1
+		set_character_flag = duel
+		set_character_flag = duel_effect_noescape
+		event_target:slayer_quarry = {
+			save_event_target_as = combatant_2
+			set_character_flag = duel
+			set_character_flag = duel_effect_noescape
+			character_event = { id = dawi.59 }
+			character_event = { id = HFP.10095 }
+		}
+		character_event = { id = dawi.60 days = 30 }
+	}
+}
+
+# dawi.59 A Slayer in your hall
+# Scope: ROOT is the foe ruler, FROM the Slayer.
+character_event = {
+	id = dawi.59
+	desc = {
+		text = EVTDESCdawi59
+		trigger = {
+			NOR = {
+				trait = creature_orc
+				trait = creature_goblin
+				trait = creature_hobgoblin
+				trait = creature_skaven
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCdawi59b
+		trigger = {
+			OR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+	}
+	desc = { text = EVTDESCdawi59c trigger = { trait = creature_skaven } }
+	picture = GFX_evt_dwarf_slayer_angry
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # dawi.58
+
+	option = {
+		name = {
+			text = EVTOPTAdawi59
+			trigger = {
+				NOR = {
+					trait = creature_orc
+					trait = creature_goblin
+					trait = creature_hobgoblin
+					trait = creature_skaven
+				}
+			}
+		}
+		name = {
+			text = EVTOPTAdawi59b
+			trigger = {
+				OR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+			}
+		}
+		name = { text = EVTOPTAdawi59c trigger = { trait = creature_skaven } }
+	}
+}
+
+# dawi.60 After the fight
+# If the Slayer lived and his foe did not, his renown grows. Either way he
+# leaves the foe's court for a Dawi hold. If the Slayer fell, his old lord
+# hears of it.
+# Scope: ROOT is the Slayer.
+character_event = {
+	id = dawi.60
+	hide_window = yes
+
+	is_triggered_only = yes # dawi.58
+
+	immediate = {
+		clr_character_flag = duel
+		clr_character_flag = duel_effect_noescape
+		if = {
+			limit = { is_alive = no }
+			event_target:slayer_old_lord = {
+				if = { limit = { is_alive = yes } character_event = { id = dawi.53 } }
+			}
+		}
+		else = {
+			if = {
+				limit = { event_target:slayer_quarry = { is_alive = no } }
+				character_event = { id = dawi.54 }
+			}
+			if = { limit = { prisoner = yes } imprison = no }
+			if = {
+				limit = {
+					liege = { dawi_slayer_foe_trigger = yes }
+					any_playable_ruler = {
+						trait = creature_dwarf
+						religion_group = dwarf_gods_group
+						is_landed = yes
+					}
+				}
+				random_playable_ruler = {
+					limit = {
+						trait = creature_dwarf
+						religion_group = dwarf_gods_group
+						is_landed = yes
+					}
+					reverse_banish = ROOT
+					character_event = { id = dawi.57 }
+				}
+			}
+		}
+	}
+}

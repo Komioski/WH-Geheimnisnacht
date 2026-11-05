@@ -17,19 +17,24 @@
 # all. Magnus the Pious ends the Age of Three Emperors after the Great War
 # Against Chaos. Ghal Maraz, the hammer of Sigmar, goes with the crown.
 #
-# Reunification                          empire.1 - empire.6
+# Reunification                          empire.1 - empire.7
 # The great cults                        empire.10 - empire.14
 # The Arch-Lectors                       empire.20 - empire.21
 # Game start                             empire.30 - empire.31
+# The Runefangs                          empire.40 - empire.42
 #
 # Callers:
 #   decisions/wh_empire_decisions.txt: claim_the_throne fires empire.1.
-#   common/on_actions/wh_on_actions.txt: empire.20 on on_death, empire.30
-#     on on_startup.
+#   common/on_actions/wh_on_actions.txt: empire.7 and empire.20 on
+#     on_death, empire.30 on on_startup, empire.40 on on_new_holder,
+#     on_new_holder_inheritance and on_new_holder_usurpation.
+#   common/religious_titles/00_religious_titles.txt: title_lector fires
+#     empire.21. common/minor_titles/wh_minor_titles.txt: the Reiksmarshal
+#     and the Emperor's Champion fire empire.42.
+#   empire.2 fires empire.10 (one faith triumphant).
 #   common/cb_types/wh_cb_types.txt: the vampires' great war fires
 #     empire.12 on success. common/cb_types/00_cb_types.txt: a Black
 #     Crusade on the Empire fires empire.12 when it is declared.
-#   empire.10 and empire.21 have no caller yet (see their comments).
 # Scripted effects: common/scripted_effects/wh_empire_effects.txt
 # Scripted triggers: common/scripted_triggers/wh_empire_triggers.txt
 # Opinions: common/opinion_modifiers/wh_empire_opinions.txt
@@ -120,6 +125,7 @@ character_event = {
 			add_artifact = ghal_maraz
 			piety = 150
 		}
+		hidden_effect = { narrative_event = { id = empire.10 days = 3 } }
 	}
 }
 
@@ -252,6 +258,29 @@ character_event = {
 	}
 }
 
+# empire.7 A pretender's heir inherits a weaker claim
+# The strong claims of the claimants (history, a coronation by the head of
+# a great cult) pass to the primary heir as a weak claim, which still
+# makes claim_the_throne cheaper. A weak claim is not passed on again.
+# Scope: ROOT is the dying claimant.
+character_event = {
+	id = empire.7
+	hide_window = yes
+	is_triggered_only = yes # on_death
+	only_playable = yes
+
+	trigger = {
+		has_strong_claim = e_the_empire
+		NOT = { has_global_flag = united_empire }
+		e_the_empire = { has_holder = no }
+		current_heir = { culture_group = imperial_group NOT = { has_claim = e_the_empire } }
+	}
+
+	immediate = {
+		current_heir = { add_weak_claim = e_the_empire }
+	}
+}
+
 ###############################################################################
 # The great cults
 # The cults of Sigmar, Ulric, Taal, Morr and Manann have backed rival
@@ -259,54 +288,122 @@ character_event = {
 # or a Black Crusade marches on it, the Grand Theogonist makes peace among
 # them (empire.12): their faithful may marry one another again, and every
 # ruler of the cults must accept the peace, or seek allies against the foe,
-# or refuse it.
+# or refuse it. The coronation of a new Emperor ends the schism for good
+# (empire.10), with one cult set first among them.
 ###############################################################################
 
 # empire.10 One faith triumphant
-# The ruler's cult is set over the others, which become its branches, and
-# every ruler of the other cults must choose whether to convert.
-# No caller: the line in claim_the_throne that fired it was commented out
-# long ago, and it would make Ulric a heresy of Sigmar. Kept until Komi
-# decides whether it should come back.
-# Scope: ROOT is the triumphant ruler.
+# The new Emperor mends the schism of 1359. One cult is set first among the
+# great cults: Sigmar's, as in the lore. A player Emperor crowned by Ar-Ulric
+# or the High Priest of Taal, or who keeps one of those faiths, raises that
+# cult instead. The great cults may marry one another again, the feud ends
+# for good (no peace of the cults is needed after it), and every ruler of
+# the three rival cults is asked to come to the triumphant altars.
+# Scope: ROOT is the new Emperor.
 narrative_event = {
 	id = empire.10
 	title = EVTTITLEempire10
-	desc = EVTDESCempire10
+	desc = { trigger = { has_global_flag = empire_triumph_ulric } text = EVTDESCempire10_ulric }
+	desc = { trigger = { has_global_flag = empire_triumph_taal } text = EVTDESCempire10_taal }
+	desc = { trigger = { has_global_flag = empire_triumph_sigmar } text = EVTDESCempire10_sigmar }
 	picture = GFX_evt_icon
 	border = GFX_event_narrative_frame_religion
 
-	is_triggered_only = yes # no caller
+	is_triggered_only = yes # empire.2
+
+	trigger = {
+		NOT = { has_global_flag = imperial_churches_unified }
+	}
 
 	immediate = {
-		k_cult_of_sigmar = { holder_scope = { character_event = { id = empire.12 days = 7 } } }
+		set_global_flag = imperial_churches_unified
+		set_global_flag = imperial_churches_peace
+		if = {
+			limit = { ai = no has_character_flag = empire_crowned_by_ulrican }
+			set_global_flag = empire_triumph_ulric
+		}
+		else_if = {
+			limit = { ai = no has_character_flag = empire_crowned_by_taalite }
+			set_global_flag = empire_triumph_taal
+		}
+		else_if = {
+			limit = { ai = no has_character_flag = empire_crowned_by_sigmarite }
+			set_global_flag = empire_triumph_sigmar
+		}
+		else_if = { limit = { ai = no religion = ulrican } set_global_flag = empire_triumph_ulric }
+		else_if = { limit = { ai = no religion = taalite } set_global_flag = empire_triumph_taal }
+		else = { set_global_flag = empire_triumph_sigmar }
 	}
 
 	option = {
 		name = EVTOPTAempire10
-		empire_cults_under_my_faith_effect = yes
-		if = { limit = { religion = sigmarite } give_nickname = nick_the_pious }
-		set_global_flag = imperial_churches_unified
+		custom_tooltip = { text = empire_schism_mended_tt }
+		hidden_effect = {
+			sigmarite = {
+				add_intermarry = ulrican
+				add_intermarry = taalite
+				add_intermarry = morrian
+				add_intermarry = manannite
+			}
+			ulrican = {
+				add_intermarry = sigmarite
+				add_intermarry = taalite
+				add_intermarry = morrian
+				add_intermarry = manannite
+			}
+			taalite = {
+				add_intermarry = sigmarite
+				add_intermarry = ulrican
+				add_intermarry = morrian
+				add_intermarry = manannite
+			}
+			morrian = {
+				add_intermarry = sigmarite
+				add_intermarry = ulrican
+				add_intermarry = taalite
+				add_intermarry = manannite
+			}
+			manannite = {
+				add_intermarry = sigmarite
+				add_intermarry = ulrican
+				add_intermarry = taalite
+				add_intermarry = morrian
+			}
+		}
+		if = {
+			limit = { has_global_flag = empire_triumph_ulric }
+			ulrican = { religion_authority = { modifier = faith_triumphant } }
+		}
+		else_if = {
+			limit = { has_global_flag = empire_triumph_taal }
+			taalite = { religion_authority = { modifier = faith_triumphant } }
+		}
+		else = {
+			sigmarite = { religion_authority = { modifier = faith_triumphant } }
+			if = { limit = { religion = sigmarite } give_nickname = nick_the_pious }
+		}
 		hidden_effect = {
 			any_playable_ruler = {
 				limit = {
-					empire_imperial_cult_trigger = yes
-					NOT = { religion = ROOT }
+					OR = { religion = sigmarite religion = ulrican religion = taalite }
+					empire_of_triumphant_faith_trigger = no
 					controls_religion = no
 				}
 				narrative_event = { id = empire.11 }
 			}
-			religion_authority = { modifier = faith_triumphant }
 		}
 	}
 }
 
-# empire.11 Convert to the triumphant faith?
-# Scope: ROOT is a ruler of another cult, FROM is the triumphant ruler.
+# empire.11 Come to the triumphant altars?
+# Under Sigmar the stubborn Ulricans of Middenland are the last to come.
+# Scope: ROOT is a ruler of a rival cult, FROM is the new Emperor.
 narrative_event = {
 	id = empire.11
 	title = EVTTITLEempire11
-	desc = EVTDESCempire11
+	desc = { trigger = { has_global_flag = empire_triumph_ulric } text = EVTDESCempire11_ulric }
+	desc = { trigger = { has_global_flag = empire_triumph_taal } text = EVTDESCempire11_taal }
+	desc = { trigger = { has_global_flag = empire_triumph_sigmar } text = EVTDESCempire11_sigmar }
 	picture = GFX_evt_icon
 	border = GFX_event_narrative_frame_religion
 
@@ -314,14 +411,28 @@ narrative_event = {
 
 	option = { # Convert
 		name = EVTOPTAempire11
-		religion = FROM
-		any_courtier = { religion = FROM }
-		capital_scope = { religion = FROM }
+		if = {
+			limit = { has_global_flag = empire_triumph_ulric }
+			religion = ulrican
+			any_courtier = { religion = ulrican }
+			capital_scope = { religion = ulrican }
+		}
+		else_if = {
+			limit = { has_global_flag = empire_triumph_taal }
+			religion = taalite
+			any_courtier = { religion = taalite }
+			capital_scope = { religion = taalite }
+		}
+		else = {
+			religion = sigmarite
+			any_courtier = { religion = sigmarite }
+			capital_scope = { religion = sigmarite }
+		}
 		ai_chance = {
-			factor = 50
-			modifier = { factor = 5 any_liege = { religion = FROM } }
-			modifier = { factor = 5 trait = cynical }
-			modifier = { factor = 10 dynasty = FROM }
+			factor = 40
+			modifier = { factor = 3 any_liege = { empire_of_triumphant_faith_trigger = yes } }
+			modifier = { factor = 3 trait = cynical }
+			modifier = { factor = 5 dynasty = FROM }
 			modifier = { factor = 0.1 trait = zealous }
 			modifier = { factor = 0.5 trait = content }
 		}
@@ -329,7 +440,7 @@ narrative_event = {
 	option = { # Keep the old faith
 		name = EVTOPTBempire11
 		ai_chance = {
-			factor = 50
+			factor = 60
 			modifier = { factor = 2 trait = content }
 			modifier = { factor = 5 trait = zealous }
 			modifier = { # Middenland's Ulricans are the most stubborn of all
@@ -349,7 +460,7 @@ narrative_event = {
 character_event = {
 	id = empire.12
 	hide_window = yes
-	is_triggered_only = yes # wh_cb_types (vampires), 00_cb_types (Black Crusade), empire.10
+	is_triggered_only = yes # wh_cb_types (vampires), 00_cb_types (Black Crusade)
 
 	trigger = {
 		NOT = { has_global_flag = imperial_churches_peace }
@@ -582,8 +693,9 @@ character_event = {
 ###############################################################################
 
 # empire.20 An Arch-Lector dies
-# His heir in the Arch-Lectory takes the Lector's title, lays aside any
-# witch hunter's vocation and is welcomed with piety.
+# His heir in the Arch-Lectory lays aside any witch hunter's vocation and is
+# welcomed with piety. The Lector's title itself is given by the game to
+# any Sigmarite theocrat who qualifies (title_lector).
 # Scope: ROOT is the dead Arch-Lector.
 character_event = {
 	id = empire.20
@@ -596,7 +708,6 @@ character_event = {
 
 	immediate = {
 		current_heir = {
-			give_minor_title = title_lector
 			if = { limit = { is_hunter_culture_trigger = yes } culture = ROOT }
 			if = {
 				limit = { is_witch_hunter_trigger = yes }
@@ -610,15 +721,28 @@ character_event = {
 }
 
 # empire.21 A Lector takes an empty Arch-Lectory
-# If the Arch-Lectory of Talabheim, or else of Nuln, has no living holder
-# outside the Grand Theogonist, the Lector takes it with its temple
-# barony. No caller: the religious title hook that fired it is commented
-# out in common/religious_titles/00_religious_titles.txt.
-# Scope: ROOT is the Lector.
+# A new Lector who holds no Arch-Lectory takes the Arch-Lectory of
+# Talabheim, or else of Nuln, if it has no holder or is only kept by the
+# Grand Theogonist, with its temple barony.
+# Scope: ROOT is the new Lector.
 character_event = {
 	id = empire.21
 	hide_window = yes
-	is_triggered_only = yes # no caller
+	is_triggered_only = yes # title_lector gain_effect
+
+	trigger = {
+		is_alive = yes
+		controls_religion = no
+		NOR = { has_landed_title = d_arch_lectory_talabheim has_landed_title = d_arch_lectory_nuln }
+		OR = {
+			d_arch_lectory_talabheim = {
+				OR = { has_holder = no holder_scope = { controls_religion = yes } }
+			}
+			d_arch_lectory_nuln = {
+				OR = { has_holder = no holder_scope = { controls_religion = yes } }
+			}
+		}
+	}
 
 	immediate = {
 		if = {
@@ -628,16 +752,25 @@ character_event = {
 				}
 			}
 			d_arch_lectory_talabheim = { grant_title = ROOT }
-			b_vateresche = { grant_title = ROOT }
-		}
-		else_if = {
-			limit = {
-				d_arch_lectory_nuln = {
-					OR = { has_holder = no holder_scope = { controls_religion = yes } }
+			if = {
+				limit = {
+					b_vateresche = {
+						OR = { has_holder = no holder_scope = { controls_religion = yes } }
+					}
 				}
+				b_vateresche = { grant_title = ROOT }
 			}
+		}
+		else = {
 			d_arch_lectory_nuln = { grant_title = ROOT }
-			b_tempel_quarter = { grant_title = ROOT }
+			if = {
+				limit = {
+					b_tempel_quarter = {
+						OR = { has_holder = no holder_scope = { controls_religion = yes } }
+					}
+				}
+				b_tempel_quarter = { grant_title = ROOT }
+			}
 		}
 	}
 }
@@ -705,5 +838,110 @@ narrative_event = {
 		name = EVTOPTBempire31
 		trigger = { has_landed_title = k_talabecland NOT = { religion = vampiric } }
 		piety = 100
+	}
+}
+
+###############################################################################
+# The Runefangs
+# The twelve Runefangs follow the Elector crowns. When an Elector crown, the
+# Empire, the Reiksmarshal or the Emperor's Champion changes hands, the
+# swords concerned go to their rightful bearers a day later, once
+# inheritance is settled (empire_runefang_*_effect). The Emperor keeps the
+# swords of crowns with no worthy holder and can call them all in with
+# reclaim_runefangs.
+###############################################################################
+
+# empire.40 An Elector crown or the Empire changes hands
+# Scope: ROOT is the new holder, FROM is the title.
+character_event = {
+	id = empire.40
+	hide_window = yes
+	is_triggered_only = yes # on_new_holder, on_new_holder_inheritance, on_new_holder_usurpation
+	only_playable = yes
+
+	trigger = {
+		FROM = { OR = { empire_runefang_crown_trigger = yes title = e_the_empire } }
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = runefang_crown }
+		character_event = { id = empire.41 days = 1 }
+	}
+}
+
+# empire.41 The Runefang follows the crown
+# Scope: ROOT is the new holder. event_target:runefang_crown: the title.
+character_event = {
+	id = empire.41
+	hide_window = yes
+	is_triggered_only = yes # empire.40
+
+	immediate = {
+		if = {
+			limit = { event_target:runefang_crown = { title = e_the_empire } }
+			empire_runefangs_all_effect = yes
+		}
+		else_if = {
+			limit = { event_target:runefang_crown = { title = k_averland } }
+			empire_runefang_averland_effect = yes
+		}
+		else_if = {
+			limit = { event_target:runefang_crown = { title = k_hochland } }
+			empire_runefang_hochland_effect = yes
+		}
+		else_if = {
+			limit = { event_target:runefang_crown = { title = k_middenland } }
+			empire_runefang_middenland_effect = yes
+		}
+		else_if = {
+			limit = { event_target:runefang_crown = { title = k_nordland } }
+			empire_runefang_nordland_effect = yes
+		}
+		else_if = {
+			limit = { event_target:runefang_crown = { title = k_ostland } }
+			empire_runefang_ostland_effect = yes
+		}
+		else_if = {
+			limit = { event_target:runefang_crown = { title = k_ostermark } }
+			empire_runefang_ostermark_effect = yes
+		}
+		else_if = {
+			limit = { event_target:runefang_crown = { title = k_reikland } }
+			empire_runefang_reikland_effect = yes
+		}
+		else_if = {
+			limit = { event_target:runefang_crown = { title = k_stirland } }
+			empire_runefang_stirland_effect = yes
+		}
+		else_if = {
+			limit = { event_target:runefang_crown = { title = k_talabecland } }
+			empire_runefang_talabecland_effect = yes
+		}
+		else_if = {
+			limit = { event_target:runefang_crown = { title = k_wissenland } }
+			empire_runefang_wissenland_effect = yes
+		}
+		else_if = {
+			limit = { event_target:runefang_crown = { title = k_solland } }
+			empire_runefang_solland_effect = yes
+		}
+		else_if = {
+			limit = { event_target:runefang_crown = { title = k_drakwald } }
+			empire_runefang_drakwald_effect = yes
+		}
+	}
+}
+
+# empire.42 The Reiksmarshal or the Emperor's Champion changes
+# The Solland and Drakwald swords go to the new title holder, or back to
+# the Emperor. Scope: any.
+character_event = {
+	id = empire.42
+	hide_window = yes
+	is_triggered_only = yes # title_reiksmarshal, title_empire_champion
+
+	immediate = {
+		empire_runefang_solland_effect = yes
+		empire_runefang_drakwald_effect = yes
 	}
 }

@@ -7,8 +7,9 @@
 #
 # The Engineers Guild (engineers_guild): joining, AI recruits, experiments,
 # the rank powers' events, Zhufbar's call to gifted young Dawi, hiring an
-# engineer for a court, and the founding of the Imperial Engineers School in
-# Nuln, which opens the guild to Imperial humans.
+# engineer for a court, war machines built at a court's capital, and the
+# founding of the Imperial Engineers School in Altdorf, which opens the guild
+# to Imperial humans.
 #
 # Lore: the Dwarf Engineers Guild is the most secretive of the Dawi craft
 # guilds. Its clans honour Morgrim, the First Engineer, as well as Grungni.
@@ -16,20 +17,28 @@
 # a crafts hall under a master's eye. Black powder, cannon, handguns, the
 # gyrocopter and the steam borer are its great works. Zhufbar is its heart.
 # The western holds and the Imperial Dwarf clans share some of its knowledge
-# with manlings, most of all in Nuln, home of the Imperial Engineers School.
+# with manlings, most of all the Dawi clans of Nuln. The Imperial Engineers
+# School in Altdorf was founded by the Tilean genius Leonardo of Miragliano
+# with the Prince of Altdorf's gold, and is forever envious of the guild. Its
+# Steam Tanks are the Empire's greatest war machines; only a handful run.
 # Sources: WFRP 4E Dwarf Player's Guide (Steel and Fire, p.87-90; Dwarf
-# Engineer career, p.56).
+# Engineer career, p.56), Arcane Journal: Empire of Man (Nuln, Steam Tank).
 #
 # Joining and AI recruits                engineer.1 - engineer.6
 # Experiments and masterworks            engineer.10 - engineer.18
 # Becoming an engineer                   engineer.19, engineer.24
 # Zhufbar's call                         engineer.20 - engineer.22
-# Hiring an engineer                     engineer.30 - engineer.31
+# Hiring an engineer                     engineer.30 - engineer.32
+# War machines                           engineer.33 - engineer.35
 # The Imperial Engineers School          engineer.40
 #
 # Fired from common/on_actions/wh_on_actions.txt: engineer.1 on
 # on_character_ask_to_join_society, engineer.5 and engineer.20 on the
-# five-year pulse, engineer.24 on the bi-yearly pulse. Decisions in decisions/WHG_engineer_decisions.txt.
+# five-year pulse, engineer.24 on the bi-yearly pulse.
+# Decisions in decisions/WHG_engineer_decisions.txt: the society powers,
+# hire_engineer (.30), hire_imperial_engineer (.32), commission_war_machine
+# (.33), found_imperial_engineer_school (.40). engineer.34 and .35 are
+# delayed from .33.
 # Scripted triggers: common/scripted_triggers/wh_engineer_triggers.txt
 # Event modifiers: common/event_modifiers/wh_engineer_modifiers.txt
 # Loc: localisation/00_WHG_engineer_events.csv
@@ -483,8 +492,9 @@ character_event = {
 
 ###############################################################################
 # Hiring an engineer
-# From the hire_engineer decision: the guild sends a Dawi engineer of
-# Zhufbar to the court.
+# From the hire_engineer decision the guild sends a Dawi engineer of
+# Zhufbar to the court; from hire_imperial_engineer a manling engineer comes
+# from the Imperial school or from Tilea.
 ###############################################################################
 
 # engineer.30 An engineer for the court
@@ -525,13 +535,200 @@ character_event = {
 	}
 }
 
+# engineer.32 A manling engineer for the court
+# From hire_imperial_engineer. A Tilean court hires one of its own; any
+# other court gets an engineer of the Imperial school, and part of the fee
+# goes to the lord of Altdorf, who keeps the school.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = engineer.32
+	desc = { trigger = { culture_group = tilean_group } text = EVTDESCengineer32a }
+	desc = { trigger = { NOT = { culture_group = tilean_group } } text = EVTDESCengineer32b }
+	picture = GFX_evt_empire_master_engineer
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # hire_imperial_engineer
+
+	immediate = {
+		if = {
+			limit = { OR = { culture_group = tilean_group culture_group = imperial_group } }
+			create_character = {
+				random_traits = yes
+				culture = ROOT
+				religion = ROOT
+				female = no
+				age = 35
+				trait = creature_human
+				trait = engineer
+			}
+		}
+		else = {
+			create_character = {
+				random_traits = yes
+				culture = reiklander
+				religion = sigmarite
+				female = no
+				age = 35
+				trait = creature_human
+				trait = engineer
+			}
+		}
+		new_character = {
+			save_event_target_as = engineer_hired
+			move_character = ROOT
+			change_stewardship = 3
+			change_martial = 2
+			if = { limit = { can_join_society = engineers_guild } join_society = engineers_guild }
+		}
+		if = {
+			limit = {
+				NOT = { culture_group = tilean_group }
+				c_altdorf = { holder_scope = { NOT = { character = ROOT } } }
+			}
+			c_altdorf = { holder_scope = { wealth = 50 } }
+		}
+	}
+
+	option = {
+		name = EVTOPTAengineer32
+	}
+}
+
+###############################################################################
+# War machines
+# From commission_war_machine: the court's engineer builds a battery of
+# great cannon (a year) or a Steam Tank (two years) at the capital. The
+# machines are the ruler's for good. If the capital is lost or no engineer
+# is left at court when the work ends, the work is lost.
+###############################################################################
+
+# engineer.33 What shall the engineer build?
+# Scope: ROOT is the ruler.
+character_event = {
+	id = engineer.33
+	desc = EVTDESCengineer33
+	picture = GFX_evt_machines_of_war
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # commission_war_machine
+
+	option = { # A battery of great cannon
+		name = EVTOPTAengineer33
+		wealth = -100
+		capital_scope = { add_province_modifier = { name = engineer_working_artillery years = 1 } }
+		hidden_effect = { character_event = { id = engineer.34 days = 365 } }
+		ai_chance = { factor = 10 }
+	}
+	option = { # A Steam Tank
+		name = EVTOPTBengineer33
+		trigger = { engineer_steam_tank_allowed_trigger = yes wealth = 500 }
+		wealth = -500
+		capital_scope = { add_province_modifier = { name = engineer_working_steam_tank years = 2 } }
+		hidden_effect = { character_event = { id = engineer.35 days = 730 } }
+		ai_chance = { factor = 10 modifier = { factor = 0 NOT = { wealth = 700 } } }
+	}
+	option = { # Not now
+		name = EVTOPTCengineer33
+		ai_chance = { factor = 1 }
+	}
+}
+
+# engineer.34 The great cannon are cast
+# Scope: ROOT is the ruler.
+character_event = {
+	id = engineer.34
+	desc = { trigger = { engineer_has_court_engineer_trigger = yes } text = EVTDESCengineer34a }
+	desc = { trigger = { engineer_has_court_engineer_trigger = no } text = EVTDESCengineer34b }
+	picture = GFX_evt_great_cannon
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # engineer.33
+
+	trigger = {
+		is_landed = yes
+	}
+
+	immediate = {
+		any_demesne_province = {
+			limit = { has_province_modifier = engineer_working_artillery }
+			remove_province_modifier = engineer_working_artillery
+		}
+	}
+
+	option = {
+		name = EVTOPTAengineer34
+		if = {
+			limit = { engineer_has_court_engineer_trigger = yes }
+			custom_tooltip = { text = engineer_cannon_battery_tt }
+			hidden_effect = {
+				capital_scope = {
+					ROOT = {
+						spawn_unit = {
+							owner = ROOT
+							home = PREV
+							province = PREV
+							attrition = 1.0
+							troops = { artillery = { 20 20 } }
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# engineer.35 The Steam Tank runs
+# Scope: ROOT is the ruler.
+character_event = {
+	id = engineer.35
+	desc = { trigger = { engineer_has_court_engineer_trigger = yes } text = EVTDESCengineer35a }
+	desc = { trigger = { engineer_has_court_engineer_trigger = no } text = EVTDESCengineer35b }
+	picture = GFX_evt_steam_tank
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # engineer.33
+
+	trigger = {
+		is_landed = yes
+	}
+
+	immediate = {
+		any_demesne_province = {
+			limit = { has_province_modifier = engineer_working_steam_tank }
+			remove_province_modifier = engineer_working_steam_tank
+		}
+	}
+
+	option = {
+		name = EVTOPTAengineer35
+		if = {
+			limit = { engineer_has_court_engineer_trigger = yes }
+			custom_tooltip = { text = engineer_steam_tank_tt }
+			prestige = 100
+			hidden_effect = {
+				capital_scope = {
+					ROOT = {
+						spawn_unit = {
+							owner = ROOT
+							home = PREV
+							province = PREV
+							attrition = 1.0
+							troops = { siege_tanks = { 1 1 } }
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 ###############################################################################
 # The Imperial Engineers School
 ###############################################################################
 
 # engineer.40 The Imperial Engineers School
 # From found_imperial_engineer_school. A Tilean genius or a Dawi master of
-# the Nuln clans heads the school; a year later Imperial humans may join the
+# the Nuln clans heads the school in Altdorf; a year later Imperial humans may join the
 # guild (the society's can_join_society reads the global flag).
 # Scope: ROOT is the founder.
 character_event = {

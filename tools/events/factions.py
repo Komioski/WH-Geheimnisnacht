@@ -57,6 +57,6 @@ def factions_of(refs):
     from collections import Counter
     out = Counter()
     for key, count in refs.items():
-        for name in KEY_TO_FACTIONS.get(key, ()):
+        for name in sorted(KEY_TO_FACTIONS.get(key, ())):  # sorted: ties break the same way every run
             out[name] += count
     return out

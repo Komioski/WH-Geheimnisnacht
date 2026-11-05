@@ -1,0 +1,979 @@
+###############################################################################
+# University events
+# Namespace: university (was DR_universities in DR_universities_events.txt)
+# Faction: Empire (and the other human realms of the Old World and Araby)
+#
+# The universities of men: Altdorf, Nuln, Streissen, Talabheim, Salzenmund
+# and Marienburg in the Empire and the Wasteland, Praag in Kislev, Remas and
+# Miragliano in Tilea, Magritta in Estalia, Martek and Kufra in Araby, and
+# Sudenburg in the Southlands once it is founded. A young noble may ask to study, or a
+# parent may send a child (send_son_to_university). The student lives at
+# the court of the university's Rector for four years, writes home halfway,
+# and comes home changed: learned, drunk, worn out, married,
+# sick, bookish, debauched, or, in Araby, a sorcerer of the flame.
+# A university is closed while its city is held by Chaos, the dead or the
+# greenskins. Bretonnia and Mousillon never send their children, and the
+# Border Princes rarely do. Araby's universities take no women.
+#
+# Asking and sending                     university.1 - university.5
+# Graduation                             university.10 - university.18
+# The letter home                        university.20 - university.21
+# Called home                            university.25
+# The Rectors                            university.30 - university.32
+#
+# Callers:
+#   common/on_actions/wh_on_actions.txt: university.1 on the five-year pulse
+#     list university_wish.
+#   common/on_actions/wh_on_actions.txt: university.30 on on_startup,
+#     university.31 on on_death, university.25 on on_new_holder and
+#     on_new_holder_inheritance.
+#   decisions/wh_empire_decisions.txt: send_son_to_university fires
+#     university.4. decisions/WHG_university_decisions.txt: endow_university.
+# Scripted effects: common/scripted_effects/wh_university_effects.txt
+# Scripted triggers: common/scripted_triggers/wh_university_triggers.txt
+# Event modifiers: common/event_modifiers/wh_university_modifiers.txt
+# Artifacts: common/artifacts/31_artifacts_universities.txt
+# Loc: localisation/00_WHG_university_events.csv
+###############################################################################
+
+namespace = university
+
+###############################################################################
+# Asking and sending
+###############################################################################
+
+# university.1 A young noble asks to study
+# On the five-year pulse an AI noble may ask the parent he lives with to
+# send him to the nearest open university. The bright, the eager and the
+# diligent ask more often; heirs and daughters less often.
+# Scope: ROOT is the young noble.
+character_event = {
+	id = university.1
+	hide_window = yes
+	is_triggered_only = yes # on_five_year_pulse, university_wish
+
+	ai = yes
+	min_age = 16
+	max_age = 35
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		university_candidate_trigger = yes
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = ambitious }
+		modifier = { factor = 0.5 trait = content }
+		modifier = { factor = 1.3 trait = quick }
+		modifier = { factor = 0.7 trait = slow }
+		modifier = { factor = 2 trait = genius }
+		modifier = { factor = 0.5 trait = imbecile }
+		modifier = { factor = 1.3 trait = gregarious }
+		modifier = { factor = 0.7 trait = shy }
+		modifier = { factor = 1.3 trait = diligent }
+		modifier = { factor = 0.7 trait = slothful }
+		modifier = { factor = 1.3 trait = scholar }
+		modifier = { factor = 0.7 is_primary_heir = yes }
+		modifier = { factor = 0.7 is_female = yes }
+		# Few Border Princes can spare the coin
+		modifier = { factor = 0.25 location = { region = world_old_world_border_princes } }
+		modifier = { factor = 0.6 NOT = { learning = 4 } }
+		modifier = { factor = 0.8 NOT = { learning = 8 } }
+		modifier = { factor = 1.25 learning = 12 }
+		modifier = { factor = 1.25 learning = 16 }
+	}
+
+	immediate = {
+		save_event_target_as = university_student
+		if = {
+			limit = {
+				father = {
+					university_parent_trigger = yes
+					ROOT = { host = { character = PREVPREV } }
+				}
+			}
+			father = { save_event_target_as = university_parent }
+		}
+		else = { mother = { save_event_target_as = university_parent } }
+		university_pick_effect = yes
+		if = {
+			limit = { event_target:university = { always = yes } }
+			set_character_flag = university_wants
+			event_target:university_parent = { character_event = { id = university.2 } }
+		}
+	}
+}
+
+# university.2 A child asks to study
+# Scope: ROOT is the parent. event_target:university_student is the child,
+# event_target:university the university.
+character_event = {
+	id = university.2
+	desc = EVTDESCuniversity2
+	picture = GFX_evt_son_asking_father
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # university.1
+
+	option = { # Go, and make me proud
+		name = EVTOPTAuniversity2
+		university_enrol_effect = yes
+		ai_chance = {
+			factor = 3
+			modifier = { factor = 0.3 NOT = { wealth = 50 } }
+			modifier = { factor = 2 trait = scholar }
+			modifier = { factor = 0.5 trait = greedy }
+		}
+	}
+	option = { # I will not allow it
+		name = EVTOPTBuniversity2
+		prestige = -50
+		event_target:university_student = {
+			clr_character_flag = university_wants
+			set_character_flag = university_denied
+			opinion = { who = ROOT modifier = opinion_very_disappointed years = 1 }
+		}
+		ai_chance = { factor = 1 }
+	}
+}
+
+# university.4 Sent to a university (decision)
+# From send_son_to_university. The parent picks the university.
+# Scope: ROOT is the child, FROM is the parent.
+character_event = {
+	id = university.4
+	hide_window = yes
+	is_triggered_only = yes # send_son_to_university
+
+	immediate = {
+		save_event_target_as = university_student
+		set_character_flag = university_wants
+		FROM = { save_event_target_as = university_parent character_event = { id = university.5 } }
+	}
+}
+
+# university.5 Where shall the child study?
+# Each university is offered to the lands it serves, while its city is open.
+# Scope: ROOT is the parent. event_target:university_student is the child.
+character_event = {
+	id = university.5
+	desc = EVTDESCuniversity5
+	picture = GFX_evt_throne_room
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # university.4
+
+	option = { # Altdorf
+		name = EVTOPTAuniversity5
+		trigger = {
+			299 = { university_city_open_trigger = yes }
+			event_target:university_student = {
+				location = {
+					OR = {
+						region = world_old_world_empire
+						region = world_old_world_kislev
+						region = world_old_world_border_princes
+						region = world_greater_araby
+					}
+				}
+			}
+		}
+		d_university_of_altdorf = { save_event_target_as = university }
+		university_enrol_effect = yes
+	}
+	option = { # Nuln
+		name = EVTOPTBuniversity5
+		trigger = {
+			309 = { university_city_open_trigger = yes }
+			event_target:university_student = {
+				location = {
+					OR = {
+						region = world_old_world_empire_south
+						region = world_old_world_empire_wasteland
+						region = world_old_world_tilea
+					}
+				}
+			}
+		}
+		d_university_of_nuln = { save_event_target_as = university }
+		university_enrol_effect = yes
+	}
+	option = { # Streissen
+		name = EVTOPTCuniversity5
+		trigger = {
+			355 = { university_city_open_trigger = yes }
+			event_target:university_student = {
+				location = {
+					OR = { region = world_old_world_empire_east region = world_old_world_kislev }
+				}
+			}
+		}
+		d_university_of_streissen = { save_event_target_as = university }
+		university_enrol_effect = yes
+	}
+	option = { # Praag
+		name = EVTOPTDuniversity5
+		trigger = {
+			182 = { university_city_open_trigger = yes }
+			event_target:university_student = {
+				location = {
+					OR = {
+						region = world_old_world_empire_north
+						region = world_old_world_empire_east
+						region = world_old_world_kislev
+					}
+				}
+			}
+		}
+		d_university_of_praag = { save_event_target_as = university }
+		university_enrol_effect = yes
+	}
+	option = { # Remas
+		name = EVTOPTEuniversity5
+		trigger = {
+			600 = { university_city_open_trigger = yes }
+			event_target:university_student = {
+				location = {
+					OR = {
+						region = world_old_world_tilea
+						region = world_old_world_estalia
+						region = world_old_world_border_princes
+					}
+				}
+			}
+		}
+		d_university_of_remas = { save_event_target_as = university }
+		university_enrol_effect = yes
+	}
+	option = { # Miragliano
+		name = EVTOPTFuniversity5
+		trigger = {
+			584 = { university_city_open_trigger = yes }
+			event_target:university_student = {
+				location = {
+					OR = {
+						region = world_old_world_empire_south
+						region = world_old_world_empire_wasteland
+						region = world_old_world_tilea
+						region = world_old_world_border_princes
+					}
+				}
+			}
+		}
+		d_university_of_miragliano = { save_event_target_as = university }
+		university_enrol_effect = yes
+	}
+	option = { # Martek
+		name = EVTOPTGuniversity5
+		trigger = {
+			1037 = { university_city_open_trigger = yes }
+			event_target:university_student = {
+				is_female = no
+				location = {
+					OR = { region = world_greater_araby region = world_old_world_estalia }
+				}
+			}
+		}
+		d_university_of_martek = { save_event_target_as = university }
+		university_enrol_effect = yes
+	}
+	option = { # Magritta
+		name = EVTOPTHuniversity5
+		trigger = {
+			553 = { university_city_open_trigger = yes }
+			event_target:university_student = {
+				location = {
+					OR = { region = world_greater_araby region = world_old_world_estalia }
+				}
+			}
+		}
+		d_university_of_magritta = { save_event_target_as = university }
+		university_enrol_effect = yes
+	}
+	option = { # Talabheim
+		name = EVTOPTJuniversity5
+		trigger = {
+			324 = { university_city_open_trigger = yes }
+			event_target:university_student = {
+				location = {
+					OR = {
+						region = world_old_world_empire_south
+						region = world_old_world_empire_east
+						region = world_old_world_empire_north
+					}
+				}
+			}
+		}
+		d_university_of_talabheim = { save_event_target_as = university }
+		university_enrol_effect = yes
+	}
+	option = { # Salzenmund
+		name = EVTOPTKuniversity5
+		trigger = {
+			239 = { university_city_open_trigger = yes }
+			event_target:university_student = {
+				location = {
+					OR = {
+						region = world_old_world_empire_north
+						region = world_old_world_empire_wasteland
+						region = world_old_world_kislev
+					}
+				}
+			}
+		}
+		d_university_of_salzenmund = { save_event_target_as = university }
+		university_enrol_effect = yes
+	}
+	option = { # Marienburg
+		name = EVTOPTLuniversity5
+		trigger = {
+			222 = { university_city_open_trigger = yes }
+			event_target:university_student = {
+				location = {
+					OR = {
+						region = world_old_world_empire_wasteland
+						region = world_old_world_empire_north
+						region = world_old_world_empire_south
+					}
+				}
+			}
+		}
+		d_university_of_marienburg = { save_event_target_as = university }
+		university_enrol_effect = yes
+	}
+	option = { # Kufra
+		name = EVTOPTMuniversity5
+		trigger = {
+			1035 = { university_city_open_trigger = yes }
+			event_target:university_student = {
+				is_female = no
+				location = { region = world_greater_araby }
+			}
+		}
+		d_university_of_kufra = { save_event_target_as = university }
+		university_enrol_effect = yes
+	}
+	option = { # Sudenburg
+		name = EVTOPTNuniversity5
+		trigger = {
+			983 = { university_city_open_trigger = yes }
+			event_target:university_student = {
+				location = {
+					OR = { region = world_greater_araby_southlands region = world_greater_araby }
+				}
+			}
+		}
+		d_university_of_sudenburg = { save_event_target_as = university }
+		university_enrol_effect = yes
+	}
+	option = { # On second thoughts, no
+		name = EVTOPTIuniversity5
+		prestige = -25
+		event_target:university_student = { clr_character_flag = university_wants }
+	}
+}
+
+###############################################################################
+# Graduation
+# Four years after the student left, he comes home. One outcome is rolled
+# and told to the parent, or to the student's lord if the parent has died,
+# or to the student himself if he has no lord.
+###############################################################################
+
+# university.10 Graduation (roll)
+# Scope: ROOT is the student. event_target:university_parent is the parent.
+character_event = {
+	id = university.10
+	hide_window = yes
+	is_triggered_only = yes # university_enrol_effect
+
+	trigger = {
+		has_character_flag = university_student
+	}
+
+	immediate = {
+		clr_character_flag = university_student
+		remove_character_modifier = university_studying
+		save_event_target_as = university_student
+		if = {
+			limit = {
+				event_target:university_parent = { is_alive = yes NOT = { character = ROOT } }
+			}
+			event_target:university_parent = { save_event_target_as = university_home }
+		}
+		else_if = {
+			limit = {
+				event_target:university_home_title = {
+					has_holder = yes
+					holder_scope = { NOT = { character = ROOT } }
+				}
+			}
+			event_target:university_home_title = {
+				holder_scope = { save_event_target_as = university_home }
+			}
+		}
+		else = { save_event_target_as = university_home }
+		random_list = {
+			10 = { # Drunkard
+				modifier = { factor = 0 trait = drunkard }
+				modifier = { factor = 1.5 has_character_flag = university_funded }
+				modifier = { factor = 1.33 trait = gluttonous }
+				modifier = { factor = 0.8 trait = temperate }
+				event_target:university_home = { character_event = { id = university.11 } }
+			}
+			10 = { # Better educated
+				modifier = { factor = 0 university_can_improve_education_trigger = no }
+				modifier = { factor = 1.5 has_character_flag = university_funded }
+				modifier = {
+					factor = 1.25
+					location = { has_province_modifier = university_endowed }
+				}
+				modifier = { factor = 1.33 trait = diligent }
+				modifier = { factor = 0.8 trait = slothful }
+				event_target:university_home = { character_event = { id = university.12 } }
+			}
+			10 = { # Worn out
+				modifier = { factor = 0 trait = depressed }
+				modifier = { factor = 1.5 has_character_flag = university_frugal }
+				modifier = { factor = 1.33 trait = kind }
+				modifier = { factor = 0.8 trait = envious }
+				event_target:university_home = { character_event = { id = university.13 } }
+			}
+			10 = { # Married
+				modifier = { factor = 0 is_married = yes }
+				modifier = { factor = 1.33 trait = lustful }
+				modifier = { factor = 0.8 trait = chaste }
+				event_target:university_home = { character_event = { id = university.14 } }
+			}
+			10 = { # Ill
+				modifier = { factor = 0 trait = ill }
+				modifier = { factor = 1.33 trait = weak }
+				modifier = { factor = 0.8 is_strong_trigger = yes }
+				event_target:university_home = { character_event = { id = university.15 } }
+			}
+			10 = { # Scholar
+				modifier = { factor = 0 trait = scholar }
+				modifier = { factor = 1.25 has_character_flag = university_frugal }
+				modifier = {
+					factor = 1.25
+					location = { has_province_modifier = university_endowed }
+				}
+				modifier = { factor = 1.33 trait = shy }
+				modifier = { factor = 0.8 trait = gregarious }
+				event_target:university_home = { character_event = { id = university.16 } }
+			}
+			10 = { # Hedonist
+				modifier = { factor = 0 trait = hedonist }
+				modifier = { factor = 1.5 has_character_flag = university_funded }
+				modifier = { factor = 1.33 trait = lustful }
+				modifier = { factor = 0.8 trait = chaste }
+				event_target:university_home = { character_event = { id = university.17 } }
+			}
+			15 = { # Araby's sorcery
+				modifier = { factor = 0 university_araby_magic_trigger = no }
+				modifier = { factor = 1.33 trait = diligent }
+				modifier = { factor = 1.33 trait = magic_potential_3 }
+				modifier = { factor = 1.33 trait = magic_potential_4 }
+				modifier = { factor = 0.8 trait = slothful }
+				event_target:university_home = { character_event = { id = university.18 } }
+			}
+			5 = { # Nothing worse for it: plain learning
+				modifier = { factor = 0 trait = academic }
+				event_target:university_home = { character_event = { id = university.16 } }
+			}
+		}
+		clr_character_flag = university_funded
+		clr_character_flag = university_frugal
+		clr_character_flag = university_halfway
+	}
+}
+
+# university.11 Home a drunkard
+# Scope: ROOT is the one told. event_target:university_student is the student.
+character_event = {
+	id = university.11
+	desc = EVTDESCuniversity11
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # university.10
+
+	option = {
+		name = EVTOPTAuniversity11
+		event_target:university_student = {
+			if = { limit = { is_ruler = no NOT = { character = ROOT } } move_character = ROOT }
+			add_trait = drunkard
+			add_trait = academic
+		}
+	}
+}
+
+# university.12 Home better taught
+# Scope: ROOT is the one told. event_target:university_student is the student.
+character_event = {
+	id = university.12
+	desc = EVTDESCuniversity12
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # university.10
+
+	option = {
+		name = EVTOPTAuniversity12
+		event_target:university_student = {
+			if = { limit = { is_ruler = no NOT = { character = ROOT } } move_character = ROOT }
+			university_improve_education_effect = yes
+			add_trait = academic
+		}
+	}
+}
+
+# university.13 Home worn out
+# Scope: ROOT is the one told. event_target:university_student is the student.
+character_event = {
+	id = university.13
+	desc = EVTDESCuniversity13
+	picture = GFX_evt_shadow
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # university.10
+
+	option = {
+		name = EVTOPTAuniversity13
+		event_target:university_student = {
+			if = { limit = { is_ruler = no NOT = { character = ROOT } } move_character = ROOT }
+			add_trait = depressed
+			add_trait = academic
+		}
+	}
+}
+
+# university.14 Home married
+# The student brings home a spouse, of the faiths and peoples of the
+# student's own land.
+# Scope: ROOT is the one told. event_target:university_student is the student.
+character_event = {
+	id = university.14
+	desc = EVTDESCuniversity14
+	picture = GFX_evt_marriage
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # university.10
+
+	option = {
+		name = EVTOPTAuniversity14
+		event_target:university_student = {
+			if = { limit = { is_ruler = no NOT = { character = ROOT } } move_character = ROOT }
+			add_trait = academic
+		}
+		if = {
+			limit = { event_target:university_student = { is_female = no } }
+			create_character = { random_traits = yes dynasty = NONE female = yes age = 20 }
+			new_character = {
+				university_spouse_origin_effect = yes
+				add_spouse = event_target:university_student
+			}
+		}
+		else = {
+			create_character = { random_traits = yes dynasty = NONE female = no age = 22 }
+			new_character = {
+				university_spouse_origin_effect = yes
+				add_spouse_matrilineal = event_target:university_student
+			}
+		}
+	}
+}
+
+# university.15 Home ill
+# Scope: ROOT is the one told. event_target:university_student is the student.
+character_event = {
+	id = university.15
+	desc = EVTDESCuniversity15
+	picture = GFX_evt_illness
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # university.10
+
+	option = {
+		name = EVTOPTAuniversity15
+		event_target:university_student = {
+			if = { limit = { is_ruler = no NOT = { character = ROOT } } move_character = ROOT }
+			add_symptom_effect = yes
+			add_trait = academic
+		}
+	}
+}
+
+# university.16 Home a scholar
+# Rarely the student brings home a thesis the masters thought worth
+# binding: once in a lifetime, and only if he has none.
+# Scope: ROOT is the one told. event_target:university_student is the student.
+character_event = {
+	id = university.16
+	desc = EVTDESCuniversity16
+	picture = GFX_evt_library
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # university.10
+
+	option = {
+		name = EVTOPTAuniversity16
+		event_target:university_student = {
+			if = { limit = { is_ruler = no NOT = { character = ROOT } } move_character = ROOT }
+			if = { limit = { NOT = { trait = scholar } } add_trait = scholar }
+			add_trait = academic
+			if = {
+				limit = {
+					learning = 12
+					NOT = { has_character_flag = university_wrote_thesis }
+					NOT = { has_artifact = university_thesis }
+				}
+				random = {
+					chance = 15
+					modifier = { factor = 2 learning = 18 }
+					set_character_flag = university_wrote_thesis
+					add_artifact = university_thesis
+				}
+			}
+		}
+	}
+}
+
+# university.17 Home a hedonist
+# Scope: ROOT is the one told. event_target:university_student is the student.
+character_event = {
+	id = university.17
+	desc = EVTDESCuniversity17
+	picture = GFX_evt_brothel
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # university.10
+
+	option = {
+		name = EVTOPTAuniversity17
+		event_target:university_student = {
+			if = { limit = { is_ruler = no NOT = { character = ROOT } } move_character = ROOT }
+			add_trait = hedonist
+			add_trait = academic
+		}
+	}
+}
+
+# university.18 Home a sorcerer of the flame
+# An Arabyan student with magic in the blood learns the sorcery of Araby:
+# an education trait a step higher, an Arabyan Scholar, a lore of magic
+# and the power to use it.
+# Scope: ROOT is the one told. event_target:university_student is the student.
+character_event = {
+	id = university.18
+	desc = EVTDESCuniversity18
+	picture = GFX_evt_apprentice
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # university.10
+
+	option = {
+		name = EVTOPTAuniversity18
+		prestige = 100
+		event_target:university_student = {
+			if = { limit = { is_ruler = no NOT = { character = ROOT } } move_character = ROOT }
+			university_improve_education_effect = yes
+			add_trait = arabyan_scholar
+			random_list = {
+				40 = { add_trait = lore_fire }
+				30 = { add_trait = lore_light }
+				20 = { add_trait = lore_metal }
+				10 = { add_trait = lore_heavens }
+			}
+			if = {
+				limit = { has_character_flag = magic_potential_flag_4 }
+				add_trait = magic_potential_4
+				clr_character_flag = magic_potential_flag_4
+			}
+			else_if = {
+				limit = { has_character_flag = magic_potential_flag_3 }
+				add_trait = magic_potential_3
+				clr_character_flag = magic_potential_flag_3
+			}
+			else_if = {
+				limit = { has_character_flag = magic_potential_flag_2 }
+				add_trait = magic_potential_2
+				clr_character_flag = magic_potential_flag_2
+			}
+			else_if = {
+				limit = { has_character_flag = magic_potential_flag_1 }
+				add_trait = magic_potential_1
+				clr_character_flag = magic_potential_flag_1
+			}
+			magic_power_random_effect = yes
+			enable_magic_xp_effect = yes
+		}
+	}
+}
+
+###############################################################################
+# The letter home
+# Two years into his studies the student writes home. The parent may send
+# money, which makes better learning and worse vices likelier alike, or
+# tell him to live on what he has, which makes him a harder scholar and
+# more often worn out. The flags are read at graduation (university.10).
+###############################################################################
+
+# university.20 Halfway through (dispatch)
+# The student has done two years, which counts if he is called home early
+# (university.25). Scope: ROOT is the student.
+character_event = {
+	id = university.20
+	hide_window = yes
+	is_triggered_only = yes # university_enrol_effect
+
+	trigger = {
+		has_character_flag = university_student
+	}
+
+	immediate = {
+		set_character_flag = university_halfway
+		save_event_target_as = university_student
+		if = {
+			limit = {
+				event_target:university_parent = { is_alive = yes NOT = { character = ROOT } }
+			}
+			event_target:university_parent = { letter_event = { id = university.21 } }
+		}
+	}
+}
+
+# university.21 A letter from the university
+# Each university writes of its own city.
+# Scope: ROOT is the parent, FROM is the student. event_target:university
+# is the university.
+letter_event = {
+	id = university.21
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_altdorf } }
+		text = EVTDESCuniversity21_altdorf
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_nuln } }
+		text = EVTDESCuniversity21_nuln
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_streissen } }
+		text = EVTDESCuniversity21_streissen
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_praag } }
+		text = EVTDESCuniversity21_praag
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_remas } }
+		text = EVTDESCuniversity21_remas
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_miragliano } }
+		text = EVTDESCuniversity21_miragliano
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_magritta } }
+		text = EVTDESCuniversity21_magritta
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_martek } }
+		text = EVTDESCuniversity21_martek
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_talabheim } }
+		text = EVTDESCuniversity21_talabheim
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_salzenmund } }
+		text = EVTDESCuniversity21_salzenmund
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_marienburg } }
+		text = EVTDESCuniversity21_marienburg
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_kufra } }
+		text = EVTDESCuniversity21_kufra
+	}
+	desc = {
+		trigger = { event_target:university = { title = d_university_of_sudenburg } }
+		text = EVTDESCuniversity21_sudenburg
+	}
+
+	is_triggered_only = yes # university.20
+
+	option = { # Send a purse of silver
+		name = EVTOPTAuniversity21
+		scaled_wealth = -0.05
+		FROM = { set_character_flag = university_funded }
+		custom_tooltip = { text = university_funded_tt }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0.2 NOT = { wealth = 100 } }
+			modifier = { factor = 0.3 trait = greedy }
+			modifier = { factor = 2 trait = charitable }
+		}
+	}
+	option = { # He must learn to live within his means
+		name = EVTOPTBuniversity21
+		FROM = { set_character_flag = university_frugal }
+		custom_tooltip = { text = university_frugal_tt }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 1.5 trait = temperate }
+		}
+	}
+}
+
+###############################################################################
+# Called home
+# A student who inherits a title, or is given one, leaves his studies at
+# once and goes home to rule. Two years of study are enough to make him
+# learned; less is not. Graduation (university.10) then never comes.
+###############################################################################
+
+# university.25 Called home to rule
+# Scope: ROOT is the student, now a ruler. FROM is the title.
+character_event = {
+	id = university.25
+	desc = EVTDESCuniversity25
+	picture = GFX_evt_courier
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_new_holder, on_new_holder_inheritance
+	only_rulers = yes
+
+	trigger = {
+		has_character_flag = university_student
+	}
+
+	immediate = {
+		clr_character_flag = university_student
+		remove_character_modifier = university_studying
+		clr_character_flag = university_funded
+		clr_character_flag = university_frugal
+	}
+
+	option = {
+		name = EVTOPTAuniversity25
+		if = {
+			limit = { has_character_flag = university_halfway NOT = { trait = academic } }
+			add_trait = academic
+		}
+		else = { prestige = 10 }
+		clr_character_flag = university_halfway
+	}
+}
+
+###############################################################################
+# The Rectors
+# Every university is held by a Rector, and the students live at his court.
+# The Rectors are created at the game start and replaced by a scholar of the
+# same faith and people when they die (wh_university_effects.txt).
+###############################################################################
+
+# university.30 The Rectors take their chairs
+# Once a game, from the multiplayer host's start.
+# Scope: ROOT is the host player.
+character_event = {
+	id = university.30
+	hide_window = yes
+	is_triggered_only = yes # on_startup
+	only_playable = yes
+	ai = no
+
+	trigger = {
+		is_multiplayer_host_character = yes
+		NOT = { has_global_flag = university_rectors_seated }
+	}
+
+	immediate = {
+		set_global_flag = university_rectors_seated
+		university_rectors_all_effect = yes
+	}
+}
+
+# university.31 A Rector dies
+# A scholar of his faith and people is chosen and takes all his
+# university chairs (university.32).
+# Scope: ROOT is the dead Rector.
+character_event = {
+	id = university.31
+	hide_window = yes
+	is_triggered_only = yes # on_death
+	only_playable = yes
+
+	trigger = {
+		any_demesne_title = { university_title_trigger = yes }
+	}
+
+	immediate = {
+		random_list = {
+			80 = {
+				modifier = { factor = 0 religion = ormazd }
+				create_character = {
+					random_traits = yes
+					dynasty = RANDOM
+					religion = ROOT
+					culture = ROOT
+					female = no
+					age = 52
+					attributes = { learning = 12 }
+				}
+			}
+			20 = {
+				modifier = { factor = 0 religion = ormazd }
+				create_character = {
+					random_traits = yes
+					dynasty = RANDOM
+					religion = ROOT
+					culture = ROOT
+					female = yes
+					age = 49
+					attributes = { learning = 12 }
+				}
+			}
+			10 = {
+				modifier = { factor = 0 NOT = { religion = ormazd } }
+				create_character = {
+					random_traits = yes
+					dynasty = RANDOM
+					religion = ROOT
+					culture = ROOT
+					female = no
+					age = 55
+					attributes = { learning = 12 }
+				}
+			}
+		}
+		new_character = {
+			university_rector_traits_effect = yes
+			character_event = { id = university.32 }
+		}
+	}
+}
+
+# university.32 The new Rector takes the chair
+# He takes the dead Rector's chairs and his students.
+# Scope: ROOT is the new Rector, FROM the dead one.
+character_event = {
+	id = university.32
+	hide_window = yes
+	is_triggered_only = yes # university.31
+
+	immediate = {
+		FROM = {
+			any_demesne_title = { limit = { university_title_trigger = yes } grant_title = ROOT }
+			# His students stay at the university
+			any_courtier = {
+				limit = { has_character_flag = university_student }
+				move_character = ROOT
+			}
+		}
+	}
+}

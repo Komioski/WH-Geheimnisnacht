@@ -68,9 +68,12 @@ namespace = dawi
 
 ###############################################################################
 # Grudges
-# Every grudge is the opinion modifier opinion_dwarf_grudge held by the wronged
-# Dawi and the kin who take it up. dawi_enter_grudge_effect writes it,
-# dawi_settle_grudge_effect strikes it out; both read the offender from
+# A grudge is an opinion modifier for its kind of wrong (wh_dawi_triggers.txt),
+# held by the wronged Dawi and the kin who take it up. Ordinary grudges are
+# settled by restitution, Blood Grudges only by death or the Slayer oath.
+# dawi_enter_<kind>_grudge_effect writes one; dawi_settle_grudge_effect strikes
+# out the ordinary ones and dawi_settle_blood_grudge_effect all of them. All
+# read the offender from
 # event_target:grudge_offender.
 ###############################################################################
 
@@ -91,23 +94,11 @@ character_event = {
 		OR = {
 			father_even_if_dead = {
 				dynasty = ROOT
-				any_opinion_modifier_target = {
-					is_alive = yes
-					reverse_has_opinion_modifier = {
-						who = PREVPREV
-						modifier = opinion_dwarf_grudge
-					}
-				}
+				any_opinion_modifier_target = { is_alive = yes dawi_grudge_by_prev_trigger = yes }
 			}
 			mother_even_if_dead = {
 				dynasty = ROOT
-				any_opinion_modifier_target = {
-					is_alive = yes
-					reverse_has_opinion_modifier = {
-						who = PREVPREV
-						modifier = opinion_dwarf_grudge
-					}
-				}
+				any_opinion_modifier_target = { is_alive = yes dawi_grudge_by_prev_trigger = yes }
 			}
 		}
 	}
@@ -123,16 +114,9 @@ character_event = {
 						limit = {
 							is_alive = yes
 							NOT = { character = ROOT }
-							reverse_has_opinion_modifier = {
-								who = PREVPREV
-								modifier = opinion_dwarf_grudge
-							}
+							dawi_grudge_by_prev_trigger = yes
 						}
-						reverse_opinion = {
-							who = ROOT
-							modifier = opinion_dwarf_grudge
-							months = 12000
-						}
+						dawi_inherit_grudges_effect = yes
 					}
 				}
 				mother_even_if_dead = {
@@ -141,16 +125,9 @@ character_event = {
 						limit = {
 							is_alive = yes
 							NOT = { character = ROOT }
-							reverse_has_opinion_modifier = {
-								who = PREVPREV
-								modifier = opinion_dwarf_grudge
-							}
+							dawi_grudge_by_prev_trigger = yes
 						}
-						reverse_opinion = {
-							who = ROOT
-							modifier = opinion_dwarf_grudge
-							months = 12000
-						}
+						dawi_inherit_grudges_effect = yes
 					}
 				}
 			}
@@ -173,7 +150,11 @@ character_event = {
 
 	trigger = {
 		dawi_grudge_keeper_trigger = yes
-		FROM = { is_alive = yes dawi_race_grudge_trigger = no dawi_grudge_against_trigger = no }
+		FROM = {
+			is_alive = yes
+			dawi_race_grudge_trigger = no
+			NOT = { reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge } }
+		}
 	}
 
 	immediate = {
@@ -182,7 +163,7 @@ character_event = {
 
 	option = {
 		name = EVTOPTAdawi2
-		dawi_enter_grudge_effect = yes
+		dawi_enter_war_grudge_effect = yes
 	}
 }
 
@@ -194,13 +175,11 @@ character_event = {
 	picture = GFX_evt_dwarf_grudge_book
 	border = GFX_event_normal_frame_religion
 
-	is_triggered_only = yes # dawi_enter_grudge_effect
+	is_triggered_only = yes # dawi_grudge_kin_told_effect
 
 	option = {
 		name = EVTOPTAdawi3
-		event_target:grudge_offender = {
-			reverse_opinion = { who = ROOT modifier = opinion_dwarf_grudge months = 12000 }
-		}
+		event_target:grudge_offender = { dawi_take_up_grudges_effect = yes }
 		piety = 10
 	}
 }
@@ -233,20 +212,14 @@ character_event = {
 	desc = {
 		text = EVTDESCdawi5
 		trigger = {
-			any_opinion_modifier_target = {
-				is_alive = yes
-				reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
-			}
+			any_opinion_modifier_target = { is_alive = yes dawi_grudge_against_trigger = yes }
 		}
 	}
 	desc = {
 		text = EVTDESCdawi5b
 		trigger = {
 			NOT = {
-				any_opinion_modifier_target = {
-					is_alive = yes
-					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
-				}
+				any_opinion_modifier_target = { is_alive = yes dawi_grudge_against_trigger = yes }
 			}
 		}
 	}
@@ -258,11 +231,12 @@ character_event = {
 	option = {
 		name = EVTOPTAdawi5
 		any_opinion_modifier_target = {
-			limit = {
-				is_alive = yes
-				reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+			limit = { is_alive = yes dawi_grudge_against_trigger = yes }
+			if = {
+				limit = { dawi_blood_grudge_against_trigger = yes }
+				custom_tooltip = { text = dawi_blood_grudge_entry_tt }
 			}
-			custom_tooltip = { text = dawi_grudge_entry_tt }
+			else = { custom_tooltip = { text = dawi_grudge_entry_tt } }
 		}
 	}
 }
@@ -270,7 +244,8 @@ character_event = {
 # dawi.6 The grudge war is won
 # The winner of a settle_grudge war takes amends from event_target:
 # grudge_offender (the enemy ruler or one of his vassals): his treasury, his
-# kin as hostages, or his head. Any of them strikes out the grudge.
+# kin as hostages, or his head. Gold or hostages strike out an ordinary
+# grudge; a Blood Grudge takes his head.
 # Scope: ROOT is the Dawi who won the war.
 character_event = {
 	id = dawi.6
@@ -286,6 +261,7 @@ character_event = {
 
 	option = { # Empty his treasury
 		name = EVTOPTAdawi6
+		trigger = { event_target:grudge_offender = { dawi_blood_grudge_against_trigger = no } }
 		event_target:grudge_offender = { transfer_scaled_wealth = { to = ROOT value = 4 } }
 		piety = 50
 		dawi_settle_grudge_effect = yes
@@ -298,6 +274,7 @@ character_event = {
 	}
 	option = { # Take his kin as hostages
 		name = EVTOPTBdawi6
+		trigger = { event_target:grudge_offender = { dawi_blood_grudge_against_trigger = no } }
 		event_target:grudge_offender = {
 			any_courtier = { limit = { dynasty = event_target:grudge_offender } imprison = ROOT }
 		}
@@ -312,7 +289,7 @@ character_event = {
 	option = { # His head
 		name = EVTOPTCdawi6
 		piety = 100
-		dawi_settle_grudge_effect = yes
+		dawi_settle_blood_grudge_effect = yes
 		event_target:grudge_offender = {
 			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
 			else = { death = { death_reason = death_execution killer = ROOT } }
@@ -335,7 +312,7 @@ character_event = {
 	picture = GFX_evt_dwarf_angry_look
 	border = GFX_event_normal_frame_war
 
-	is_triggered_only = yes # dawi_enter_grudge_effect
+	is_triggered_only = yes # dawi_grudge_offender_told_effect
 
 	option = {
 		name = EVTOPTAdawi7
@@ -351,7 +328,7 @@ character_event = {
 	picture = GFX_evt_dwarf_angry_look
 	border = GFX_event_normal_frame_war
 
-	is_triggered_only = yes # dawi_enter_grudge_effect
+	is_triggered_only = yes # dawi_grudge_offender_told_effect
 
 	option = {
 		name = EVTOPTAdawi8
@@ -391,8 +368,12 @@ character_event = {
 	option = {
 		name = EVTOPTAdawi9
 		if = {
-			limit = { FROM = { dawi_grudge_against_trigger = no } }
-			dawi_enter_grudge_effect = yes
+			limit = { FROM = { dawi_blood_grudge_against_trigger = no } }
+			if = {
+				limit = { has_character_flag = dwarf_grudge_plot_discovered_dead_relative }
+				dawi_enter_kin_grudge_effect = yes
+			}
+			else = { dawi_enter_murder_grudge_effect = yes }
 		}
 		clr_character_flag = dwarf_grudge_plot_discovered
 		clr_character_flag = dwarf_grudge_plot_discovered_dead_relative
@@ -438,7 +419,7 @@ character_event = {
 
 	option = {
 		name = EVTOPTAdawi11
-		dawi_enter_grudge_effect = yes
+		dawi_enter_kin_grudge_effect = yes
 	}
 }
 
@@ -557,8 +538,17 @@ character_event = {
 	option = {
 		name = EVTOPTAdawi15
 		if = {
-			limit = { FROM = { dawi_grudge_against_trigger = no } }
-			dawi_enter_grudge_effect = yes
+			limit = {
+				FROM = {
+					NOT = {
+						reverse_has_opinion_modifier = {
+							who = ROOT
+							modifier = opinion_dawi_grudge_oath
+						}
+					}
+				}
+			}
+			dawi_enter_oath_grudge_effect = yes
 		}
 	}
 }
@@ -580,7 +570,9 @@ character_event = {
 			is_alive = yes
 			NOT = { character = ROOT }
 			dawi_race_grudge_trigger = no
-			dawi_grudge_against_trigger = no
+			NOT = {
+				reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dawi_grudge_oath }
+			}
 		}
 	}
 
@@ -590,7 +582,7 @@ character_event = {
 
 	option = { # Write it down
 		name = EVTOPTAdawi16
-		dawi_enter_grudge_effect = yes
+		dawi_enter_oath_grudge_effect = yes
 		ai_chance = { factor = 90 }
 	}
 	option = { # They had their reasons
@@ -795,7 +787,7 @@ character_event = {
 			is_alive = yes
 			is_ruler = yes
 			prisoner = no
-			reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+			dawi_ordinary_grudge_against_trigger = yes
 		}
 	}
 
@@ -807,7 +799,7 @@ character_event = {
 					is_alive = yes
 					is_ruler = yes
 					prisoner = no
-					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+					dawi_ordinary_grudge_against_trigger = yes
 				}
 				save_event_target_as = grudge_offender
 			}
@@ -849,7 +841,7 @@ character_event = {
 				any_opinion_modifier_target = {
 					count = 5
 					is_alive = yes
-					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+					dawi_grudge_against_trigger = yes
 				}
 			}
 			add_character_modifier = { name = unfulfilled_grudges_5 duration = -1 }
@@ -859,7 +851,7 @@ character_event = {
 				any_opinion_modifier_target = {
 					count = 4
 					is_alive = yes
-					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+					dawi_grudge_against_trigger = yes
 				}
 			}
 			add_character_modifier = { name = unfulfilled_grudges_4 duration = -1 }
@@ -869,7 +861,7 @@ character_event = {
 				any_opinion_modifier_target = {
 					count = 3
 					is_alive = yes
-					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+					dawi_grudge_against_trigger = yes
 				}
 			}
 			add_character_modifier = { name = unfulfilled_grudges_3 duration = -1 }
@@ -879,17 +871,14 @@ character_event = {
 				any_opinion_modifier_target = {
 					count = 2
 					is_alive = yes
-					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
+					dawi_grudge_against_trigger = yes
 				}
 			}
 			add_character_modifier = { name = unfulfilled_grudges_2 duration = -1 }
 		}
 		else_if = {
 			limit = {
-				any_opinion_modifier_target = {
-					is_alive = yes
-					reverse_has_opinion_modifier = { who = ROOT modifier = opinion_dwarf_grudge }
-				}
+				any_opinion_modifier_target = { is_alive = yes dawi_grudge_against_trigger = yes }
 			}
 			add_character_modifier = { name = unfulfilled_grudges_1 duration = -1 }
 		}
@@ -3341,7 +3330,7 @@ character_event = {
 				modifier = { factor = 2 intrigue = 12 }
 				custom_tooltip = { text = dawi_statues_culprit_found_tt }
 				FROM = { save_event_target_as = grudge_offender }
-				dawi_enter_grudge_effect = yes
+				dawi_enter_theft_grudge_effect = yes
 			}
 			60 = { custom_tooltip = { text = dawi_statues_culprit_lost_tt } }
 		}
@@ -3477,7 +3466,7 @@ character_event = {
 				chance = 30
 				custom_tooltip = { text = dawi_rockfall_culprit_found_tt }
 				FROM = { save_event_target_as = grudge_offender }
-				dawi_enter_grudge_effect = yes
+				dawi_enter_murder_grudge_effect = yes
 			}
 		}
 		FROM = { character_event = { id = dawi.177 days = 1 } }

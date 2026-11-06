@@ -3,7 +3,7 @@
 # Namespace: sway (was HF.21000 - HF.21999 in HF_sway_events and HF.42000 -
 #   HF.42031 in HF_sway_additional_events; sway.N = old HF.21N, HF.21000 is
 #   sway.990, and HF.42N is sway.(N - 41800), so HF.42000 is sway.200)
-# Faction: any landed ruler (Sway decision, and the AI picks targets)
+# Faction: any landed ruler of any race (Sway decision, and the AI picks targets)
 #
 # A ruler who chooses to sway another works on them for years: letters,
 # gifts, talk of war, governance and learning, appeals to their vices and
@@ -29,11 +29,23 @@
 # Help with their education              sway.200 - sway.209
 # Lifestyle invitations (hunt, duel,     sway.220 - sway.231
 #   games, feast, scholarship, stewardship, the dungeon)
+# The voices of the races: message, gift sway.299 - sway.303
+#   and deed in each race's own manner
+#
+# Races: every ruler speaks in one voice (court, undead, greenskin, Skaven,
+#   ogre, Lizardmen, warband, daemon; wh_sway_triggers.txt). The courtly
+#   methods (letters, art, poems, learning, education, visits, invitations)
+#   only fire when both keep a court (court or undead); otherwise the voice
+#   methods do. The Dawi and greenskins, and the Lizardmen and the Skaven or
+#   daemons, can never sway each other. AI independents with no one to work
+#   on at home pick a neighbouring ruler (997, 998).
 #
 # Saved: persistent event targets sway_target, antagonize_target; character
 #   flags flag_character_being_swayed, flag_tired_of_gifts,
-#   sway_can_lend_guard, sway_got_sworn_swords and many attempt flags;
-#   unit earmark sway_sworn_swords.
+#   sway_can_lend_guard, sway_got_sworn_swords, sway_got_ally_band,
+#   sway_voice_msg/gift/deed and many attempt flags; unit earmarks
+#   sway_sworn_swords, sway_ally_band (302, 5%: a band of the target's own
+#   kind, from Grave Guard to a mob of Boyz).
 #
 # Callers:
 #   decisions/HF_sway_antagonize_decisions.txt (sets the target),
@@ -88,6 +100,28 @@ character_event = {
 				}
 			}
 			save_event_target_as = potential_antagonized
+		}
+		if = { #No one at home: an independent ruler may pick on a neighbour instead.
+			limit = {
+				NOT = { event_target:potential_antagonized = { always = yes } }
+				independent = yes
+			}
+			random_neighbor_independent_ruler = {
+				limit = {
+					is_inaccessible_trigger = no
+					is_adult = yes
+					NOT = { trait = incapable }
+					NOR = {
+						is_friend = ROOT
+						is_lover = ROOT
+						has_character_flag = flag_character_being_swayed
+						has_character_flag = flag_character_being_antagonized
+					}
+				}
+				preferred_limit = { sway_pair_blocked_trigger = yes }
+				preferred_limit = { sway_same_voice_trigger = no }
+				save_event_target_as = potential_antagonized
+			}
 		}
 		if = {
 			limit = { event_target:potential_antagonized = { is_alive = yes } } #Prevent script asserts in case of no character being scoped to.
@@ -488,13 +522,32 @@ character_event = {
 			}
 			save_event_target_as = potential_swayed
 		}
+		if = { #No one at home: an independent ruler may work on a neighbour instead.
+			limit = { NOT = { event_target:potential_swayed = { always = yes } } independent = yes }
+			random_neighbor_independent_ruler = {
+				limit = {
+					is_inaccessible_trigger = no
+					is_adult = yes
+					NOT = { trait = incapable }
+					sway_pair_blocked_trigger = no
+					NOR = {
+						war_with = ROOT
+						is_friend = ROOT
+						has_character_flag = flag_character_being_swayed
+						has_character_flag = flag_character_being_antagonized
+					}
+				}
+				preferred_limit = { sway_same_voice_trigger = yes }
+				save_event_target_as = potential_swayed
+			}
+		}
 		if = {
 			limit = { event_target:potential_swayed = { is_alive = yes } } #Prevent script asserts in case of no character being scoped to.
 			random = {
 				chance = 70
 				modifier = {
 					factor = 3 #Vassal of player more likely to suck up to him.
-					event_target:potential_antagonized = { vassal_of = ROOT ai = no }
+					event_target:potential_swayed = { vassal_of = ROOT ai = no }
 				}
 				#Soft AI triggers
 				modifier = {
@@ -780,6 +833,21 @@ character_event = {
 	immediate = {
 		#This event fires for the Appeaser, but all the DELAYED events below this one should be sent to the Appeased WITHOUT triggers. They need to be hidden events that simply check the trigger with an "if" and ping back to the Appeaser. If the trigger has become invalid during the delay, then the hidden event can simply call this event again after a couple of weeks, this way the Appeaser doesn't have to wait another year to receive an event from this list.
 		random_list = {
+			6 = { #The voices of the races: when one of the two keeps no court.
+				trigger = {
+					persistent_event_target:sway_target = {
+						sway_courtly_pair_trigger = no
+						sway_pair_blocked_trigger = no
+					}
+				}
+				modifier = {
+					factor = 0
+					persistent_event_target:sway_target = {
+						is_inaccessible_or_incapable_trigger = yes
+					}
+				}
+				persistent_event_target:sway_target = { character_event = { id = sway.299 } }
+			}
 			################## CLEAN UP EVENTS ####################
 			100 = { #You or your target have separately gone into Seclusion (somehow), clear target.
 				trigger = {
@@ -857,6 +925,10 @@ character_event = {
 			}
 			################## TIER ONE EVENTS (Generic, Education traits) ####################
 			1 = { #Send generic letter to improve relations.
+				modifier = { #Courtly method: both must keep a court.
+					factor = 0
+					persistent_event_target:sway_target = { sway_courtly_pair_trigger = no }
+				}
 				trigger = {
 					persistent_event_target:sway_target = {
 						NOR = {
@@ -888,6 +960,10 @@ character_event = {
 				persistent_event_target:sway_target = { character_event = { id = sway.16 } }
 			}
 			1 = { #Send generic gift to improve opinion.
+				modifier = { #Courtly method: both must keep a court.
+					factor = 0
+					persistent_event_target:sway_target = { sway_courtly_pair_trigger = no }
+				}
 				trigger = {
 					persistent_event_target:sway_target = {
 						NOR = {
@@ -995,6 +1071,10 @@ character_event = {
 				persistent_event_target:sway_target = { character_event = { id = sway.40 } }
 			}
 			1 = { #Use your learning education to sway character.
+				modifier = { #Courtly method: both must keep a court.
+					factor = 0
+					persistent_event_target:sway_target = { sway_courtly_pair_trigger = no }
+				}
 				trigger = { persistent_event_target:sway_target = { no_grievance_trigger = yes } }
 				modifier = {
 					factor = 0
@@ -1019,6 +1099,10 @@ character_event = {
 				persistent_event_target:sway_target = { character_event = { id = sway.45 } }
 			}
 			1 = { #Use your educational trait to improve your sway target's
+				modifier = { #Courtly method: both must keep a court.
+					factor = 0
+					persistent_event_target:sway_target = { sway_courtly_pair_trigger = no }
+				}
 				trigger = {
 					persistent_event_target:sway_target = {
 						no_grievance_trigger = yes
@@ -1252,6 +1336,10 @@ character_event = {
 				persistent_event_target:sway_target = { character_event = { id = sway.84 } }
 			}
 			3 = { #poet event.
+				modifier = { #Courtly method: both must keep a court.
+					factor = 0
+					persistent_event_target:sway_target = { sway_courtly_pair_trigger = no }
+				}
 				trigger = { persistent_event_target:sway_target = { no_grievance_trigger = yes } }
 				modifier = {
 					factor = 0
@@ -1336,6 +1424,10 @@ character_event = {
 
 			################## TIER THREE EVENTS (Event chains) ####################
 			5 = { #Long visit.
+				modifier = { #Courtly method: both must keep a court.
+					factor = 0
+					persistent_event_target:sway_target = { sway_courtly_pair_trigger = no }
+				}
 				trigger = {
 					persistent_event_target:sway_target = {
 						NOR = {
@@ -1385,6 +1477,10 @@ character_event = {
 
 			################## TIER FOUR EVENTS (Lifestyle Events) ####################
 			2 = { #Invite to lifestyle event
+				modifier = { #Courtly method: both must keep a court.
+					factor = 0
+					persistent_event_target:sway_target = { sway_courtly_pair_trigger = no }
+				}
 				trigger = {
 					persistent_event_target:sway_target = {
 						no_grievance_trigger = yes
@@ -16531,5 +16627,555 @@ character_event = {
 		name = { trigger = { has_character_flag = sway_torture } text = EVTOPTAsway231_TORTURE }
 
 		reset_flag_lifestyle_sway_event_effect = yes
+	}
+}
+
+###############################################################################
+# The voices of the races (sway.299 - sway.303)
+# Rulers who do not keep a court, or who sway one who does not, use these
+# methods instead of letters, art, poems, visits and invitations. Each voice
+# (common/scripted_triggers/wh_sway_triggers.txt) has its own message, gift
+# and deed, and the target answers in its own voice. A rare reward: the
+# target lends a band of its own kind (earmark sway_ally_band).
+###############################################################################
+
+#Target: hidden ping from sway.990.
+character_event = {
+	id = sway.299
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { character_event = { id = sway.300 } }
+	}
+}
+
+#Swayer: how do I win this one over? FROM is the target.
+character_event = {
+	id = sway.300
+	desc = { trigger = { sway_voice_court_trigger = yes } text = EVTDESCsway300_court }
+	desc = { trigger = { sway_voice_undead_trigger = yes } text = EVTDESCsway300_undead }
+	desc = { trigger = { sway_voice_greenskin_trigger = yes } text = EVTDESCsway300_greenskin }
+	desc = { trigger = { sway_voice_skaven_trigger = yes } text = EVTDESCsway300_skaven }
+	desc = { trigger = { sway_voice_ogre_trigger = yes } text = EVTDESCsway300_ogre }
+	desc = { trigger = { sway_voice_lizardmen_trigger = yes } text = EVTDESCsway300_lizardmen }
+	desc = { trigger = { sway_voice_warband_trigger = yes } text = EVTDESCsway300_warband }
+	desc = { trigger = { sway_voice_daemon_trigger = yes } text = EVTDESCsway300_daemon }
+	picture = GFX_evt_sway_hf
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+	is_triggered_only = yes
+
+	option = { #Message
+		name = { text = EVTOPTAsway300_court trigger = { sway_voice_court_trigger = yes } }
+		name = { text = EVTOPTAsway300_undead trigger = { sway_voice_undead_trigger = yes } }
+		name = { text = EVTOPTAsway300_greenskin trigger = { sway_voice_greenskin_trigger = yes } }
+		name = { text = EVTOPTAsway300_skaven trigger = { sway_voice_skaven_trigger = yes } }
+		name = { text = EVTOPTAsway300_ogre trigger = { sway_voice_ogre_trigger = yes } }
+		name = { text = EVTOPTAsway300_lizardmen trigger = { sway_voice_lizardmen_trigger = yes } }
+		name = { text = EVTOPTAsway300_warband trigger = { sway_voice_warband_trigger = yes } }
+		name = { text = EVTOPTAsway300_daemon trigger = { sway_voice_daemon_trigger = yes } }
+		custom_tooltip = { text = tooltip_sway300_A }
+		tooltip_info = diplomacy
+		set_character_flag = sway_voice_msg
+		hidden_tooltip = { FROM = { character_event = { id = sway.301 } } }
+		ai_chance = { factor = 100 }
+	}
+	option = { #Gift
+		name = { text = EVTOPTBsway300_court trigger = { sway_voice_court_trigger = yes } }
+		name = { text = EVTOPTBsway300_undead trigger = { sway_voice_undead_trigger = yes } }
+		name = { text = EVTOPTBsway300_greenskin trigger = { sway_voice_greenskin_trigger = yes } }
+		name = { text = EVTOPTBsway300_skaven trigger = { sway_voice_skaven_trigger = yes } }
+		name = { text = EVTOPTBsway300_ogre trigger = { sway_voice_ogre_trigger = yes } }
+		name = { text = EVTOPTBsway300_lizardmen trigger = { sway_voice_lizardmen_trigger = yes } }
+		name = { text = EVTOPTBsway300_warband trigger = { sway_voice_warband_trigger = yes } }
+		name = { text = EVTOPTBsway300_daemon trigger = { sway_voice_daemon_trigger = yes } }
+		trigger = {
+			OR = {
+				AND = {
+					OR = {
+						sway_voice_court_trigger = yes
+						sway_voice_lizardmen_trigger = yes
+						sway_voice_ogre_trigger = yes
+						sway_voice_skaven_trigger = yes
+						sway_voice_undead_trigger = yes
+					}
+					wealth = 50
+				}
+				AND = {
+					NOR = {
+						sway_voice_court_trigger = yes
+						sway_voice_lizardmen_trigger = yes
+						sway_voice_ogre_trigger = yes
+						sway_voice_skaven_trigger = yes
+						sway_voice_undead_trigger = yes
+					}
+					prestige = 50
+				}
+			}
+		}
+		if = {
+			limit = {
+				OR = {
+					sway_voice_court_trigger = yes
+					sway_voice_lizardmen_trigger = yes
+					sway_voice_ogre_trigger = yes
+					sway_voice_skaven_trigger = yes
+					sway_voice_undead_trigger = yes
+				}
+			}
+			wealth = -50
+		}
+		else = { prestige = -50 }
+		custom_tooltip = { text = tooltip_sway300_B }
+		set_character_flag = sway_voice_gift
+		hidden_tooltip = { FROM = { character_event = { id = sway.301 } } }
+		ai_chance = { factor = 80 modifier = { factor = 0.25 trait = greedy } }
+	}
+	option = { #Deed
+		%s
+		custom_tooltip = { text = tooltip_sway300_C }
+		tooltip_info = martial
+		if = { limit = { sway_voice_ogre_trigger = yes } wealth = -25 }
+		set_character_flag = sway_voice_deed
+		hidden_tooltip = { FROM = { character_event = { id = sway.301 } } }
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 2 trait = wroth }
+			modifier = { factor = 0.5 trait = craven }
+		}
+	}
+	option = { #Not now
+		name = EVTOPTDsway300
+		ai_chance = { factor = 0 }
+	}
+}
+
+#Target: receives the message, gift or deed. FROM is the swayer.
+character_event = {
+	id = sway.301
+	desc = {
+		trigger = { FROM = { sway_voice_court_trigger = yes has_character_flag = sway_voice_msg } }
+		text = EVTDESCsway301_court_msg
+	}
+	desc = {
+		trigger = { FROM = { sway_voice_court_trigger = yes has_character_flag = sway_voice_gift } }
+		text = EVTDESCsway301_court_gift
+	}
+	desc = {
+		trigger = { FROM = { sway_voice_court_trigger = yes has_character_flag = sway_voice_deed } }
+		text = EVTDESCsway301_court_deed
+	}
+	desc = {
+		trigger = { FROM = { sway_voice_undead_trigger = yes has_character_flag = sway_voice_msg } }
+		text = EVTDESCsway301_undead_msg
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_undead_trigger = yes has_character_flag = sway_voice_gift }
+		}
+		text = EVTDESCsway301_undead_gift
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_undead_trigger = yes has_character_flag = sway_voice_deed }
+		}
+		text = EVTDESCsway301_undead_deed
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_greenskin_trigger = yes has_character_flag = sway_voice_msg }
+		}
+		text = EVTDESCsway301_greenskin_msg
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_greenskin_trigger = yes has_character_flag = sway_voice_gift }
+		}
+		text = EVTDESCsway301_greenskin_gift
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_greenskin_trigger = yes has_character_flag = sway_voice_deed }
+		}
+		text = EVTDESCsway301_greenskin_deed
+	}
+	desc = {
+		trigger = { FROM = { sway_voice_skaven_trigger = yes has_character_flag = sway_voice_msg } }
+		text = EVTDESCsway301_skaven_msg
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_skaven_trigger = yes has_character_flag = sway_voice_gift }
+		}
+		text = EVTDESCsway301_skaven_gift
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_skaven_trigger = yes has_character_flag = sway_voice_deed }
+		}
+		text = EVTDESCsway301_skaven_deed
+	}
+	desc = {
+		trigger = { FROM = { sway_voice_ogre_trigger = yes has_character_flag = sway_voice_msg } }
+		text = EVTDESCsway301_ogre_msg
+	}
+	desc = {
+		trigger = { FROM = { sway_voice_ogre_trigger = yes has_character_flag = sway_voice_gift } }
+		text = EVTDESCsway301_ogre_gift
+	}
+	desc = {
+		trigger = { FROM = { sway_voice_ogre_trigger = yes has_character_flag = sway_voice_deed } }
+		text = EVTDESCsway301_ogre_deed
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_lizardmen_trigger = yes has_character_flag = sway_voice_msg }
+		}
+		text = EVTDESCsway301_lizardmen_msg
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_lizardmen_trigger = yes has_character_flag = sway_voice_gift }
+		}
+		text = EVTDESCsway301_lizardmen_gift
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_lizardmen_trigger = yes has_character_flag = sway_voice_deed }
+		}
+		text = EVTDESCsway301_lizardmen_deed
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_warband_trigger = yes has_character_flag = sway_voice_msg }
+		}
+		text = EVTDESCsway301_warband_msg
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_warband_trigger = yes has_character_flag = sway_voice_gift }
+		}
+		text = EVTDESCsway301_warband_gift
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_warband_trigger = yes has_character_flag = sway_voice_deed }
+		}
+		text = EVTDESCsway301_warband_deed
+	}
+	desc = {
+		trigger = { FROM = { sway_voice_daemon_trigger = yes has_character_flag = sway_voice_msg } }
+		text = EVTDESCsway301_daemon_msg
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_daemon_trigger = yes has_character_flag = sway_voice_gift }
+		}
+		text = EVTDESCsway301_daemon_gift
+	}
+	desc = {
+		trigger = {
+			FROM = { sway_voice_daemon_trigger = yes has_character_flag = sway_voice_deed }
+		}
+		text = EVTDESCsway301_daemon_deed
+	}
+	picture = GFX_evt_pleasing_letter
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+	is_triggered_only = yes
+
+	option = { #Accept
+		name = { text = EVTOPTAsway301_court trigger = { sway_voice_court_trigger = yes } }
+		name = { text = EVTOPTAsway301_undead trigger = { sway_voice_undead_trigger = yes } }
+		name = { text = EVTOPTAsway301_greenskin trigger = { sway_voice_greenskin_trigger = yes } }
+		name = { text = EVTOPTAsway301_skaven trigger = { sway_voice_skaven_trigger = yes } }
+		name = { text = EVTOPTAsway301_ogre trigger = { sway_voice_ogre_trigger = yes } }
+		name = { text = EVTOPTAsway301_lizardmen trigger = { sway_voice_lizardmen_trigger = yes } }
+		name = { text = EVTOPTAsway301_warband trigger = { sway_voice_warband_trigger = yes } }
+		name = { text = EVTOPTAsway301_daemon trigger = { sway_voice_daemon_trigger = yes } }
+		custom_tooltip = { text = tooltip_sway301_A }
+		opinion = { who = FROM modifier = opinion_swayed_1 years = 5 }
+		hidden_tooltip = { FROM = { character_event = { id = sway.302 days = 5 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 sway_same_voice_trigger = yes }
+			modifier = {
+				factor = 1.5
+				FROM = { has_character_flag = sway_voice_gift }
+				trait = greedy
+			}
+			modifier = {
+				factor = 0.5
+				FROM = { has_character_flag = sway_voice_gift }
+				trait = charitable
+			}
+			modifier = {
+				factor = 2
+				FROM = { has_character_flag = sway_voice_deed }
+				OR = { trait = brave trait = wroth }
+			}
+			modifier = {
+				factor = 0.5
+				FROM = { has_character_flag = sway_voice_deed }
+				trait = craven
+			}
+			modifier = { factor = 0.5 FROM = { sway_voice_skaven_trigger = yes } trait = paranoid }
+			modifier = {
+				factor = 0.5
+				FROM = { sway_voice_daemon_trigger = yes }
+				NOT = { religion_group = chaos_gods_group }
+				trait = zealous
+			}
+			modifier = { factor = 1.25 FROM = { diplomacy = 10 } }
+			modifier = { factor = 1.25 FROM = { diplomacy = 14 } }
+			modifier = {
+				factor = 1.25
+				FROM = { martial = 12 }
+				FROM = { has_character_flag = sway_voice_deed }
+			}
+		}
+	}
+	option = { #Refuse
+		name = { text = EVTOPTBsway301_court trigger = { sway_voice_court_trigger = yes } }
+		name = { text = EVTOPTBsway301_undead trigger = { sway_voice_undead_trigger = yes } }
+		name = { text = EVTOPTBsway301_greenskin trigger = { sway_voice_greenskin_trigger = yes } }
+		name = { text = EVTOPTBsway301_skaven trigger = { sway_voice_skaven_trigger = yes } }
+		name = { text = EVTOPTBsway301_ogre trigger = { sway_voice_ogre_trigger = yes } }
+		name = { text = EVTOPTBsway301_lizardmen trigger = { sway_voice_lizardmen_trigger = yes } }
+		name = { text = EVTOPTBsway301_warband trigger = { sway_voice_warband_trigger = yes } }
+		name = { text = EVTOPTBsway301_daemon trigger = { sway_voice_daemon_trigger = yes } }
+		custom_tooltip = { text = tooltip_sway301_B }
+		hidden_tooltip = { FROM = { character_event = { id = sway.303 days = 5 } } }
+		ai_chance = { factor = 40 }
+	}
+}
+
+#Swayer: the target liked it. FROM is the target.
+character_event = {
+	id = sway.302
+	desc = { trigger = { sway_voice_court_trigger = yes } text = EVTDESCsway302_court }
+	desc = { trigger = { sway_voice_undead_trigger = yes } text = EVTDESCsway302_undead }
+	desc = { trigger = { sway_voice_greenskin_trigger = yes } text = EVTDESCsway302_greenskin }
+	desc = { trigger = { sway_voice_skaven_trigger = yes } text = EVTDESCsway302_skaven }
+	desc = { trigger = { sway_voice_ogre_trigger = yes } text = EVTDESCsway302_ogre }
+	desc = { trigger = { sway_voice_lizardmen_trigger = yes } text = EVTDESCsway302_lizardmen }
+	desc = { trigger = { sway_voice_warband_trigger = yes } text = EVTDESCsway302_warband }
+	desc = { trigger = { sway_voice_daemon_trigger = yes } text = EVTDESCsway302_daemon }
+	picture = GFX_evt_pleasing_letter
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAsway302
+		tooltip = {
+			FROM = {
+				show_scope_change = no
+				opinion = { who = ROOT modifier = opinion_swayed_1 years = 5 }
+			}
+		}
+		if = { # Rare: the target lends a band of its own kind.
+			limit = {
+				is_ruler = yes
+				is_landed = yes
+				capital_scope = { always = yes }
+				FROM = { is_ruler = yes is_landed = yes }
+				NOT = { has_character_flag = sway_got_ally_band }
+			}
+			random = {
+				chance = 5
+				set_character_flag = sway_got_ally_band
+				if = {
+					limit = { FROM = { sway_voice_court_trigger = yes } }
+					custom_tooltip = {
+						text = tooltip_sway302_band_court
+						capital_scope = {
+							PREV = {
+								spawn_unit = {
+									province = PREV
+									owner = PREV
+									troops = { heavy_infantry = { 80 80 } archers = { 40 40 } }
+									earmark = sway_ally_band
+									maintenance_multiplier = 0.5
+								}
+							}
+						}
+					}
+				}
+				if = {
+					limit = { FROM = { sway_voice_undead_trigger = yes } }
+					custom_tooltip = {
+						text = tooltip_sway302_band_undead
+						capital_scope = {
+							PREV = {
+								spawn_unit = {
+									province = PREV
+									owner = PREV
+									troops = { heavy_infantry = { 120 120 } }
+									earmark = sway_ally_band
+									maintenance_multiplier = 0.5
+								}
+							}
+						}
+					}
+				}
+				if = {
+					limit = { FROM = { sway_voice_greenskin_trigger = yes } }
+					custom_tooltip = {
+						text = tooltip_sway302_band_greenskin
+						capital_scope = {
+							PREV = {
+								spawn_unit = {
+									province = PREV
+									owner = PREV
+									troops = {
+										light_infantry = { 150 150 }
+										heavy_infantry = { 50 50 }
+									}
+									earmark = sway_ally_band
+									maintenance_multiplier = 0.5
+								}
+							}
+						}
+					}
+				}
+				if = {
+					limit = { FROM = { sway_voice_skaven_trigger = yes } }
+					custom_tooltip = {
+						text = tooltip_sway302_band_skaven
+						capital_scope = {
+							PREV = {
+								spawn_unit = {
+									province = PREV
+									owner = PREV
+									troops = { light_infantry = { 200 200 } }
+									earmark = sway_ally_band
+									maintenance_multiplier = 0.5
+								}
+							}
+						}
+					}
+				}
+				if = {
+					limit = { FROM = { sway_voice_ogre_trigger = yes } }
+					custom_tooltip = {
+						text = tooltip_sway302_band_ogre
+						capital_scope = {
+							PREV = {
+								spawn_unit = {
+									province = PREV
+									owner = PREV
+									troops = { heavy_infantry = { 80 80 } }
+									earmark = sway_ally_band
+									maintenance_multiplier = 0.5
+								}
+							}
+						}
+					}
+				}
+				if = {
+					limit = { FROM = { sway_voice_lizardmen_trigger = yes } }
+					custom_tooltip = {
+						text = tooltip_sway302_band_lizardmen
+						capital_scope = {
+							PREV = {
+								spawn_unit = {
+									province = PREV
+									owner = PREV
+									troops = { heavy_infantry = { 100 100 } pikemen = { 50 50 } }
+									earmark = sway_ally_band
+									maintenance_multiplier = 0.5
+								}
+							}
+						}
+					}
+				}
+				if = {
+					limit = { FROM = { sway_voice_warband_trigger = yes } }
+					custom_tooltip = {
+						text = tooltip_sway302_band_warband
+						capital_scope = {
+							PREV = {
+								spawn_unit = {
+									province = PREV
+									owner = PREV
+									troops = {
+										light_infantry = { 80 80 }
+										light_cavalry = { 60 60 }
+									}
+									earmark = sway_ally_band
+									maintenance_multiplier = 0.5
+								}
+							}
+						}
+					}
+				}
+				if = {
+					limit = { FROM = { sway_voice_daemon_trigger = yes } }
+					custom_tooltip = {
+						text = tooltip_sway302_band_daemon
+						capital_scope = {
+							PREV = {
+								spawn_unit = {
+									province = PREV
+									owner = PREV
+									troops = {
+										light_infantry = { 150 150 }
+										heavy_infantry = { 30 30 }
+									}
+									earmark = sway_ally_band
+									maintenance_multiplier = 0.5
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		clr_character_flag = sway_voice_msg
+		clr_character_flag = sway_voice_gift
+		clr_character_flag = sway_voice_deed
+		ai_chance = { factor = 100 }
+	}
+}
+
+#Swayer: the target refused. FROM is the target.
+character_event = {
+	id = sway.303
+	desc = { trigger = { sway_voice_court_trigger = yes } text = EVTDESCsway303_court }
+	desc = { trigger = { sway_voice_undead_trigger = yes } text = EVTDESCsway303_undead }
+	desc = { trigger = { sway_voice_greenskin_trigger = yes } text = EVTDESCsway303_greenskin }
+	desc = { trigger = { sway_voice_skaven_trigger = yes } text = EVTDESCsway303_skaven }
+	desc = { trigger = { sway_voice_ogre_trigger = yes } text = EVTDESCsway303_ogre }
+	desc = { trigger = { sway_voice_lizardmen_trigger = yes } text = EVTDESCsway303_lizardmen }
+	desc = { trigger = { sway_voice_warband_trigger = yes } text = EVTDESCsway303_warband }
+	desc = { trigger = { sway_voice_daemon_trigger = yes } text = EVTDESCsway303_daemon }
+	picture = GFX_evt_upsetting_letter
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAsway303
+		if = { # A greenskin who lost the brawl.
+			limit = { sway_voice_greenskin_trigger = yes has_character_flag = sway_voice_deed }
+			random = { chance = 25 add_trait_wounded_effect = yes }
+		}
+		if = { # A Skaven whose spies were seen.
+			limit = { sway_voice_skaven_trigger = yes has_character_flag = sway_voice_msg }
+			FROM = {
+				show_scope_change = no
+				opinion = { who = ROOT modifier = opinion_sway_skaven_spied years = 5 }
+			}
+		}
+		clr_character_flag = sway_voice_msg
+		clr_character_flag = sway_voice_gift
+		clr_character_flag = sway_voice_deed
+		ai_chance = { factor = 100 }
 	}
 }

@@ -1,0 +1,1820 @@
+###############################################################################
+# The Feast of Khaine
+# Namespace: drufeast (was druchii_feast in BR_druchi_feast.txt, a reflavour
+# of the vanilla Kali Puja feast)
+# Faction: Dark Elves
+#
+# A Druchii lord holds a month-long feast for his vassals (holdafeast
+# decision). He sends the invitations, buys slaves as gifts for his spouse
+# or lover, chooses how lavish his table will be and what bloody
+# entertainment to hire. At the feast the guests eat, plot, duel, drink and
+# seduce, a spectacle may go wrong, and at the end the host honours Khaine
+# with a sacrifice. Each guest goes home with a good or a bad memory of it.
+#
+# Invitations and preparations            drufeast.1 - drufeast.8
+# The feast                               drufeast.10 - drufeast.19
+# Intrigues at the feast                  drufeast.20 - drufeast.39
+# Spectacles                              drufeast.40 - drufeast.51
+# The rite of Khaine                      drufeast.60 - drufeast.71
+#
+# The feast runs on character flags: the host has the modifier
+# holding_large_druchi_feast, every guest the flag attending_druchii_feast,
+# and the event target feast_host is saved down every chain. Intrigues are
+# rolled once per guest when they arrive (drufeast_intrigue_roll_effect),
+# not by MTTH.
+#
+# Callers:
+#   decisions/wh_druchii_decisions.txt: holdafeast (1).
+# Support: common/scripted_effects/wh_druchii_feast_effects.txt
+# Loc: localisation/00_WHG_druchii_feast_events.csv
+###############################################################################
+
+namespace = drufeast
+
+###############################################################################
+# Invitations and preparations
+###############################################################################
+
+# drufeast.1 The invitations
+# The host invites every vassal, picks a gift for spouse or lover, sets his
+# table and hires entertainment. The feast begins twelve days later.
+# Scope: ROOT is the host (holdafeast).
+character_event = {
+	id = drufeast.1
+	desc = EVTDESCdrufeast1
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # holdafeast
+
+	option = {
+		name = EVTOPTAdrufeast1
+		custom_tooltip = { text = drufeast_invitations_tt }
+		hidden_effect = {
+			save_event_target_as = feast_host
+			any_vassal = {
+				limit = {
+					prisoner = no
+					war = no
+					in_command = no
+					NOT = { trait = incapable }
+					age = 16
+					NOT = { has_character_flag = do_not_disturb }
+				}
+				letter_event = { id = drufeast.2 }
+			}
+			if = { limit = { is_married = yes } character_event = { id = drufeast.4 } }
+			else_if = { limit = { has_lover = yes } character_event = { id = drufeast.5 } }
+			character_event = { id = drufeast.7 days = 1 }
+			character_event = { id = drufeast.10 days = 12 }
+		}
+	}
+}
+
+# drufeast.2 An invitation from the liege
+# Scope: ROOT is a vassal, FROM the host (drufeast.1).
+letter_event = {
+	id = drufeast.2
+	desc = EVTDESCdrufeast2
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # drufeast.1
+
+	option = { # Attend
+		name = EVTOPTAdrufeast2
+		set_character_flag = do_not_disturb
+		set_character_flag = drufeast_dnd
+		if = {
+			limit = { trait = in_hiding }
+			remove_trait = in_hiding
+			add_character_modifier = { name = went_out_of_hiding_timer duration = 180 hidden = yes }
+		}
+		hidden_effect = {
+			character_event = { id = drufeast.11 days = 12 }
+			character_event = { id = drufeast.19 days = 42 } # Safety cleanup
+			if = { limit = { is_married = yes } character_event = { id = drufeast.4 } }
+			else_if = { limit = { has_lover = yes } character_event = { id = drufeast.5 } }
+		}
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 5 has_focus = focus_carousing }
+			modifier = { factor = 0.1 trait = in_hiding }
+			modifier = { factor = 2 opinion = { who = FROM value = -30 } }
+			modifier = { factor = 5 opinion = { who = FROM value = -15 } }
+			modifier = { factor = 5 opinion = { who = FROM value = 0 } }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBdrufeast2
+		FROM = { letter_event = { id = drufeast.3 days = 3 } }
+		ai_chance = { factor = 1 modifier = { factor = 0 opinion = { who = FROM value = 25 } } }
+	}
+}
+
+# drufeast.3 A vassal refuses
+# Scope: ROOT is the host, FROM the vassal (drufeast.2).
+letter_event = {
+	id = drufeast.3
+	desc = EVTDESCdrufeast3
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # drufeast.2
+
+	option = {
+		name = EVTOPTAdrufeast3
+		opinion = { modifier = opinion_dislike who = FROM years = 2 }
+	}
+}
+
+# drufeast.4 A slave for the spouse
+# Tradition says a Druchii brings a slave as a gift for the spouse at a
+# feast. A fine Asur (or Dawi) slave, a human wretch, nothing, or a gift
+# for a lover instead. The spouse reacts at the feast (drufeast.6).
+# Scope: ROOT is the host or a guest (drufeast.1, drufeast.2).
+character_event = {
+	id = drufeast.4
+	desc = EVTDESCdrufeast4
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.1, drufeast.2
+
+	option = { # A fine slave
+		name = EVTOPTAdrufeast4
+		trigger = { spouse = { is_female = yes } }
+		scaled_wealth = -0.2
+		set_character_flag = druchii_feast_fine_gift_to_spouse
+		hidden_effect = { character_event = { id = drufeast.6 days = 30 } }
+	}
+	option = { # A fine slave
+		name = EVTOPTBdrufeast4
+		trigger = { spouse = { is_female = no } }
+		scaled_wealth = -0.2
+		set_character_flag = druchii_feast_fine_gift_to_spouse
+		hidden_effect = { character_event = { id = drufeast.6 days = 30 } }
+	}
+	option = { # A human wretch
+		name = EVTOPTCdrufeast4
+		scaled_wealth = -0.05
+		set_character_flag = druchii_feast_small_gift_to_spouse
+		hidden_effect = { character_event = { id = drufeast.6 days = 30 } }
+	}
+	option = { # Nothing
+		name = EVTOPTDdrufeast4
+		trigger = { NOT = { trait = kind } }
+		set_character_flag = druchii_feast_no_gift_to_spouse
+		hidden_effect = { character_event = { id = drufeast.6 days = 30 } }
+	}
+	option = { # The lover instead
+		name = EVTOPTEdrufeast4
+		trigger = { has_lover = yes spouse = { NOT = { is_lover = ROOT } } }
+		set_character_flag = druchii_feast_no_gift_to_spouse
+		hidden_effect = { character_event = { id = drufeast.5 } }
+	}
+}
+
+# drufeast.5 A slave for the lover
+# Scope: ROOT is the host or a guest (drufeast.1, drufeast.2, drufeast.4).
+character_event = {
+	id = drufeast.5
+	desc = EVTDESCdrufeast5
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.1, drufeast.2, drufeast.4
+
+	option = { # A fine slave
+		name = EVTOPTAdrufeast4
+		trigger = { any_lover = { is_female = yes } }
+		scaled_wealth = -0.2
+		set_character_flag = druchii_feast_fine_gift_to_lover
+		hidden_effect = { character_event = { id = drufeast.6 days = 30 } }
+	}
+	option = { # A fine slave
+		name = EVTOPTBdrufeast4
+		trigger = { NOT = { any_lover = { is_female = yes } } }
+		scaled_wealth = -0.2
+		set_character_flag = druchii_feast_fine_gift_to_lover
+		hidden_effect = { character_event = { id = drufeast.6 days = 30 } }
+	}
+	option = { # A human wretch
+		name = EVTOPTCdrufeast4
+		scaled_wealth = -0.05
+		set_character_flag = druchii_feast_small_gift_to_lover
+		hidden_effect = { character_event = { id = drufeast.6 days = 30 } }
+	}
+	option = { # Nothing
+		name = EVTOPTDdrufeast4
+		trigger = { is_married = no NOT = { trait = kind } }
+		set_character_flag = druchii_feast_no_gift_to_lover
+		hidden_effect = { character_event = { id = drufeast.6 days = 30 } }
+	}
+}
+
+# drufeast.6 The giving of gifts
+# Spouse and lover react to their gifts. A spouse who sees the lover get
+# the better slave is furious.
+# Scope: ROOT is the giver (drufeast.4, drufeast.5).
+character_event = {
+	id = drufeast.6
+	desc = EVTDESCdrufeast6
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.4, drufeast.5
+
+	option = {
+		name = EVTOPTAdrufeast6
+		if = {
+			limit = { has_character_flag = druchii_feast_fine_gift_to_spouse }
+			spouse = {
+				opinion = { modifier = opinion_very_grateful who = ROOT years = 1 }
+				random = { chance = 30 add_lover = ROOT }
+			}
+		}
+		else_if = {
+			limit = { has_character_flag = druchii_feast_small_gift_to_spouse }
+			spouse = { opinion = { modifier = opinion_grateful who = ROOT years = 1 } }
+		}
+		else_if = {
+			limit = { has_character_flag = druchii_feast_no_gift_to_spouse }
+			spouse = { opinion = { modifier = opinion_insulted who = ROOT years = 1 } }
+		}
+		if = {
+			limit = { has_character_flag = druchii_feast_fine_gift_to_lover }
+			random_lover = { opinion = { modifier = opinion_very_grateful who = ROOT years = 1 } }
+			spouse = { opinion = { modifier = opinion_furious who = ROOT years = 1 } }
+		}
+		else_if = {
+			limit = { has_character_flag = druchii_feast_small_gift_to_lover }
+			random_lover = { opinion = { modifier = opinion_grateful who = ROOT years = 1 } }
+			spouse = { opinion = { modifier = opinion_insulted who = ROOT years = 1 } }
+		}
+		else_if = {
+			limit = { has_character_flag = druchii_feast_no_gift_to_lover }
+			random_lover = { opinion = { modifier = opinion_disappointed who = ROOT years = 1 } }
+		}
+		clr_character_flag = druchii_feast_fine_gift_to_spouse
+		clr_character_flag = druchii_feast_small_gift_to_spouse
+		clr_character_flag = druchii_feast_no_gift_to_spouse
+		clr_character_flag = druchii_feast_fine_gift_to_lover
+		clr_character_flag = druchii_feast_small_gift_to_lover
+		clr_character_flag = druchii_feast_no_gift_to_lover
+	}
+}
+
+# drufeast.7 The table
+# The host chooses how lavish the feast will be. The guests judge it
+# (drufeast.12); a poor table is remembered.
+# Scope: ROOT is the host (drufeast.1).
+character_event = {
+	id = drufeast.7
+	desc = EVTDESCdrufeast7
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.1
+
+	option = { # Lavish
+		name = EVTOPTAdrufeast7
+		trigger = { wealth = 100 }
+		wealth = -100
+		prestige = 25
+		set_character_flag = lavishly_food
+		hidden_effect = { character_event = { id = drufeast.8 } }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = gluttonous }
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 0 trait = greedy }
+		}
+	}
+	option = { # Fair
+		name = EVTOPTBdrufeast7
+		trigger = { wealth = 40 }
+		wealth = -40
+		set_character_flag = medium_food
+		hidden_effect = { character_event = { id = drufeast.8 } }
+		ai_chance = { factor = 50 }
+	}
+	option = { # Meagre
+		name = EVTOPTCdrufeast7
+		set_character_flag = low_food
+		hidden_effect = { character_event = { id = drufeast.8 } }
+		ai_chance = { factor = 20 modifier = { factor = 3 trait = greedy } }
+	}
+}
+
+# drufeast.8 Entertainment for the guests
+# Pit fighters, a dark singer of Khaine, or a beastmaster with his
+# manticore (who might lose control of it, drufeast.40). Or nothing.
+# Scope: ROOT is the host (drufeast.7).
+character_event = {
+	id = drufeast.8
+	desc = EVTDESCdrufeast8
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.7
+
+	option = { # Pit fighters
+		name = EVTOPTAdrufeast8
+		trigger = { wealth = 50 }
+		wealth = -50
+		set_character_flag = feast_pit_fighters
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 2 trait = wroth }
+		}
+	}
+	option = { # Dark singer
+		name = EVTOPTBdrufeast8
+		trigger = { wealth = 40 }
+		wealth = -40
+		set_character_flag = feast_dark_singer
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 2 trait = gregarious }
+		}
+	}
+	option = { # Beastmaster
+		name = EVTOPTCdrufeast8
+		trigger = { wealth = 60 }
+		wealth = -60
+		set_character_flag = feast_beastmaster
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = hunter }
+			modifier = { factor = 2 trait = proud }
+		}
+	}
+	option = { # Nothing
+		name = EVTOPTDdrufeast8
+		ai_chance = { factor = 10 modifier = { factor = 3 trait = greedy } }
+	}
+}
+
+###############################################################################
+# The feast
+###############################################################################
+
+# drufeast.10 The feast begins
+# The host's courtiers join in. A month later the feast ends (drufeast.15).
+# Scope: ROOT is the host (drufeast.1).
+character_event = {
+	id = drufeast.10
+	desc = EVTDESCdrufeast10
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.1
+
+	option = {
+		name = EVTOPTAdrufeast10
+		set_character_flag = druchii_feast_begun
+		hidden_effect = {
+			save_event_target_as = feast_host
+			character_event = { id = drufeast.14 days = 3 random = 5 } # The show
+			character_event = { id = drufeast.60 days = 25 } # The rite of Khaine
+			character_event = { id = drufeast.15 days = 30 } # The end
+			character_event = { id = drufeast.19 days = 31 } # Cleanup
+			random_list = { # A spectacle by the beastmaster or a sorceress
+				10 = {
+					modifier = { factor = 5 has_character_flag = feast_beastmaster }
+					character_event = { id = drufeast.40 days = 10 random = 5 }
+				}
+				10 = { character_event = { id = drufeast.47 days = 10 random = 5 } }
+				60 = { }
+			}
+			any_courtier = {
+				limit = { is_adult = yes is_ruler = no prisoner = no NOT = { trait = incapable } }
+				set_character_flag = attending_druchii_feast
+				drufeast_intrigue_roll_effect = yes
+				character_event = { id = drufeast.19 days = 31 } # Cleanup
+			}
+		}
+	}
+}
+
+# drufeast.11 A guest arrives (hidden)
+# Scope: ROOT is a vassal, FROM the host (drufeast.2).
+character_event = {
+	id = drufeast.11
+	hide_window = yes
+
+	is_triggered_only = yes # drufeast.2
+
+	trigger = {
+		FROM = { has_character_modifier = holding_large_druchi_feast }
+	}
+
+	immediate = {
+		set_character_flag = attending_druchii_feast
+		FROM = { save_event_target_as = feast_host }
+		character_event = { id = drufeast.12 days = 2 random = 5 }
+		drufeast_intrigue_roll_effect = yes
+	}
+}
+
+# drufeast.12 The table (guest)
+# A guest judges the host's table. Praise pleases the host, complaints
+# offend him (drufeast.13), and a poor table spoils the feast.
+# Scope: ROOT is a vassal (drufeast.11).
+character_event = {
+	id = drufeast.12
+	desc = {
+		text = EVTDESCdrufeast12
+		trigger = { event_target:feast_host = { has_character_flag = lavishly_food } }
+	}
+	desc = {
+		text = EVTDESCdrufeast12b
+		trigger = { event_target:feast_host = { has_character_flag = medium_food } }
+	}
+	desc = {
+		text = EVTDESCdrufeast12c
+		trigger = {
+			event_target:feast_host = {
+				NOR = { has_character_flag = lavishly_food has_character_flag = medium_food }
+			}
+		}
+	}
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.11
+
+	trigger = {
+		has_character_flag = attending_druchii_feast
+	}
+
+	option = { # Praise
+		name = EVTOPTAdrufeast12
+		trigger = { event_target:feast_host = { has_character_flag = lavishly_food } }
+		event_target:feast_host = {
+			opinion = { modifier = opinion_impressed who = ROOT years = 2 }
+			set_character_flag = drufeast_praised
+			character_event = { id = drufeast.13 }
+		}
+		ai_chance = { factor = 90 }
+	}
+	option = { # Too warm
+		name = EVTOPTBdrufeast12
+		trigger = {
+			event_target:feast_host = { has_character_flag = lavishly_food }
+			OR = { trait = proud trait = arbitrary trait = gluttonous }
+		}
+		prestige = 5
+		event_target:feast_host = {
+			opinion = { modifier = opinion_insulted who = ROOT years = 2 }
+			set_character_flag = drufeast_insulted
+			character_event = { id = drufeast.13 }
+		}
+		ai_chance = { factor = 10 }
+	}
+	option = { # A fine table
+		name = EVTOPTCdrufeast12
+		trigger = { event_target:feast_host = { has_character_flag = medium_food } }
+		ai_chance = { factor = 80 }
+	}
+	option = { # I eat better at home
+		name = EVTOPTDdrufeast12
+		trigger = { event_target:feast_host = { has_character_flag = medium_food } }
+		prestige = 5
+		event_target:feast_host = {
+			opinion = { modifier = opinion_insulted who = ROOT years = 1 }
+			set_character_flag = drufeast_insulted
+			character_event = { id = drufeast.13 }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = proud }
+			modifier = { factor = 0 trait = humble }
+		}
+	}
+	option = { # Lie and thank him
+		name = EVTOPTEdrufeast12
+		trigger = {
+			event_target:feast_host = {
+				NOR = { has_character_flag = lavishly_food has_character_flag = medium_food }
+			}
+		}
+		set_character_flag = bad_druchii_feast
+		ai_chance = { factor = 60 }
+	}
+	option = { # Slave food!
+		name = EVTOPTFdrufeast12
+		trigger = {
+			event_target:feast_host = {
+				NOR = { has_character_flag = lavishly_food has_character_flag = medium_food }
+			}
+		}
+		set_character_flag = bad_druchii_feast
+		prestige = 5
+		event_target:feast_host = {
+			opinion = { modifier = opinion_insulted who = ROOT years = 2 }
+			set_character_flag = drufeast_insulted
+			character_event = { id = drufeast.13 }
+		}
+		ai_chance = { factor = 40 modifier = { factor = 0 trait = craven } }
+	}
+}
+
+# drufeast.13 The host overhears
+# A guest praises (or mocks) the host's table.
+# Scope: ROOT is the host, FROM the guest (drufeast.12).
+character_event = {
+	id = drufeast.13
+	desc = { text = EVTDESCdrufeast13 trigger = { has_character_flag = drufeast_praised } }
+	desc = {
+		text = EVTDESCdrufeast13b
+		trigger = { NOT = { has_character_flag = drufeast_praised } }
+	}
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.12
+
+	option = {
+		name = EVTOPTAdrufeast13
+		trigger = { has_character_flag = drufeast_praised }
+		prestige = 10
+		clr_character_flag = drufeast_praised
+	}
+	option = {
+		name = EVTOPTBdrufeast13
+		trigger = { NOT = { has_character_flag = drufeast_praised } }
+		opinion = { modifier = opinion_insulted who = FROM years = 2 }
+		clr_character_flag = drufeast_insulted
+	}
+}
+
+# drufeast.14 The show
+# The entertainment the host hired performs. The host gains prestige and
+# every guest sees it too.
+# Scope: ROOT is the host (drufeast.10), or a guest (drufeast.14 itself).
+character_event = {
+	id = drufeast.14
+	desc = {
+		text = EVTDESCdrufeast14
+		trigger = {
+			character = event_target:feast_host
+			event_target:feast_host = { has_character_flag = feast_pit_fighters }
+		}
+	}
+	desc = {
+		text = EVTDESCdrufeast14b
+		trigger = {
+			NOT = { character = event_target:feast_host }
+			event_target:feast_host = { has_character_flag = feast_pit_fighters }
+		}
+	}
+	desc = {
+		text = EVTDESCdrufeast14c
+		trigger = {
+			character = event_target:feast_host
+			event_target:feast_host = { has_character_flag = feast_dark_singer }
+		}
+	}
+	desc = {
+		text = EVTDESCdrufeast14d
+		trigger = {
+			NOT = { character = event_target:feast_host }
+			event_target:feast_host = { has_character_flag = feast_dark_singer }
+		}
+	}
+	desc = {
+		text = EVTDESCdrufeast14e
+		trigger = {
+			character = event_target:feast_host
+			event_target:feast_host = { has_character_flag = feast_beastmaster }
+		}
+	}
+	desc = {
+		text = EVTDESCdrufeast14f
+		trigger = {
+			NOT = { character = event_target:feast_host }
+			event_target:feast_host = { has_character_flag = feast_beastmaster }
+		}
+	}
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.10, drufeast.14
+
+	trigger = {
+		event_target:feast_host = {
+			OR = {
+				has_character_flag = feast_pit_fighters
+				has_character_flag = feast_dark_singer
+				has_character_flag = feast_beastmaster
+			}
+		}
+	}
+
+	option = { # Host
+		name = EVTOPTAdrufeast14
+		trigger = { character = event_target:feast_host }
+		prestige = 30
+		hidden_effect = {
+			any_vassal = {
+				limit = { has_character_flag = attending_druchii_feast }
+				character_event = { id = drufeast.14 }
+			}
+		}
+	}
+	option = { # Guest
+		name = EVTOPTBdrufeast14
+		trigger = { NOT = { character = event_target:feast_host } }
+		event_target:feast_host = {
+			reverse_opinion = { modifier = opinion_impressed who = ROOT years = 2 }
+		}
+	}
+}
+
+# drufeast.15 The feast ends (hidden)
+# Scope: ROOT is the host (drufeast.10).
+character_event = {
+	id = drufeast.15
+	hide_window = yes
+
+	is_triggered_only = yes # drufeast.10
+
+	immediate = {
+		character_event = { id = drufeast.16 }
+		any_vassal = {
+			limit = { has_character_flag = attending_druchii_feast }
+			character_event = { id = drufeast.17 }
+		}
+	}
+}
+
+# drufeast.16 The feast is over (host)
+# A good feast or a bad one, depending on whether anything spoiled it for
+# the host.
+# Scope: ROOT is the host (drufeast.15).
+character_event = {
+	id = drufeast.16
+	desc = {
+		text = EVTDESCdrufeast16
+		trigger = { NOT = { has_character_flag = bad_druchii_feast } }
+	}
+	desc = { text = EVTDESCdrufeast16b trigger = { has_character_flag = bad_druchii_feast } }
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.15
+
+	option = {
+		name = EVTOPTAdrufeast16
+		trigger = { NOT = { has_character_flag = bad_druchii_feast } }
+		add_character_modifier = { name = large_feast_timer duration = 365 hidden = yes }
+	}
+	option = {
+		name = EVTOPTBdrufeast16
+		trigger = { has_character_flag = bad_druchii_feast }
+		add_character_modifier = { name = large_feast_timer duration = 365 hidden = yes }
+	}
+}
+
+# drufeast.17 The feast is over (guest)
+# Scope: ROOT is a vassal, FROM the host (drufeast.15).
+character_event = {
+	id = drufeast.17
+	desc = {
+		text = EVTDESCdrufeast17
+		trigger = { NOT = { has_character_flag = bad_druchii_feast } }
+	}
+	desc = { text = EVTDESCdrufeast17b trigger = { has_character_flag = bad_druchii_feast } }
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.15
+
+	option = {
+		name = EVTOPTAdrufeast17
+		trigger = { NOT = { has_character_flag = bad_druchii_feast } }
+		opinion = { modifier = opinion_impressed who = FROM years = 1 }
+		add_character_modifier = { name = large_feast_timer duration = 365 hidden = yes }
+	}
+	option = {
+		name = EVTOPTBdrufeast17
+		trigger = { has_character_flag = bad_druchii_feast }
+		add_character_modifier = { name = large_feast_timer duration = 365 hidden = yes }
+	}
+}
+
+# drufeast.19 Cleanup (hidden)
+# Clears every feast flag and the host's modifier.
+# Scope: the host or any guest (drufeast.2, drufeast.10).
+character_event = {
+	id = drufeast.19
+	hide_window = yes
+
+	is_triggered_only = yes # drufeast.2, drufeast.10
+
+	immediate = {
+		if = {
+			limit = {
+				OR = {
+					has_character_modifier = holding_large_druchi_feast
+					has_character_flag = drufeast_dnd
+				}
+			}
+			clr_character_flag = do_not_disturb
+			clr_character_flag = drufeast_dnd
+		}
+		remove_character_modifier = holding_large_druchi_feast
+		clr_character_flag = attending_druchii_feast
+		clr_character_flag = druchii_feast_begun
+		clr_character_flag = druchii_feast_fine_gift_to_spouse
+		clr_character_flag = druchii_feast_small_gift_to_spouse
+		clr_character_flag = druchii_feast_no_gift_to_spouse
+		clr_character_flag = druchii_feast_fine_gift_to_lover
+		clr_character_flag = druchii_feast_small_gift_to_lover
+		clr_character_flag = druchii_feast_no_gift_to_lover
+		clr_character_flag = druchii_feast_magician
+		clr_character_flag = lavishly_food
+		clr_character_flag = medium_food
+		clr_character_flag = low_food
+		clr_character_flag = feast_pit_fighters
+		clr_character_flag = feast_dark_singer
+		clr_character_flag = feast_beastmaster
+		clr_character_flag = feast_drunkard_guest
+		clr_character_flag = druchi_feast_duel
+		clr_character_flag = drufeast_praised
+		clr_character_flag = drufeast_insulted
+		clr_character_flag = wounded_opponent
+		clr_character_flag = maimed_opponent
+		clr_character_flag = killed_opponent
+		clr_character_flag = bad_druchii_feast
+	}
+}
+
+###############################################################################
+# Intrigues at the feast
+# Rolled once for every guest when they arrive (drufeast_intrigue_roll_effect):
+# a late-night alliance, a duel, a night with another guest's spouse, too
+# much wine, or (if bandits haunt the host's lands) complaints about the
+# road.
+###############################################################################
+
+# drufeast.20 A late-night talk
+# A guest talks late into the night with another and they become friends.
+# Scope: ROOT is the guest (drufeast_intrigue_roll_effect).
+character_event = {
+	id = drufeast.20
+	desc = EVTDESCdrufeast20
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast_intrigue_roll_effect
+
+	trigger = {
+		has_character_flag = attending_druchii_feast
+		NOT = { num_of_friends = 3 }
+		event_target:feast_host = { any_vassal = { drufeast_friend_candidate_trigger = yes } }
+	}
+
+	option = {
+		name = EVTOPTAdrufeast20
+		event_target:feast_host = {
+			random_vassal = {
+				limit = { drufeast_friend_candidate_trigger = yes }
+				add_friend = ROOT
+				character_event = { id = drufeast.21 }
+			}
+		}
+	}
+}
+
+# drufeast.21 A late-night talk (the other guest)
+# Scope: ROOT is the other guest, FROM the first (drufeast.20).
+character_event = {
+	id = drufeast.21
+	desc = EVTDESCdrufeast21
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.20
+
+	option = {
+		name = EVTOPTAdrufeast20
+	}
+}
+
+# drufeast.22 A challenge
+# A brave or cruel guest challenges another to a duel. One duel per feast.
+# Scope: ROOT is the challenger (drufeast_intrigue_roll_effect).
+character_event = {
+	id = drufeast.22
+	desc = EVTDESCdrufeast22
+	picture = GFX_evt_melee
+
+	is_triggered_only = yes # drufeast_intrigue_roll_effect
+	only_men = yes
+
+	trigger = {
+		has_character_flag = attending_druchii_feast
+		NOT = { trait = wounded }
+		NOT = { trait = maimed }
+		NOT = { trait = craven }
+		martial = 9
+		OR = { trait = duelist trait = brave trait = wroth trait = cruel }
+		event_target:feast_host = {
+			NOT = { has_character_flag = druchi_feast_duel }
+			any_vassal = { drufeast_duel_candidate_trigger = yes }
+		}
+	}
+
+	option = { # Challenge
+		name = EVTOPTAdrufeast22
+		save_event_target_as = duel_challenger
+		event_target:feast_host = {
+			set_character_flag = druchi_feast_duel
+			random_vassal = {
+				limit = { drufeast_duel_candidate_trigger = yes }
+				save_event_target_as = duel_challenged
+				character_event = { id = drufeast.23 tooltip = drufeast_duel_challenge_tt }
+			}
+		}
+	}
+	option = { # Hold back
+		name = EVTOPTBdrufeast22
+		prestige = -10
+	}
+}
+
+# drufeast.23 Challenged
+# The challenged guest accepts or backs down. If he fights, he may be
+# wounded, maimed or killed, or he may hold his own (the challenger then
+# strikes back, drufeast.24), or the host stops it (drufeast.26).
+# Scope: ROOT is the challenged guest, FROM the challenger (drufeast.22).
+character_event = {
+	id = drufeast.23
+	desc = EVTDESCdrufeast23
+	picture = GFX_evt_melee
+
+	is_triggered_only = yes # drufeast.22
+
+	option = { # Accept
+		name = EVTOPTAdrufeast23
+		random_list = {
+			35 = {
+				add_trait = wounded
+				FROM = {
+					set_character_flag = wounded_opponent
+					character_event = { id = drufeast.24 }
+				}
+			}
+			35 = {
+				add_trait = maimed
+				FROM = {
+					set_character_flag = maimed_opponent
+					character_event = { id = drufeast.24 }
+				}
+			}
+			10 = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					FROM = {
+						set_character_flag = killed_opponent
+						character_event = { id = drufeast.25 }
+					}
+					death = { death_reason = death_duel killer = FROM }
+				}
+			}
+			20 = { event_target:feast_host = { character_event = { id = drufeast.26 } } }
+		}
+	}
+	option = { # Decline
+		name = EVTOPTBdrufeast23
+		prestige = -10
+	}
+}
+
+# drufeast.24 The duel goes on
+# The challenger has drawn blood and fights on: he may be hurt or killed in
+# turn, or he wins (drufeast.25).
+# Scope: ROOT is the challenger, FROM the challenged guest (drufeast.23).
+character_event = {
+	id = drufeast.24
+	desc = { text = EVTDESCdrufeast24 trigger = { has_character_flag = wounded_opponent } }
+	desc = { text = EVTDESCdrufeast24b trigger = { has_character_flag = maimed_opponent } }
+	picture = GFX_evt_melee
+
+	is_triggered_only = yes # drufeast.23
+
+	option = {
+		name = EVTOPTAdrufeast24
+		random_list = {
+			10 = {
+				modifier = { factor = 0.1 has_character_flag = maimed_opponent }
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					FROM = {
+						set_character_flag = killed_opponent
+						character_event = { id = drufeast.25 }
+					}
+					death = { death_reason = death_duel killer = FROM }
+				}
+			}
+			20 = {
+				modifier = { factor = 0.5 has_character_flag = maimed_opponent }
+				add_trait = maimed
+				FROM = {
+					set_character_flag = maimed_opponent
+					character_event = { id = drufeast.25 }
+				}
+			}
+			30 = {
+				modifier = { factor = 0.6 has_character_flag = maimed_opponent }
+				add_trait = wounded
+				FROM = {
+					set_character_flag = wounded_opponent
+					character_event = { id = drufeast.25 }
+				}
+			}
+			40 = {
+				modifier = { factor = 1.75 has_character_flag = maimed_opponent }
+				character_event = { id = drufeast.25 }
+			}
+		}
+	}
+}
+
+# drufeast.25 Victory in the duel
+# The guest who struck the last blow grows in skill. The host hears of it
+# (drufeast.27).
+# Scope: ROOT is the victor (drufeast.23, drufeast.24).
+character_event = {
+	id = drufeast.25
+	desc = { text = EVTDESCdrufeast25 trigger = { has_character_flag = wounded_opponent } }
+	desc = { text = EVTDESCdrufeast25b trigger = { has_character_flag = maimed_opponent } }
+	desc = { text = EVTDESCdrufeast25c trigger = { has_character_flag = killed_opponent } }
+	picture = GFX_evt_melee
+
+	is_triggered_only = yes # drufeast.23, drufeast.24
+
+	option = {
+		name = EVTOPTAdrufeast25
+		if = { limit = { has_character_flag = killed_opponent } change_martial = 3 }
+		else_if = { limit = { has_character_flag = maimed_opponent } change_martial = 2 }
+		else = { change_martial = 1 }
+		event_target:feast_host = { character_event = { id = drufeast.27 } }
+	}
+}
+
+# drufeast.26 The host stops the duel
+# Neither fighter will forgive the other.
+# Scope: ROOT is the host, FROM the challenged guest (drufeast.23). The
+# fighters are the event targets duel_challenger and duel_challenged.
+character_event = {
+	id = drufeast.26
+	desc = EVTDESCdrufeast26
+	picture = GFX_evt_melee
+
+	is_triggered_only = yes # drufeast.23
+
+	option = {
+		name = EVTOPTAdrufeast26
+		event_target:duel_challenger = {
+			opinion = { modifier = opinion_dislike who = event_target:duel_challenged years = 10 }
+		}
+		event_target:duel_challenged = {
+			opinion = { modifier = opinion_dislike who = event_target:duel_challenger years = 10 }
+		}
+	}
+}
+
+# drufeast.27 The host hears of the duel
+# Scope: ROOT is the host, FROM the victor (drufeast.25).
+character_event = {
+	id = drufeast.27
+	desc = {
+		text = EVTDESCdrufeast27
+		trigger = { FROM = { has_character_flag = wounded_opponent } }
+	}
+	desc = {
+		text = EVTDESCdrufeast27b
+		trigger = { FROM = { has_character_flag = maimed_opponent } }
+	}
+	desc = {
+		text = EVTDESCdrufeast27c
+		trigger = { FROM = { has_character_flag = killed_opponent } }
+	}
+	picture = GFX_evt_melee
+
+	is_triggered_only = yes # drufeast.25
+
+	option = {
+		name = EVTOPTAdrufeast27
+		if = {
+			limit = { FROM = { has_character_flag = killed_opponent } }
+			set_character_flag = bad_druchii_feast
+		}
+		else = { prestige = 5 }
+		FROM = {
+			clr_character_flag = wounded_opponent
+			clr_character_flag = maimed_opponent
+			clr_character_flag = killed_opponent
+		}
+	}
+}
+
+# drufeast.30 Another guest's spouse
+# A married lord takes a fancy to another guest's wife (or husband).
+# Scope: ROOT is the guest (drufeast_intrigue_roll_effect).
+character_event = {
+	id = drufeast.30
+	desc = EVTDESCdrufeast30
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast_intrigue_roll_effect
+	only_rulers = yes
+	max_age = 300
+
+	trigger = {
+		has_character_flag = attending_druchii_feast
+		is_married = yes
+		fertility = 0.4
+		NOT = { trait = celibate }
+		event_target:feast_host = {
+			any_vassal = {
+				has_character_flag = attending_druchii_feast
+				NOT = { character = ROOT }
+				spouse = { drufeast_seduction_target_trigger = yes }
+			}
+		}
+	}
+
+	option = { # Behave
+		name = EVTOPTAdrufeast30
+		prestige = -5
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 3 trait = chaste }
+			modifier = { factor = 0.25 trait = lustful }
+		}
+	}
+	option = { # Invite them
+		name = EVTOPTBdrufeast30
+		event_target:feast_host = {
+			random_vassal = {
+				limit = {
+					has_character_flag = attending_druchii_feast
+					NOT = { character = ROOT }
+					spouse = { drufeast_seduction_target_trigger = yes }
+				}
+				spouse = {
+					character_event = { id = drufeast.31 tooltip = drufeast_invitation_sent_tt }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = lustful }
+			modifier = { factor = 1.5 trait = hedonist }
+		}
+	}
+}
+
+# drufeast.31 The invitation
+# The spouse may accept. A child may follow (drufeast.32).
+# Scope: ROOT is the other guest's spouse, FROM the seducer (drufeast.30).
+character_event = {
+	id = drufeast.31
+	desc = EVTDESCdrufeast31
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # drufeast.30
+
+	option = { # Accept
+		name = EVTOPTAdrufeast31
+		if = {
+			limit = { is_female = yes }
+			random = {
+				chance = 25
+				FROM = { impregnate = ROOT character_event = { id = drufeast.32 days = 60 } }
+			}
+		}
+		else = {
+			random = {
+				chance = 25
+				impregnate = FROM
+				character_event = { id = drufeast.32 days = 60 }
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = lustful }
+			modifier = { factor = 0.2 trait = chaste }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBdrufeast31
+		piety = 5
+		ai_chance = { factor = 50 }
+	}
+}
+
+# drufeast.32 A child of the feast
+# The cuckolded spouse finds out.
+# Scope: ROOT is the father, FROM the mother (drufeast.31).
+character_event = {
+	id = drufeast.32
+	desc = EVTDESCdrufeast32
+	picture = GFX_evt_pregnancy
+
+	is_triggered_only = yes # drufeast.31
+
+	option = {
+		name = EVTOPTAdrufeast32
+		FROM = { spouse = { opinion = { modifier = opinion_cuckolded who = ROOT years = 100 } } }
+		spouse = { opinion = { modifier = opinion_dislike who = FROM years = 10 } }
+	}
+}
+
+# drufeast.33 More wine
+# A guest is pressed to drink more. He may take to the bottle, or refuse
+# and offend the host.
+# Scope: ROOT is the guest (drufeast_intrigue_roll_effect).
+character_event = {
+	id = drufeast.33
+	desc = EVTDESCdrufeast33
+	picture = GFX_evt_drunk
+
+	is_triggered_only = yes # drufeast_intrigue_roll_effect
+
+	trigger = {
+		has_character_flag = attending_druchii_feast
+		NOT = { trait = drunkard }
+		event_target:feast_host = { NOT = { has_character_flag = feast_drunkard_guest } }
+	}
+
+	option = { # Drink
+		name = EVTOPTAdrufeast33
+		random = { chance = 25 add_trait = drunkard }
+		event_target:feast_host = { set_character_flag = feast_drunkard_guest }
+	}
+	option = { # Refuse
+		name = EVTOPTBdrufeast33
+		event_target:feast_host = {
+			set_character_flag = feast_drunkard_guest
+			character_event = { id = drufeast.34 }
+		}
+	}
+}
+
+# drufeast.34 The cup refused
+# Scope: ROOT is the host, FROM the guest (drufeast.33).
+character_event = {
+	id = drufeast.34
+	desc = EVTDESCdrufeast34
+	picture = GFX_evt_drunk
+
+	is_triggered_only = yes # drufeast.33
+
+	option = {
+		name = EVTOPTAdrufeast34
+		opinion = { modifier = opinion_insulted who = FROM years = 10 }
+	}
+}
+
+# drufeast.35 A drunken scene
+# A drunkard guest makes a fool of himself, offending the host's steward if
+# the table was lavish.
+# Scope: ROOT is the drunkard (drufeast_intrigue_roll_effect).
+character_event = {
+	id = drufeast.35
+	desc = EVTDESCdrufeast35
+	picture = GFX_evt_drunk
+
+	is_triggered_only = yes # drufeast_intrigue_roll_effect
+
+	trigger = {
+		has_character_flag = attending_druchii_feast
+		trait = drunkard
+		event_target:feast_host = { NOT = { has_character_flag = feast_drunkard_guest } }
+	}
+
+	option = {
+		name = EVTOPTAdrufeast35
+		prestige = -10
+		event_target:feast_host = {
+			set_character_flag = feast_drunkard_guest
+			character_event = { id = drufeast.36 }
+			random_courtier = {
+				limit = { has_job_title = job_treasurer NOT = { trait = drunkard } }
+				opinion = { modifier = opinion_dislike who = ROOT years = 10 }
+			}
+		}
+	}
+}
+
+# drufeast.36 A drunk at my table
+# Scope: ROOT is the host, FROM the drunkard (drufeast.35, drufeast.37).
+character_event = {
+	id = drufeast.36
+	desc = EVTDESCdrufeast36
+	picture = GFX_evt_drunk
+
+	is_triggered_only = yes # drufeast.35, drufeast.37
+
+	option = {
+		name = EVTOPTAdrufeast36
+		opinion = { modifier = opinion_disgusted who = FROM years = 10 }
+	}
+}
+
+# drufeast.37 Asleep in the soup
+# Scope: ROOT is the drunkard (drufeast_intrigue_roll_effect).
+character_event = {
+	id = drufeast.37
+	desc = EVTDESCdrufeast37
+	picture = GFX_evt_drunk
+
+	is_triggered_only = yes # drufeast_intrigue_roll_effect
+
+	trigger = {
+		has_character_flag = attending_druchii_feast
+		trait = drunkard
+		event_target:feast_host = { NOT = { has_character_flag = feast_drunkard_guest } }
+	}
+
+	option = {
+		name = EVTOPTAdrufeast37
+		prestige = -10
+		event_target:feast_host = {
+			set_character_flag = feast_drunkard_guest
+			character_event = { id = drufeast.36 }
+		}
+	}
+}
+
+# drufeast.38 Robbed on the road
+# Bandits in the host's lands robbed a guest on the way to the feast.
+# Scope: ROOT is the guest (drufeast_intrigue_roll_effect).
+character_event = {
+	id = drufeast.38
+	desc = EVTDESCdrufeast38
+	picture = GFX_evt_bandits
+
+	is_triggered_only = yes # drufeast_intrigue_roll_effect
+
+	trigger = {
+		has_character_flag = attending_druchii_feast
+		event_target:feast_host = { location = { has_province_modifier = highway_robber_band } }
+	}
+
+	option = {
+		name = EVTOPTAdrufeast38
+		set_character_flag = bad_druchii_feast
+		event_target:feast_host = { character_event = { id = drufeast.39 } }
+	}
+}
+
+# drufeast.39 The guest complains of bandits
+# Scope: ROOT is the host, FROM the guest (drufeast.38).
+character_event = {
+	id = drufeast.39
+	desc = EVTDESCdrufeast39
+	picture = GFX_evt_bandits
+
+	is_triggered_only = yes # drufeast.38
+
+	option = {
+		name = EVTOPTAdrufeast39
+		FROM = { opinion = { modifier = opinion_dislike who = ROOT years = 10 } }
+	}
+}
+
+###############################################################################
+# Spectacles
+# The beastmaster's manticore breaks loose (far likelier if the host hired
+# a beastmaster), or a sorceress performs her illusions.
+###############################################################################
+
+# drufeast.40 The beastmaster
+# Half the time the manticore breaks loose (drufeast.41).
+# Scope: ROOT is the host (drufeast.10).
+character_event = {
+	id = drufeast.40
+	desc = EVTDESCdrufeast40
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.10
+
+	option = {
+		name = EVTOPTAdrufeast40
+		hidden_effect = { random = { chance = 50 character_event = { id = drufeast.41 } } }
+	}
+}
+
+# drufeast.41 The manticore breaks loose
+# It terrifies a guest, kills one, or is slain by one.
+# Scope: ROOT is the host (drufeast.40).
+character_event = {
+	id = drufeast.41
+	desc = EVTDESCdrufeast41
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.40
+
+	option = {
+		name = EVTOPTAdrufeast41
+		hidden_effect = {
+			random_list = {
+				10 = { character_event = { id = drufeast.42 } }
+				10 = {
+					trigger = {
+						any_vassal = { has_character_flag = attending_druchii_feast ai = yes }
+					}
+					character_event = { id = drufeast.44 }
+				}
+				10 = {
+					trigger = {
+						any_vassal = { has_character_flag = attending_druchii_feast is_female = no }
+					}
+					character_event = { id = drufeast.45 }
+				}
+			}
+		}
+	}
+}
+
+# drufeast.42 The manticore escapes
+# It flies off through the roof, scaring a guest half to death.
+# Scope: ROOT is the host (drufeast.41).
+character_event = {
+	id = drufeast.42
+	desc = EVTDESCdrufeast42
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.41
+
+	option = {
+		name = EVTOPTAdrufeast42
+		set_character_flag = bad_druchii_feast
+		random_vassal = {
+			limit = { has_character_flag = attending_druchii_feast }
+			character_event = { id = drufeast.43 }
+		}
+	}
+}
+
+# drufeast.43 Face to face with a manticore
+# The craven and the already stressed may be scarred by it for life.
+# Scope: ROOT is the guest, FROM the host (drufeast.42).
+character_event = {
+	id = drufeast.43
+	desc = EVTDESCdrufeast43
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.42
+
+	option = {
+		name = EVTOPTAdrufeast43
+		set_character_flag = bad_druchii_feast
+		if = {
+			limit = { NOT = { trait = stressed } NOT = { trait = craven } }
+			add_trait = stressed
+		}
+		else = {
+			random_list = {
+				10 = { add_trait = ill }
+				10 = { add_trait = stutter }
+				10 = { add_trait = depressed }
+				10 = {
+					change_variable = { which = "lunatic_counter" value = 5 }
+					character_event = { id = mutate.5 } # Lunacy counter
+				}
+			}
+		}
+	}
+}
+
+# drufeast.44 The manticore kills a guest
+# Scope: ROOT is the host (drufeast.41).
+character_event = {
+	id = drufeast.44
+	desc = EVTDESCdrufeast44
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.41
+
+	option = {
+		name = EVTOPTAdrufeast44
+		set_character_flag = bad_druchii_feast
+		random_vassal = {
+			limit = { has_character_flag = attending_druchii_feast ai = yes }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_accident } }
+		}
+	}
+}
+
+# drufeast.45 A guest slays the manticore
+# Every guest is impressed with the hero.
+# Scope: ROOT is the host (drufeast.41).
+character_event = {
+	id = drufeast.45
+	desc = EVTDESCdrufeast45
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.41
+
+	option = {
+		name = EVTOPTAdrufeast45
+		random_vassal = {
+			limit = { has_character_flag = attending_druchii_feast is_female = no }
+			save_event_target_as = manticore_slayer
+			character_event = { id = drufeast.46 }
+		}
+		opinion = { modifier = opinion_impressed who = event_target:manticore_slayer years = 5 }
+		hidden_effect = {
+			any_vassal = {
+				limit = {
+					has_character_flag = attending_druchii_feast
+					NOT = { character = event_target:manticore_slayer }
+				}
+				opinion = {
+					modifier = opinion_impressed
+					who = event_target:manticore_slayer
+					years = 5
+				}
+			}
+		}
+	}
+}
+
+# drufeast.46 Manticore slayer
+# Scope: ROOT is the hero, FROM the host (drufeast.45).
+character_event = {
+	id = drufeast.46
+	desc = EVTDESCdrufeast46
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.45
+
+	option = {
+		name = EVTOPTAdrufeast46
+		prestige = 30
+	}
+}
+
+# drufeast.47 A sorceress performs (hidden)
+# Only for a player host: one of three illusions.
+# Scope: ROOT is the host (drufeast.10).
+character_event = {
+	id = drufeast.47
+	hide_window = yes
+
+	is_triggered_only = yes # drufeast.10
+
+	trigger = {
+		ai = no
+	}
+
+	immediate = {
+		set_character_flag = druchii_feast_magician
+		random_list = {
+			10 = { narrative_event = { id = drufeast.48 } }
+			10 = { narrative_event = { id = drufeast.49 } }
+			10 = { narrative_event = { id = drufeast.51 } }
+		}
+	}
+}
+
+# drufeast.48 The vanishing slave
+# Scope: ROOT is the host (drufeast.47).
+narrative_event = {
+	id = drufeast.48
+	title = EVTTITLEdrufeast48
+	desc = EVTDESCdrufeast48
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.47
+
+	option = {
+		name = EVTOPTAdrufeast48
+		add_character_modifier = { name = entertaining_entertainment days = 730 }
+	}
+	option = {
+		name = EVTOPTBdrufeast48
+		prestige = 20
+	}
+}
+
+# drufeast.49 The three cups
+# Whichever cup the host picks, it is the wrong one (drufeast.50).
+# Scope: ROOT is the host (drufeast.47).
+narrative_event = {
+	id = drufeast.49
+	title = EVTTITLEdrufeast48
+	desc = EVTDESCdrufeast49
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.47
+
+	option = {
+		name = EVTOPTAdrufeast49
+		hidden_effect = { character_event = { id = drufeast.50 } }
+	}
+	option = {
+		name = EVTOPTBdrufeast49
+		hidden_effect = { character_event = { id = drufeast.50 } }
+	}
+	option = {
+		name = EVTOPTCdrufeast49
+		hidden_effect = { character_event = { id = drufeast.50 } }
+	}
+}
+
+# drufeast.50 The wrong cup
+# The clever see through the trick; the wroth accuse her of cheating.
+# Scope: ROOT is the host (drufeast.49).
+character_event = {
+	id = drufeast.50
+	desc = EVTDESCdrufeast50
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.49
+
+	option = {
+		name = EVTOPTAdrufeast50
+		prestige = -5
+	}
+	option = {
+		name = EVTOPTBdrufeast50
+		tooltip_info = wroth
+		trigger = { trait = wroth NOR = { trait = genius trait = quick } }
+		prestige = 15
+		add_trait = cynical
+	}
+	option = {
+		name = EVTOPTCdrufeast50
+		trigger = { OR = { trait = genius trait = quick } }
+		prestige = 30
+	}
+}
+
+# drufeast.51 The climbing rope
+# Scope: ROOT is the host (drufeast.47).
+narrative_event = {
+	id = drufeast.51
+	title = EVTTITLEdrufeast48
+	desc = EVTDESCdrufeast51
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # drufeast.47
+
+	option = {
+		name = EVTOPTAdrufeast51
+		add_character_modifier = { name = entertaining_entertainment days = 730 }
+	}
+	option = {
+		name = EVTOPTBdrufeast51
+		trigger = { OR = { trait = genius trait = quick } }
+		prestige = 30
+	}
+}
+
+###############################################################################
+# The rite of Khaine
+# Near the end of the feast the host honours Khaine with a sacrifice: cold
+# ones, a prisoner, his finest slaves, or ten manticores. The guests watch.
+###############################################################################
+
+# drufeast.60 The rite of Khaine (hidden)
+# Scope: ROOT is the host (drufeast.10).
+character_event = {
+	id = drufeast.60
+	hide_window = yes
+
+	is_triggered_only = yes # drufeast.10
+
+	trigger = {
+		has_character_modifier = holding_large_druchi_feast
+	}
+
+	immediate = {
+		character_event = { id = drufeast.61 }
+	}
+}
+
+# drufeast.61 The night of Khaine
+# Scope: ROOT is the host (drufeast.60).
+character_event = {
+	id = drufeast.61
+	desc = EVTDESCdrufeast61
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # drufeast.60
+
+	option = { # The usual rites
+		name = EVTOPTAdrufeast61
+		hidden_effect = {
+			character_event = { id = drufeast.70 }
+			any_vassal = {
+				limit = { has_character_flag = attending_druchii_feast }
+				character_event = { id = drufeast.71 }
+			}
+		}
+		ai_chance = { factor = 30 modifier = { factor = 0 trait = zealous } }
+	}
+	option = { # A greater sacrifice
+		name = EVTOPTBdrufeast61
+		hidden_effect = { character_event = { id = drufeast.62 } }
+		ai_chance = { factor = 70 }
+	}
+}
+
+# drufeast.62 A sacrifice for the Bloody-Handed God
+# Scope: ROOT is the host (drufeast.61).
+character_event = {
+	id = drufeast.62
+	desc = EVTDESCdrufeast62
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # drufeast.61
+
+	option = { # A prisoner
+		name = EVTOPTAdrufeast62
+		trigger = { any_courtier = { prisoner = yes host = { character = ROOT } } }
+		prestige = 20
+		random_courtier = {
+			limit = { prisoner = yes host = { character = ROOT } }
+			character_event = { id = drufeast.63 }
+		}
+	}
+	option = { # Slaves
+		name = EVTOPTBdrufeast62
+		prestige = 10
+		hidden_effect = {
+			character_event = { id = drufeast.66 }
+			any_vassal = {
+				limit = { has_character_flag = attending_druchii_feast }
+				character_event = { id = drufeast.67 }
+			}
+		}
+	}
+	option = { # Manticores
+		name = EVTOPTCdrufeast62
+		trigger = { wealth = 50 }
+		wealth = -50
+		prestige = 30
+		hidden_effect = {
+			narrative_event = { id = drufeast.68 }
+			any_vassal = {
+				limit = { has_character_flag = attending_druchii_feast }
+				narrative_event = { id = drufeast.69 }
+			}
+		}
+	}
+}
+
+# drufeast.63 To the altar (hidden)
+# Relays the sacrifice so that the victim is FROM in the host's and guests'
+# events.
+# Scope: ROOT is the prisoner, FROM the host (drufeast.62).
+character_event = {
+	id = drufeast.63
+	hide_window = yes
+
+	is_triggered_only = yes # drufeast.62
+
+	immediate = {
+		FROM = {
+			any_vassal = {
+				limit = { has_character_flag = attending_druchii_feast }
+				character_event = { id = drufeast.65 }
+			}
+			character_event = { id = drufeast.64 }
+		}
+	}
+}
+
+# drufeast.64 The prisoner's heart (host)
+# Scope: ROOT is the host, FROM the prisoner (drufeast.63).
+character_event = {
+	id = drufeast.64
+	desc = EVTDESCdrufeast64
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # drufeast.63
+
+	option = {
+		name = EVTOPTAdrufeast64
+		piety = 30
+		FROM = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_sacrificed killer = ROOT } }
+		}
+	}
+}
+
+# drufeast.65 The prisoner's heart (guests)
+# Scope: ROOT is a guest, FROM the prisoner (drufeast.63).
+character_event = {
+	id = drufeast.65
+	desc = EVTDESCdrufeast64
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # drufeast.63
+
+	option = {
+		name = EVTOPTAdrufeast64
+		piety = 10
+	}
+}
+
+# drufeast.66 The slaves' blood (host)
+# Scope: ROOT is the host (drufeast.62).
+character_event = {
+	id = drufeast.66
+	desc = EVTDESCdrufeast66
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # drufeast.62
+
+	option = {
+		name = EVTOPTAdrufeast64
+		piety = 30
+	}
+}
+
+# drufeast.67 The slaves' blood (guests)
+# Scope: ROOT is a guest, FROM the host (drufeast.62).
+character_event = {
+	id = drufeast.67
+	desc = EVTDESCdrufeast66
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # drufeast.62
+
+	option = {
+		name = EVTOPTAdrufeast64
+		piety = 10
+	}
+}
+
+# drufeast.68 Walls painted in blood (host)
+# Scope: ROOT is the host (drufeast.62).
+narrative_event = {
+	id = drufeast.68
+	title = EVTTITLEdrufeast68
+	desc = EVTDESCdrufeast68
+	picture = GFX_evt_feast
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # drufeast.62
+
+	option = {
+		name = EVTOPTAdrufeast68
+		piety = 30
+	}
+}
+
+# drufeast.69 Walls painted in blood (guests)
+# Scope: ROOT is a guest, FROM the host (drufeast.62).
+narrative_event = {
+	id = drufeast.69
+	title = EVTTITLEdrufeast68
+	desc = EVTDESCdrufeast68
+	picture = GFX_evt_feast
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # drufeast.62
+
+	option = {
+		name = EVTOPTAdrufeast68
+		piety = 10
+	}
+}
+
+# drufeast.70 The usual rites (host)
+# Cold ones are bled beneath the statue of Khaine.
+# Scope: ROOT is the host (drufeast.61).
+character_event = {
+	id = drufeast.70
+	desc = EVTDESCdrufeast70
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # drufeast.61
+
+	option = {
+		name = EVTOPTAdrufeast68
+		piety = 20
+	}
+}
+
+# drufeast.71 The usual rites (guests)
+# Scope: ROOT is a guest, FROM the host (drufeast.61).
+character_event = {
+	id = drufeast.71
+	desc = EVTDESCdrufeast70
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # drufeast.61
+
+	option = {
+		name = EVTOPTAdrufeast68
+		piety = 5
+	}
+}

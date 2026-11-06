@@ -23,6 +23,8 @@
 # Game start                             empire.30 - empire.31
 # The Runefangs                          empire.40 - empire.42
 # The Knights Griffon                    empire.50 - empire.51
+# Ottilia's Edict, the War of the Hammer  empire.60 - empire.68
+# The Pantheon of the Old World           empire.70
 #
 # Callers:
 #   decisions/wh_empire_decisions.txt: claim_the_throne fires empire.1.
@@ -33,13 +35,24 @@
 #     empire.21. common/minor_titles/wh_minor_titles.txt: the Reiksmarshal
 #     and the Emperor's Champion fire empire.42.
 #   empire.2 fires empire.10 (one faith triumphant).
-#   decisions/wh_empire_decisions.txt: found_knights_griffon fires empire.50.
+#   decisions/wh_empire_decisions.txt: found_knights_griffon fires empire.50;
+#     renew_ottilian_edict fires empire.60, revoke_ottilian_edict empire.65.
+#   common/cb_types/wh_cb_types.txt: war_of_the_hammer fires empire.65 on
+#     success and empire.70 on failure. wh_on_actions: empire.66 on
+#     on_new_holder_inheritance and on_new_holder_usurpation, empire.67 on
+#     on_character_convert_religion.
 #   common/cb_types/wh_cb_types.txt: the vampires' great war fires
 #     empire.12 on success. common/cb_types/00_cb_types.txt: a Black
 #     Crusade on the Empire fires empire.12 when it is declared.
 # Scripted effects: common/scripted_effects/wh_empire_effects.txt
 # Scripted triggers: common/scripted_triggers/wh_empire_triggers.txt
 # Opinions: common/opinion_modifiers/wh_empire_opinions.txt
+# Modifiers: common/event_modifiers/wh_empire_modifiers.txt (the burned
+#   temples, the Pantheon), common/religion_modifiers/wh_religion_modifiers.txt
+# Saved (Edict): global flags ottilian_edict_active, ottilian_edict_ended;
+#   persistent target ottilian_edict_giver; character flags
+#   ottilian_edict_giver, ottilian_edict_refuser, ottilian_edict_burned,
+#   ottilian_edict_lost_war; title flag ottilian_edict_title.
 # Loc: localisation/00_WHG_empire_events.csv
 ###############################################################################
 
@@ -953,5 +966,436 @@ character_event = {
 	option = {
 		name = EVTOPTAempire51
 		piety = 25
+	}
+}
+
+###############################################################################
+# Ottilia's Edict
+# Lore: in 1360 IC Ottilia of Talabecland declared herself Empress, named
+# Sigmar a false god and outlawed his cult, with the Ulricans behind her.
+# A rare decision lets an Ulrican or Taalite Emperor or claimant renew the
+# Edict (renew_ottilian_edict). The Sigmarite temples may burn, the
+# Sigmarite vassals must turn or refuse, and a year later the refusers may
+# rise in the War of the Hammer. The Edict is never fixed for good: it ends
+# if the Sigmarites win that war, if the giver revokes it or turns from the
+# Wolf and the Huntsman, or when an heir or usurper chooses to drop it. An
+# Emperor who wins the war may raise a Pantheon of the Old World in the
+# capital.
+###############################################################################
+
+# empire.60 The Edict of the Wolf
+# Scope: ROOT is the Emperor or claimant who takes the decision.
+character_event = {
+	id = empire.60
+	desc = EVTDESCempire60
+	picture = GFX_evt_lunatic
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # renew_ottilian_edict
+
+	option = { # Burn the temples of the false god
+		name = EVTOPTAempire60
+		trigger = { empire_edict_burnable_temple_trigger = yes }
+		custom_tooltip = { text = empire60_burn_tt }
+		piety = 100
+		if = { limit = { NOT = { trait = zealous } } add_trait = zealous }
+		hidden_effect = {
+			if = {
+				limit = { 299 = { owner = { same_realm = ROOT } religion = sigmarite } }
+				299 = { save_event_target_as = edict_burned_city }
+			}
+			else = {
+				random_realm_province = {
+					limit = {
+						religion = sigmarite
+						any_province_holding = { holding_type = temple }
+					}
+					preferred_limit = { is_holy_site = sigmarite }
+					save_event_target_as = edict_burned_city
+				}
+			}
+			event_target:edict_burned_city = {
+				add_province_modifier = { name = sigmar_temples_burned years = 20 }
+				any_province_holding = {
+					limit = { holding_type = temple NOT = { holder_scope = { character = ROOT } } }
+					destroy_settlement = yes
+				}
+			}
+			set_character_flag = ottilian_edict_burned
+		}
+		empire_proclaim_edict_effect = yes
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 3 trait = zealous }
+			modifier = { factor = 0.2 trait = kind }
+		}
+	}
+	option = { # Outlaw the cult, spare the temples
+		name = EVTOPTBempire60
+		piety = 50
+		empire_proclaim_edict_effect = yes
+		ai_chance = { factor = 60 }
+	}
+	option = { # Not yet
+		name = EVTOPTCempire60
+		ai_chance = { factor = 20 modifier = { factor = 3 trait = craven } }
+	}
+}
+
+# empire.61 News of the Edict
+# Scope: ROOT is a ruler of the cults, FROM is the giver.
+narrative_event = {
+	id = empire.61
+	title = EVTTITLEempire61
+	desc = {
+		trigger = { FROM = { has_character_flag = ottilian_edict_burned } }
+		text = EVTDESCempire61_burned
+	}
+	desc = {
+		trigger = { FROM = { NOT = { has_character_flag = ottilian_edict_burned } } }
+		text = EVTDESCempire61
+	}
+	picture = GFX_evt_burning_house
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # empire.60
+
+	option = {
+		name = EVTOPTAempire61
+		trigger = { religion = sigmarite }
+	}
+	option = {
+		name = EVTOPTBempire61
+		trigger = { OR = { religion = ulrican religion = taalite } }
+	}
+	option = {
+		name = EVTOPTCempire61
+		trigger = { NOR = { religion = sigmarite religion = ulrican religion = taalite } }
+	}
+}
+
+# empire.62 The Edict is read in your hall
+# Scope: ROOT is a Sigmarite vassal of the giver, FROM is the giver.
+character_event = {
+	id = empire.62
+	desc = EVTDESCempire62
+	picture = GFX_evt_courier
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # empire_proclaim_edict_effect
+
+	option = { # Turn to the giver's god
+		name = EVTOPTAempire62
+		religion = FROM
+		remove_opinion = { who = FROM modifier = opinion_edict_outlawed_sigmar }
+		opinion = { who = FROM modifier = opinion_edict_turned years = 10 }
+		reverse_opinion = { who = FROM modifier = opinion_edict_turned years = 10 }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 0.1 trait = zealous }
+			modifier = { factor = 3 trait = cynical }
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 0.5 opinion = { who = FROM value = -25 } }
+		}
+	}
+	option = { # Turn in public, keep Sigmar in the heart
+		name = EVTOPTBempire62
+		trigger = { NOT = { trait = honest } }
+		set_secret_religion = sigmarite
+		religion = FROM
+		remove_opinion = { who = FROM modifier = opinion_edict_outlawed_sigmar }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = deceitful }
+			modifier = { factor = 0 trait = zealous }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTCempire62
+		piety = 50
+		set_character_flag = ottilian_edict_refuser
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 4 trait = zealous }
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.2 trait = craven }
+			modifier = { factor = 2 opinion = { who = FROM value = -25 } }
+			modifier = { factor = 0.3 NOT = { higher_tier_than = BARON } }
+		}
+	}
+}
+
+# empire.63 A year under the Edict: a preacher of Sigmar condemns it, and the
+# refusers may rise.
+# Scope: ROOT is the giver.
+character_event = {
+	id = empire.63
+	desc = EVTDESCempire63
+	picture = GFX_evt_heretic
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # empire_proclaim_edict_effect
+
+	trigger = {
+		has_character_flag = ottilian_edict_giver
+		empire_edict_in_force_trigger = yes
+	}
+
+	option = { # Burn the preacher
+		name = EVTOPTAempire63
+		piety = 25
+		any_vassal = {
+			limit = { religion = sigmarite }
+			opinion = { who = ROOT modifier = opinion_edict_burned_preacher years = 10 }
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 0 trait = kind }
+		}
+	}
+	option = { # Drive him out
+		name = EVTOPTBempire63
+		prestige = -25
+		ai_chance = { factor = 50 }
+	}
+	option = { # Let him preach
+		name = EVTOPTCempire63
+		piety = -50
+		any_vassal = {
+			limit = { religion = sigmarite }
+			opinion = { who = ROOT modifier = opinion_edict_spared_preacher years = 10 }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = kind }
+			modifier = { factor = 0 trait = zealous }
+		}
+	}
+	after = {
+		hidden_effect = {
+			random_vassal = {
+				limit = {
+					has_character_flag = ottilian_edict_refuser
+					religion = sigmarite
+					is_adult = yes
+					prisoner = no
+					NOT = { trait = incapable }
+					higher_tier_than = BARON
+				}
+				preferred_limit = { higher_tier_than = DUKE }
+				preferred_limit = { higher_tier_than = COUNT }
+				save_event_target_as = hammer_leader
+			}
+			if = {
+				limit = { event_target:hammer_leader = { always = yes } }
+				event_target:hammer_leader = {
+					war = { casus_belli = war_of_the_hammer target = ROOT }
+				}
+				any_vassal = {
+					limit = {
+						has_character_flag = ottilian_edict_refuser
+						religion = sigmarite
+						NOT = { character = event_target:hammer_leader }
+						prisoner = no
+					}
+					join_attacker_wars = event_target:hammer_leader
+				}
+				any_playable_ruler = {
+					limit = { empire_imperial_cult_trigger = yes is_within_diplo_range = ROOT }
+					character_event = { id = empire.64 days = 3 }
+				}
+			}
+		}
+	}
+}
+
+# empire.64 The War of the Hammer
+# Scope: ROOT is a ruler of the cults, FROM is the giver.
+character_event = {
+	id = empire.64
+	desc = EVTDESCempire64
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # empire.63
+
+	option = {
+		name = EVTOPTAempire64
+		trigger = { religion = sigmarite }
+	}
+	option = {
+		name = EVTOPTBempire64
+		trigger = { NOT = { religion = sigmarite } }
+	}
+}
+
+# empire.65 The Edict is revoked
+# Scope: ROOT is the giver or the new holder who lets it lapse.
+narrative_event = {
+	id = empire.65
+	title = EVTTITLEempire65
+	desc = { trigger = { has_character_flag = ottilian_edict_lost_war } text = EVTDESCempire65_war }
+	desc = {
+		trigger = { NOT = { has_character_flag = ottilian_edict_lost_war } }
+		text = EVTDESCempire65
+	}
+	picture = GFX_evt_icon
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # war_of_the_hammer, revoke_ottilian_edict, empire.66, empire.67
+
+	immediate = {
+		empire_revoke_edict_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAempire65
+		clr_character_flag = ottilian_edict_lost_war
+	}
+}
+
+# empire.66 The Edict passes to a new holder
+# Scope: ROOT is the new holder, FROM the title, FROMFROM the old holder.
+character_event = {
+	id = empire.66
+	desc = EVTDESCempire66
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_new_holder_inheritance, on_new_holder_usurpation
+
+	trigger = {
+		has_global_flag = ottilian_edict_active
+		FROM = { has_title_flag = ottilian_edict_title }
+		NOT = { has_character_flag = ottilian_edict_giver }
+	}
+
+	immediate = {
+		if = {
+			limit = { NOR = { religion = ulrican religion = taalite } }
+			narrative_event = { id = empire.65 }
+		}
+	}
+
+	option = { # Keep the Edict
+		name = EVTOPTAempire66
+		trigger = { OR = { religion = ulrican religion = taalite } }
+		set_character_flag = ottilian_edict_giver
+		save_persistent_event_target = { name = ottilian_edict_giver scope = ROOT }
+		hidden_effect = {
+			primary_title = { set_title_flag = ottilian_edict_title }
+			any_vassal = {
+				limit = { religion = sigmarite }
+				opinion = { who = ROOT modifier = opinion_edict_outlawed_sigmar }
+			}
+			character_event = { id = empire.63 days = 365 random = 60 }
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 3 trait = zealous }
+			modifier = { factor = 0.3 trait = cynical }
+			modifier = { factor = 0.5 trait = kind }
+		}
+	}
+	option = { # Let it lapse
+		name = EVTOPTBempire66
+		trigger = { OR = { religion = ulrican religion = taalite } }
+		narrative_event = { id = empire.65 }
+		ai_chance = { factor = 60 modifier = { factor = 0.2 trait = zealous } }
+	}
+	option = { # Not my faith: the Edict ends
+		name = EVTOPTCempire66
+		trigger = { NOR = { religion = ulrican religion = taalite } }
+	}
+}
+
+# empire.67 The giver turns from the Wolf and the Huntsman: the Edict ends
+# Scope: ROOT is the giver (on_character_convert_religion).
+character_event = {
+	id = empire.67
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = ottilian_edict_giver
+		NOR = { religion = ulrican religion = taalite }
+	}
+
+	immediate = {
+		narrative_event = { id = empire.65 }
+	}
+}
+
+# empire.68 News: the Edict is no more
+# Scope: ROOT is a ruler of the cults, FROM is the one who ended it.
+character_event = {
+	id = empire.68
+	desc = EVTDESCempire68
+	picture = GFX_evt_icon
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # empire_revoke_edict_effect
+
+	option = {
+		name = EVTOPTAempire68
+		trigger = { religion = sigmarite }
+		piety = 25
+	}
+	option = {
+		name = EVTOPTBempire68
+		trigger = { NOT = { religion = sigmarite } }
+	}
+}
+
+# empire.70 The Pantheon of the Old World
+# After winning the War of the Hammer, the giver may raise a temple to the
+# gods of the Old World in the capital and choose who it honours. Echoes the
+# old Olympian temple dedication.
+# Scope: ROOT is the giver.
+character_event = {
+	id = empire.70
+	desc = EVTDESCempire70
+	picture = GFX_evt_cathedral
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # war_of_the_hammer on_fail and on_reverse_demand
+
+	trigger = {
+		capital_scope = { NOT = { has_province_modifier = pantheon_elder_brothers } }
+		capital_scope = { NOT = { has_province_modifier = pantheon_war_gods } }
+		capital_scope = { NOT = { has_province_modifier = pantheon_plenty } }
+		capital_scope = { NOT = { has_province_modifier = pantheon_watchers } }
+	}
+
+	option = { # Ulric and Taal, the elder brothers
+		name = EVTOPTAempire70
+		wealth = -150
+		capital_scope = { add_province_modifier = { name = pantheon_elder_brothers duration = -1 } }
+		ai_chance = { factor = 30 }
+	}
+	option = { # The gods of war: Ulric and Myrmidia
+		name = EVTOPTBempire70
+		wealth = -150
+		capital_scope = { add_province_modifier = { name = pantheon_war_gods duration = -1 } }
+		ai_chance = { factor = 30 modifier = { factor = 2 trait = brave } }
+	}
+	option = { # The gods of plenty: Rhya, Shallya and Handrich
+		name = EVTOPTCempire70
+		wealth = -150
+		capital_scope = { add_province_modifier = { name = pantheon_plenty duration = -1 } }
+		ai_chance = { factor = 30 modifier = { factor = 2 trait = greedy } }
+	}
+	option = { # The watchers: Morr and Verena
+		name = EVTOPTDempire70
+		wealth = -150
+		capital_scope = { add_province_modifier = { name = pantheon_watchers duration = -1 } }
+		ai_chance = { factor = 20 modifier = { factor = 2 trait = scholar } }
+	}
+	option = { # No coin for temples
+		name = EVTOPTEempire70
+		ai_chance = { factor = 10 modifier = { factor = 3 trait = greedy } }
 	}
 }

@@ -1,0 +1,2380 @@
+###############################################################################
+# Venerated Souls (saints) events
+# Namespace: saint (was HF in HF_sainthood_events.txt, HF_saint_flavour_events,
+#   HF_saintly_bloodlines_events and HF_saintly_pilgrimage_events)
+# Faction: Old World faiths
+#   (Sigmar, Ulric, Taal, Shallya, Manann, Morr, Myrmidia, the Lady, Solkan,
+#   the gods of Kislev and the old faith)
+#
+# In the Old World, men and women of rare piety are raised after death to
+# Venerated Souls: lesser holy figures beneath their god. A local priest
+# names the dead "Pious" first; years later the head of the cult (for the
+# great cults, the Grand Conclave that Magnus the Pious founded) may name
+# them a Venerated Soul. Their tomb draws pilgrims, their kin may carry a
+# holy bloodline, and a corrupt priest can make a farce of it all.
+#
+# The Pious                               saint.1 - saint.3
+# Raised to a Venerated Soul              saint.10 - saint.15
+# The unworthy named Pious                saint.20 - saint.24
+# The Grand Theogonist's favourite        saint.30 - saint.36
+# Tombs of the Venerated                  saint.40 - saint.46
+# Holy bloodlines                         saint.50 - saint.55
+# Pilgrimage to a tomb                    saint.60 - saint.78
+#
+# Callers:
+#   common/on_actions/00_on_actions.txt: on_death (1, 30), on_death random
+#     list (20), on_siege_over_winner random list (46), on_yearly_pulse
+#     random list (50).
+#   common/on_actions/wh_on_actions.txt: five-year list saint_tombs (40, 41,
+#     42), five-year list saint_bloodlines (51, 53, 55).
+#   common/cb_types/01_cb_types.txt: depose_impious_pope (35, 36).
+#   events/pilgrim_events.txt: SoA.5011 (60).
+# Support: common/scripted_effects/wh_saint_effects.txt,
+#   common/scripted_triggers/wh_saint_triggers.txt
+# Loc: localisation/00_WHG_saint_events.csv
+###############################################################################
+
+namespace = saint
+
+###############################################################################
+# The Pious
+# A devout lord dies (saint.1). If a priest of the same faith holds land in
+# the realm, he names the dead "Pious" half a year to a year and a half
+# later (saint.2). Once the Grand Theogonist has forbidden local namings
+# (saint.23), only the head of the cult may do it.
+###############################################################################
+
+# saint.1 A devout death (hidden)
+# Scope: ROOT is the dead character (on_death).
+character_event = {
+	id = saint.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+	min_age = 16
+	only_playable = yes
+	religion_group = old_world_group
+
+	trigger = {
+		saint_worthy_trigger = yes
+		OR = {
+			AND = { tier = EMPEROR piety >= 1250 }
+			AND = { tier = KING piety >= 1000 }
+			AND = { tier = DUKE piety >= 750 }
+			AND = { tier = COUNT piety >= 500 }
+			has_character_modifier = true_christian_knight
+			has_any_opinion_modifier = opinion_baptism_sponsor_target
+		}
+	}
+
+	immediate = {
+		save_event_target_as = saint_person
+		top_liege = { save_event_target_as = saint_top_liege }
+		capital_scope = { save_event_target_as = saint_capital }
+		random_demesne_province = {
+			limit = { saint_no_tomb_trigger = yes }
+			save_event_target_as = random_saint_demesne_province
+		}
+		random_realm_province = {
+			limit = { saint_no_tomb_trigger = yes }
+			save_event_target_as = random_saint_realm_province
+		}
+		if = {
+			limit = { ai = no }
+			add_trait = i_used_to_be_a_player # Players wait less for the Conclave
+		}
+		random = {
+			chance = 100
+			modifier = {
+				factor = 0.25
+				any_owned_bloodline = { has_bloodline_flag = saintly_bloodline }
+			}
+			modifier = { factor = 0.8 trait = cynical }
+			if = {
+				limit = { has_global_flag = venerated_by_conclave_only religion = sigmarite }
+				rightful_religious_head_scope = {
+					character_event = { id = saint.2 days = 180 random = 360 }
+				}
+				set_character_flag = beatified
+			}
+			else_if = {
+				limit = { any_realm_character = { saint_local_priest_trigger = yes } }
+				random_realm_character = {
+					limit = { saint_local_priest_trigger = yes }
+					character_event = { id = saint.2 days = 180 random = 360 }
+				}
+				set_character_flag = beatified
+			}
+		}
+		saint_canonization_roll_effect = yes
+	}
+}
+
+# saint.2 A priest names the dead Pious (hidden)
+# The priest (or the head of the cult) writes to the realm and the dead
+# one's kin (saint.3).
+# Scope: ROOT is the priest or the head of the cult (saint.1).
+character_event = {
+	id = saint.2
+	hide_window = yes
+
+	is_triggered_only = yes # saint.1
+
+	trigger = {
+		religion = event_target:saint_person
+		NOT = { event_target:saint_person = { trait = beatified } }
+		NOT = { event_target:saint_person = { trait = saint } }
+	}
+
+	immediate = {
+		save_event_target_as = saint_proclaimer
+		event_target:saint_person = {
+			add_trait = beatified
+			if = { limit = { is_female = yes } set_special_character_title = BLESSED_TITLE_FEMALE }
+			else = { set_special_character_title = BLESSED_TITLE }
+		}
+		saint_news_pious_effect = yes
+	}
+}
+
+# saint.3 Named Pious
+# Kin of the dead gain piety; when the head of the cult named them, his
+# priests think better of the family too.
+# Scope: ROOT is a ruler of the faith; FROM is the proclaimer (saint.2).
+narrative_event = {
+	id = saint.3
+	title = EVTNAMEsaint3
+	desc = { trigger = { FROM = { controls_religion = no } } text = EVTDESCsaint3 }
+	desc = { trigger = { FROM = { controls_religion = yes } } text = EVTDESCsaint3b }
+	picture = GFX_evt_beatification
+	border = GFX_event_narrative_frame_religion
+	portrait = event_target:saint_person
+
+	is_triggered_only = yes # saint.2
+
+	option = {
+		name = EVTOPTAsaint3
+		show_portrait = FROM
+		if = {
+			limit = { event_target:saint_person = { family = ROOT } }
+			if = {
+				limit = { FROM = { controls_religion = yes } }
+				piety = 150
+				FROM = { opinion = { modifier = opinion_family_saint who = ROOT years = 10 } }
+			}
+			else = { piety = 50 }
+		}
+	}
+}
+
+###############################################################################
+# Raised to a Venerated Soul
+# At death a roll decides whether the dead may one day be raised
+# (saint_canonization_roll_effect). Years later, three to thirty, the head
+# of the cult is asked (saint.11, saint.12). If he agrees, the dead becomes
+# a Venerated Soul, a tomb is raised, and a holy bloodline may begin.
+###############################################################################
+
+# saint.11 The case comes before the cult (hidden)
+# The head of the cult where the dead ruled hears it, or the dead's own.
+# Scope: ROOT is a province of the dead's realm
+# (saint_canonization_roll_effect).
+province_event = {
+	id = saint.11
+	hide_window = yes
+
+	is_triggered_only = yes # saint_canonization_roll_effect
+
+	trigger = {
+		event_target:saint_person = {
+			OR = { trait = beatified has_religion_feature = religion_beatification }
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				event_target:saint_capital = { owner = { religion = event_target:saint_person } }
+			}
+			event_target:saint_capital = {
+				owner = { rightful_religious_head_scope = { character_event = { id = saint.12 } } }
+			}
+		}
+		else = {
+			event_target:saint_person = {
+				rightful_religious_head_scope = { character_event = { id = saint.12 } }
+			}
+		}
+	}
+}
+
+# saint.12 A Venerated Soul?
+# The head of the cult decides. If he agrees: a miracle is told, the dead
+# becomes a Venerated Soul, a tomb is raised, and a holy bloodline may
+# begin. The AI always agrees.
+# Scope: ROOT is the head of the cult (saint.11).
+character_event = {
+	id = saint.12
+	desc = { trigger = { saint_grand_conclave_trigger = yes } text = EVTDESCsaint12 }
+	desc = { trigger = { saint_grand_conclave_trigger = no } text = EVTDESCsaint12b }
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint.11
+
+	immediate = {
+		save_event_target_as = canonizer_person
+	}
+
+	option = { # Raise the soul
+		name = EVTOPTAsaint12
+		custom_tooltip = { text = saint_canonize_TT }
+		hidden_effect = {
+			saint_miracle_effect = yes
+			event_target:saint_person = {
+				remove_trait = beatified
+				add_trait = saint
+				if = {
+					limit = { is_female = yes }
+					set_special_character_title = SAINT_TITLE_FEMALE
+				}
+				else = { set_special_character_title = SAINT_TITLE }
+			}
+			saint_news_venerated_effect = yes
+			narrative_event = { id = saint.15 }
+			set_global_flag = saintly_burial_sites_exist
+			saint_raise_tomb_effect = yes
+			saint_found_bloodline_effect = yes
+		}
+		ai_chance = { factor = 1 }
+	}
+	option = { # Not yet
+		name = EVTOPTBsaint12
+		ai_chance = { factor = 0 }
+	}
+}
+
+# saint.13 A new tomb
+# Scope: ROOT is the owner of the province that holds the tomb; FROM is
+# the province (saint_raise_tomb_effect).
+character_event = {
+	id = saint.13
+	desc = EVTDESCsaint13
+	picture = GFX_evt_large_army
+	border = GFX_event_normal_frame_religion
+	notification = yes
+
+	is_triggered_only = yes # saint_raise_tomb_effect
+
+	option = {
+		name = EVTOPTAsaint13
+	}
+}
+
+# saint.15 A Venerated Soul
+# Rulers of the faith and the dead one's kin hear of it; they think well of
+# the head of the cult, and kin gain piety.
+# Scope: ROOT is a ruler of the faith; FROM is the head of the cult
+# (saint.12).
+narrative_event = {
+	id = saint.15
+	title = EVTNAMEsaint15
+	desc = EVTDESCsaint15
+	picture = GFX_evt_beatification
+	border = GFX_event_narrative_frame_religion
+	portrait = event_target:saint_person
+
+	is_triggered_only = yes # saint.12
+
+	immediate = {
+		sound_effect = saint_proclaimed
+		if = {
+			limit = { NOT = { character = FROM } }
+			opinion = { name = opinion_very_grateful_donation who = FROM years = 30 }
+		}
+	}
+
+	option = {
+		name = EVTOPTAsaint15
+		show_portrait = FROM
+		if = {
+			limit = { event_target:saint_person = { family = ROOT } }
+			piety = 100
+			custom_tooltip = { text = saint_family_TT }
+		}
+	}
+}
+
+###############################################################################
+# The unworthy named Pious
+# Now and then a priest of Sigmar names a drunkard or a glutton Pious, for
+# gold or friendship (saint.20, saint.21). Half a year to two years later
+# the Grand Theogonist forbids it: from then on only he may name the Pious
+# (saint.23). It happens once.
+###############################################################################
+
+# saint.20 A sinner dies (hidden)
+# Scope: ROOT is the dead character (on_death random list).
+character_event = {
+	id = saint.20
+	hide_window = yes
+
+	is_triggered_only = yes # on_death random list
+	min_age = 16
+	religion = sigmarite
+
+	trigger = {
+		OR = { trait = drunkard trait = hedonist }
+		NOT = { has_global_flag = venerated_by_conclave_only }
+		NOT = { has_global_flag = bad_beatification_completed }
+		k_cult_of_sigmar = { has_holder = yes }
+		any_realm_character = { saint_local_priest_trigger = yes }
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 2 year >= 2010 }
+		modifier = { factor = 1.5 year >= 2125 }
+		modifier = { factor = 1.5 year >= 2300 }
+	}
+
+	immediate = {
+		save_event_target_as = saint_person
+		top_liege = { save_event_target_as = saint_top_liege }
+		random_realm_character = {
+			limit = { saint_local_priest_trigger = yes }
+			character_event = { id = saint.21 days = 180 random = 500 }
+		}
+	}
+}
+
+# saint.21 The priest names the sinner Pious (hidden)
+# Scope: ROOT is the priest (saint.20).
+character_event = {
+	id = saint.21
+	hide_window = yes
+
+	is_triggered_only = yes # saint.20
+
+	trigger = {
+		NOT = { has_global_flag = venerated_by_conclave_only }
+		NOT = { has_global_flag = bad_beatification_completed }
+		NOT = { event_target:saint_person = { trait = beatified } }
+		NOT = { event_target:saint_person = { trait = saint } }
+	}
+
+	immediate = {
+		set_global_flag = bad_beatification_completed
+		save_event_target_as = saint_proclaimer
+		religion_authority = { modifier = impious_beatification }
+		event_target:saint_person = {
+			add_trait = beatified
+			if = { limit = { is_female = yes } set_special_character_title = BLESSED_TITLE_FEMALE }
+			else = { set_special_character_title = BLESSED_TITLE }
+		}
+		saint_news_unworthy_effect = yes
+		k_cult_of_sigmar = {
+			holder_scope = { character_event = { id = saint.23 days = 180 random = 500 } }
+		}
+	}
+}
+
+# saint.22 A sinner named Pious
+# Scope: ROOT is a ruler of the faith; FROM is the priest (saint.21).
+narrative_event = {
+	id = saint.22
+	title = EVTNAMEsaint22
+	desc = { trigger = { saint_shares_sin_trigger = no } text = EVTDESCsaint22 }
+	desc = { trigger = { saint_shares_sin_trigger = yes } text = EVTDESCsaint22b }
+	picture = GFX_evt_beatification
+	border = GFX_event_narrative_frame_religion
+	portrait = event_target:saint_person
+
+	is_triggered_only = yes # saint.21
+
+	option = { # A disgrace
+		name = EVTOPTAsaint22
+		trigger = { saint_shares_sin_trigger = no }
+		show_portrait = FROM
+		if = { limit = { event_target:saint_person = { family = ROOT } } prestige = -25 }
+	}
+	option = { # Well, why not
+		name = EVTOPTBsaint22
+		trigger = { saint_shares_sin_trigger = yes }
+		show_portrait = FROM
+		if = { limit = { event_target:saint_person = { family = ROOT } } piety = 25 }
+	}
+}
+
+# saint.23 The Grand Theogonist forbids it (hidden)
+# From now on only the Grand Theogonist names the Pious of Sigmar.
+# Scope: ROOT is the Grand Theogonist (saint.21).
+character_event = {
+	id = saint.23
+	hide_window = yes
+
+	is_triggered_only = yes # saint.21
+
+	trigger = {
+		has_landed_title = k_cult_of_sigmar
+		NOT = { has_global_flag = venerated_by_conclave_only }
+	}
+
+	immediate = {
+		set_global_flag = venerated_by_conclave_only
+		any_playable_ruler = {
+			limit = { religion = sigmarite }
+			narrative_event = { id = saint.24 }
+		}
+	}
+}
+
+# saint.24 Only the Grand Theogonist
+# Scope: ROOT is a Sigmarite ruler; FROM is the Grand Theogonist (saint.23).
+narrative_event = {
+	id = saint.24
+	title = EVTNAMEsaint24
+	desc = { trigger = { saint_shares_sin_trigger = no } text = EVTDESCsaint24 }
+	desc = { trigger = { saint_shares_sin_trigger = yes } text = EVTDESCsaint24b }
+	picture = GFX_evt_church_council
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # saint.23
+
+	option = { # Good
+		name = EVTOPTAsaint24
+		trigger = { saint_shares_sin_trigger = no }
+		custom_tooltip = { text = saint_conclave_only_TT }
+		show_portrait = event_target:saint_person
+	}
+	option = { # An insult to the dead
+		name = EVTOPTBsaint24
+		trigger = { saint_shares_sin_trigger = yes }
+		opinion = { modifier = insulted who = FROM }
+		FROM = { show_scope_change = no opinion = { modifier = insulted who = ROOT } }
+		custom_tooltip = { text = saint_conclave_only_TT }
+		show_portrait = event_target:saint_person
+	}
+}
+
+###############################################################################
+# The Grand Theogonist's favourite
+# A corrupt Grand Theogonist (bad_priest) may raise a dead friend who shared
+# his vices to a Venerated Soul (saint.30, saint.31). Rulers of the faith
+# are outraged or side with him (saint.32); a zealous king may march to
+# depose him (depose_impious_pope), and the faithful choose sides
+# (saint.33). The war ends with saint.35 or saint.36.
+###############################################################################
+
+# saint.30 The favourite dies (hidden)
+# Scope: ROOT is the dead character (on_death).
+character_event = {
+	id = saint.30
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+	min_age = 16
+	religion = sigmarite
+
+	trigger = {
+		death_in_cathay_trigger = no
+		death_no_trace_trigger = no
+		NOT = { trait = excommunicated }
+		k_cult_of_sigmar = {
+			holder_scope = {
+				trait = bad_priest
+				independent = yes
+				NOT = { has_character_flag = impious_canonization_done }
+				opinion = { who = ROOT value = 50 }
+				saint_gt_shares_vice_with_root_trigger = yes
+			}
+		}
+	}
+
+	immediate = {
+		save_event_target_as = saint_person
+		random = {
+			chance = 20
+			k_cult_of_sigmar = {
+				holder_scope = { character_event = { id = saint.31 days = 180 random = 300 } }
+			}
+		}
+	}
+}
+
+# saint.31 The Grand Theogonist raises his friend (hidden)
+# Scope: ROOT is the Grand Theogonist (saint.30).
+character_event = {
+	id = saint.31
+	hide_window = yes
+
+	is_triggered_only = yes # saint.30
+
+	trigger = {
+		has_landed_title = k_cult_of_sigmar
+		trait = bad_priest
+		NOT = { has_character_flag = impious_canonization_done }
+		saint_gt_shares_vice_with_saint_trigger = yes
+	}
+
+	immediate = {
+		set_character_flag = impious_canonization_done
+		set_global_flag = impious_canonization_war_brewing
+		religion_authority = { modifier = impious_canonization }
+		log = "Unworthy Venerated Soul named by [Root.GetTitledName]"
+		event_target:saint_person = {
+			remove_trait = beatified
+			add_trait = saint
+			if = { limit = { is_female = yes } set_special_character_title = SAINT_TITLE_FEMALE }
+			else = { set_special_character_title = SAINT_TITLE }
+			create_bloodline = {
+				type = saintly_bloodline_07
+				religion = event_target:saint_person
+				inheritance = patrilineal
+			}
+			trigger_switch = {
+				on_trigger = trait
+				impaler = {
+					give_nickname = nick_gods_torturer
+					new_bloodline = { set_description = saintly_impaler_description }
+				}
+				cannibal_trait = {
+					give_nickname = nick_gods_cannibal
+					new_bloodline = { set_description = saintly_cannibal_description }
+				}
+				hedonist = {
+					give_nickname = nick_gods_hedonist
+					new_bloodline = { set_description = saintly_hedonist_description }
+				}
+				drunkard = {
+					give_nickname = nick_gods_drunkard
+					new_bloodline = { set_description = saintly_drunkard_description }
+				}
+				lunatic_1 = {
+					give_nickname = nick_the_fool_for_christ
+					new_bloodline = { set_description = saintly_lunatic_description }
+				}
+				lunatic_2 = {
+					give_nickname = nick_the_fool_for_christ
+					new_bloodline = { set_description = saintly_lunatic_description }
+				}
+				lunatic_3 = {
+					give_nickname = nick_the_fool_for_christ
+					new_bloodline = { set_description = saintly_lunatic_description }
+				}
+				seducer = {
+					give_nickname = nick_gods_seducer
+					new_bloodline = { set_description = saintly_seducer_description }
+				}
+				seductress = {
+					give_nickname = nick_gods_seducer
+					new_bloodline = { set_description = saintly_seducer_description }
+				}
+				lustful = {
+					give_nickname = nick_papal_lover
+					new_bloodline = { set_description = saintly_lustful_description }
+				}
+			}
+		}
+		any_playable_ruler = { limit = { religion = ROOT } narrative_event = { id = saint.32 } }
+		# A zealous king or emperor may take up arms against him
+		if = {
+			limit = {
+				independent = yes
+				any_playable_ruler = { saint_papal_attacker_trigger = yes }
+			}
+			random_playable_ruler = {
+				limit = { saint_papal_attacker_trigger = yes }
+				preferred_limit = { tier = EMPEROR }
+				save_event_target_as = papal_attacker
+				add_trait = zealous
+				unsafe_war = { target = ROOT casus_belli = depose_impious_pope }
+			}
+			any_playable_ruler = {
+				limit = { religion = ROOT NOT = { character = event_target:papal_attacker } }
+				narrative_event = { id = saint.33 days = 15 }
+			}
+		}
+	}
+}
+
+# saint.32 An unworthy Venerated Soul
+# The text follows the vice the two shared. Rulers who share it may side
+# with the Grand Theogonist, and some catch the vice.
+# Scope: ROOT is a Sigmarite ruler; FROM is the Grand Theogonist (saint.31).
+narrative_event = {
+	id = saint.32
+	title = EVTNAMEsaint32
+	desc = { trigger = { FROM = { trait = impaler } } text = EVTDESCsaint32 }
+	desc = { trigger = { FROM = { trait = cannibal_trait } } text = EVTDESCsaint32b }
+	desc = { trigger = { FROM = { trait = hedonist } } text = EVTDESCsaint32c }
+	desc = { trigger = { FROM = { trait = drunkard } } text = EVTDESCsaint32d }
+	desc = {
+		trigger = { FROM = { OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } } }
+		text = EVTDESCsaint32e
+	}
+	desc = {
+		trigger = { FROM = { OR = { trait = seducer trait = seductress trait = lustful } } }
+		text = EVTDESCsaint32f
+	}
+	picture = GFX_evt_beatification
+	border = GFX_event_narrative_frame_religion
+	portrait = event_target:saint_person
+	sound = saint_proclaimed
+
+	is_triggered_only = yes # saint.31
+
+	option = { # Outrageous
+		name = EVTOPTAsaint32
+		custom_tooltip = { text = saint_impious_canonization_TT }
+		ai_chance = { factor = 80 modifier = { factor = 0.25 saint_has_any_vice_trigger = yes } }
+	}
+	option = { # Side with the Grand Theogonist
+		name = EVTOPTBsaint32
+		trigger = { NOT = { trait = zealous } OR = { independent = yes ai = no } }
+		show_portrait = FROM
+		set_character_flag = supported_impious_pope
+		random = { chance = 50 saint_catch_vice_effect = yes }
+		custom_tooltip = { text = saint_impious_canonization_TT }
+		ai_chance = { factor = 20 modifier = { factor = 4 saint_has_any_vice_trigger = yes } }
+	}
+}
+
+# saint.33 War against the Grand Theogonist
+# Scope: ROOT is a Sigmarite ruler; FROM is the Grand Theogonist (saint.31).
+narrative_event = {
+	id = saint.33
+	title = EVTNAMEsaint33
+	desc = EVTDESCsaint33
+	picture = GFX_evt_large_army
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # saint.31
+
+	trigger = {
+		FROM = {
+			has_landed_title = k_cult_of_sigmar
+			any_war = { using_cb = depose_impious_pope is_primary_war_defender = yes }
+		}
+		event_target:papal_attacker = { is_alive = yes }
+	}
+
+	immediate = {
+		clr_global_flag = impious_canonization_war_brewing
+	}
+
+	option = { # Join the attackers
+		name = EVTOPTAsaint33
+		trigger = {
+			independent = yes
+			NOR = {
+				trait = cynical
+				has_character_flag = supported_impious_pope
+				any_war = { using_cb = depose_impious_pope }
+			}
+		}
+		custom_tooltip = {
+			text = saint_join_attackers_TT
+			event_target:papal_attacker = {
+				show_scope_change = no
+				any_war = {
+					limit = { using_cb = depose_impious_pope is_primary_war_attacker = yes }
+					ROOT = { show_scope_change = no join_attacker_wars = PREV }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 5 OR = { trait = zealous trait = holy_warrior } }
+		}
+	}
+	option = { # Defend the Grand Theogonist
+		name = EVTOPTBsaint33
+		trigger = {
+			independent = yes
+			NOR = {
+				trait = zealous
+				trait = holy_warrior
+				any_war = { using_cb = depose_impious_pope }
+			}
+		}
+		custom_tooltip = {
+			text = saint_join_defenders_TT
+			FROM = {
+				show_scope_change = no
+				any_war = {
+					limit = { using_cb = depose_impious_pope }
+					ROOT = { show_scope_change = no join_defender_wars = PREV }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 5 has_character_flag = supported_impious_pope }
+		}
+	}
+	option = { # Stay out of it
+		name = EVTOPTCsaint33
+		trigger = { independent = yes NOT = { any_war = { using_cb = depose_impious_pope } } }
+		custom_tooltip = { text = saint_stay_out_TT }
+		ai_chance = {
+			factor = 10
+			modifier = {
+				factor = 3
+				NOR = {
+					has_character_flag = supported_impious_pope
+					trait = zealous
+					trait = holy_warrior
+				}
+			}
+		}
+	}
+	option = { # Already at war
+		name = EVTOPTDsaint33
+		trigger = { any_war = { using_cb = depose_impious_pope } }
+	}
+	option = { # A vassal can only watch
+		name = EVTOPTEsaint33
+		trigger = { independent = no }
+	}
+}
+
+# saint.35 The Grand Theogonist is deposed
+# Scope: ROOT is a ruler of the faith; FROM is the war leader who deposed
+# him (depose_impious_pope on_success).
+narrative_event = {
+	id = saint.35
+	title = EVTNAMEsaint35
+	desc = EVTDESCsaint35
+	picture = GFX_evt_church_council
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # depose_impious_pope
+
+	immediate = {
+		k_cult_of_sigmar = { holder_scope = { save_event_target_as = current_pope } }
+	}
+
+	option = {
+		name = EVTOPTAsaint35
+		trigger = { NOT = { has_character_flag = impious_papal_defender } }
+		show_portrait = event_target:current_pope
+	}
+	option = {
+		name = EVTOPTBsaint35
+		trigger = { has_character_flag = impious_papal_defender }
+		clr_character_flag = impious_papal_defender
+		show_portrait = event_target:current_pope
+	}
+}
+
+# saint.36 The Grand Theogonist holds on
+# Scope: ROOT is a ruler of the faith; FROM is the war leader who failed
+# (depose_impious_pope on_reverse_demand).
+narrative_event = {
+	id = saint.36
+	title = EVTNAMEsaint36
+	desc = EVTDESCsaint36
+	picture = GFX_evt_church_council
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # depose_impious_pope
+
+	immediate = {
+		k_cult_of_sigmar = { holder_scope = { save_event_target_as = current_pope } }
+	}
+
+	option = {
+		name = EVTOPTAsaint36
+		trigger = { NOT = { has_character_flag = impious_papal_defender } }
+	}
+	option = {
+		name = EVTOPTBsaint36
+		trigger = { has_character_flag = impious_papal_defender }
+		clr_character_flag = impious_papal_defender
+		show_portrait = event_target:current_pope
+	}
+}
+
+###############################################################################
+# Tombs of the Venerated
+# A tomb of a Venerated Soul (province modifier tomb_of_a_saint) draws
+# pilgrims to its lord (saint.40) and inspires him (saint.41). A cynical,
+# greedy player may rob a tomb in his liege's lands (saint.42 - saint.45),
+# and a besieger outside the Old World faiths may sack one (saint.46).
+###############################################################################
+
+# saint.40 Pilgrims at the tomb
+# Scope: ROOT is a lord with a tomb in his demesne (five-year list
+# saint_tombs).
+character_event = {
+	id = saint.40
+	desc = EVTDESCsaint40
+	picture = GFX_evt_market
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # five-year list saint_tombs
+	only_playable = yes
+	only_capable = yes
+	min_age = 16
+	religion_group = old_world_group
+
+	trigger = {
+		any_demesne_province = { saint_has_tomb_trigger = yes }
+	}
+
+	immediate = {
+		random_demesne_province = {
+			limit = { saint_has_tomb_trigger = yes }
+			save_event_target_as = local_burial_tomb
+		}
+	}
+
+	option = { # Restore the plundered tomb
+		name = EVTOPTAsaint40
+		trigger = {
+			event_target:local_burial_tomb = { has_province_modifier = pillaged_tomb_of_a_saint }
+		}
+		scaled_wealth = { value = -0.3 min = -50 max = -200 }
+		piety = 30
+		custom_tooltip = { text = saint_restore_tomb_TT }
+		hidden_effect = {
+			event_target:local_burial_tomb = {
+				remove_province_modifier = pillaged_tomb_of_a_saint
+				add_province_modifier = { name = tomb_of_a_saint duration = -1 }
+			}
+		}
+		ai_chance = { factor = 30 }
+	}
+	option = { # Restore it and give the cult a great gift
+		name = EVTOPTBsaint40
+		trigger = {
+			trait = zealous
+			event_target:local_burial_tomb = { has_province_modifier = pillaged_tomb_of_a_saint }
+		}
+		tooltip_info = zealous
+		scaled_wealth = { value = -1 min = -200 max = -500 }
+		piety = 100
+		custom_tooltip = { text = saint_restore_tomb_TT }
+		hidden_effect = {
+			event_target:local_burial_tomb = {
+				remove_province_modifier = pillaged_tomb_of_a_saint
+				add_province_modifier = { name = tomb_of_a_saint duration = -1 }
+			}
+		}
+		ai_chance = { factor = 30 }
+	}
+	option = { # Feed and house the pilgrims
+		name = EVTOPTCsaint40
+		trigger = {
+			trait = zealous
+			NOT = {
+				event_target:local_burial_tomb = {
+					has_province_modifier = pillaged_tomb_of_a_saint
+				}
+			}
+		}
+		tooltip_info = zealous
+		scaled_wealth = { value = -0.6 min = -100 max = -350 }
+		piety = 50
+		ai_chance = { factor = 30 }
+	}
+	option = { # Tax the pilgrims
+		name = EVTOPTDsaint40
+		scaled_wealth = { value = 0.1 min = 50 max = 250 }
+		piety = -10
+		ai_chance = { factor = 20 modifier = { factor = 3 trait = greedy } }
+	}
+	option = { # Walk among the pilgrims
+		name = EVTOPTEsaint40
+		trigger = { NOR = { trait = shy trait = pilgrim } }
+		piety = 10
+		random = { chance = 50 add_trait = gregarious character_event = { id = 38265 } }
+		ai_chance = { factor = 20 }
+	}
+	option = { # Tell them of my own pilgrimage
+		name = EVTOPTFsaint40
+		trigger = { trait = pilgrim }
+		prestige = 25
+		piety = 10
+		random = { chance = 75 add_trait = gregarious character_event = { id = 38265 } }
+		ai_chance = { factor = 20 }
+	}
+}
+
+# saint.41 Inspired by the Venerated Soul
+# The lord takes up one of the soul's virtues that he lacks.
+# Scope: ROOT is a lord with a tomb in his demesne (five-year list
+# saint_tombs).
+character_event = {
+	id = saint.41
+	desc = EVTDESCsaint41
+	picture = GFX_evt_library
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # five-year list saint_tombs
+	only_playable = yes
+	only_capable = yes
+	min_age = 16
+	religion_group = old_world_group
+
+	trigger = {
+		any_demesne_province = {
+			saint_has_tomb_trigger = yes
+			event_target:province_saint = { saint_has_virtue_root_lacks_trigger = yes }
+		}
+	}
+
+	immediate = {
+		random_demesne_province = {
+			limit = {
+				saint_has_tomb_trigger = yes
+				event_target:province_saint = { saint_has_virtue_root_lacks_trigger = yes }
+			}
+			save_event_target_as = saintly_burial_site
+		}
+	}
+
+	option = { # Live up to the soul's example
+		name = EVTOPTAsaint41
+		saint_take_up_virtue_effect = yes
+		piety = 50
+		ai_chance = { factor = 80 }
+	}
+	option = { # Admire it from afar
+		name = EVTOPTBsaint41
+		ai_chance = { factor = 20 }
+	}
+}
+
+# saint.42 A tomb worth robbing
+# Only players: a cynical, greedy or arbitrary vassal eyes a tomb in his
+# liege's lands.
+# Scope: ROOT is the would-be thief (five-year list saint_tombs).
+character_event = {
+	id = saint.42
+	desc = EVTDESCsaint42
+	picture = GFX_evt_lunatic
+	border = GFX_event_normal_frame_intrigue
+	portrait = event_target:offended_burial_site_owner
+
+	is_triggered_only = yes # five-year list saint_tombs
+	only_playable = yes
+	only_capable = yes
+	ai = no
+	min_age = 16
+	prisoner = no
+	religion_group = old_world_group
+
+	trigger = {
+		trait = cynical
+		OR = { trait = greedy trait = arbitrary }
+		any_liege = {
+			any_realm_province = {
+				has_province_modifier = tomb_of_a_saint
+				NOT = { owner = { character = ROOT } }
+			}
+		}
+	}
+
+	immediate = {
+		any_liege = {
+			random_realm_province = {
+				limit = {
+					has_province_modifier = tomb_of_a_saint
+					NOT = { owner = { character = ROOT } }
+				}
+				save_event_target_as = target_burial_site
+			}
+		}
+		event_target:target_burial_site = {
+			owner = { save_event_target_as = offended_burial_site_owner }
+		}
+	}
+
+	option = { # Leave the dead in peace
+		name = EVTOPTAsaint42
+		piety = 10
+	}
+	option = { # Rob it
+		name = EVTOPTBsaint42
+		custom_tooltip = { text = saint_rob_tomb_TT }
+		character_event = { id = saint.43 days = 30 random = 30 }
+	}
+}
+
+# saint.43 In the tomb
+# Careful: fewer relics, less risk. Greedy: more relics, more risk. A thief
+# who is caught is thrown in the lord's dungeon (saint.44).
+# Scope: ROOT is the thief (saint.42).
+character_event = {
+	id = saint.43
+	desc = EVTDESCsaint43
+	picture = GFX_evt_icon
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # saint.42
+
+	option = { # Take a little, quickly
+		name = EVTOPTAsaint43
+		random_list = {
+			70 = {
+				modifier = { factor = 1.5 intrigue = 12 }
+				modifier = { factor = 1.5 intrigue = 18 }
+				custom_tooltip = { text = saint_rob_careful_TT }
+				hidden_effect = {
+					random_list = {
+						50 = {
+							add_artifact = saintly_finger
+							new_artifact = { set_name = saint_finger_name }
+						}
+						35 = {
+							add_artifact = saintly_bone
+							new_artifact = { set_name = saint_bone_name }
+						}
+						15 = {
+							add_artifact = saintly_skull_tier_1
+							new_artifact = { set_name = saint_skull_1_name }
+						}
+					}
+					saint_plunder_tomb_effect = yes
+				}
+				scaled_wealth = { value = 0.3 min = 50 max = 200 }
+			}
+			30 = { saint_thief_caught_effect = yes }
+		}
+	}
+	option = { # Take everything
+		name = EVTOPTBsaint43
+		random_list = {
+			30 = {
+				modifier = { factor = 1.5 intrigue = 10 }
+				modifier = { factor = 2 intrigue = 15 }
+				custom_tooltip = { text = saint_rob_greedy_TT }
+				hidden_effect = {
+					random_list = {
+						10 = {
+							add_artifact = saintly_bone
+							new_artifact = { set_name = saint_bone_name }
+							add_artifact = saintly_finger
+							new_artifact = { set_name = saint_finger_name }
+						}
+						20 = {
+							add_artifact = saintly_skull_tier_1
+							new_artifact = { set_name = saint_skull_1_name }
+							add_artifact = saintly_finger
+							new_artifact = { set_name = saint_finger_name }
+						}
+						10 = {
+							add_artifact = saintly_skull_tier_2
+							new_artifact = { set_name = saint_skull_2_name }
+							add_artifact = saintly_bone
+							new_artifact = { set_name = saint_bone_name }
+						}
+						3 = {
+							add_artifact = saintly_tongue
+							new_artifact = { set_name = saint_tongue_name }
+							add_artifact = saintly_skull_tier_1
+							new_artifact = { set_name = saint_skull_1_name }
+						}
+					}
+					saint_plunder_tomb_effect = yes
+				}
+				scaled_wealth = { value = 0.8 min = 150 max = 500 }
+			}
+			70 = { saint_thief_caught_effect = yes }
+		}
+	}
+}
+
+# saint.44 A thief in the tomb
+# Scope: ROOT is the owner of the tomb; FROM is the thief (saint.43).
+character_event = {
+	id = saint.44
+	desc = EVTDESCsaint44
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_intrigue
+	portrait = FROM
+
+	is_triggered_only = yes # saint.43
+
+	option = {
+		name = EVTOPTAsaint44
+	}
+}
+
+# saint.45 The tomb is plundered
+# Scope: ROOT is the owner of the tomb (saint_plunder_tomb_effect,
+# saint.46).
+character_event = {
+	id = saint.45
+	desc = EVTDESCsaint45
+	picture = GFX_evt_icon
+	border = GFX_event_normal_frame_religion
+	notification = yes
+
+	is_triggered_only = yes # saint_plunder_tomb_effect, saint.46
+
+	option = {
+		name = EVTOPTAsaint45
+	}
+}
+
+# saint.46 A holy tomb in a fallen town
+# Rulers outside the Old World faiths may sack it for gold, or spare it;
+# a spared tomb is safe from them for three years.
+# Scope: ROOT is the winner of the siege; FROM is the province
+# (on_siege_over_winner random list).
+character_event = {
+	id = saint.46
+	desc = EVTDESCsaint46
+	picture = GFX_evt_end_of_days
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_siege_over_winner random list
+	only_playable = yes
+	min_age = 16
+
+	trigger = {
+		NOT = { religion_group = old_world_group }
+		OR = {
+			NOT = { has_character_flag = spared_saint_tomb }
+			had_character_flag = { flag = spared_saint_tomb days = 1095 }
+		}
+		FROM = { has_province_modifier = tomb_of_a_saint }
+	}
+
+	immediate = {
+		FROM = {
+			save_event_target_as = target_burial_site
+			owner = { save_event_target_as = pillaged_tomb_owner }
+		}
+	}
+
+	option = { # Sack it
+		name = EVTOPTAsaint46
+		scaled_wealth = { value = 1.2 min = 150 max = 500 }
+		hidden_effect = {
+			FROM = {
+				remove_province_modifier = tomb_of_a_saint
+				add_province_modifier = { name = pillaged_tomb_of_a_saint duration = -1 }
+			}
+			event_target:pillaged_tomb_owner = { character_event = { id = saint.45 } }
+		}
+		ai_chance = { factor = 80 }
+	}
+	option = { # Leave it be
+		name = EVTOPTBsaint46
+		piety = 50
+		clr_character_flag = spared_saint_tomb
+		set_character_flag = spared_saint_tomb
+		ai_chance = { factor = 20 }
+	}
+}
+
+###############################################################################
+# Holy bloodlines
+# The kin of a Venerated Soul carry a holy bloodline. Defenders of the faith
+# draw zealots, to war (saint.50) and sometimes into trouble (saint.53,
+# saint.54); a theologian's line draws scholars (saint.51, saint.52); a
+# monastic line draws a holy order to the capital (saint.55).
+###############################################################################
+
+# saint.50 Zealots take up arms
+# Scope: ROOT is a ruler of a defender bloodline at holy war (on_yearly_pulse
+# random list).
+character_event = {
+	id = saint.50
+	desc = EVTDESCsaint50
+	picture = GFX_evt_melee
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_yearly_pulse random list
+	min_age = 16
+	only_playable = yes
+
+	trigger = {
+		any_owned_bloodline = {
+			has_bloodline_flag = defender_of_the_faith
+			founder = { religion = ROOT }
+		}
+		any_war = {
+			OR = {
+				using_cb = crusade
+				using_cb = new_crusade
+				using_cb = religious
+				using_cb = religious_revolt
+			}
+		}
+	}
+
+	immediate = {
+		capital_scope = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					home = PREV
+					owner = THIS
+					match_character = THIS
+					match_mult = 0.15
+					match_min = 200
+					match_max = 5000
+					attrition = 1.0
+					earmark = venerated_zealots
+					disband_on_peace = yes
+					can_toggle_looting = no
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAsaint50
+	}
+}
+
+# saint.51 A great theologian (hidden)
+# Scope: ROOT is a ruler of a theologian bloodline (five-year list
+# saint_bloodlines).
+character_event = {
+	id = saint.51
+	hide_window = yes
+
+	is_triggered_only = yes # five-year list saint_bloodlines
+	min_age = 16
+	only_playable = yes
+
+	trigger = {
+		any_owned_bloodline = {
+			has_bloodline_flag = theologian_saintly_bloodline
+			founder = { religion = ROOT }
+		}
+		NOT = { any_courtier = { has_character_flag = saintly_bloodline_great_theologian } }
+	}
+
+	immediate = {
+		random_owned_bloodline = {
+			limit = { has_bloodline_flag = theologian_saintly_bloodline }
+			founder = { save_event_target_as = theologian_founder }
+		}
+		create_random_priest = {
+			random_traits = yes
+			dynasty = random
+			attributes = { diplomacy = 8 learning = 15 stewardship = 2 intrigue = 2 martial = 2 }
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			saint_clean_hireling_effect = yes
+			random_list = {
+				15 = { change_learning = 2 }
+				20 = { add_trait = theologian }
+				5 = { add_trait = scholar }
+				5 = { add_trait = mystic }
+				10 = { change_learning = 4 }
+				5 = { change_learning = 6 }
+				5 = { add_trait = shrewd }
+			}
+			set_character_flag = saintly_bloodline_great_theologian
+			save_event_target_as = great_theologian
+			random_list = {
+				25 = { give_nickname = nick_the_holy }
+				25 = { give_nickname = nick_the_kind }
+				25 = { give_nickname = nick_the_good }
+				25 = { give_nickname = nick_the_merry }
+				25 = { give_nickname = nick_the_noble }
+				25 = { give_nickname = nick_the_wise }
+			}
+		}
+		character_event = { id = saint.52 }
+	}
+}
+
+# saint.52 A theologian at the gates
+# Scope: ROOT is the ruler (saint.51).
+character_event = {
+	id = saint.52
+	desc = EVTDESCsaint52
+	picture = GFX_evt_heretic
+	border = GFX_event_normal_frame_religion
+	portrait = event_target:great_theologian
+
+	is_triggered_only = yes # saint.51
+
+	option = {
+		name = EVTOPTAsaint52
+		piety = 50
+	}
+}
+
+# saint.53 Zealots in the capital
+# Zealots who think the ruler the next great defender run wild in the
+# capital. Cynics send soldiers, zealots try to lead them, scholars argue.
+# The outcome comes as a notice (saint.54).
+# Scope: ROOT is a ruler of a defender bloodline (five-year list
+# saint_bloodlines).
+character_event = {
+	id = saint.53
+	desc = EVTDESCsaint53
+	picture = GFX_evt_secluded_in_prayer
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # five-year list saint_bloodlines
+	min_age = 16
+	only_playable = yes
+
+	trigger = {
+		any_owned_bloodline = { has_bloodline_flag = defender_of_the_faith }
+		capital_scope = { NOT = { has_province_modifier = zealots_running_amok } }
+		NOT = { has_character_modifier = removed_zealots }
+	}
+
+	immediate = {
+		random_owned_bloodline = {
+			limit = { has_bloodline_flag = defender_of_the_faith }
+			founder = { save_event_target_as = founder_of_zealots }
+		}
+	}
+
+	option = { # Send the guard
+		name = EVTOPTAsaint53
+		trigger = { trait = cynical }
+		tooltip_info = cynical
+		piety = -25
+		random_list = {
+			50 = {
+				modifier = { factor = 0.3 martial >= 10 }
+				prestige = -50
+				custom_tooltip = { text = saint_zealots_stay_TT }
+				hidden_effect = {
+					capital_scope = {
+						add_province_modifier = { name = zealots_running_amok duration = 1095 }
+					}
+					set_character_flag = saint_zealots_guard_failed
+					character_event = { id = saint.54 }
+				}
+			}
+			50 = {
+				prestige = 50
+				custom_tooltip = { text = saint_zealots_gone_TT }
+				hidden_effect = {
+					add_character_modifier = { name = removed_zealots duration = 1825 }
+					set_character_flag = saint_zealots_guard_won
+					character_event = { id = saint.54 }
+				}
+			}
+		}
+	}
+	option = { # Lead them
+		name = EVTOPTBsaint53
+		trigger = { trait = zealous }
+		tooltip_info = zealous
+		wealth = -50
+		piety = 25
+		random_list = {
+			40 = {
+				modifier = { factor = 0.5 diplomacy >= 10 }
+				prestige = -50
+				custom_tooltip = { text = saint_zealots_stay_TT }
+				hidden_effect = {
+					capital_scope = {
+						add_province_modifier = { name = zealots_running_amok duration = 1095 }
+					}
+					set_character_flag = saint_zealots_lead_failed
+					character_event = { id = saint.54 }
+				}
+			}
+			40 = {
+				prestige = 50
+				custom_tooltip = { text = saint_zealots_militia_TT }
+				hidden_effect = {
+					capital_scope = {
+						ROOT = {
+							spawn_unit = {
+								owner = THIS
+								province = PREV
+								home = PREV
+								troops = { archers = { 200 200 } light_infantry = { 500 500 } }
+								attrition = 1
+								maintenance_multiplier = 0
+								can_toggle_looting = yes
+							}
+						}
+					}
+					set_character_flag = saint_zealots_lead_militia
+					character_event = { id = saint.54 }
+				}
+			}
+			20 = {
+				prestige = 100
+				custom_tooltip = { text = saint_zealots_captain_TT }
+				hidden_effect = {
+					create_random_soldier = {
+						random_traits = yes
+						dynasty = random
+						female = no
+						attributes = {
+							diplomacy = 1
+							learning = 6
+							stewardship = 3
+							intrigue = 3
+							martial = 10
+						}
+					}
+					new_character = {
+						character_event = { id = aiclean.31 } # Racial trait
+						saint_clean_hireling_effect = yes
+						random_list = {
+							15 = { change_martial = 1 }
+							20 = { add_trait = duelist }
+							5 = { add_trait = strategist }
+							5 = { add_trait = theologian }
+							10 = { change_learning = 3 }
+							5 = { change_learning = 5 }
+							5 = { add_trait = shrewd }
+						}
+						save_event_target_as = zealot_general
+						random_list = {
+							25 = { give_nickname = nick_the_pious }
+							25 = { give_nickname = nick_the_cleansing_flame }
+							25 = { give_nickname = nick_the_witch_hunter }
+							25 = { give_nickname = nick_the_purifier }
+							25 = { give_nickname = nick_the_fearless }
+							25 = { give_nickname = nick_the_ruthless }
+						}
+					}
+					capital_scope = {
+						ROOT = {
+							spawn_unit = {
+								owner = THIS
+								province = PREV
+								home = PREV
+								troops = { archers = { 200 200 } light_infantry = { 500 500 } }
+								attrition = 1
+								maintenance_multiplier = 0
+								can_toggle_looting = yes
+							}
+						}
+					}
+					set_character_flag = saint_zealots_lead_captain
+					character_event = { id = saint.54 }
+				}
+			}
+		}
+	}
+	option = { # Reason with them
+		name = EVTOPTCsaint53
+		trigger = { learning >= 10 }
+		tooltip_info = learning
+		piety = 50
+		random_list = {
+			50 = {
+				modifier = { factor = 0.5 learning >= 15 }
+				prestige = -50
+				custom_tooltip = { text = saint_zealots_stay_TT }
+				hidden_effect = {
+					capital_scope = {
+						add_province_modifier = { name = zealots_running_amok duration = 1095 }
+					}
+					set_character_flag = saint_zealots_talk_failed
+					character_event = { id = saint.54 }
+				}
+			}
+			50 = {
+				prestige = 50
+				custom_tooltip = { text = saint_zealots_gone_TT }
+				hidden_effect = {
+					add_character_modifier = { name = removed_zealots duration = 1825 }
+					set_character_flag = saint_zealots_talk_won
+					character_event = { id = saint.54 }
+				}
+			}
+		}
+	}
+	option = { # Let them be
+		name = EVTOPTDsaint53
+		capital_scope = { add_province_modifier = { name = zealots_running_amok duration = 1095 } }
+	}
+}
+
+# saint.54 What became of the zealots
+# The text follows the outcome flag saint.53 set; the flag is cleared here.
+# Scope: ROOT is the ruler (saint.53).
+character_event = {
+	id = saint.54
+	desc = { trigger = { has_character_flag = saint_zealots_guard_failed } text = EVTDESCsaint54 }
+	desc = { trigger = { has_character_flag = saint_zealots_guard_won } text = EVTDESCsaint54b }
+	desc = { trigger = { has_character_flag = saint_zealots_lead_failed } text = EVTDESCsaint54c }
+	desc = { trigger = { has_character_flag = saint_zealots_lead_militia } text = EVTDESCsaint54d }
+	desc = { trigger = { has_character_flag = saint_zealots_lead_captain } text = EVTDESCsaint54e }
+	desc = { trigger = { has_character_flag = saint_zealots_talk_failed } text = EVTDESCsaint54f }
+	desc = { trigger = { has_character_flag = saint_zealots_talk_won } text = EVTDESCsaint54g }
+	picture = GFX_evt_large_army
+	border = GFX_event_normal_frame_religion
+	notification = yes
+
+	is_triggered_only = yes # saint.53
+
+	option = {
+		name = EVTOPTAsaint54
+		clr_character_flag = saint_zealots_guard_failed
+		clr_character_flag = saint_zealots_guard_won
+		clr_character_flag = saint_zealots_lead_failed
+		clr_character_flag = saint_zealots_lead_militia
+		clr_character_flag = saint_zealots_lead_captain
+		clr_character_flag = saint_zealots_talk_failed
+		clr_character_flag = saint_zealots_talk_won
+	}
+}
+
+# saint.55 Brothers of the order
+# A holy order remembers the founder and offers to preach in the capital.
+# Scope: ROOT is a ruler of a monastic bloodline (five-year list
+# saint_bloodlines).
+character_event = {
+	id = saint.55
+	desc = EVTDESCsaint55
+	picture = GFX_evt_monk
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # five-year list saint_bloodlines
+	min_age = 16
+	only_playable = yes
+
+	trigger = {
+		any_owned_bloodline = {
+			has_bloodline_flag = monastic_saintly_bloodline
+			founder = { religion = ROOT }
+		}
+		capital_scope = { NOT = { has_province_modifier = monk_society_help } }
+	}
+
+	option = { # Give them a house and gold
+		name = EVTOPTAsaint55
+		wealth = -100
+		capital_scope = { add_province_modifier = { name = monk_society_help duration = 5475 } }
+		ai_chance = { factor = 60 modifier = { factor = 0 NOT = { wealth = 150 } } }
+	}
+	option = { # Let them stay a while
+		name = EVTOPTBsaint55
+		capital_scope = { add_province_modifier = { name = monk_society_help duration = 1825 } }
+		ai_chance = { factor = 40 }
+	}
+}
+
+###############################################################################
+# Pilgrimage to a tomb
+# A pilgrim of the Old World faiths may visit the tomb of a Venerated Soul
+# instead of the great shrine of his god (SoA.5011). He picks one of up to
+# three tombs outside his realm (saint.60) and sets out (saint.61). On the
+# road he meets fellow pilgrims or robbers (saint.62, saint.63), then at
+# the halfway mark (saint.64) one encounter fitting the land: revellers, a
+# burning inn, a shrine in the rain, Beastmen in the northern woods, a
+# serpent in the south, or a village of the Dark Gods (saint.65 - saint.74).
+# At the tomb (saint.75) the devout may be given a relic; then home
+# (saint.77). A pilgrim who leaves the faith stops at once (saint.78).
+###############################################################################
+
+# saint.60 Which tomb?
+# Scope: ROOT is the pilgrim (SoA.5011).
+character_event = {
+	id = saint.60
+	desc = EVTDESCsaint60
+	picture = GFX_evt_cathedral
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # SoA.5011
+
+	immediate = {
+		random_province = {
+			limit = { saint_pilgrim_tomb_trigger = yes }
+			preferred_limit = { event_target:province_saint = { religion = ROOT } }
+			save_event_target_as = first_burial_site
+		}
+		random_province = {
+			limit = {
+				saint_pilgrim_tomb_trigger = yes
+				NOT = { province = event_target:first_burial_site }
+			}
+			preferred_limit = { event_target:province_saint = { religion = ROOT } }
+			save_event_target_as = second_burial_site
+		}
+		random_province = {
+			limit = {
+				saint_pilgrim_tomb_trigger = yes
+				NOT = { province = event_target:first_burial_site }
+				NOT = { province = event_target:second_burial_site }
+			}
+			preferred_limit = { event_target:province_saint = { religion = ROOT } }
+			save_event_target_as = third_burial_site
+		}
+	}
+
+	option = {
+		name = EVTOPTAsaint60
+		trigger = { event_target:first_burial_site = { always = yes } }
+		event_target:first_burial_site = { save_event_target_as = pilgrimage_destination }
+		saint_pilgrim_setout_effect = yes
+	}
+	option = {
+		name = EVTOPTBsaint60
+		trigger = { event_target:second_burial_site = { always = yes } }
+		event_target:second_burial_site = { save_event_target_as = pilgrimage_destination }
+		saint_pilgrim_setout_effect = yes
+	}
+	option = {
+		name = EVTOPTCsaint60
+		trigger = { event_target:third_burial_site = { always = yes } }
+		event_target:third_burial_site = { save_event_target_as = pilgrimage_destination }
+		saint_pilgrim_setout_effect = yes
+	}
+	option = { # Stay home after all
+		name = EVTOPTDsaint60
+		saint_pilgrim_clear_effect = yes
+		ai_chance = { factor = 0 }
+	}
+}
+
+# saint.61 Setting out
+# Scope: ROOT is the pilgrim (saint_pilgrim_setout_effect).
+character_event = {
+	id = saint.61
+	desc = { trigger = { has_character_flag = saint_pilgrim_north } text = EVTDESCsaint61 }
+	desc = { trigger = { has_character_flag = saint_pilgrim_south } text = EVTDESCsaint61b }
+	desc = { trigger = { has_character_flag = saint_pilgrim_home } text = EVTDESCsaint61c }
+	desc = { trigger = { has_character_flag = saint_pilgrim_far } text = EVTDESCsaint61d }
+	picture = GFX_evt_pilgrims_epic_journey
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint_pilgrim_setout_effect
+
+	trigger = {
+		religion_group = old_world_group
+	}
+	fail_trigger_effect = { character_event = { id = saint.78 } }
+
+	option = {
+		name = EVTOPTAsaint61
+		clr_character_flag = preparing_pilgrimage
+		add_trait = on_pilgrimage
+		hidden_effect = {
+			random_list = {
+				50 = { character_event = { id = saint.62 days = 15 } }
+				50 = { character_event = { id = saint.63 days = 15 } }
+			}
+		}
+	}
+}
+
+# saint.62 Fellow pilgrims
+# Scope: ROOT is the pilgrim (saint.61).
+character_event = {
+	id = saint.62
+	desc = EVTDESCsaint62
+	picture = GFX_evt_riders_night_hf
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint.61
+
+	trigger = {
+		religion_group = old_world_group
+	}
+	fail_trigger_effect = { character_event = { id = saint.78 } }
+
+	option = { # Walk with them
+		name = EVTOPTAsaint62
+		if = { limit = { trait = shy } remove_trait = shy character_event = { id = 38295 } }
+		else_if = {
+			limit = { NOT = { trait = gregarious } }
+			add_trait = gregarious
+			character_event = { id = 38265 }
+		}
+		hidden_effect = { character_event = { id = saint.64 days = 30 } }
+	}
+	option = { # Walk alone
+		name = EVTOPTBsaint62
+		change_martial = 1
+		random = {
+			chance = 50
+			if = {
+				limit = { trait = gregarious }
+				remove_trait = gregarious
+				character_event = { id = 38297 }
+			}
+			else_if = {
+				limit = { NOT = { trait = shy } }
+				add_trait = shy
+				character_event = { id = 38263 }
+			}
+		}
+		hidden_effect = { character_event = { id = saint.64 days = 15 } }
+	}
+}
+
+# saint.63 Road wardens of a sort
+# Scope: ROOT is the pilgrim (saint.61).
+character_event = {
+	id = saint.63
+	desc = EVTDESCsaint63
+	picture = GFX_evt_bandits
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint.61
+
+	trigger = {
+		religion_group = old_world_group
+	}
+	fail_trigger_effect = { character_event = { id = saint.78 } }
+
+	option = { # Pay the toll
+		name = EVTOPTAsaint63
+		prestige = -50
+		wealth = -100
+		hidden_effect = { character_event = { id = saint.64 days = 15 } }
+	}
+	option = { # Draw steel
+		name = EVTOPTBsaint63
+		prestige = 100
+		random_list = {
+			60 = { add_character_modifier = { name = repelled_bandits duration = 1825 } }
+			30 = {
+				modifier = { factor = 0.5 combat_rating >= 20 }
+				modifier = { factor = 0.75 combat_rating >= 10 }
+				modifier = { factor = 1.5 combat_rating <= -10 }
+				modifier = { factor = 2 combat_rating <= -20 }
+				add_trait = wounded
+				character_event = { id = 38280 }
+			}
+			9 = {
+				modifier = { factor = 0.5 combat_rating >= 20 }
+				modifier = { factor = 0.75 combat_rating >= 10 }
+				modifier = { factor = 1.5 combat_rating <= -10 }
+				modifier = { factor = 2 combat_rating <= -20 }
+				add_trait = maimed
+				character_event = { id = 38281 }
+			}
+			1 = {
+				modifier = { factor = 0 combat_rating >= 20 }
+				modifier = { factor = 0.5 combat_rating >= 20 }
+				modifier = { factor = 0.75 combat_rating >= 10 }
+				modifier = { factor = 1.5 combat_rating <= -10 }
+				modifier = { factor = 2 combat_rating <= -20 }
+				saint_pilgrim_death_effect = yes
+			}
+		}
+		hidden_effect = { character_event = { id = saint.64 days = 15 } }
+	}
+}
+
+# saint.64 Halfway
+# Picks one encounter that fits the land the tomb lies in.
+# Scope: ROOT is the pilgrim (saint.62, saint.63).
+character_event = {
+	id = saint.64
+	desc = { trigger = { has_character_flag = saint_pilgrim_north } text = EVTDESCsaint64 }
+	desc = { trigger = { has_character_flag = saint_pilgrim_south } text = EVTDESCsaint64b }
+	desc = { trigger = { has_character_flag = saint_pilgrim_home } text = EVTDESCsaint64c }
+	desc = { trigger = { has_character_flag = saint_pilgrim_far } text = EVTDESCsaint64d }
+	picture = GFX_evt_pilgrims_epic_journey
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint.62, saint.63
+
+	trigger = {
+		religion_group = old_world_group
+	}
+	fail_trigger_effect = { character_event = { id = saint.78 } }
+
+	option = {
+		name = EVTOPTAsaint64
+		hidden_effect = {
+			random_list = {
+				60 = { character_event = { id = saint.65 days = 15 } }
+				60 = { character_event = { id = saint.66 days = 15 } }
+				60 = { character_event = { id = saint.69 days = 15 } }
+				60 = {
+					trigger = { has_character_flag = saint_pilgrim_north }
+					character_event = { id = saint.67 days = 15 }
+				}
+				60 = {
+					trigger = {
+						OR = {
+							has_character_flag = saint_pilgrim_north
+							has_character_flag = saint_pilgrim_home
+						}
+					}
+					character_event = { id = saint.68 days = 15 }
+				}
+				60 = {
+					trigger = {
+						OR = {
+							has_character_flag = saint_pilgrim_south
+							has_character_flag = saint_pilgrim_far
+						}
+					}
+					character_event = { id = saint.70 days = 15 }
+				}
+				5 = { character_event = { id = saint.71 days = 15 } }
+			}
+		}
+	}
+}
+
+# saint.65 Travelling players
+# Scope: ROOT is the pilgrim (saint.64).
+character_event = {
+	id = saint.65
+	desc = { trigger = { NOT = { trait = homosexual } } text = EVTDESCsaint65 }
+	desc = { trigger = { trait = homosexual } text = EVTDESCsaint65b }
+	picture = GFX_evt_jugglers
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint.64
+
+	trigger = {
+		religion_group = old_world_group
+	}
+	fail_trigger_effect = { character_event = { id = saint.78 } }
+
+	option = { # Stay the night
+		name = EVTOPTAsaint65
+		if = { limit = { trait = chaste } remove_trait = chaste character_event = { id = 38303 } }
+		else_if = {
+			limit = { NOT = { trait = lustful } }
+			add_trait = lustful
+			character_event = { id = 38272 }
+		}
+		add_character_modifier = { name = good_times duration = 120 }
+		saint_pilgrim_arrive_effect = yes
+	}
+	option = { # Refuse
+		name = EVTOPTBsaint65
+		if = { limit = { trait = lustful } remove_trait = lustful }
+		else_if = {
+			limit = { NOT = { trait = chaste } }
+			add_trait = chaste
+			character_event = { id = 38274 }
+		}
+		saint_pilgrim_arrive_effect = yes
+	}
+}
+
+# saint.66 The burning inn
+# Scope: ROOT is the pilgrim (saint.64).
+character_event = {
+	id = saint.66
+	desc = EVTDESCsaint66
+	picture = GFX_evt_firey_silhouette_hf
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint.64
+
+	trigger = {
+		religion_group = old_world_group
+	}
+	fail_trigger_effect = { character_event = { id = saint.78 } }
+
+	option = { # Help them
+		name = EVTOPTAsaint66
+		prestige = 50
+		wealth = -50
+		if = { limit = { trait = greedy } remove_trait = greedy }
+		else_if = {
+			limit = { NOT = { trait = charitable } }
+			add_trait = charitable
+			character_event = { id = 38273 }
+		}
+		saint_pilgrim_arrive_effect = yes
+	}
+	option = { # Walk on
+		name = EVTOPTBsaint66
+		prestige = -25
+		if = {
+			limit = { trait = honest NOT = { trait = zealous } }
+			remove_trait = honest
+			character_event = { id = 38311 }
+		}
+		else_if = {
+			limit = { NOT = { trait = honest } NOT = { trait = deceitful } }
+			add_trait = deceitful
+			character_event = { id = 38255 }
+		}
+		saint_pilgrim_arrive_effect = yes
+	}
+	option = { # Search the ruins
+		name = EVTOPTCsaint66
+		prestige = -50
+		wealth = 50
+		if = { limit = { trait = charitable } remove_trait = charitable }
+		else_if = {
+			limit = { NOT = { trait = greedy } }
+			add_trait = greedy
+			character_event = { id = 38252 }
+		}
+		saint_pilgrim_arrive_effect = yes
+	}
+}
+
+# saint.67 Beastmen on the forest road
+# Scope: ROOT is the pilgrim (saint.64, saint.68).
+character_event = {
+	id = saint.67
+	desc = EVTDESCsaint67
+	picture = GFX_evt_bloody_man
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # saint.64, saint.68
+
+	trigger = {
+		religion_group = old_world_group
+	}
+	fail_trigger_effect = { character_event = { id = saint.78 } }
+
+	option = { # Fight
+		name = EVTOPTAsaint67
+		prestige = 100
+		if = { limit = { trait = craven } remove_trait = craven character_event = { id = 38257 } }
+		else_if = {
+			limit = { NOT = { trait = brave } }
+			add_trait = brave
+			character_event = { id = 38270 }
+		}
+		random_list = {
+			30 = { add_character_modifier = { name = fought_bear duration = 3650 } }
+			30 = {
+				modifier = { factor = 0.5 combat_rating >= 20 }
+				modifier = { factor = 0.75 combat_rating >= 10 }
+				modifier = { factor = 1.5 combat_rating <= -10 }
+				modifier = { factor = 2 combat_rating <= -20 }
+				add_trait = wounded
+				character_event = { id = 38280 }
+			}
+			30 = {
+				modifier = { factor = 0.5 combat_rating >= 20 }
+				modifier = { factor = 0.75 combat_rating >= 10 }
+				modifier = { factor = 1.5 combat_rating <= -10 }
+				modifier = { factor = 2 combat_rating <= -20 }
+				add_trait = maimed
+				character_event = { id = 38281 }
+			}
+			10 = {
+				modifier = { factor = 0.5 combat_rating >= 20 }
+				modifier = { factor = 0.75 combat_rating >= 10 }
+				modifier = { factor = 1.5 combat_rating <= -10 }
+				modifier = { factor = 2 combat_rating <= -20 }
+				saint_pilgrim_death_effect = yes
+			}
+		}
+		saint_pilgrim_arrive_effect = yes
+	}
+	option = { # Run
+		name = EVTOPTBsaint67
+		prestige = -50
+		if = { limit = { trait = brave } remove_trait = brave }
+		else_if = {
+			limit = { NOT = { trait = craven } }
+			add_trait = craven
+			character_event = { id = 38296 }
+		}
+		saint_pilgrim_arrive_effect = yes
+	}
+	option = { # Bray back at them
+		name = EVTOPTCsaint67
+		trigger = { OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } }
+		tooltip_info_custom = lunatic
+		random_list = {
+			60 = {
+				modifier = { factor = 2 learning > 20 }
+				add_character_modifier = { name = outsmarted_bear duration = 7300 }
+			}
+			40 = {
+				modifier = { factor = 2 learning < 5 }
+				modifier = { factor = 1.5 learning < 10 }
+				modifier = { factor = 0.5 learning > 15 }
+				saint_pilgrim_death_effect = yes
+			}
+		}
+		saint_pilgrim_arrive_effect = yes
+	}
+}
+
+# saint.68 Lost in the woods
+# Scope: ROOT is the pilgrim (saint.64).
+character_event = {
+	id = saint.68
+	desc = EVTDESCsaint68
+	picture = GFX_evt_mysterious_forest
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint.64
+
+	trigger = {
+		religion_group = old_world_group
+	}
+	fail_trigger_effect = { character_event = { id = saint.78 } }
+
+	option = { # Hack a way out
+		name = EVTOPTAsaint68
+		if = { limit = { trait = patient } remove_trait = patient }
+		else_if = {
+			limit = { NOT = { trait = wroth } }
+			add_trait = wroth
+			character_event = { id = 38254 }
+		}
+		saint_pilgrim_arrive_effect = yes
+	}
+	option = { # Keep calm and follow the sun
+		name = EVTOPTBsaint68
+		prestige = 10
+		if = { limit = { trait = wroth } remove_trait = wroth }
+		else_if = {
+			limit = { NOT = { trait = patient } }
+			add_trait = patient
+			character_event = { id = 38264 }
+		}
+		random_list = {
+			50 = {
+				custom_tooltip = { text = saint_forest_way_out_TT }
+				saint_pilgrim_arrive_effect = yes
+			}
+			50 = {
+				custom_tooltip = { text = saint_forest_beasts_TT }
+				hidden_effect = { character_event = { id = saint.67 days = 15 } }
+			}
+		}
+	}
+	option = { # Read the moss and the stars
+		name = EVTOPTCsaint68
+		trigger = { OR = { trait = genius trait = quick } }
+		prestige = 25
+		saint_pilgrim_arrive_effect = yes
+	}
+}
+
+# saint.69 A wayside shrine in the rain
+# Scope: ROOT is the pilgrim (saint.64).
+character_event = {
+	id = saint.69
+	desc = EVTDESCsaint69
+	picture = GFX_evt_stone_church
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint.64
+
+	trigger = {
+		religion_group = old_world_group
+	}
+	fail_trigger_effect = { character_event = { id = saint.78 } }
+
+	option = { # Rest a few days
+		name = EVTOPTAsaint69
+		add_character_modifier = { name = good_nights_sleep duration = 180 }
+		hidden_effect = { character_event = { id = saint.75 days = 30 } }
+	}
+	option = { # Walk on through the rain
+		name = EVTOPTBsaint69
+		prestige = 50
+		if = { limit = { trait = cynical } remove_trait = cynical }
+		else_if = {
+			limit = { NOT = { trait = zealous } }
+			add_trait = zealous
+			character_event = { id = 38269 }
+		}
+		random = {
+			chance = 20
+			give_flu_effect = yes
+			custom_tooltip = { text = saint_rain_illness_TT }
+		}
+		saint_pilgrim_arrive_effect = yes
+	}
+}
+
+# saint.70 A serpent in the night
+# Scope: ROOT is the pilgrim (saint.64).
+character_event = {
+	id = saint.70
+	desc = EVTDESCsaint70
+	picture = GFX_evt_sand_desert
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint.64
+
+	trigger = {
+		religion_group = old_world_group
+	}
+	fail_trigger_effect = { character_event = { id = saint.78 } }
+
+	option = { # Kill it
+		name = EVTOPTAsaint70
+		if = { limit = { trait = craven } remove_trait = craven character_event = { id = 38296 } }
+		else_if = {
+			limit = { NOT = { trait = brave } }
+			add_trait = brave
+			character_event = { id = 38270 }
+		}
+		random_list = {
+			50 = { change_martial = 1 }
+			30 = {
+				modifier = { factor = 0.5 combat_rating >= 20 }
+				modifier = { factor = 0.75 combat_rating >= 10 }
+				modifier = { factor = 1.5 combat_rating <= -10 }
+				modifier = { factor = 2 combat_rating <= -20 }
+				add_trait = wounded
+				character_event = { id = 38280 }
+			}
+			20 = {
+				modifier = { factor = 0.5 combat_rating >= 20 }
+				modifier = { factor = 0.75 combat_rating >= 10 }
+				modifier = { factor = 1.5 combat_rating <= -10 }
+				modifier = { factor = 2 combat_rating <= -20 }
+				add_trait = maimed
+				character_event = { id = 38281 }
+			}
+			1 = {
+				modifier = { factor = 0.5 combat_rating >= 20 }
+				modifier = { factor = 0.75 combat_rating >= 10 }
+				modifier = { factor = 1.5 combat_rating <= -10 }
+				modifier = { factor = 2 combat_rating <= -20 }
+				saint_pilgrim_snake_death_effect = yes
+			}
+		}
+		saint_pilgrim_arrive_effect = yes
+	}
+	option = { # Leave this cursed place
+		name = EVTOPTBsaint70
+		random = { chance = 40 add_trait = paranoid }
+		saint_pilgrim_arrive_effect = yes
+	}
+	option = { # Bottle its venom
+		name = EVTOPTCsaint70
+		trigger = { intrigue = 10 }
+		add_character_modifier = { name = pet_snake duration = -1 }
+		random = { chance = 20 add_character_modifier = { name = poisoned duration = 50 } }
+		saint_pilgrim_arrive_effect = yes
+	}
+}
+
+# saint.71 A village not on any map
+# Scope: ROOT is the pilgrim (saint.64).
+character_event = {
+	id = saint.71
+	desc = EVTDESCsaint71
+	picture = GFX_evt_depopulated_town
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint.64
+
+	option = {
+		name = EVTOPTAsaint71
+		character_event = { id = saint.72 days = 1 }
+	}
+}
+
+# saint.72 The congregation
+# A cult of the Dark Gods means the pilgrim to be the vessel of their
+# rite. Play along (saint.73) or cut a way out.
+# Scope: ROOT is the pilgrim (saint.71).
+character_event = {
+	id = saint.72
+	desc = EVTDESCsaint72
+	picture = GFX_evt_sacrifice
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint.71
+
+	option = { # Play along
+		name = EVTOPTAsaint72
+		if = { limit = { trait = zealous } remove_trait = zealous }
+		character_event = { id = saint.73 days = 1 }
+	}
+	option = { # Fight free
+		name = EVTOPTBsaint72
+		if = { limit = { NOT = { trait = zealous } } add_trait = zealous }
+		random_list = {
+			50 = { change_martial = 3 saint_pilgrim_arrive_effect = yes }
+			50 = {
+				modifier = { factor = 0.5 combat_rating >= 20 }
+				modifier = { factor = 0.75 combat_rating >= 10 }
+				modifier = { factor = 1.5 combat_rating <= -10 }
+				modifier = { factor = 2 combat_rating <= -20 }
+				saint_pilgrim_cult_death_effect = yes
+			}
+		}
+	}
+}
+
+# saint.73 The rite
+# Scope: ROOT is the pilgrim (saint.72).
+character_event = {
+	id = saint.73
+	desc = EVTDESCsaint73
+	picture = GFX_evt_sacrifice
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint.72
+
+	option = { # Let it happen
+		name = EVTOPTAsaint73
+		random_list = {
+			80 = {
+				custom_tooltip = { text = saint_rite_survive_TT }
+				hidden_effect = { character_event = { id = saint.74 days = 15 } }
+			}
+			20 = { saint_pilgrim_cult_death_effect = yes }
+		}
+	}
+	option = { # Fight free now
+		name = EVTOPTBsaint73
+		random_list = {
+			50 = { change_martial = 3 saint_pilgrim_arrive_effect = yes }
+			50 = {
+				modifier = { factor = 0.5 combat_rating >= 20 }
+				modifier = { factor = 0.75 combat_rating >= 10 }
+				modifier = { factor = 1.5 combat_rating <= -10 }
+				modifier = { factor = 2 combat_rating <= -20 }
+				saint_pilgrim_cult_death_effect = yes
+			}
+		}
+	}
+}
+
+# saint.74 Waking in a field
+# The pilgrim lives, changed: a gift, and something else inside.
+# Scope: ROOT is the pilgrim (saint.73).
+character_event = {
+	id = saint.74
+	desc = EVTDESCsaint74
+	picture = GFX_evt_burning_castle_hf
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint.73
+
+	immediate = {
+		random_list = {
+			20 = { trigger = { NOT = { trait = genius } } add_trait = genius }
+			20 = { trigger = { NOT = { trait = quick } } add_trait = quick }
+			20 = { trigger = { NOT = { trait = fair } } add_trait = fair }
+			20 = { trigger = { NOT = { trait = strong } } add_trait = strong }
+			10 = { change_martial = 5 }
+			10 = { change_stewardship = 5 }
+			10 = { change_intrigue = 5 }
+			10 = { change_diplomacy = 5 }
+			10 = { change_learning = 5 }
+		}
+	}
+
+	option = {
+		name = EVTOPTAsaint74
+		add_trait = possessed
+		character_event = { id = 38315 }
+		saint_pilgrim_arrive_effect = yes
+	}
+}
+
+# saint.75 At the tomb
+# How crowded the tomb is gets rolled here. The devout may be given a
+# small relic by the keepers: 5%, once in a lifetime, only without one.
+# Scope: ROOT is the pilgrim (saint_pilgrim_arrive_effect, saint.69).
+character_event = {
+	id = saint.75
+	desc = { trigger = { has_character_flag = saint_tomb_crowded } text = EVTDESCsaint75 }
+	desc = { trigger = { has_character_flag = saint_tomb_quiet } text = EVTDESCsaint75b }
+	desc = { trigger = { has_character_flag = saint_tomb_forgotten } text = EVTDESCsaint75c }
+	picture = GFX_evt_icon
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint_pilgrim_arrive_effect, saint.69
+
+	trigger = {
+		religion_group = old_world_group
+	}
+	fail_trigger_effect = { character_event = { id = saint.78 } }
+
+	immediate = {
+		random_list = {
+			40 = { set_character_flag = saint_tomb_crowded }
+			40 = { set_character_flag = saint_tomb_quiet }
+			20 = {
+				modifier = {
+					factor = 2
+					event_target:pilgrimage_destination = {
+						has_province_modifier = pillaged_tomb_of_a_saint
+					}
+				}
+				set_character_flag = saint_tomb_forgotten
+			}
+		}
+	}
+
+	option = { # As holy as I hoped
+		name = EVTOPTAsaint75
+		trigger = { trait = zealous }
+		piety = 25
+		if = {
+			limit = {
+				NOT = { has_character_flag = saint_relic_given }
+				NOT = { any_artifact = { has_artifact_flag = saint_item } }
+			}
+			random = {
+				chance = 5
+				set_character_flag = saint_relic_given
+				add_artifact = saintly_finger
+				new_artifact = { set_name = saint_finger_gift_name }
+			}
+		}
+		saint_pilgrim_tomb_done_effect = yes
+	}
+	option = { # Bones and candles
+		name = EVTOPTBsaint75
+		trigger = { trait = cynical }
+		piety = -10
+		saint_pilgrim_tomb_done_effect = yes
+	}
+	option = { # What a journey
+		name = EVTOPTCsaint75
+		trigger = { NOR = { trait = cynical trait = zealous } }
+		piety = 15
+		saint_pilgrim_tomb_done_effect = yes
+	}
+}
+
+# saint.77 Home again
+# Scope: ROOT is the pilgrim (saint_pilgrim_tomb_done_effect).
+character_event = {
+	id = saint.77
+	desc = EVTDESCsaint77
+	picture = GFX_evt_garden
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # saint_pilgrim_tomb_done_effect
+
+	trigger = {
+		religion_group = old_world_group
+	}
+	fail_trigger_effect = { character_event = { id = saint.78 } }
+
+	immediate = {
+		if = {
+			limit = { ai = no NOT = { has_character_flag = achievement_pilgrim } }
+			set_character_flag = achievement_pilgrim
+		}
+	}
+
+	option = {
+		name = EVTOPTAsaint77
+		add_trait = pilgrim
+		saint_pilgrim_clear_effect = yes
+	}
+}
+
+# saint.78 The pilgrimage ends (hidden)
+# Scope: ROOT is the pilgrim (fail_trigger_effect of the journey events).
+character_event = {
+	id = saint.78
+	hide_window = yes
+
+	is_triggered_only = yes # journey events
+
+	immediate = {
+		saint_pilgrim_clear_effect = yes
+	}
+}

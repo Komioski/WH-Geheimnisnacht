@@ -1,0 +1,1054 @@
+###############################################################################
+# Crusades: holy blood and the Errantry War against Araby
+# Namespace: crusade (was HF.49020 - HF.49121 and HFP.49122 - HFP.49123 in
+#   HF_crusade_events)
+# Faction: Old World faiths
+#   (the crusader bloodlines of any Great Crusade; the Errantry War is the
+#   Bretonnian Knights of Antoch against Araby)
+#
+# Crusader blood: the knight who carries a Great Crusade twice, or kills
+# a dozen foes in its battles, founds a holy bloodline.
+#
+# The Errantry War: once in a game, after 2100, the Knights of Antoch (a
+# Grail order) turn on Araby. Old World rulers near the sands may ask the
+# order to march on a Sultan, paying in piety, gold or land. The order
+# fights for one Arabyan kingdom at a time (CB southern_crusade_war); when
+# every county of it is held by the faithful, the war is won and the
+# order becomes the Kingdom of Antoch. Lose the war twice and it is over.
+# In 1449 the King of Bretonnia declared the first Errantry War against the
+# Arabyans who had invaded Estalia; this is its heir.
+#
+# Crusader blood                    crusade.1 - crusade.2
+# Broken pacts                      crusade.5 - crusade.6
+# The Errantry War is called        crusade.10 - crusade.14
+# Asking the knights for aid        crusade.15 - crusade.18
+# The march                         crusade.19 - crusade.21
+# Rewards, defeat and victory       crusade.22 - crusade.26
+# On campaign                       crusade.30 - crusade.31
+# (crusade.50+ is kept for the Fourth Crusade, still in HF_crusade_events.)
+#
+# Saved: title flags northern_crusade_target (on the order: it has a
+#   kingdom to conquer) and northern_crusade_active_target (on that
+#   kingdom); global flags northern_crusades_active, northern_crusade_success,
+#   northern_crusade_failure; persistent target teutonic_target on the order
+#   (the kingdom). Event targets: northern_crusade_asker,
+#   northern_crusade_potential_target, northern_crusade_target_character,
+#   northern_crusade_kingdom_title, northern_crusade_duchy_title.
+#
+# Callers:
+#   common/on_actions/00_on_actions.txt: on_yearly_pulse (10, 26, 30),
+#     on_battle_won_leader, on_major_battle_won_leader, on_siege_won_leader,
+#     on_unit_entering_province (31), on_crusade_launches (5).
+#   common/cb_types/00_cb_types.txt: new_crusade (1).
+#   common/cb_types/ka_cb_types.txt southern_crusade_war and
+#     01_cb_types.txt northern_crusade_war (22, 24, via the effects 23, 25).
+#   common/scripted_effects/04_scripted_effects_crusades.txt (2).
+#   decisions/HFP_holy_order_decisions.txt: ask_teutonic_for_help_teutonic,
+#     ask_teutonic_for_help_pagan (15).
+# Support: common/scripted_effects/wh_crusade_effects.txt,
+#   common/scripted_triggers/wh_crusade_triggers.txt
+# Loc: localisation/00_WHG_crusade_events.csv
+###############################################################################
+
+namespace = crusade
+
+###############################################################################
+# Crusader blood
+###############################################################################
+
+# crusade.1 Grand Crusader
+# The knight who did most for a second Great Crusade founds a holy line.
+# Scope: ROOT is that knight (new_crusade CB on_success).
+narrative_event = {
+	id = crusade.1
+	title = EVTNAMEcrusade1
+	desc = EVTDESCcrusade1
+	picture = GFX_evt_knight_kneeling
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+	has_dlc = "Holy Fury"
+
+	trigger = {
+		NOT = {
+			any_owned_bloodline = {
+				has_bloodline_flag = crusader_bloodline
+				founder = { character = ROOT }
+			}
+		}
+	}
+
+	immediate = {
+		sound_effect = bloodline_added
+	}
+
+	option = {
+		name = EVTOPTAcrusade1
+		if = { limit = { is_female = no } create_bloodline = { type = grand_crusader } }
+		else = { create_bloodline = { type = grand_crusader inheritance = matrilineal } }
+		set_bloodline_founder_religion_flag_effect = yes
+	}
+}
+
+# crusade.2 Commander of the Crusade
+# A knight's twelfth kill on a Great Crusade: he cuts down the enemy
+# commander and founds a holy line.
+# Scope: ROOT is the knight; event_target enemy_commander
+#   (crusader_commander_counter_effect).
+narrative_event = {
+	id = crusade.2
+	title = EVTNAMEcrusade2
+	desc = EVTDESCcrusade2
+	picture = GFX_evt_melee
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+	has_dlc = "Holy Fury"
+
+	trigger = {
+		NOT = {
+			any_owned_bloodline = {
+				has_bloodline_flag = crusader_bloodline
+				founder = { character = ROOT }
+			}
+		}
+	}
+
+	immediate = {
+		event_target:enemy_commander = { any_controlled_unit = { morale = -1 } }
+		sound_effect = bloodline_added
+	}
+
+	option = {
+		name = EVTOPTAcrusade2
+		event_target:enemy_commander = {
+			if = {
+				limit = { ai = yes } # A player's commander lives
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_battle killer = ROOT } }
+			}
+		}
+		if = { limit = { is_female = no } create_bloodline = { type = crusader_commander } }
+		else = { create_bloodline = { type = crusader_commander inheritance = matrilineal } }
+		set_bloodline_founder_religion_flag_effect = yes
+	}
+}
+
+###############################################################################
+# Broken pacts
+###############################################################################
+
+# crusade.5 Pacts broken by the call
+# A Great Crusade launches: every crusader who has a non-aggression pact
+# with its target breaks it.
+# Scope: ROOT is the religious head (on_crusade_launches).
+character_event = {
+	id = crusade.5
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		any_crusade_participant = { crusade_target_char = { has_non_aggression_pact_with = PREV } }
+	}
+
+	immediate = {
+		any_crusade_participant = {
+			limit = { crusade_target_char = { has_non_aggression_pact_with = PREV } }
+			character_event = { id = crusade.6 }
+		}
+	}
+}
+
+# crusade.6 A pact broken
+# Scope: ROOT is the crusader (crusade.5).
+character_event = {
+	id = crusade.6
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		crusade_target_char = { has_non_aggression_pact_with = PREV }
+	}
+
+	immediate = {
+		crusade_target_char = { save_event_target_as = sad_nap_target }
+		reverse_opinion = {
+			who = event_target:sad_nap_target
+			modifier = broken_non_aggression_pact
+		}
+		prestige = -200
+		add_character_modifier = { name = broken_non_aggression_pact_char_modifier years = 10 }
+	}
+}
+
+###############################################################################
+# The Errantry War is called
+###############################################################################
+
+# crusade.10 The knights look south
+# Once in a game: if a Sultan still rules lands near the Old World, the
+# master of Antoch calls the Errantry War.
+# Scope: ROOT is the master of the order (on_yearly_pulse).
+character_event = {
+	id = crusade.10
+	hide_window = yes
+	is_triggered_only = yes
+	only_rulers = yes
+	religion = grail # The Knights of Antoch
+	has_dlc = "Holy Fury"
+
+	trigger = {
+		crusade_south_order_trigger = yes
+		year = 2100
+		NOR = {
+			has_global_flag = northern_crusades_active
+			has_global_flag = northern_crusade_failure
+			has_global_flag = northern_crusade_success
+		}
+		any_independent_ruler = { crusade_south_target_ruler_trigger = yes }
+	}
+
+	immediate = {
+		set_global_flag = northern_crusades_active
+		any_playable_ruler = { narrative_event = { id = crusade.11 } }
+		810 = { province_event = { id = crusade.12 } } # Couronne
+	}
+}
+
+# crusade.11 The Errantry War
+# News to every ruler.
+# Scope: ROOT is any ruler; FROM is the master of the order (crusade.10).
+narrative_event = {
+	id = crusade.11
+	title = EVTNAMEcrusade11
+	desc = EVTDESCcrusade11
+	picture = GFX_evt_crusaders
+	border = GFX_event_narrative_frame_religion
+	portrait = FROM
+
+	is_triggered_only = yes
+	has_dlc = "Holy Fury"
+
+	option = {
+		name = EVTOPTAcrusade11
+		trigger = { religion = FROM }
+		if = {
+			limit = {
+				independent = yes
+				any_neighbor_independent_ruler = { crusade_south_target_ruler_trigger = yes }
+			}
+			custom_tooltip = { text = EVTOPTAcrusade11_TT }
+		}
+	}
+
+	option = {
+		name = EVTOPTBcrusade11
+		trigger = { NOT = { religion = FROM } religion_group = FROM }
+	}
+
+	option = {
+		name = EVTOPTCcrusade11
+		trigger = { NOT = { religion_group = FROM } NOT = { religion_group = ormazd_gods_group } }
+	}
+
+	option = {
+		name = EVTOPTDcrusade11
+		trigger = { religion_group = ormazd_gods_group }
+	}
+}
+
+# crusade.12 The muster
+# Scope: Couronne (crusade.10).
+province_event = {
+	id = crusade.12
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		province_event = { id = crusade.13 days = 1825 random = 1825 }
+	}
+}
+
+# crusade.13 The knights sail
+# Five to ten years after the call, the order picks a target if none
+# has been asked of it.
+# Scope: Couronne (crusade.12, crusade.14).
+province_event = {
+	id = crusade.13
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_global_flag = northern_crusades_active
+		crusade_south_target_set_trigger = no
+	}
+
+	immediate = {
+		if = {
+			limit = { is_title_active = d_knights_of_antoch }
+			d_knights_of_antoch = { holder_scope = { character_event = { id = crusade.14 } } }
+		}
+		else_if = {
+			limit = { is_title_active = k_knights_of_antoch }
+			k_knights_of_antoch = { holder_scope = { character_event = { id = crusade.14 } } }
+		}
+	}
+}
+
+# crusade.14 The order picks its own target
+# The largest Sultan near the Old World. If no one has asked the order for
+# aid by now, it chooses itself; with no target, try again in a year.
+# Scope: ROOT is the master of the order (crusade.13).
+character_event = {
+	id = crusade.14
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = {
+				crusade_south_target_set_trigger = no
+				any_independent_ruler = { crusade_south_target_ruler_trigger = yes }
+			}
+			random_independent_ruler = {
+				limit = { crusade_south_target_ruler_trigger = yes }
+				preferred_limit = { realm_size = 30 }
+				preferred_limit = { realm_size = 20 }
+				preferred_limit = { realm_size = 10 }
+				random_demesne_title = {
+					limit = { higher_tier_than = COUNT crusade_south_region_trigger = yes }
+					kingdom = {
+						set_title_flag = northern_crusade_active_target
+						save_event_target_as = northern_crusade_kingdom_title
+					}
+				}
+				save_event_target_as = northern_crusade_target_character
+			}
+			character_event = { id = crusade.19 }
+		}
+		else_if = {
+			limit = { crusade_south_target_set_trigger = no }
+			810 = { province_event = { id = crusade.13 days = 365 } }
+		}
+	}
+}
+
+###############################################################################
+# Asking the knights for aid
+###############################################################################
+
+# crusade.15 The order weighs a plea
+# A ruler of the faith names a Sultan for the knights to march on. The
+# master's price depends on his opinion of the asker: prayers, gold or land.
+# Scope: ROOT is the master of the order; event targets
+#   northern_crusade_asker and northern_crusade_potential_target
+#   (ask_teutonic_for_help_teutonic, ask_teutonic_for_help_pagan).
+character_event = {
+	id = crusade.15
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { crusade_south_target_set_trigger = no }
+			event_target:northern_crusade_potential_target = {
+				random_realm_title = {
+					limit = { crusade_south_region_trigger = yes }
+					kingdom = { save_event_target_as = northern_crusade_kingdom_title }
+				}
+			}
+			event_target:northern_crusade_asker = {
+				any_landed_title = {
+					limit = {
+						tier = COUNT
+						location = { crusade_south_region_trigger = yes }
+						kingdom = { title = event_target:northern_crusade_kingdom_title }
+						owner = {
+							OR = { any_liege = { character = PREVPREVPREV } character = PREVPREV }
+						}
+					}
+					location = { duchy = { save_event_target_as = northern_crusade_duchy_title } }
+				}
+			}
+		}
+		else = {
+			event_target:northern_crusade_potential_target = {
+				random_realm_title = {
+					limit = {
+						tier = COUNT
+						kingdom = { has_title_flag = northern_crusade_active_target }
+					}
+					kingdom = { save_event_target_as = northern_crusade_kingdom_title }
+				}
+			}
+			event_target:northern_crusade_asker = {
+				any_landed_title = {
+					limit = {
+						tier = COUNT
+						kingdom = { has_title_flag = northern_crusade_active_target }
+						owner = {
+							OR = { any_liege = { character = PREVPREVPREV } character = PREVPREV }
+						}
+					}
+					location = { duchy = { save_event_target_as = northern_crusade_duchy_title } }
+				}
+			}
+		}
+
+		random_list = {
+			# Asks only for prayers and piety
+			10 = {
+				trigger = { opinion = { who = event_target:northern_crusade_asker value = 1 } }
+				modifier = {
+					factor = 1.5
+					opinion = { who = event_target:northern_crusade_asker value = 25 }
+				}
+				modifier = {
+					factor = 1.5
+					opinion = { who = event_target:northern_crusade_asker value = 50 }
+				}
+				modifier = {
+					factor = 1.5
+					opinion = { who = event_target:northern_crusade_asker value = 75 }
+				}
+				modifier = {
+					factor = 1.5
+					opinion = { who = event_target:northern_crusade_asker value = 90 }
+				}
+				modifier = {
+					factor = 0.5
+					NOT = { opinion = { who = event_target:northern_crusade_asker value = 10 } }
+				}
+				modifier = { factor = 0.5 OR = { trait = ambitious trait = greedy } }
+				modifier = { factor = 1.5 OR = { trait = humble trait = content } }
+				modifier = { factor = 0.1 is_rival = event_target:northern_crusade_asker }
+				event_target:northern_crusade_asker = { letter_event = { id = crusade.16 } }
+			}
+			# Asks for gold
+			10 = { event_target:northern_crusade_asker = { letter_event = { id = crusade.17 } } }
+			# Asks for land
+			10 = {
+				trigger = {
+					NOT = { opinion = { who = event_target:northern_crusade_asker value = 60 } }
+					event_target:northern_crusade_asker = {
+						any_landed_title = {
+							kingdom = { title = event_target:northern_crusade_kingdom_title }
+							owner = {
+								OR = {
+									any_liege = { character = PREVPREVPREV }
+									character = PREVPREV
+								}
+							}
+						}
+						any_demesne_title = {
+							tier = COUNT
+							location = {
+								duchy = {
+									NOT = { title = event_target:northern_crusade_duchy_title }
+								}
+							}
+						}
+					}
+				}
+				modifier = {
+					factor = 1.5
+					NOT = { opinion = { who = event_target:northern_crusade_asker value = -10 } }
+				}
+				modifier = {
+					factor = 1.5
+					NOT = { opinion = { who = event_target:northern_crusade_asker value = 0 } }
+				}
+				modifier = {
+					factor = 1.5
+					NOT = { opinion = { who = event_target:northern_crusade_asker value = 15 } }
+				}
+				modifier = {
+					factor = 0.5
+					opinion = { who = event_target:northern_crusade_asker value = 25 }
+				}
+				modifier = {
+					factor = 0.5
+					opinion = { who = event_target:northern_crusade_asker value = 50 }
+				}
+				modifier = {
+					factor = 0.5
+					opinion = { who = event_target:northern_crusade_asker value = 75 }
+				}
+				modifier = { factor = 1.5 OR = { trait = ambitious trait = greedy } }
+				modifier = { factor = 0.5 OR = { trait = content trait = humble } }
+				modifier = { factor = 3 is_rival = event_target:northern_crusade_asker }
+				event_target:northern_crusade_asker = { letter_event = { id = crusade.18 } }
+			}
+		}
+	}
+}
+
+# crusade.16 The knights ask for prayers
+# Scope: ROOT is the asker; FROM is the master of the order (crusade.15).
+letter_event = {
+	id = crusade.16
+	desc = EVTDESCcrusade16
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAcrusade16
+		piety = -200
+		crusade_south_pick_target_effect = yes
+		crusade_south_call_order_effect = yes
+	}
+
+	option = {
+		name = EVTOPTBcrusade16
+	}
+
+	after = {
+		clr_character_flag = northern_crusade_asked_for_help
+	}
+}
+
+# crusade.17 The knights ask for gold
+# Scope: ROOT is the asker; FROM is the master of the order (crusade.15).
+letter_event = {
+	id = crusade.17
+	desc = EVTDESCcrusade17
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_list = {
+			10 = {
+				trigger = { FROM = { opinion = { who = ROOT value = 1 } } }
+				modifier = { factor = 1.5 FROM = { opinion = { who = ROOT value = 25 } } }
+				modifier = { factor = 1.5 FROM = { opinion = { who = ROOT value = 50 } } }
+				modifier = { factor = 1.5 FROM = { opinion = { who = ROOT value = 75 } } }
+				modifier = { factor = 0.5 FROM = { NOT = { opinion = { who = ROOT value = 10 } } } }
+				modifier = { factor = 0.5 FROM = { OR = { trait = ambitious trait = greedy } } }
+				modifier = { factor = 1.5 FROM = { OR = { trait = humble trait = content } } }
+				modifier = { factor = 0.1 FROM = { is_rival = ROOT } }
+				set_character_flag = northern_crusade_small_donation
+			}
+			10 = { set_character_flag = northern_crusade_medium_donation }
+			10 = {
+				modifier = { factor = 1.5 FROM = { NOT = { opinion = { who = ROOT value = 0 } } } }
+				modifier = { factor = 1.5 FROM = { NOT = { opinion = { who = ROOT value = 15 } } } }
+				modifier = { factor = 0.5 FROM = { opinion = { who = ROOT value = 25 } } }
+				modifier = { factor = 0.5 FROM = { opinion = { who = ROOT value = 50 } } }
+				modifier = { factor = 1.5 FROM = { OR = { trait = ambitious trait = greedy } } }
+				modifier = { factor = 0.5 FROM = { OR = { trait = content trait = humble } } }
+				modifier = { factor = 3 FROM = { is_rival = ROOT } }
+				set_character_flag = northern_crusade_large_donation
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAcrusade17
+		if = {
+			limit = { has_character_flag = northern_crusade_small_donation }
+			scaled_wealth = { value = -0.3 min = -50 max = -200 }
+		}
+		else_if = {
+			limit = { has_character_flag = northern_crusade_medium_donation }
+			scaled_wealth = { value = -0.6 min = -100 max = -400 }
+		}
+		else = { scaled_wealth = { value = -1 min = -200 max = -800 } }
+		piety = -100 # Gold buys some of the prayers
+		crusade_south_pick_target_effect = yes
+		crusade_south_call_order_effect = yes
+	}
+
+	option = {
+		name = EVTOPTBcrusade17
+	}
+
+	after = {
+		clr_character_flag = northern_crusade_small_donation
+		clr_character_flag = northern_crusade_medium_donation
+		clr_character_flag = northern_crusade_large_donation
+		clr_character_flag = northern_crusade_asked_for_help
+	}
+}
+
+# crusade.18 The knights ask for land
+# They want a foothold: every county the asker's realm holds in the duchy
+# nearest the target.
+# Scope: ROOT is the asker; FROM is the master of the order (crusade.15).
+letter_event = {
+	id = crusade.18
+	desc = EVTDESCcrusade18
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAcrusade18
+		custom_tooltip = {
+			text = EVTOPTAcrusade18_TT
+			any_realm_lord = {
+				any_demesne_title = {
+					limit = {
+						OR = { tier = COUNT tier = BARON }
+						location = { duchy = { title = event_target:northern_crusade_duchy_title } }
+					}
+					grant_title_no_opinion = FROM
+				}
+			}
+			any_demesne_title = {
+				limit = {
+					OR = { tier = COUNT tier = BARON }
+					location = { duchy = { title = event_target:northern_crusade_duchy_title } }
+				}
+				grant_title_no_opinion = FROM
+			}
+			FROM = {
+				if = {
+					limit = {
+						capital_scope = {
+							duchy = { title = event_target:northern_crusade_duchy_title }
+						}
+					}
+					teutonic_order_upgrade_capital_effect = yes
+					character_event = { id = HFP.41090 days = 1 }
+				}
+				else_if = {
+					limit = { NOT = { realm_size = 10 } }
+					teutonic_order_upgrade_capital_effect = yes
+				}
+				holy_order_distribute_titles_effect = yes
+			}
+		}
+		crusade_south_pick_target_effect = yes
+		crusade_south_call_order_effect = yes
+	}
+
+	option = {
+		name = EVTOPTBcrusade18
+	}
+
+	after = {
+		clr_character_flag = northern_crusade_asked_for_help
+	}
+}
+
+###############################################################################
+# The march
+###############################################################################
+
+# crusade.19 The knights march
+# The order declares war on the target for the kingdom (or, on later wars,
+# for the kingdom it is already conquering), gets a fresh army and calls its
+# allies.
+# Scope: ROOT is the master of the order (crusade.14, the effect
+#   crusade_south_call_order_effect).
+character_event = {
+	id = crusade.19
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:northern_crusade_target_character = { is_alive = yes }
+	}
+
+	immediate = {
+		if = {
+			limit = { crusade_south_target_set_trigger = no }
+			event_target:northern_crusade_kingdom_title = {
+				set_title_flag = northern_crusade_active_target
+				d_knights_of_antoch = {
+					save_persistent_event_target = { name = teutonic_target scope = PREV }
+				}
+				k_knights_of_antoch = {
+					save_persistent_event_target = { name = teutonic_target scope = PREV }
+				}
+			}
+			unsafe_war = {
+				target = event_target:northern_crusade_target_character
+				casus_belli = southern_crusade_war
+				thirdparty_title = event_target:northern_crusade_kingdom_title
+				tier = KING
+			}
+			location = { save_event_target_as = current_location }
+			spawn_unit = {
+				province = event_target:current_location
+				home = event_target:current_location
+				owner = ROOT
+				troops = {
+					archers = { 750 750 }
+					light_infantry = { 1250 1250 }
+					heavy_infantry = { 750 750 }
+					knights = { 250 250 }
+				}
+				attrition = 0
+				merge = yes
+				reinforces = yes
+			}
+			spawn_unit = {
+				province = event_target:current_location
+				home = event_target:current_location
+				owner = ROOT
+				match_character = event_target:northern_crusade_target_character
+				match_mult = 0.5
+				match_min = 500
+				attrition = 0
+				merge = yes
+				reinforces = yes
+			}
+			d_knights_of_antoch = { set_title_flag = northern_crusade_target }
+			k_knights_of_antoch = { set_title_flag = northern_crusade_target }
+			any_playable_ruler = { narrative_event = { id = crusade.20 } }
+		}
+		else = {
+			random_landed_title = {
+				limit = { tier = KING has_title_flag = northern_crusade_active_target }
+				save_event_target_as = northern_crusade_kingdom_title
+			}
+			unsafe_war = {
+				target = event_target:northern_crusade_target_character
+				casus_belli = southern_crusade_war
+				thirdparty_title = event_target:northern_crusade_kingdom_title
+				tier = KING
+			}
+		}
+		if = {
+			limit = { event_target:northern_crusade_asker = { always = yes } }
+			any_war = {
+				limit = { using_cb = southern_crusade_war }
+				event_target:northern_crusade_asker = { join_attacker_wars = PREV }
+			}
+		}
+		character_event = { id = crusade.21 }
+	}
+}
+
+# crusade.20 The Errantry War
+# The order sails for Araby. News to every ruler.
+# Scope: ROOT is any ruler; FROM is the master of the order (crusade.19).
+narrative_event = {
+	id = crusade.20
+	title = EVTNAMEcrusade20
+	desc = EVTDESCcrusade20
+	picture = GFX_evt_araby_crusade
+	border = GFX_event_narrative_frame_religion
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAcrusade20
+		trigger = { religion = FROM }
+		show_portrait = event_target:northern_crusade_target_character
+	}
+
+	option = {
+		name = EVTOPTBcrusade20
+		trigger = { NOT = { religion = FROM } religion_group = FROM }
+		show_portrait = event_target:northern_crusade_target_character
+	}
+
+	option = {
+		name = EVTOPTCcrusade20
+		trigger = { NOT = { religion_group = FROM } }
+		show_portrait = event_target:northern_crusade_target_character
+	}
+}
+
+# crusade.21 A knight takes the cross
+# One faithful lord of the south who is not yet fighting joins the order's
+# war, kings first.
+# Scope: ROOT is the master of the order (crusade.19).
+character_event = {
+	id = crusade.21
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		random_independent_ruler = {
+			limit = {
+				religion = ROOT
+				higher_tier_than = BARON
+				war = no
+				NOT = { character = ROOT }
+				any_demesne_province = { crusade_south_region_trigger = yes }
+			}
+			preferred_limit = { tier = KING }
+			preferred_limit = { tier = DUKE }
+			save_event_target_as = northern_crusade_support
+		}
+		if = {
+			limit = { event_target:northern_crusade_support = { always = yes } }
+			any_war = {
+				limit = { using_cb = southern_crusade_war }
+				event_target:northern_crusade_support = { join_attacker_wars = PREV }
+			}
+		}
+	}
+}
+
+###############################################################################
+# Rewards, defeat and victory
+###############################################################################
+
+# crusade.22 The order's thanks
+# Piety for all who fought, gold for those who fought well, a relic of the
+# war for those who fought best.
+# Scope: ROOT is an ally; FROM is the master of the order (southern_crusade_war
+#   on_success_title).
+letter_event = {
+	id = crusade.22
+	desc = {
+		trigger = { NOT = { has_character_flag = northern_crusade_gold_reward } }
+		text = EVTDESCcrusade22
+	}
+	desc = {
+		trigger = { has_character_flag = northern_crusade_gold_reward }
+		text = EVTDESCcrusade22b
+	}
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAcrusade22
+		piety = 150
+		if = {
+			limit = { has_character_flag = northern_crusade_gold_reward }
+			scaled_wealth = { value = 0.5 min = 100 }
+		}
+		if = {
+			limit = { has_character_flag = northern_crusade_artifact_reward }
+			alternate_crusade_artifact_distribution_effect = yes
+		}
+		FROM = {
+			show_scope_change = no
+			opinion = { modifier = opinion_grateful who = ROOT years = 15 }
+		}
+	}
+
+	after = {
+		clr_character_flag = northern_crusade_artifact_reward
+		clr_character_flag = northern_crusade_gold_reward
+	}
+}
+
+# crusade.23 The Errantry War fails
+# The order has lost its war twice. News to every ruler.
+# Scope: ROOT is any ruler; FROM is the master of the order
+#   (crusade_south_failure_effect).
+narrative_event = {
+	id = crusade.23
+	title = EVTNAMEcrusade23
+	desc = EVTDESCcrusade23
+	picture = GFX_evt_araby_rider
+	border = GFX_event_narrative_frame_religion
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_global_flag = northern_crusade_failure
+		clr_global_flag = northern_crusades_active
+		sound_effect = pagan_warhorn
+		random_landed_title = {
+			limit = { has_title_flag = northern_crusade_active_target }
+			clr_title_flag = northern_crusade_active_target
+		}
+	}
+
+	option = {
+		name = EVTOPTAcrusade23
+		trigger = { religion = FROM }
+	}
+
+	option = {
+		name = EVTOPTBcrusade23
+		trigger = { NOT = { religion = FROM } religion_group = FROM }
+	}
+
+	option = {
+		name = EVTOPTCcrusade23
+		trigger = { NOR = { religion_group = FROM religion_group = ormazd_gods_group } }
+	}
+
+	option = {
+		name = EVTOPTDcrusade23
+		trigger = { religion_group = ormazd_gods_group }
+	}
+}
+
+# crusade.24 Friend of Antoch
+# The ally who did most in two of the order's victories founds a bloodline
+# and is given a knight's helm of the order.
+# Scope: ROOT is the ally; FROM is the master of the order
+#   (southern_crusade_war on_success_title).
+narrative_event = {
+	id = crusade.24
+	title = EVTNAMEcrusade24
+	desc = EVTDESCcrusade24
+	picture = GFX_evt_bloodlines
+	border = GFX_event_narrative_frame_religion
+	portrait = FROM
+
+	is_triggered_only = yes
+	has_dlc = "Holy Fury"
+
+	trigger = {
+		NOT = { any_owned_bloodline = { has_bloodline_flag = northern_crusade_bloodline } }
+		NOT = {
+			any_owned_bloodline = {
+				has_bloodline_flag = crusader_bloodline
+				founder = { character = ROOT }
+			}
+		}
+	}
+
+	immediate = {
+		sound_effect = bloodline_added
+	}
+
+	option = {
+		name = EVTOPTAcrusade24
+		if = {
+			limit = { NOT = { has_artifact = crown_winged_helmet } }
+			add_artifact = crown_winged_helmet
+		}
+		if = { limit = { is_female = no } create_bloodline = { type = northern_crusade_bloodline } }
+		else = {
+			create_bloodline = { type = northern_crusade_bloodline inheritance = matrilineal }
+		}
+	}
+}
+
+# crusade.25 Victory in the south
+# A kingdom of Araby is won for the Lady. News to every ruler.
+# Scope: ROOT is any ruler; FROM is the master of the order; event_target
+#   northern_crusade_kingdom (crusade_south_victory_effect).
+narrative_event = {
+	id = crusade.25
+	title = EVTNAMEcrusade25
+	desc = EVTDESCcrusade25
+	picture = GFX_evt_crusaders
+	border = GFX_event_narrative_frame_religion
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAcrusade25
+		trigger = { religion = FROM }
+		piety = 100
+	}
+
+	option = {
+		name = EVTOPTBcrusade25
+		trigger = { NOT = { religion = FROM } religion_group = FROM }
+	}
+
+	option = {
+		name = EVTOPTCcrusade25
+		trigger = { NOR = { religion_group = FROM religion_group = ormazd_gods_group } }
+	}
+
+	option = {
+		name = EVTOPTDcrusade25
+		trigger = { religion_group = ormazd_gods_group }
+	}
+}
+
+# crusade.26 Is the kingdom won?
+# The order may finish the kingdom by other wars too: check once a year.
+# Scope: ROOT is the master of the order (on_yearly_pulse).
+character_event = {
+	id = crusade.26
+	hide_window = yes
+	is_triggered_only = yes
+	only_rulers = yes
+	religion = grail # The Knights of Antoch
+
+	trigger = {
+		crusade_south_order_trigger = yes
+		has_global_flag = northern_crusades_active
+		any_demesne_title = { kingdom = { crusade_south_kingdom_won_trigger = yes } }
+	}
+
+	immediate = {
+		random_demesne_title = {
+			limit = { kingdom = { crusade_south_kingdom_won_trigger = yes } }
+			kingdom = { save_event_target_as = northern_crusade_kingdom }
+		}
+		crusade_south_victory_effect = yes
+	}
+}
+
+###############################################################################
+# On campaign
+###############################################################################
+
+# crusade.30 On campaign
+# A player commanding on the Errantry War in enemy lands may meet the
+# usual adventures of a crusade.
+# Scope: ROOT is the commander (on_yearly_pulse, crusade.31).
+character_event = {
+	id = crusade.30
+	hide_window = yes
+	is_triggered_only = yes
+
+	ai = no
+
+	trigger = {
+		religion_group = old_world_group
+		in_command = yes
+		prisoner = no
+		NOT = { has_character_modifier = northern_crusade_cooldown }
+		any_war = { using_cb = southern_crusade_war any_attacker = { character = ROOT } }
+		location = {
+			owner = {
+				OR = {
+					any_war = {
+						using_cb = southern_crusade_war
+						any_defender = { character = PREVPREV }
+					}
+					any_liege = {
+						any_war = {
+							using_cb = southern_crusade_war
+							any_defender = { character = PREVPREV }
+						}
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		set_character_flag = northern_crusade_flavor
+		crusade_flavor_event_tombola_effect = yes
+	}
+
+	after = {
+		clr_character_flag = northern_crusade_flavor
+		add_character_modifier = { name = northern_crusade_cooldown hidden = yes days = 25 }
+	}
+}
+
+# crusade.31 The road south
+# A quarter of battles won, sieges won and marches on the Errantry War lead
+# to crusade.30.
+# Scope: ROOT is the commander (on_battle_won_leader,
+#   on_major_battle_won_leader, on_siege_won_leader,
+#   on_unit_entering_province).
+character_event = {
+	id = crusade.31
+	hide_window = yes
+	is_triggered_only = yes
+
+	ai = no
+
+	trigger = {
+		religion_group = old_world_group
+		any_war = { using_cb = southern_crusade_war }
+	}
+
+	immediate = {
+		random = { chance = 25 character_event = { id = crusade.30 days = 1 random = 15 } }
+	}
+}

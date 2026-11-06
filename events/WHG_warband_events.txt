@@ -1,0 +1,438 @@
+###############################################################################
+# Warbands
+# Namespace: warband (was WB.25000 - WB.25037 in HF_warband_powers_events)
+# Faction: the Chaos warbands (Undivided, Khorne, Nurgle, Tzeentch,
+#   Slaanesh) and the Skaven Warlords
+#
+# The Call to Glory: a rank 4 champion at war calls on the warband, and
+# fresh warriors join while the champion leads an army on land, in the
+# troops of the warband's god (or the Skaven clans). The flow dries up
+# after 20 bands unless the champion inspires or pays for more; rowdy
+# bands demand plunder; the champion's own people flock to the capital.
+# Rarely, once in a life, the Chosen (Blightkings, Stormvermin) come and
+# stay for good. Gork and Mork have the Waaagh! instead.
+#
+# The Call to Glory            warband.1 - warband.7
+#
+# Saved: character modifier call_to_glory, variable call_to_glory_variable,
+#   character flag warband_got_chosen; earmarks call_to_glory_disciplined,
+#   call_to_glory_rowdy, warband_chosen.
+#
+# Callers:
+#   decisions/hf_warrior_lodge_decisions.txt (warband_call_to_glory: 1).
+#   Cleanup at peace: HF.25035/HF.25036 (on_war_ended_*), shared with the
+#   warrior lodges.
+# Support: common/scripted_triggers/wh_warband_triggers.txt,
+#   common/scripted_effects/wh_warband_effects.txt
+#
+# Removed: the dead Summon Commander power (WB.25000, never called), its
+# cooldown cleanup (WB.25002/WB.25003, cooldown never applied) and a dead
+# copy of the scarred-trait setup (WB.25020; HF.25020 does it).
+###############################################################################
+
+namespace = warband
+
+###############################################################################
+# The Call to Glory
+###############################################################################
+
+# warband.1 The call goes out
+# The champion calls the warband to war; the first warriors come in about
+# a month. Scope: the caller.
+character_event = {
+	id = warband.1
+	desc = { trigger = { warband_voice_chaos_trigger = yes } text = EVTDESCwarband1_chaos }
+	desc = { trigger = { warband_voice_khorne_trigger = yes } text = EVTDESCwarband1_khorne }
+	desc = { trigger = { warband_voice_nurgle_trigger = yes } text = EVTDESCwarband1_nurgle }
+	desc = { trigger = { warband_voice_tzeentch_trigger = yes } text = EVTDESCwarband1_tzeentch }
+	desc = { trigger = { warband_voice_slaanesh_trigger = yes } text = EVTDESCwarband1_slaanesh }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband1_skaven }
+	picture = {
+		trigger = { warband_voice_any_chaos_trigger = yes }
+		picture = GFX_evt_chaos_warband
+	}
+	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = { trigger = { warband_voice_chaos_trigger = yes } text = EVTOPTAwarband1_chaos }
+		name = { trigger = { warband_voice_khorne_trigger = yes } text = EVTOPTAwarband1_khorne }
+		name = { trigger = { warband_voice_nurgle_trigger = yes } text = EVTOPTAwarband1_nurgle }
+		name = {
+			trigger = { warband_voice_tzeentch_trigger = yes }
+			text = EVTOPTAwarband1_tzeentch
+		}
+		name = {
+			trigger = { warband_voice_slaanesh_trigger = yes }
+			text = EVTOPTAwarband1_slaanesh
+		}
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband1_skaven }
+		custom_tooltip = { text = TT_EVTOPTAHF25030 }
+		hidden_tooltip = { character_event = { id = warband.2 days = 25 random = 5 } }
+	}
+}
+
+# warband.2 The muster (hidden)
+# Every month or so: a band arrives, the flow dries up, rowdy warriors
+# grumble, the people flock to the capital or, once in a life, the Chosen
+# come. Out of command it waits; at peace it ends. Scope: the caller.
+character_event = {
+	id = warband.2
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_list = {
+			30 = { #A new band
+				trigger = { warband_glory_ok_trigger = yes warband_glory_leading_trigger = yes }
+				character_event = { id = warband.3 }
+			}
+			50 = { #Not leading an army: wait
+				trigger = { warband_glory_ok_trigger = yes warband_glory_leading_trigger = no }
+				character_event = { id = warband.2 days = 35 random = 5 }
+			}
+			100 = { #The call has lapsed
+				trigger = { warband_glory_lapsed_trigger = yes }
+				warband_glory_end_effect = yes
+			}
+			100 = { #The flow dries up
+				trigger = {
+					warband_glory_lapsed_trigger = no
+					warband_glory_leading_trigger = yes
+					check_variable = { which = "call_to_glory_variable" value = 20 }
+				}
+				character_event = { id = warband.4 }
+			}
+			5 = { #Rowdy warriors want more plunder
+				trigger = {
+					warband_glory_ok_trigger = yes
+					warband_glory_leading_trigger = yes
+					has_earmarked_regiments = call_to_glory_rowdy
+					check_variable = { which = "call_to_glory_variable" value = 5 }
+				}
+				character_event = { id = warband.5 }
+			}
+			5 = { #The people flock to the capital
+				trigger = {
+					warband_glory_ok_trigger = yes
+					warband_glory_leading_trigger = yes
+					check_variable = { which = "call_to_glory_variable" value = 5 }
+				}
+				character_event = { id = warband.6 }
+			}
+			2 = { #The Chosen (rare, once in a life)
+				trigger = {
+					warband_glory_ok_trigger = yes
+					warband_glory_leading_trigger = yes
+					check_variable = { which = "call_to_glory_variable" value = 10 }
+					NOT = { has_character_flag = warband_got_chosen }
+				}
+				character_event = { id = warband.7 }
+			}
+		}
+	}
+}
+
+# warband.3 A new band arrives
+# Scope: the caller, leading an army on land.
+character_event = {
+	id = warband.3
+	desc = { trigger = { warband_voice_chaos_trigger = yes } text = EVTDESCwarband3_chaos }
+	desc = { trigger = { warband_voice_khorne_trigger = yes } text = EVTDESCwarband3_khorne }
+	desc = { trigger = { warband_voice_nurgle_trigger = yes } text = EVTDESCwarband3_nurgle }
+	desc = { trigger = { warband_voice_tzeentch_trigger = yes } text = EVTDESCwarband3_tzeentch }
+	desc = { trigger = { warband_voice_slaanesh_trigger = yes } text = EVTDESCwarband3_slaanesh }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband3_skaven }
+	picture = {
+		trigger = { warband_voice_any_chaos_trigger = yes }
+		picture = GFX_evt_chaos_warband
+	}
+	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+	notification = yes
+
+	trigger = {
+		warband_glory_ok_trigger = yes
+		warband_glory_leading_trigger = yes
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = { warband_glory_lapsed_trigger = yes }
+			warband_glory_end_effect = yes
+		}
+		else = {
+			character_event = { id = warband.2 days = 25 random = 5 }
+		}
+	}
+
+	option = {
+		name = { trigger = { warband_voice_chaos_trigger = yes } text = EVTOPTAwarband3_chaos }
+		name = { trigger = { warband_voice_khorne_trigger = yes } text = EVTOPTAwarband3_khorne }
+		name = { trigger = { warband_voice_nurgle_trigger = yes } text = EVTOPTAwarband3_nurgle }
+		name = {
+			trigger = { warband_voice_tzeentch_trigger = yes }
+			text = EVTOPTAwarband3_tzeentch
+		}
+		name = {
+			trigger = { warband_voice_slaanesh_trigger = yes }
+			text = EVTOPTAwarband3_slaanesh
+		}
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband3_skaven }
+		warband_glory_spawn_effect = yes
+		hidden_tooltip = {
+			change_variable = { which = "call_to_glory_variable" value = 1 }
+			character_event = { id = warband.2 days = 35 random = 5 }
+		}
+	}
+}
+
+# warband.4 The flow dries up
+# After 20 bands the warband sends no more, unless the champion inspires
+# or pays for them. Scope: the caller.
+character_event = {
+	id = warband.4
+	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESCwarband4_chaos }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband4_skaven }
+	picture = {
+		trigger = { warband_voice_any_chaos_trigger = yes }
+		picture = GFX_evt_chaos_warband
+	}
+	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		warband_glory_lapsed_trigger = no
+	}
+
+	fail_trigger_effect = {
+		if = { limit = { warband_glory_lapsed_trigger = yes } warband_glory_end_effect = yes }
+	}
+
+	option = { #Inspire them
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTAwarband4_chaos }
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband4_skaven }
+		trigger = { combat_rating = 50 }
+		tooltip_info = combat_rating
+		custom_tooltip = { text = tooltip_call_to_glory_resume_reinforcements }
+		hidden_tooltip = {
+			change_variable = { which = "call_to_glory_variable" value = -10 }
+			character_event = { id = warband.2 days = 45 random = 5 }
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { #Pay them
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTBwarband4_chaos }
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTBwarband4_skaven }
+		trigger = { wealth = 150 }
+		scaled_wealth = { value = -1.0 min = -150 max = -250 }
+		custom_tooltip = { text = tooltip_call_to_glory_resume_reinforcements }
+		hidden_tooltip = {
+			change_variable = { which = "call_to_glory_variable" value = -10 }
+			character_event = { id = warband.2 days = 45 random = 5 }
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0 NOT = { wealth = 400 } }
+			modifier = { factor = 0.25 trait = greedy }
+		}
+	}
+	option = { #No more
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTCwarband4_chaos }
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTCwarband4_skaven }
+		custom_tooltip = { text = tooltip_call_to_glory_end_reinforcements }
+		hidden_tooltip = { set_variable = { which = "call_to_glory_variable" value = 0 } }
+		ai_chance = { factor = 20 }
+	}
+}
+
+# warband.5 Rowdy warriors want more plunder
+# Talk them round, pay them, or let them go. Scope: the caller.
+character_event = {
+	id = warband.5
+	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESCwarband5_chaos }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband5_skaven }
+	picture = {
+		trigger = { warband_voice_any_chaos_trigger = yes }
+		picture = GFX_evt_chaos_warband
+	}
+	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		warband_glory_ok_trigger = yes
+	}
+
+	fail_trigger_effect = {
+		if = { limit = { warband_glory_lapsed_trigger = yes } warband_glory_end_effect = yes }
+	}
+
+	option = { #Talk them round
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTAwarband5_chaos }
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband5_skaven }
+		trigger = { diplomacy = 20 }
+		tooltip_info = diplomacy
+		ai_chance = { factor = 100 }
+	}
+	option = { #Pay them
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTBwarband5_chaos }
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTBwarband5_skaven }
+		trigger = { wealth = 50 }
+		scaled_wealth = { value = -0.8 min = -50 max = -150 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0 NOT = { wealth = 200 } }
+			modifier = { factor = 0.25 trait = greedy }
+		}
+	}
+	option = { #Let them go
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTCwarband5_chaos }
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTCwarband5_skaven }
+		custom_tooltip = { text = tooltip_rowdy_troops_leave }
+		hidden_tooltip = {
+			disband_event_forces = call_to_glory_rowdy
+			change_variable = { which = "call_to_glory_variable" value = -3 }
+		}
+		ai_chance = { factor = 20 }
+	}
+	after = {
+		hidden_tooltip = { character_event = { id = warband.2 days = 25 random = 5 } }
+	}
+}
+
+# warband.6 The people flock to the capital
+# Train them as levies, send them home for prestige, arm them, or (Chaos)
+# send them raiding by sea or (Skaven) hand them to Clan Skryre.
+# Scope: the caller.
+character_event = {
+	id = warband.6
+	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESCwarband6_chaos }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband6_skaven }
+	picture = {
+		trigger = { warband_voice_any_chaos_trigger = yes }
+		picture = GFX_evt_chaos_warband
+	}
+	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		warband_glory_ok_trigger = yes
+	}
+
+	fail_trigger_effect = {
+		if = { limit = { warband_glory_lapsed_trigger = yes } warband_glory_end_effect = yes }
+	}
+
+	option = { #Train them
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTAwarband6_chaos }
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband6_skaven }
+		if = { limit = { is_nomadic = yes } manpower = 200 }
+		else = {
+			any_demesne_province = {
+				add_province_modifier = {
+					name = capital_call_to_glory
+					duration = 150
+					stacking = yes
+				}
+			}
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { #Send them home
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTBwarband6_chaos }
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTBwarband6_skaven }
+		prestige = 150
+		ai_chance = { factor = 50 }
+	}
+	option = { #Arm them
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTCwarband6_chaos }
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTCwarband6_skaven }
+		capital_scope = {
+			ROOT = {
+				hidden_tooltip = {
+					change_variable = { which = "call_to_glory_variable" value = 1 }
+				}
+				spawn_unit = {
+					province = PREV
+					owner = ROOT
+					troops = { light_infantry = { 400 400 } }
+					earmark = call_to_glory_rowdy
+					attrition = 0
+					merge = yes
+					maintenance_multiplier = 0
+					disband_on_peace = yes
+				}
+			}
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { #Raid by sea (Chaos)
+		name = EVTOPTDwarband6_chaos
+		trigger = { warband_voice_any_chaos_trigger = yes capital_scope = { is_coastal = yes } }
+		spawn_fleet = {
+			province = closest
+			owner = ROOT
+			disband_on_peace = yes
+			troops = { galleys = { 50 50 } }
+			earmark = call_to_glory_rowdy
+		}
+		ai_chance = { factor = 25 }
+	}
+	option = { #Clan Skryre (Skaven)
+		name = EVTOPTDwarband6_skaven
+		trigger = { warband_voice_skaven_trigger = yes }
+		military_techpoints = 75
+		ai_chance = { factor = 25 }
+	}
+	after = {
+		hidden_tooltip = { character_event = { id = warband.2 days = 45 random = 5 } }
+	}
+}
+
+# warband.7 The Chosen
+# Once in a life, a company of the Chosen (Blightkings for Nurgle,
+# Stormvermin for the Skaven) joins the champion for good, at half upkeep.
+# Scope: the caller, leading an army on land.
+character_event = {
+	id = warband.7
+	desc = { trigger = { warband_voice_chaos_trigger = yes } text = EVTDESCwarband7_chaos }
+	desc = { trigger = { warband_voice_khorne_trigger = yes } text = EVTDESCwarband7_khorne }
+	desc = { trigger = { warband_voice_nurgle_trigger = yes } text = EVTDESCwarband7_nurgle }
+	desc = { trigger = { warband_voice_tzeentch_trigger = yes } text = EVTDESCwarband7_tzeentch }
+	desc = { trigger = { warband_voice_slaanesh_trigger = yes } text = EVTDESCwarband7_slaanesh }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband7_skaven }
+	picture = {
+		trigger = { warband_voice_any_chaos_trigger = yes }
+		picture = GFX_evt_chaos_champions
+	}
+	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		warband_glory_ok_trigger = yes
+		warband_glory_leading_trigger = yes
+		NOT = { has_character_flag = warband_got_chosen }
+	}
+
+	option = {
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTAwarband7_chaos }
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband7_skaven }
+		set_character_flag = warband_got_chosen
+		custom_tooltip = { text = warband7_chosen_TT }
+		hidden_tooltip = { warband_chosen_spawn_effect = yes }
+		hidden_tooltip = { character_event = { id = warband.2 days = 35 random = 5 } }
+	}
+}

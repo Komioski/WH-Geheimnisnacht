@@ -6,7 +6,7 @@
 ------------------------------------------------------
 THIS IS A DARK age, a bloody age, an age of daemons
 and of sorcery. It is an age of battle and death.
-and of the world’s ending. Amidst all of the fire,
+and of the worldâ€™s ending. Amidst all of the fire,
 flame and fury it is a time, too, of mighty heroes,
 of bold deeds and great courage.
     ~         ~

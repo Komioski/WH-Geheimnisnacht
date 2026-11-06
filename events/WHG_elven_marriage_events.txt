@@ -1,0 +1,1557 @@
+###############################################################################
+# Elven courtship, weddings and divorce
+# Namespace: elfwed (was selfmarriage in S_elven_marriage_events.txt and
+# sdivorce in S_elven_divorce_events.txt)
+# Faction: Asur, Druchii, Asrai
+#
+# Elves do not marry in haste. A suitor courts the beloved with gifts and
+# shows of talent until the courtship is warm enough to propose. The
+# beloved (or, for a courtier, their liege) gives the final word, and the
+# wedding follows the rites of their people. An Asur who is divorced may
+# demand gold or land as the price of letting the spouse go.
+#
+# Courtship                               elfwed.1 - elfwed.6
+# The proposal and the wedding            elfwed.7 - elfwed.15
+# AI courtships                           elfwed.50 - elfwed.51
+# Divorce among the Asur                  elfwed.60 - elfwed.70
+#
+# The courtship keeps its state on the suitor: the variable courting_score,
+# the flag elfwed_gift_* for the gift on its way, and the flag
+# asking_for_matrilineal. Both carry the trait courting (which forbids any
+# other marriage), the hidden modifier courting_timer (a one-year cooldown
+# on starting another) and elfwed_courtship_alive (five years, see elfwed.15). The event targets
+# elfwed_suitor and elfwed_beloved are saved at the start and used down the
+# whole chain. A courtship that stalls lapses on its own (elfwed.15).
+#
+# Callers:
+#   decisions/wh_asur_decisions.txt: elven_courting_decision (1).
+#   common/on_actions/wh_on_actions.txt: bi-yearly (50), on_divorce (60).
+#   events/on_action_events.txt: the marriage handler (70).
+# Support: common/scripted_effects/wh_elven_marriage_effects.txt,
+#   common/scripted_triggers/wh_elven_marriage_triggers.txt
+# Loc: localisation/00_WHG_elven_marriage_events.csv
+###############################################################################
+
+namespace = elfwed
+
+###############################################################################
+# Courtship
+# The suitor picks a gift or a show of talent (elfwed.2), the beloved
+# judges it months later (elfwed.3), and the suitor learns how it went
+# (elfwed.4 or elfwed.5). Each success raises the courtship score; a
+# failure may lower it, and at nothing the beloved is free again.
+###############################################################################
+
+# elfwed.1 The courtship begins (hidden)
+# Scope: ROOT is the beloved, FROMFROM the suitor (elven_courting_decision).
+character_event = {
+	id = elfwed.1
+	hide_window = yes
+
+	is_triggered_only = yes # elven_courting_decision
+
+	immediate = {
+		save_event_target_as = elfwed_beloved
+		FROMFROM = {
+			save_event_target_as = elfwed_suitor
+			add_trait = courting
+			character_event = { id = elfwed.2 }
+			add_character_modifier = { name = elfwed_courtship_alive hidden = yes duration = 1825 }
+			character_event = { id = elfwed.15 days = 1825 }
+		}
+		add_character_modifier = { name = elfwed_courtship_alive hidden = yes duration = 1825 }
+		character_event = { id = elfwed.15 days = 1825 }
+	}
+}
+
+# elfwed.2 The courtship
+# Scope: ROOT is the suitor, FROM the beloved (elfwed.1, elfwed.6, elfwed.51).
+character_event = {
+	id = elfwed.2
+	desc = { text = EVTDESCelfwed2 trigger = { is_married = no FROM = { is_married = no } } }
+	desc = { text = EVTDESCelfwed2b trigger = { is_married = no FROM = { is_married = yes } } }
+	desc = { text = EVTDESCelfwed2c trigger = { is_married = yes } }
+	picture = GFX_evt_elf_love
+
+	is_triggered_only = yes # elfwed.1, elfwed.6, elfwed.51
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	immediate = {
+		if = { # Keep the courtship from lapsing while it is alive
+			limit = { is_married = no FROM = { is_married = no } }
+			remove_character_modifier = courting_timer
+			add_character_modifier = { name = courting_timer hidden = yes duration = 365 }
+			remove_character_modifier = elfwed_courtship_alive
+			add_character_modifier = { name = elfwed_courtship_alive hidden = yes duration = 1825 }
+			FROM = {
+				remove_character_modifier = courting_timer
+				add_character_modifier = { name = courting_timer hidden = yes duration = 365 }
+				remove_character_modifier = elfwed_courtship_alive
+				add_character_modifier = { name = elfwed_courtship_alive hidden = yes duration = 1825 }
+			}
+		}
+	}
+
+	option = { # You married
+		name = EVTOPTAelfwed2
+		trigger = { is_married = yes }
+		elfwed_end_courtship_effect = yes
+		FROM = { elfwed_end_courtship_effect = yes }
+	}
+	option = { # The beloved married
+		name = EVTOPTBelfwed2
+		trigger = { is_married = no FROM = { is_married = yes } }
+		prestige = -50
+		elfwed_end_courtship_effect = yes
+		FROM = { elfwed_end_courtship_effect = yes }
+	}
+	option = { # Propose
+		name = EVTOPTCelfwed2
+		trigger = { is_married = no FROM = { is_married = no } }
+		elfwed_clear_gift_effect = yes
+		elfwed_propose_effect = yes
+		ai_chance = {
+			factor = 18
+			modifier = {
+				factor = 0.1
+				NOT = { check_variable = { which = "courting_score" value = 4 } }
+			}
+			modifier = { factor = 4 check_variable = { which = "courting_score" value = 10 } }
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 2 is_lover = FROM }
+			modifier = { factor = 5 is_lover = FROM FROM = { is_ruler = yes } }
+			modifier = { factor = 1.5 is_friend = FROM }
+			modifier = { factor = 0.5 higher_tier_than = FROM is_female = yes }
+			modifier = { factor = 0.5 trait = ambitious is_female = yes }
+			modifier = {
+				factor = 0
+				is_female = yes
+				FROM = { is_ruler = no liege = { character = ROOT } }
+			}
+		}
+	}
+	option = { # Propose a matrilineal marriage
+		name = EVTOPTDelfwed2
+		trigger = { is_married = no FROM = { is_married = no } }
+		set_character_flag = asking_for_matrilineal
+		elfwed_clear_gift_effect = yes
+		elfwed_propose_effect = yes
+		ai_chance = {
+			factor = 7
+			modifier = {
+				factor = 0.1
+				NOT = { check_variable = { which = "courting_score" value = 4 } }
+			}
+			modifier = { factor = 4 check_variable = { which = "courting_score" value = 10 } }
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 2 is_lover = FROM }
+			modifier = { factor = 5 is_lover = FROM FROM = { is_ruler = yes } }
+			modifier = { factor = 1.5 is_friend = FROM }
+			modifier = { factor = 3 higher_tier_than = FROM is_female = yes }
+			modifier = { factor = 0.5 higher_tier_than = FROM is_female = no }
+			modifier = { factor = 0.5 trait = ambitious is_female = no }
+			modifier = {
+				factor = 0
+				is_female = no
+				FROM = { is_ruler = no liege = { character = ROOT } }
+			}
+		}
+	}
+	option = { # A show of wealth
+		name = EVTOPTEelfwed2
+		trigger = {
+			is_married = no
+			FROM = { is_married = no }
+			elfwed_can_afford_gold_trigger = yes
+		}
+		elfwed_gold_gift_effect = yes
+		set_character_flag = elfwed_gift_gold
+		hidden_effect = { FROM = { character_event = { id = elfwed.3 days = 50 random = 200 } } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = charitable }
+			modifier = { factor = 0.5 trait = greedy }
+			modifier = { factor = 0 check_variable = { which = "courting_score" value = 10 } }
+		}
+	}
+	option = { # A show of power
+		name = EVTOPTFelfwed2
+		trigger = { is_married = no FROM = { is_married = no } }
+		elfwed_prestige_gift_effect = yes
+		set_character_flag = elfwed_gift_prestige
+		hidden_effect = { FROM = { character_event = { id = elfwed.3 days = 50 random = 200 } } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 0.75 trait = humble }
+			modifier = { factor = 0.75 trait = shy }
+			modifier = { factor = 0 NOT = { prestige = 100 } }
+			modifier = { factor = 0 check_variable = { which = "courting_score" value = 10 } }
+		}
+	}
+	option = { # Poetry
+		name = EVTOPTGelfwed2
+		trigger = { is_married = no FROM = { is_married = no } trait = poet }
+		tooltip_info = poet
+		set_character_flag = elfwed_gift_poetry
+		hidden_effect = { FROM = { character_event = { id = elfwed.3 days = 50 random = 200 } } }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 0 check_variable = { which = "courting_score" value = 10 } }
+		}
+	}
+	option = { # Magic
+		name = EVTOPTHelfwed2
+		trigger = { is_married = no FROM = { is_married = no } trait = asur_mage }
+		tooltip_info = asur_mage
+		set_character_flag = elfwed_gift_magic
+		hidden_effect = { FROM = { character_event = { id = elfwed.3 days = 50 random = 200 } } }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 0 check_variable = { which = "courting_score" value = 10 } }
+		}
+	}
+	option = { # Seduction
+		name = EVTOPTIelfwed2
+		trigger = {
+			is_married = no
+			FROM = { is_married = no }
+			OR = { trait = seducer trait = seductress }
+		}
+		tooltip_info = seducer
+		set_character_flag = elfwed_gift_seduction
+		hidden_effect = { FROM = { character_event = { id = elfwed.3 days = 50 random = 200 } } }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 1.75 trait = lustful }
+			modifier = { factor = 1.75 religion = cult_of_pleasure }
+			modifier = { factor = 1.75 society_member_of = cult_of_pleasure }
+			modifier = { factor = 0 check_variable = { which = "courting_score" value = 10 } }
+		}
+	}
+	option = { # Trophies of the hunt
+		name = EVTOPTJelfwed2
+		trigger = {
+			is_married = no
+			FROM = { is_married = no }
+			OR = { trait = hunter trait = falconer }
+		}
+		tooltip_info = hunter
+		set_character_flag = elfwed_gift_hunt
+		hidden_effect = { FROM = { character_event = { id = elfwed.3 days = 50 random = 200 } } }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 0 check_variable = { which = "courting_score" value = 10 } }
+		}
+	}
+	option = { # Flowers from the garden
+		name = EVTOPTKelfwed2
+		trigger = { is_married = no FROM = { is_married = no } trait = gardener }
+		tooltip_info = gardener
+		set_character_flag = elfwed_gift_garden
+		hidden_effect = { FROM = { character_event = { id = elfwed.3 days = 50 random = 200 } } }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 0 check_variable = { which = "courting_score" value = 10 } }
+		}
+	}
+	option = { # Revels
+		name = EVTOPTLelfwed2
+		trigger = {
+			is_married = no
+			FROM = { is_married = no }
+			OR = { trait = socializer trait = hedonist }
+		}
+		tooltip_info = hedonist
+		set_character_flag = elfwed_gift_revel
+		hidden_effect = { FROM = { character_event = { id = elfwed.3 days = 50 random = 200 } } }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 1.75 trait = gluttonous }
+			modifier = { factor = 1.75 religion = cult_of_pleasure }
+			modifier = { factor = 1.75 society_member_of = cult_of_pleasure }
+			modifier = { factor = 0 check_variable = { which = "courting_score" value = 10 } }
+		}
+	}
+	option = { # Old books and lore
+		name = EVTOPTMelfwed2
+		trigger = {
+			is_married = no
+			FROM = { is_married = no }
+			OR = { trait = scholar trait = erudite trait = theologian }
+		}
+		tooltip_info = scholar
+		set_character_flag = elfwed_gift_scholar
+		hidden_effect = { FROM = { character_event = { id = elfwed.3 days = 50 random = 200 } } }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 1.5 trait = erudite }
+			modifier = { factor = 1.75 trait = shy }
+			modifier = { factor = 1.75 trait = chaste }
+			modifier = { factor = 1.75 trait = celibate }
+			modifier = { factor = 0 check_variable = { which = "courting_score" value = 10 } }
+		}
+	}
+	option = { # Give up
+		name = EVTOPTNelfwed2
+		trigger = { is_married = no FROM = { is_married = no } }
+		elfwed_end_courtship_effect = yes
+		FROM = { elfwed_end_courtship_effect = yes }
+		ai_chance = { factor = 1 modifier = { factor = 5 is_rival = FROM } }
+	}
+}
+
+# elfwed.3 The beloved judges the gift
+# Scope: ROOT is the beloved, FROM the suitor (elfwed.2).
+character_event = {
+	id = elfwed.3
+	desc = { text = EVTDESCelfwed3 trigger = { FROM = { has_character_flag = elfwed_gift_gold } } }
+	desc = {
+		text = EVTDESCelfwed3b
+		trigger = { FROM = { has_character_flag = elfwed_gift_prestige } }
+	}
+	desc = {
+		text = EVTDESCelfwed3c
+		trigger = { FROM = { has_character_flag = elfwed_gift_poetry } }
+	}
+	desc = {
+		text = EVTDESCelfwed3d
+		trigger = { FROM = { has_character_flag = elfwed_gift_magic } }
+	}
+	desc = {
+		text = EVTDESCelfwed3e
+		trigger = { FROM = { has_character_flag = elfwed_gift_seduction } }
+	}
+	desc = { text = EVTDESCelfwed3f trigger = { FROM = { has_character_flag = elfwed_gift_hunt } } }
+	desc = {
+		text = EVTDESCelfwed3g
+		trigger = { FROM = { has_character_flag = elfwed_gift_garden } }
+	}
+	desc = {
+		text = EVTDESCelfwed3h
+		trigger = { FROM = { has_character_flag = elfwed_gift_revel } }
+	}
+	desc = {
+		text = EVTDESCelfwed3i
+		trigger = { FROM = { has_character_flag = elfwed_gift_scholar } }
+	}
+	picture = GFX_evt_elf_love
+
+	is_triggered_only = yes # elfwed.2
+
+	trigger = {
+		is_married = no
+		FROM = { is_alive = yes is_married = no }
+	}
+
+	option = { # Gold: I do like presents
+		name = EVTOPTAelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_gold } }
+		add_trait = courting
+		hidden_effect = { FROM = { character_event = { id = elfwed.4 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = trusting }
+			modifier = { factor = 2 is_lover = FROM }
+			modifier = { factor = 1.75 is_friend = FROM }
+			modifier = { factor = 0.35 is_rival = FROM }
+			modifier = { factor = 1.75 trait = greedy }
+			modifier = { factor = 1.25 trait = proud }
+			modifier = { factor = 1.25 trait = ambitious }
+			modifier = { factor = 0.85 trait = envious }
+			modifier = { factor = 1.5 NOT = { wealth = 0 } }
+			modifier = { factor = 1.25 NOT = { wealth = 100 } }
+			modifier = { factor = 0.75 culture_group = asrai_group }
+			modifier = { factor = 0.75 culture = nagarythi }
+			modifier = { factor = 0.75 culture = chracian }
+		}
+	}
+	option = { # Prestige: that is true
+		name = EVTOPTBelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_prestige } }
+		add_trait = courting
+		hidden_effect = { FROM = { character_event = { id = elfwed.4 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = trusting }
+			modifier = { factor = 2 is_lover = FROM }
+			modifier = { factor = 1.75 is_friend = FROM }
+			modifier = { factor = 0.35 is_rival = FROM }
+			modifier = { factor = 1.75 trait = proud }
+			modifier = { factor = 1.5 trait = ambitious }
+			modifier = { factor = 1.5 trait = gregarious }
+			modifier = { factor = 1.75 trait = socializer }
+			modifier = { factor = 0.75 trait = paranoid }
+			modifier = { factor = 0.85 trait = humble }
+			modifier = {
+				factor = 1.25
+				OR = { trait = dim trait = dumb trait = slow trait = idiot trait = imbecile }
+			}
+			modifier = { factor = 0.75 culture_group = asrai_group }
+			modifier = { factor = 1.25 culture_group = asur_group }
+		}
+	}
+	option = { # Poetry: that is sweet
+		name = EVTOPTCelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_poetry } }
+		add_trait = courting
+		if = { limit = { NOT = { is_lover = FROM } } random = { chance = 15 add_lover = FROM } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.4 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = trusting }
+			modifier = { factor = 2 is_lover = FROM }
+			modifier = { factor = 1.75 is_friend = FROM }
+			modifier = { factor = 0.35 is_rival = FROM }
+			modifier = { factor = 1.75 trait = poet }
+			modifier = { factor = 1.5 trait = shy }
+			modifier = { factor = 0.75 FROM = { trait = lisp } }
+			modifier = { factor = 0.5 FROM = { trait = stutter } }
+			modifier = { factor = 0.5 is_ruler = yes }
+			modifier = { factor = 0.5 culture_group = druchii_group }
+		}
+	}
+	option = { # Magic: I'm impressed
+		name = EVTOPTDelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_magic } }
+		add_trait = courting
+		if = { limit = { NOT = { is_lover = FROM } } random = { chance = 25 add_lover = FROM } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.4 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = trusting }
+			modifier = { factor = 2 is_lover = FROM }
+			modifier = { factor = 1.75 is_friend = FROM }
+			modifier = { factor = 0.35 is_rival = FROM }
+			modifier = { factor = 1.75 NOT = { trait = asur_mage } }
+			modifier = { factor = 0.85 trait = cynical }
+			modifier = { factor = 0.85 is_ruler = yes }
+			modifier = { factor = 1.25 OR = { trait = bright trait = smart } }
+			modifier = { factor = 1.5 OR = { trait = quick trait = brilliant trait = genius } }
+		}
+	}
+	option = { # Seduction: let's do this
+		name = EVTOPTEelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_seduction } }
+		add_trait = courting
+		if = { limit = { NOT = { is_lover = FROM } } random = { chance = 30 add_lover = FROM } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.4 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = trusting }
+			modifier = { factor = 2 is_lover = FROM }
+			modifier = { factor = 1.75 is_friend = FROM }
+			modifier = { factor = 0.35 is_rival = FROM }
+			modifier = { factor = 1.75 trait = lustful }
+			modifier = { factor = 1.5 trait = gregarious }
+			modifier = { factor = 1.75 FROM = { trait = beautiful } }
+			modifier = { factor = 1.5 FROM = { trait = pretty } }
+			modifier = { factor = 1.25 FROM = { trait = fair } }
+			modifier = { factor = 0.75 FROM = { OR = { trait = plain trait = ugly } } }
+			modifier = { factor = 0.5 FROM = { trait = unsightly } }
+			modifier = { factor = 0.35 FROM = { trait = monstrous } }
+			modifier = { factor = 0.25 FROM = { trait = burnt_by_asuryan } }
+			modifier = {
+				factor = 1.75
+				OR = {
+					religion = cult_of_pleasure
+					religion = atharti
+					society_member_of = cult_of_pleasure
+				}
+			}
+			modifier = { factor = 0.5 trait = chaste }
+			modifier = { factor = 0.5 is_ruler = yes }
+		}
+	}
+	option = { # Hunt: it's beautiful
+		name = EVTOPTFelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_hunt } }
+		add_trait = courting
+		if = { limit = { NOT = { is_lover = FROM } } random = { chance = 30 add_lover = FROM } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.4 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = trusting }
+			modifier = { factor = 2 is_lover = FROM }
+			modifier = { factor = 1.75 is_friend = FROM }
+			modifier = { factor = 0.35 is_rival = FROM }
+			modifier = { factor = 1.5 trait = cruel }
+			modifier = { factor = 1.75 OR = { trait = hunter trait = falconer trait = impaler } }
+			modifier = { factor = 0.75 trait = kind }
+			modifier = { factor = 1.25 trait = brave }
+			modifier = { factor = 1.5 trait = craven } # A protector who brings home monsters
+			modifier = {
+				factor = 1.25
+				OR = {
+					trait = misguided_warrior
+					trait = tough_soldier
+					trait = skilled_tactician
+					trait = brilliant_strategist
+				}
+			}
+			modifier = { factor = 0.5 is_ruler = yes }
+			modifier = { factor = 1.5 culture_group = asrai_group }
+		}
+	}
+	option = { # Garden: it does look enchanted
+		name = EVTOPTGelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_garden } }
+		add_trait = courting
+		if = { limit = { NOT = { is_lover = FROM } } random = { chance = 15 add_lover = FROM } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.4 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = trusting }
+			modifier = { factor = 2 is_lover = FROM }
+			modifier = { factor = 1.75 is_friend = FROM }
+			modifier = { factor = 0.35 is_rival = FROM }
+			modifier = { factor = 1.5 trait = kind }
+			modifier = { factor = 1.5 trait = humble }
+			modifier = { factor = 1.5 trait = shy }
+			modifier = { factor = 0.75 trait = greedy }
+			modifier = {
+				factor = 0.75
+				OR = { trait = socializer trait = gregarious trait = hedonist }
+			}
+			modifier = { factor = 0.5 is_ruler = yes }
+			modifier = { factor = 1.5 culture_group = asrai_group }
+			modifier = { factor = 0.5 culture_group = druchii_group }
+		}
+	}
+	option = { # Revels: see you again tonight
+		name = EVTOPTHelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_revel } }
+		add_trait = courting
+		if = { limit = { NOT = { is_lover = FROM } } random = { chance = 20 add_lover = FROM } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.4 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = trusting }
+			modifier = { factor = 2 is_lover = FROM }
+			modifier = { factor = 1.75 is_friend = FROM }
+			modifier = { factor = 0.35 is_rival = FROM }
+			modifier = {
+				factor = 1.5
+				OR = { trait = lustful trait = socializer trait = gregarious }
+			}
+			modifier = { factor = 1.5 OR = { trait = drunkard trait = addict } }
+			modifier = { factor = 1.75 trait = hedonist }
+			modifier = {
+				factor = 1.75
+				OR = {
+					religion = cult_of_pleasure
+					religion = atharti
+					society_member_of = cult_of_pleasure
+				}
+			}
+			modifier = { factor = 0.5 OR = { trait = celibate trait = temperate } }
+			modifier = { factor = 0.75 OR = { trait = shy trait = paranoid } }
+			modifier = { factor = 0.5 is_ruler = yes }
+		}
+	}
+	option = { # Books: it is all so interesting
+		name = EVTOPTIelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_scholar } }
+		add_trait = courting
+		if = { limit = { NOT = { is_friend = FROM } } random = { chance = 25 add_friend = FROM } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.4 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = trusting }
+			modifier = { factor = 2 is_lover = FROM }
+			modifier = { factor = 1.75 is_friend = FROM }
+			modifier = { factor = 0.35 is_rival = FROM }
+			modifier = { factor = 1.75 OR = { trait = celibate trait = erudite } }
+			modifier = { factor = 1.5 OR = { trait = poet trait = theologian trait = scholar } }
+			modifier = { factor = 0.75 OR = { trait = lustful trait = slothful } }
+			modifier = { factor = 0.5 trait = hedonist }
+			modifier = { factor = 0.75 OR = { trait = dim trait = dumb trait = slow } }
+			modifier = { factor = 0.35 OR = { trait = idiot trait = imbecile } }
+			modifier = {
+				factor = 1.4
+				OR = { trait = smart trait = quick trait = brilliant trait = genius }
+			}
+			modifier = { factor = 0.5 is_ruler = yes }
+			modifier = { factor = 0.75 culture_group = asrai_group }
+		}
+	}
+	option = { # Gold: what a waste of money
+		name = EVTOPTJelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_gold } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.5 } } }
+		ai_chance = { factor = 50 }
+	}
+	option = { # Prestige: not interested
+		name = EVTOPTKelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_prestige } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.5 } } }
+		ai_chance = { factor = 50 }
+	}
+	option = { # Poetry: how tedious
+		name = EVTOPTLelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_poetry } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.5 } } }
+		ai_chance = { factor = 50 }
+	}
+	option = { # Magic: irresponsible
+		name = EVTOPTMelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_magic } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.5 } } }
+		ai_chance = { factor = 50 }
+	}
+	option = { # Seduction: maybe later
+		name = EVTOPTNelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_seduction } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.5 } } }
+		ai_chance = { factor = 50 }
+	}
+	option = { # Hunt: so many wasted lives
+		name = EVTOPTOelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_hunt } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.5 } } }
+		ai_chance = { factor = 50 }
+	}
+	option = { # Garden: no time for this
+		name = EVTOPTPelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_garden } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.5 } } }
+		ai_chance = { factor = 50 }
+	}
+	option = { # Revels: enough of this
+		name = EVTOPTQelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_revel } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.5 } } }
+		ai_chance = { factor = 50 }
+	}
+	option = { # Books: what a bore
+		name = EVTOPTRelfwed3
+		trigger = { FROM = { has_character_flag = elfwed_gift_scholar } }
+		hidden_effect = { FROM = { character_event = { id = elfwed.5 } } }
+		ai_chance = { factor = 50 }
+	}
+}
+
+# elfwed.4 The gift pleased
+# The courtship score rises by what the gift was worth: magic 5, gold and
+# seduction 4, poetry 3, power, hunting, revels and books 2, flowers 1.
+# Scope: ROOT is the suitor, FROM the beloved (elfwed.3).
+character_event = {
+	id = elfwed.4
+	desc = { text = EVTDESCelfwed4 trigger = { has_character_flag = elfwed_gift_gold } }
+	desc = { text = EVTDESCelfwed4b trigger = { has_character_flag = elfwed_gift_prestige } }
+	desc = { text = EVTDESCelfwed4c trigger = { has_character_flag = elfwed_gift_poetry } }
+	desc = { text = EVTDESCelfwed4d trigger = { has_character_flag = elfwed_gift_magic } }
+	desc = { text = EVTDESCelfwed4e trigger = { has_character_flag = elfwed_gift_seduction } }
+	desc = { text = EVTDESCelfwed4f trigger = { has_character_flag = elfwed_gift_hunt } }
+	desc = { text = EVTDESCelfwed4g trigger = { has_character_flag = elfwed_gift_garden } }
+	desc = { text = EVTDESCelfwed4h trigger = { has_character_flag = elfwed_gift_revel } }
+	desc = { text = EVTDESCelfwed4i trigger = { has_character_flag = elfwed_gift_scholar } }
+	picture = GFX_evt_elf_love
+
+	is_triggered_only = yes # elfwed.3
+
+	option = {
+		name = EVTOPTAelfwed4
+		hidden_effect = {
+			if = {
+				limit = { has_character_flag = elfwed_gift_magic }
+				change_variable = { which = "courting_score" value = 5 }
+			}
+			else_if = {
+				limit = {
+					OR = {
+						has_character_flag = elfwed_gift_gold
+						has_character_flag = elfwed_gift_seduction
+					}
+				}
+				change_variable = { which = "courting_score" value = 4 }
+			}
+			else_if = {
+				limit = { has_character_flag = elfwed_gift_poetry }
+				change_variable = { which = "courting_score" value = 3 }
+			}
+			else_if = {
+				limit = { has_character_flag = elfwed_gift_garden }
+				change_variable = { which = "courting_score" value = 1 }
+			}
+			else = { change_variable = { which = "courting_score" value = 2 } }
+			elfwed_clear_gift_effect = yes
+			FROM = { character_event = { id = elfwed.6 } }
+		}
+	}
+}
+
+# elfwed.5 The gift fell flat
+# The courtship may cool. How likely, and by how much, depends on the gift:
+# a failed show of power or seduction costs the most. At nothing the
+# beloved is free to marry another.
+# Scope: ROOT is the suitor, FROM the beloved (elfwed.3).
+character_event = {
+	id = elfwed.5
+	desc = { text = EVTDESCelfwed5 trigger = { has_character_flag = elfwed_gift_gold } }
+	desc = { text = EVTDESCelfwed5b trigger = { has_character_flag = elfwed_gift_prestige } }
+	desc = { text = EVTDESCelfwed5c trigger = { has_character_flag = elfwed_gift_poetry } }
+	desc = { text = EVTDESCelfwed5d trigger = { has_character_flag = elfwed_gift_magic } }
+	desc = { text = EVTDESCelfwed5e trigger = { has_character_flag = elfwed_gift_seduction } }
+	desc = { text = EVTDESCelfwed5f trigger = { has_character_flag = elfwed_gift_hunt } }
+	desc = { text = EVTDESCelfwed5g trigger = { has_character_flag = elfwed_gift_garden } }
+	desc = { text = EVTDESCelfwed5h trigger = { has_character_flag = elfwed_gift_revel } }
+	desc = { text = EVTDESCelfwed5i trigger = { has_character_flag = elfwed_gift_scholar } }
+	picture = GFX_evt_elf_love
+
+	is_triggered_only = yes # elfwed.3
+
+	option = {
+		name = EVTOPTAelfwed5
+		hidden_effect = {
+			if = {
+				limit = { has_character_flag = elfwed_gift_gold }
+				random = { chance = 50 change_variable = { which = "courting_score" value = -2 } }
+			}
+			else_if = {
+				limit = { has_character_flag = elfwed_gift_prestige }
+				random = { chance = 30 change_variable = { which = "courting_score" value = -4 } }
+			}
+			else_if = {
+				limit = { has_character_flag = elfwed_gift_magic }
+				random = { chance = 10 change_variable = { which = "courting_score" value = -2 } }
+			}
+			else_if = {
+				limit = { has_character_flag = elfwed_gift_seduction }
+				random = { chance = 25 change_variable = { which = "courting_score" value = -3 } }
+			}
+			else_if = {
+				limit = { has_character_flag = elfwed_gift_hunt }
+				random = { chance = 80 change_variable = { which = "courting_score" value = -1 } }
+			}
+			else_if = {
+				limit = { has_character_flag = elfwed_gift_revel }
+				random = { chance = 50 change_variable = { which = "courting_score" value = -2 } }
+			}
+			else_if = {
+				limit = { has_character_flag = elfwed_gift_scholar }
+				random = { chance = 40 change_variable = { which = "courting_score" value = -1 } }
+			}
+			else = { # Poetry, flowers
+				random = { chance = 30 change_variable = { which = "courting_score" value = -1 } }
+			}
+			if = {
+				limit = { NOT = { check_variable = { which = "courting_score" value = 1 } } }
+				set_variable = { which = "courting_score" value = 0 }
+				FROM = { remove_trait = courting }
+			}
+			elfwed_clear_gift_effect = yes
+			FROM = { character_event = { id = elfwed.6 } }
+		}
+	}
+}
+
+# elfwed.6 Back to the suitor (hidden)
+# Scope: ROOT is the beloved, FROM the suitor (elfwed.4, elfwed.5).
+character_event = {
+	id = elfwed.6
+	hide_window = yes
+
+	is_triggered_only = yes # elfwed.4, elfwed.5
+
+	immediate = {
+		FROM = { character_event = { id = elfwed.2 } }
+	}
+}
+
+###############################################################################
+# The proposal and the wedding
+# A ruler answers for themself; a courtier first hears the suitor out
+# (elfwed.7) and then their liege decides (elfwed.9). A suitor who is the
+# beloved's own liege needs nobody's leave.
+###############################################################################
+
+# elfwed.7 A proposal to a courtier
+# Scope: ROOT is the beloved, FROM the suitor (elfwed_propose_effect).
+character_event = {
+	id = elfwed.7
+	desc = {
+		text = EVTDESCelfwed7
+		trigger = {
+			FROM = {
+				has_character_flag = asking_for_matrilineal
+				NOR = { check_variable = { which = "courting_score" value = 1 } is_lover = ROOT }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCelfwed7b
+		trigger = {
+			FROM = {
+				has_character_flag = asking_for_matrilineal
+				OR = { check_variable = { which = "courting_score" value = 1 } is_lover = ROOT }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCelfwed7c
+		trigger = {
+			FROM = {
+				NOT = { has_character_flag = asking_for_matrilineal }
+				NOR = { check_variable = { which = "courting_score" value = 1 } is_lover = ROOT }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCelfwed7d
+		trigger = {
+			FROM = {
+				NOT = { has_character_flag = asking_for_matrilineal }
+				OR = { check_variable = { which = "courting_score" value = 1 } is_lover = ROOT }
+			}
+		}
+	}
+	picture = GFX_evt_elf_love
+
+	is_triggered_only = yes # elfwed_propose_effect
+
+	option = { # Take it to the liege
+		name = EVTOPTAelfwed7
+		set_character_flag = landless_fiancee_flag
+		hidden_effect = { FROM = { character_event = { id = elfwed.8 } } }
+		ai_chance = {
+			factor = 80
+			modifier = {
+				factor = 0.25
+				FROM = {
+					NOR = {
+						check_variable = { which = "courting_score" value = 1 }
+						is_lover = ROOT
+					}
+				}
+			}
+			modifier = { factor = 2 is_lover = FROM }
+			modifier = { factor = 0.2 is_rival = FROM }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBelfwed7
+		hidden_effect = { FROM = { character_event = { id = elfwed.11 } } }
+		elfwed_end_courtship_effect = yes
+		FROM = { elfwed_end_courtship_effect = yes }
+		ai_chance = { factor = 20 }
+	}
+}
+
+# elfwed.8 The proposal goes to the liege (hidden)
+# Scope: ROOT is the suitor, FROM the beloved (elfwed.7).
+character_event = {
+	id = elfwed.8
+	hide_window = yes
+
+	is_triggered_only = yes # elfwed.7
+
+	immediate = {
+		FROM = { liege = { character_event = { id = elfwed.9 } } }
+	}
+}
+
+# elfwed.9 The final word
+# A ruler decides on their own proposal; a courtier's liege decides for them.
+# Scope: ROOT is the one who decides, FROM the suitor, FROMFROM the beloved
+# (elfwed_propose_effect, elfwed.8).
+character_event = {
+	id = elfwed.9
+	desc = {
+		text = EVTDESCelfwed9
+		trigger = {
+			FROMFROM = { has_character_flag = landless_fiancee_flag }
+			FROM = { has_character_flag = asking_for_matrilineal }
+		}
+	}
+	desc = {
+		text = EVTDESCelfwed9b
+		trigger = {
+			FROMFROM = { NOT = { has_character_flag = landless_fiancee_flag } }
+			FROM = { has_character_flag = asking_for_matrilineal }
+		}
+	}
+	desc = {
+		text = EVTDESCelfwed9c
+		trigger = {
+			FROMFROM = { has_character_flag = landless_fiancee_flag }
+			FROM = { NOT = { has_character_flag = asking_for_matrilineal } }
+		}
+	}
+	desc = {
+		text = EVTDESCelfwed9d
+		trigger = {
+			FROMFROM = { NOT = { has_character_flag = landless_fiancee_flag } }
+			FROM = { NOT = { has_character_flag = asking_for_matrilineal } }
+		}
+	}
+	picture = GFX_evt_elf_love
+
+	is_triggered_only = yes # elfwed_propose_effect, elfwed.8
+
+	trigger = {
+		FROM = { is_alive = yes is_married = no }
+		FROMFROM = { is_alive = yes is_married = no }
+	}
+
+	option = { # Accept
+		name = EVTOPTAelfwed9
+		FROMFROM = { show_portrait = yes }
+		elfwed_wed_effect = yes
+		hidden_effect = { FROM = { character_event = { id = elfwed.10 } } }
+		ai_chance = {
+			factor = 50
+			# The suitor's courtship
+			modifier = {
+				factor = 1.3
+				FROMFROM = { character = ROOT }
+				FROM = { check_variable = { which = "courting_score" value = 2 } }
+			}
+			modifier = {
+				factor = 1.3
+				FROMFROM = { character = ROOT }
+				FROM = { check_variable = { which = "courting_score" value = 4 } }
+			}
+			modifier = {
+				factor = 1.3
+				FROMFROM = { character = ROOT }
+				FROM = { check_variable = { which = "courting_score" value = 6 } }
+			}
+			modifier = {
+				factor = 1.3
+				FROMFROM = { character = ROOT }
+				FROM = { check_variable = { which = "courting_score" value = 8 } }
+			}
+			modifier = {
+				factor = 1.3
+				FROMFROM = { character = ROOT }
+				FROM = { check_variable = { which = "courting_score" value = 10 } }
+			}
+			modifier = {
+				factor = 1.15
+				NOT = { FROMFROM = { character = ROOT } }
+				FROM = { check_variable = { which = "courting_score" value = 4 } }
+			}
+			modifier = {
+				factor = 1.15
+				NOT = { FROMFROM = { character = ROOT } }
+				FROM = { check_variable = { which = "courting_score" value = 8 } }
+			}
+			# Faith and blood
+			modifier = { factor = 0.5 FROM = { NOT = { religion = ROOT } } }
+			modifier = {
+				factor = 0
+				FROM = { NOT = { religion = ROOT } }
+				FROMFROM = { trait = malekith }
+			}
+			modifier = {
+				factor = 0
+				FROM = { OR = { father = { character = ROOT } mother = { character = ROOT } } }
+			}
+			modifier = { factor = 0.65 is_close_relative = FROM }
+			modifier = { factor = 0.85 NOT = { culture = FROM } }
+			modifier = { # The heir's line goes to another house
+				factor = 0.65
+				FROM = { has_character_flag = asking_for_matrilineal }
+				FROMFROM = { is_female = no is_close_relative = ROOT }
+			}
+			modifier = { # A royal line courted by a lesser house
+				factor = 0.35
+				FROMFROM = { elfwed_house_royal_trigger = yes }
+				FROM = { elfwed_house_royal_trigger = no }
+			}
+			modifier = { # A provincial courting into Ulthuan
+				factor = 0.75
+				FROM = { NOT = { capital_scope = { empire = { title = e_ulthuan } } } }
+				capital_scope = { empire = { title = e_ulthuan } }
+			}
+			# The suitor's standing
+			modifier = { factor = 0.65 FROM = { NOT = { prestige = 0 } } }
+			modifier = { factor = 1.25 FROM = { prestige = 300 } }
+			modifier = { factor = 1.25 FROM = { prestige = 700 } }
+			modifier = { factor = 0.75 FROM = { NOT = { wealth = 0 } } }
+			modifier = { factor = 1.15 FROM = { wealth = 250 } }
+			modifier = { factor = 1.5 FROM = { is_ruler = yes } }
+			modifier = { factor = 0.5 FROM = { trait = infertile } }
+			modifier = { factor = 0.75 FROM = { num_of_children = 2 } }
+			modifier = {
+				factor = 0.75
+				FROM = { OR = { trait = lunatic_2 trait = lunatic_3 trait = possessed } }
+			}
+			modifier = { factor = 0.8 FROM = { is_ill = yes } }
+			# The heart
+			modifier = { factor = 4 FROMFROM = { character = ROOT } is_lover = FROM }
+			modifier = { factor = 0.25 NOT = { FROMFROM = { character = ROOT } } is_lover = FROM }
+			modifier = { factor = 2.5 is_friend = FROM }
+			modifier = { factor = 0.25 is_rival = FROM }
+			modifier = {
+				factor = 1.5
+				FROMFROM = { character = ROOT }
+				elfwed_shared_interest_trigger = yes
+			}
+			modifier = { factor = 1.25 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 1.25 opinion = { who = FROM value = 50 } }
+			modifier = { factor = 0.5 NOT = { opinion = { who = FROM value = 0 } } }
+			modifier = { factor = 0.2 NOT = { opinion = { who = FROM value = -50 } } }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBelfwed9
+		hidden_effect = { FROM = { character_event = { id = elfwed.11 } } }
+		FROM = { elfwed_end_courtship_effect = yes }
+		FROMFROM = { elfwed_end_courtship_effect = yes }
+		ai_chance = { factor = 50 }
+	}
+}
+
+# elfwed.10 The answer is yes
+# The suitor gains prestige by the rank of the house married into.
+# Scope: ROOT is the suitor (elfwed.9, elfwed_propose_effect).
+character_event = {
+	id = elfwed.10
+	desc = EVTDESCelfwed10
+	picture = GFX_evt_elf_marriage
+
+	is_triggered_only = yes # elfwed.9, elfwed_propose_effect
+
+	option = {
+		name = EVTOPTAelfwed10
+		if = {
+			limit = { event_target:elfwed_beloved = { elfwed_house_emperor_trigger = yes } }
+			prestige = 400
+		}
+		else_if = {
+			limit = { event_target:elfwed_beloved = { elfwed_house_king_trigger = yes } }
+			prestige = 300
+		}
+		else_if = {
+			limit = { event_target:elfwed_beloved = { elfwed_house_duke_trigger = yes } }
+			prestige = 200
+		}
+		else_if = {
+			limit = { event_target:elfwed_beloved = { elfwed_house_count_trigger = yes } }
+			prestige = 100
+		}
+		else_if = {
+			limit = { event_target:elfwed_beloved = { elfwed_house_baron_trigger = yes } }
+			prestige = 50
+		}
+		else = { prestige = 25 }
+	}
+}
+
+# elfwed.11 The answer is no
+# Scope: ROOT is the suitor, FROM the one who refused (elfwed.7, elfwed.9).
+character_event = {
+	id = elfwed.11
+	desc = EVTDESCelfwed11
+	picture = GFX_evt_elf_love
+
+	is_triggered_only = yes # elfwed.7, elfwed.9
+
+	option = {
+		name = EVTOPTAelfwed11
+		elfwed_end_courtship_effect = yes
+	}
+}
+
+# elfwed.12 An Asur wedding
+# Scope: a newly wed Asur (elfwed_wedding_rite_effect).
+long_character_event = {
+	id = elfwed.12
+	desc = EVTDESCelfwed12
+	picture = GFX_evt_elf_marriage
+
+	is_triggered_only = yes # elfwed_wedding_rite_effect
+
+	option = {
+		name = EVTOPTAelfwed12
+	}
+}
+
+# elfwed.13 A Druchii wedding
+# Scope: a newly wed Druchii (elfwed_wedding_rite_effect).
+long_character_event = {
+	id = elfwed.13
+	desc = EVTDESCelfwed13
+	picture = GFX_evt_druchii_marriage
+
+	is_triggered_only = yes # elfwed_wedding_rite_effect
+
+	option = {
+		name = EVTOPTAelfwed13
+	}
+}
+
+# elfwed.14 An Asrai wedding
+# Scope: a newly wed Asrai (elfwed_wedding_rite_effect).
+long_character_event = {
+	id = elfwed.14
+	desc = EVTDESCelfwed14
+	picture = GFX_evt_asrai_marriage
+
+	is_triggered_only = yes # elfwed_wedding_rite_effect
+
+	option = {
+		name = EVTOPTAelfwed14
+	}
+}
+
+# elfwed.15 The courtship lapses (hidden)
+# Each round of the courtship renews elfwed_courtship_alive. Once five years pass
+# without one, the courting trait (which forbids marriage) is taken away.
+# Scope: the suitor or the beloved (elfwed.1, elfwed.51, itself).
+character_event = {
+	id = elfwed.15
+	hide_window = yes
+
+	is_triggered_only = yes # elfwed.1, elfwed.51, elfwed.15
+
+	trigger = {
+		OR = { trait = courting has_character_modifier = elfwed_courtship_alive }
+	}
+
+	immediate = {
+		if = {
+			limit = { has_character_modifier = elfwed_courtship_alive }
+			character_event = { id = elfwed.15 days = 365 }
+		}
+		else = { elfwed_end_courtship_effect = yes }
+	}
+}
+
+###############################################################################
+# AI courtships
+# An unwed elf courtier or baron sets out to court an elf of the other sex
+# and the same faith in a realm within reach.
+###############################################################################
+
+# elfwed.50 An AI elf goes courting (hidden)
+# Scope: an unmarried AI elf, courtier or baron (bi-yearly).
+character_event = {
+	id = elfwed.50
+	hide_window = yes
+
+	is_triggered_only = yes # on_bi_yearly_pulse
+	ai = yes
+	capable_only = yes
+
+	trigger = {
+		trait = creature_elf
+		OR = { religion_group = cadai_group religion_group = cytharai_group }
+		is_married = no
+		is_betrothed = no
+		age = 25
+		is_incapacitated_trigger = no
+		holy_order = no
+		mercenary = no
+		cannot_marry_trigger = no
+		NOT = { has_character_modifier = courting_timer }
+		OR = { is_landed = no tier = BARON }
+	}
+
+	immediate = {
+		random_playable_ruler = {
+			limit = { trait = creature_elf religion_group = ROOT is_within_diplo_range = ROOT }
+			random_realm_character = {
+				limit = {
+					trait = creature_elf
+					religion_group = ROOT
+					is_married = no
+					is_betrothed = no
+					age = 25
+					is_incapacitated_trigger = no
+					holy_order = no
+					mercenary = no
+					cannot_marry_trigger = no
+					NOT = { has_character_modifier = courting_timer }
+					NOT = { is_close_relative = ROOT }
+					OR = {
+						AND = { ROOT = { is_female = no } is_female = yes }
+						AND = { ROOT = { is_female = yes } is_female = no }
+					}
+				}
+				save_event_target_as = elfwed_beloved
+			}
+		}
+		if = {
+			limit = { event_target:elfwed_beloved = { always = yes } }
+			save_event_target_as = elfwed_suitor
+			set_variable = { which = "courting_score" value = 0 }
+			clr_character_flag = asking_for_matrilineal
+			clr_character_flag = landless_fiancee_flag
+			add_character_modifier = { name = courting_timer hidden = yes duration = 365 }
+			event_target:elfwed_beloved = {
+				clr_character_flag = asking_for_matrilineal
+				clr_character_flag = landless_fiancee_flag
+				add_character_modifier = { name = courting_timer hidden = yes duration = 365 }
+				character_event = { id = elfwed.51 }
+			}
+		}
+	}
+}
+
+# elfwed.51 Courted by an AI elf (hidden)
+# Scope: ROOT is the beloved, FROM the suitor (elfwed.50).
+character_event = {
+	id = elfwed.51
+	hide_window = yes
+
+	is_triggered_only = yes # elfwed.50
+
+	immediate = {
+		FROM = {
+			add_trait = courting
+			character_event = { id = elfwed.2 }
+			add_character_modifier = { name = elfwed_courtship_alive hidden = yes duration = 1825 }
+			character_event = { id = elfwed.15 days = 1825 }
+		}
+		add_character_modifier = { name = elfwed_courtship_alive hidden = yes duration = 1825 }
+		character_event = { id = elfwed.15 days = 1825 }
+	}
+}
+
+###############################################################################
+# Divorce among the Asur
+# One does not simply divorce an Asur. The spouse who is cast aside may let
+# it go, or demand gold or land; refuse the price and they may contest the
+# divorce, and the two stay married.
+###############################################################################
+
+# elfwed.60 Cast aside
+# Scope: ROOT is the divorced spouse, FROM the one divorcing them (on_divorce).
+character_event = {
+	id = elfwed.60
+	desc = EVTDESCelfwed60
+	picture = GFX_evt_asur_arguing
+
+	is_triggered_only = yes # on_divorce
+
+	trigger = {
+		culture_group = asur_group
+	}
+
+	option = { # Let it go
+		name = EVTOPTAelfwed60
+		elfwed_divorce_sour_effect = yes
+		hidden_effect = { FROM = { character_event = { id = elfwed.61 } } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 1.5 is_lover = FROM }
+			modifier = { factor = 1.75 is_friend = FROM }
+			modifier = { factor = 0.5 is_rival = FROM }
+			modifier = {
+				factor = 0.75
+				OR = { trait = wroth trait = envious trait = cruel trait = proud }
+			}
+			modifier = {
+				factor = 1.5
+				OR = { trait = charitable trait = kind trait = humble trait = shy }
+			}
+			modifier = { factor = 0.5 NOT = { wealth = 100 } }
+			modifier = {
+				factor = 1.5
+				trait = interventionist_elf
+				FROM = { trait = interventionist_elf }
+			}
+			modifier = { factor = 1.5 trait = isolationist_elf FROM = { trait = isolationist_elf } }
+			modifier = { factor = 1.25 opinion = { who = FROM value = 20 } }
+			modifier = { factor = 1.5 opinion = { who = FROM value = 60 } }
+			modifier = { factor = 1.75 opinion = { who = FROM value = 100 } }
+		}
+	}
+	option = { # Demand gold
+		name = EVTOPTBelfwed60
+		elfwed_divorce_sour_effect = yes
+		hidden_effect = { FROM = { character_event = { id = elfwed.62 } } }
+		ai_chance = { factor = 50 modifier = { factor = 1.5 trait = greedy } }
+	}
+	option = { # Demand land
+		name = EVTOPTCelfwed60
+		trigger = { FROM = { is_landed = yes any_demesne_title = { tier = COUNT count = 2 } } }
+		elfwed_divorce_sour_effect = yes
+		hidden_effect = { FROM = { character_event = { id = elfwed.66 } } }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 1.5 trait = ambitious }
+			modifier = { factor = 1.5 FROM = { any_demesne_title = { tier = COUNT count = 4 } } }
+			modifier = { factor = 1.5 FROM = { any_demesne_title = { tier = COUNT count = 6 } } }
+		}
+	}
+}
+
+# elfwed.61 The spouse lets it go
+# Scope: ROOT is the divorcer, FROM the divorced spouse (elfwed.60).
+character_event = {
+	id = elfwed.61
+	desc = EVTDESCelfwed61
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # elfwed.60
+
+	option = {
+		name = EVTOPTAelfwed61
+		elfwed_divorce_settled_effect = yes
+		FROM = { elfwed_divorce_settled_effect = yes }
+	}
+}
+
+# elfwed.62 The price of a divorce
+# The higher the divorcer's rank, the more they pay. Refusing costs prestige
+# by the spouse's rank.
+# Scope: ROOT is the divorcer, FROM the divorced spouse (elfwed.60).
+character_event = {
+	id = elfwed.62
+	desc = EVTDESCelfwed62
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # elfwed.60
+
+	option = { # Pay
+		name = EVTOPTAelfwed62
+		trigger = {
+			OR = {
+				AND = { is_ruler = no wealth = 50 }
+				AND = { tier = BARON wealth = 100 }
+				AND = { tier = COUNT wealth = 250 }
+				AND = { tier = DUKE wealth = 500 }
+				AND = { tier = KING wealth = 750 }
+				AND = { tier = EMPEROR wealth = 1000 }
+			}
+		}
+		if = { limit = { tier = EMPEROR } wealth = -1000 FROM = { wealth = 1000 } }
+		else_if = { limit = { tier = KING } wealth = -750 FROM = { wealth = 750 } }
+		else_if = { limit = { tier = DUKE } wealth = -500 FROM = { wealth = 500 } }
+		else_if = { limit = { tier = COUNT } wealth = -250 FROM = { wealth = 250 } }
+		else_if = { limit = { tier = BARON } wealth = -100 FROM = { wealth = 100 } }
+		else = { wealth = -50 FROM = { wealth = 50 } }
+		elfwed_divorce_settled_effect = yes
+		hidden_effect = { FROM = { character_event = { id = elfwed.63 } } }
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 1.5 is_lover = FROM }
+			modifier = { factor = 1.75 is_friend = FROM }
+			modifier = { factor = 0.5 is_rival = FROM }
+			modifier = {
+				factor = 0.75
+				OR = { trait = wroth trait = envious trait = cruel trait = proud }
+			}
+			modifier = {
+				factor = 1.5
+				OR = { trait = charitable trait = kind trait = humble trait = shy }
+			}
+			modifier = { factor = 0.5 trait = greedy }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBelfwed62
+		if = { limit = { FROM = { tier = EMPEROR } } prestige = -1000 }
+		else_if = { limit = { FROM = { tier = KING } } prestige = -750 }
+		else_if = { limit = { FROM = { tier = DUKE } } prestige = -500 }
+		else_if = { limit = { FROM = { tier = COUNT } } prestige = -250 }
+		else_if = { limit = { FROM = { tier = BARON } } prestige = -100 }
+		else = { prestige = -50 }
+		hidden_effect = { FROM = { character_event = { id = elfwed.64 } } }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 1.5 trait = stubborn }
+			modifier = { factor = 1.5 trait = ambitious }
+		}
+	}
+}
+
+# elfwed.63 The price is paid
+# Scope: ROOT is the divorced spouse, FROM the divorcer (elfwed.62, elfwed.66).
+character_event = {
+	id = elfwed.63
+	desc = EVTDESCelfwed63
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # elfwed.62, elfwed.66
+
+	option = {
+		name = EVTOPTAelfwed63
+		elfwed_divorce_settled_effect = yes
+		FROM = { elfwed_divorce_settled_effect = yes }
+	}
+}
+
+# elfwed.64 The price is refused
+# The spouse may accept it, or contest the divorce and stay married.
+# Scope: ROOT is the divorced spouse, FROM the divorcer (elfwed.62, elfwed.66).
+character_event = {
+	id = elfwed.64
+	desc = EVTDESCelfwed64
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # elfwed.62, elfwed.66
+
+	option = { # Let them go
+		name = EVTOPTAelfwed64
+		elfwed_divorce_settled_effect = yes
+		FROM = { elfwed_divorce_settled_effect = yes }
+		ai_chance = { factor = 50 modifier = { factor = 1.75 is_friend = FROM } }
+	}
+	option = { # Contest the divorce
+		name = EVTOPTBelfwed64
+		trigger = { is_married = no FROM = { is_married = no } }
+		if = { limit = { has_character_flag = had_matriheritage } add_trait = in_matriheritage }
+		if = {
+			limit = { FROM = { has_character_flag = had_matriheritage } }
+			FROM = { add_trait = in_matriheritage }
+		}
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = was_matrimarried_flag
+					FROM = { has_character_flag = was_matrimarried_flag }
+				}
+			}
+			add_spouse_matrilineal = FROM
+		}
+		else = { add_spouse = FROM }
+		clr_character_flag = was_matrimarried_flag
+		clr_character_flag = had_matriheritage
+		hidden_effect = { FROM = { character_event = { id = elfwed.65 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 is_lover = FROM }
+			modifier = { factor = 1.75 is_rival = FROM }
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 1.75 trait = stubborn }
+			modifier = { factor = 1.5 trait = ambitious }
+		}
+	}
+}
+
+# elfwed.65 Still married
+# Scope: ROOT is the divorcer, FROM the spouse who contested (elfwed.64).
+character_event = {
+	id = elfwed.65
+	desc = EVTDESCelfwed65
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # elfwed.64
+
+	option = {
+		name = EVTOPTAelfwed65
+		clr_character_flag = was_matrimarried_flag
+		clr_character_flag = had_matriheritage
+		elfwed_divorce_sour_effect = yes
+	}
+}
+
+# elfwed.66 Land as the price of a divorce
+# The divorcer gives up a county for every two they hold, at most three and
+# never the capital, and a duchy if they hold three or more.
+# Scope: ROOT is the divorcer, FROM the divorced spouse (elfwed.60).
+character_event = {
+	id = elfwed.66
+	desc = EVTDESCelfwed66
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # elfwed.60
+
+	option = { # Give the land
+		name = EVTOPTAelfwed66
+		# Count the holdings before any are given away
+		if = {
+			limit = { any_demesne_title = { tier = COUNT count = 6 } }
+			set_character_flag = elfwed_gives_three
+		}
+		else_if = {
+			limit = { any_demesne_title = { tier = COUNT count = 4 } }
+			set_character_flag = elfwed_gives_two
+		}
+		if = {
+			limit = { any_demesne_title = { tier = DUKE count = 3 } }
+			random_demesne_title = {
+				limit = { tier = DUKE is_primary_holder_title = no location = { is_capital = no } }
+				grant_title = FROM
+			}
+		}
+		random_demesne_title = {
+			limit = { tier = COUNT is_primary_holder_title = no location = { is_capital = no } }
+			grant_title = FROM
+		}
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = elfwed_gives_two
+					has_character_flag = elfwed_gives_three
+				}
+			}
+			random_demesne_title = {
+				limit = { tier = COUNT is_primary_holder_title = no location = { is_capital = no } }
+				grant_title = FROM
+			}
+		}
+		if = {
+			limit = { has_character_flag = elfwed_gives_three }
+			random_demesne_title = {
+				limit = { tier = COUNT is_primary_holder_title = no location = { is_capital = no } }
+				grant_title = FROM
+			}
+		}
+		clr_character_flag = elfwed_gives_two
+		clr_character_flag = elfwed_gives_three
+		elfwed_divorce_settled_effect = yes
+		hidden_effect = { FROM = { character_event = { id = elfwed.63 } } }
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 1.5 is_lover = FROM }
+			modifier = { factor = 1.75 is_friend = FROM }
+			modifier = { factor = 0.5 is_rival = FROM }
+			modifier = {
+				factor = 0.75
+				OR = { trait = wroth trait = envious trait = cruel trait = proud }
+			}
+			modifier = { factor = 1.5 OR = { trait = charitable trait = kind trait = humble } }
+			modifier = { factor = 0.5 trait = ambitious }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBelfwed66
+		if = { limit = { FROM = { tier = EMPEROR } } prestige = -1500 }
+		else_if = { limit = { FROM = { tier = KING } } prestige = -950 }
+		else_if = { limit = { FROM = { tier = DUKE } } prestige = -750 }
+		else_if = { limit = { FROM = { tier = COUNT } } prestige = -500 }
+		else_if = { limit = { FROM = { tier = BARON } } prestige = -250 }
+		else = { prestige = -100 }
+		hidden_effect = { FROM = { character_event = { id = elfwed.64 } } }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 1.5 trait = ambitious }
+		}
+	}
+}
+
+# elfwed.70 Remember a matrilineal marriage (hidden)
+# A divorce ends the marriage, so whether it was matrilineal is kept as a
+# flag in case the divorce is contested (elfwed.64).
+# Scope: a newly wed character (elfwed_wed_effect, events/on_action_events.txt).
+character_event = {
+	id = elfwed.70
+	hide_window = yes
+
+	is_triggered_only = yes # elfwed_wed_effect, on_action_events.txt
+
+	trigger = {
+		is_married_matrilineally = yes
+	}
+
+	immediate = {
+		set_character_flag = was_matrimarried_flag
+	}
+}

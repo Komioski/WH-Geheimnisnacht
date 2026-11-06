@@ -122,7 +122,7 @@ v1.3.7.1:
 - Fixed a province border issue with the mountains of Naggaroth that caused an inexplicable CTD
 - Successfully cleansing Greenskins now ptoperly removes ALL Greenskin modifiers
 - Rot Helm artifact now has a modifier
-- Fixed the bug with children of Zoltán in the chaos wastes not being his
+- Fixed the bug with children of ZoltÃ¡n in the chaos wastes not being his
 - Trevari gfx should no longer crash the game on the ruler designer, this should be the last one
 - Dawi City walls now have a description and localization
 - Repaired a government issue with vampiric and Tilean/Estalians
@@ -192,9 +192,9 @@ v1.3.7.1:
     - Heavy Cavalry receive better support from Pikemen
 - Overhauled the voting weights for patrician succession in defines.lua
   > Original Formula:
-  (campaign fund × 5) + age² + (prestige × 2) + a random factor of 500 points = total respect
+  (campaign fund Ã— 5) + ageÂ² + (prestige Ã— 2) + a random factor of 500 points = total respect
   > New Formula
-  (campaign fund × 2) + (age² × 0.3) + (prestige × 5) + a random factor of 200 points = total respect
+  (campaign fund Ã— 2) + (ageÂ² Ã— 0.3) + (prestige Ã— 5) + a random factor of 200 points = total respect
 - Added a Bespoke targetted decision to destroy an inactive wonder, this is tied to a game rule for cost.
   > Some care was taken to make this only apply to inactive wonders that are tier 1-2 and damaged.
   > So pillage the wonder first until it meets the requirements to destroy!

@@ -25,15 +25,27 @@
 # The march                         crusade.19 - crusade.21
 # Rewards, defeat and victory       crusade.22 - crusade.26
 # On campaign                       crusade.30 - crusade.31
-# (crusade.50+ is kept for the Fourth Crusade, still in HF_crusade_events.)
+# The diverted Errantry War         crusade.50 - crusade.54
+#
+# The diverted Errantry War (the old Fourth Crusade, with the game rule on):
+# when the knights first sail, a Tilean prince who built their fleet may
+# demand his price. The master may pay, refuse, or settle the debt by
+# sacking the prince's rival port, Miragliano, Remas or Luccini (CB
+# diverted_errantry_war). The sacked city goes to the creditor, its gold
+# to the knights, and the master's house earns a black bloodline. Then
+# the fleet sails on for Araby.
 #
 # Saved: title flags northern_crusade_target (on the order: it has a
 #   kingdom to conquer) and northern_crusade_active_target (on that
 #   kingdom); global flags northern_crusades_active, northern_crusade_success,
-#   northern_crusade_failure; persistent target teutonic_target on the order
-#   (the kingdom). Event targets: northern_crusade_asker,
+#   northern_crusade_failure, diverted_errantry_done; persistent target
+#   teutonic_target on the order (the kingdom). Character flags
+#   diverted_errantry_attacker, diverted_errantry_target,
+#   diverted_errantry_creditor; title flag diverted_errantry_port. Event
+#   targets: northern_crusade_asker,
 #   northern_crusade_potential_target, northern_crusade_target_character,
-#   northern_crusade_kingdom_title, northern_crusade_duchy_title.
+#   northern_crusade_kingdom_title, northern_crusade_duchy_title,
+#   diverted_port, diverted_port_title, diverted_target, diverted_creditor.
 #
 # Callers:
 #   common/on_actions/00_on_actions.txt: on_yearly_pulse (10, 26, 30),
@@ -41,7 +53,8 @@
 #     on_unit_entering_province (31), on_crusade_launches (5).
 #   common/cb_types/00_cb_types.txt: new_crusade (1).
 #   common/cb_types/ka_cb_types.txt southern_crusade_war and
-#     01_cb_types.txt northern_crusade_war (22, 24, via the effects 23, 25).
+#     01_cb_types.txt northern_crusade_war (22, 24, via the effects 23, 25);
+#     ka_cb_types.txt diverted_errantry_war (53, 54).
 #   common/scripted_effects/04_scripted_effects_crusades.txt (2).
 #   decisions/HFP_holy_order_decisions.txt: ask_teutonic_for_help_teutonic,
 #     ask_teutonic_for_help_pagan (15).
@@ -273,8 +286,9 @@ province_event = {
 
 # crusade.13 The knights sail
 # Five to ten years after the call, the order picks a target if none
-# has been asked of it.
-# Scope: Couronne (crusade.12, crusade.14).
+# has been asked of it (crusade.50 first, which may divert the fleet).
+# Scope: Couronne (crusade.12, crusade.14, crusade.51, the effect
+#   crusade_diverted_cleanup_effect).
 province_event = {
 	id = crusade.13
 	hide_window = yes
@@ -288,11 +302,11 @@ province_event = {
 	immediate = {
 		if = {
 			limit = { is_title_active = d_knights_of_antoch }
-			d_knights_of_antoch = { holder_scope = { character_event = { id = crusade.14 } } }
+			d_knights_of_antoch = { holder_scope = { character_event = { id = crusade.50 } } }
 		}
 		else_if = {
 			limit = { is_title_active = k_knights_of_antoch }
-			k_knights_of_antoch = { holder_scope = { character_event = { id = crusade.14 } } }
+			k_knights_of_antoch = { holder_scope = { character_event = { id = crusade.50 } } }
 		}
 	}
 }
@@ -300,7 +314,7 @@ province_event = {
 # crusade.14 The order picks its own target
 # The largest Sultan near the Old World. If no one has asked the order for
 # aid by now, it chooses itself; with no target, try again in a year.
-# Scope: ROOT is the master of the order (crusade.13).
+# Scope: ROOT is the master of the order (crusade.50, crusade.51).
 character_event = {
 	id = crusade.14
 	hide_window = yes
@@ -1050,5 +1064,312 @@ character_event = {
 
 	immediate = {
 		random = { chance = 25 character_event = { id = crusade.30 days = 1 random = 15 } }
+	}
+}
+
+###############################################################################
+# The diverted Errantry War
+###############################################################################
+
+# crusade.50 The fleet is built
+# When the knights first sail, the Tilean ship-princes who built their fleet
+# may want paying. Once a game, with the Fourth Crusade game rule on.
+# Scope: ROOT is the master of the order (crusade.13).
+character_event = {
+	id = crusade.50
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = {
+				has_game_rule = { name = fourth_crusade value = on }
+				NOT = { has_global_flag = diverted_errantry_done }
+				OR = {
+					584 = { crusade_diverted_port_trigger = yes } # Miragliano
+					600 = { crusade_diverted_port_trigger = yes } # Remas
+					614 = { crusade_diverted_port_trigger = yes } # Luccini
+				}
+				random = 35
+			}
+			random_list = {
+				10 = {
+					trigger = { 584 = { crusade_diverted_port_trigger = yes } }
+					584 = { crusade_diverted_save_port_effect = yes }
+				}
+				10 = {
+					trigger = { 600 = { crusade_diverted_port_trigger = yes } }
+					600 = { crusade_diverted_save_port_effect = yes }
+				}
+				10 = {
+					trigger = { 614 = { crusade_diverted_port_trigger = yes } }
+					614 = { crusade_diverted_save_port_effect = yes }
+				}
+			}
+			random_independent_ruler = {
+				limit = { crusade_diverted_creditor_trigger = yes }
+				preferred_limit = { is_merchant_republic = yes }
+				preferred_limit = {
+					any_realm_province = {
+						OR = { province_id = 584 province_id = 600 province_id = 614 }
+					}
+				}
+				preferred_limit = { realm_size = 10 }
+				save_event_target_as = diverted_creditor
+			}
+		}
+		if = {
+			limit = {
+				event_target:diverted_target = { always = yes }
+				event_target:diverted_creditor = { always = yes }
+			}
+			set_global_flag = diverted_errantry_done
+			character_event = { id = crusade.51 }
+		}
+		else = { character_event = { id = crusade.14 } }
+	}
+}
+
+# crusade.51 The debt of ships
+# The fleet is built and the order cannot pay. The Tilean who built it
+# offers a way out: sack his rival's port and call the debt settled.
+# Scope: ROOT is the master of the order; event targets diverted_port,
+#   diverted_port_title, diverted_target, diverted_creditor (crusade.50).
+character_event = {
+	id = crusade.51
+	desc = EVTDESCcrusade51
+	picture = GFX_evt_dockyard
+	border = GFX_event_normal_frame_religion
+	portrait = event_target:diverted_creditor
+
+	is_triggered_only = yes
+
+	# Turn the knights on the port
+	option = {
+		name = EVTOPTAcrusade51
+		piety = -50
+		set_character_flag = diverted_errantry_attacker
+		event_target:diverted_target = { set_character_flag = diverted_errantry_target }
+		event_target:diverted_creditor = { set_character_flag = diverted_errantry_creditor }
+		event_target:diverted_port_title = { set_title_flag = diverted_errantry_port }
+		unsafe_war = {
+			target = event_target:diverted_target
+			casus_belli = diverted_errantry_war
+			thirdparty_title = event_target:diverted_port_title
+		}
+		hidden_tooltip = {
+			location = { save_event_target_as = current_location }
+			spawn_unit = {
+				province = event_target:current_location
+				home = event_target:current_location
+				owner = ROOT
+				troops = {
+					archers = { 750 750 }
+					light_infantry = { 1250 1250 }
+					heavy_infantry = { 750 750 }
+					knights = { 250 250 }
+				}
+				attrition = 0
+				merge = yes
+				reinforces = yes
+			}
+			event_target:diverted_creditor = { join_attacker_wars = ROOT }
+			any_playable_ruler = { narrative_event = { id = crusade.52 } }
+		}
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 0.5 trait = zealous }
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+
+	# Pay the debt from the order's coffers
+	option = {
+		name = EVTOPTBcrusade51
+		scaled_wealth = { value = -2 min = -150 }
+		event_target:diverted_creditor = {
+			opinion = { modifier = opinion_grateful who = ROOT years = 10 }
+			scaled_wealth = { value = 1 min = 75 }
+		}
+		hidden_tooltip = { character_event = { id = crusade.14 days = 30 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 0 trait = greedy }
+		}
+	}
+
+	# The Lady's knights owe nothing to merchants
+	option = {
+		name = EVTOPTCcrusade51
+		prestige = -100
+		event_target:diverted_creditor = {
+			opinion = { modifier = opinion_betrayed who = ROOT years = 10 }
+		}
+		hidden_tooltip = {
+			810 = { province_event = { id = crusade.13 days = 730 random = 730 } } # Couronne
+		}
+		ai_chance = { factor = 10 modifier = { factor = 2 trait = proud } }
+	}
+}
+
+# crusade.52 The Errantry turns on Tilea
+# News to every ruler.
+# Scope: ROOT is any ruler; FROM is the master of the order (crusade.51).
+narrative_event = {
+	id = crusade.52
+	title = EVTNAMEcrusade52
+	desc = EVTDESCcrusade52
+	picture = GFX_evt_crusaders
+	border = GFX_event_narrative_frame_religion
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAcrusade52
+		trigger = { character = event_target:diverted_target }
+		show_portrait = event_target:diverted_creditor
+	}
+
+	option = {
+		name = EVTOPTBcrusade52
+		trigger = { character = event_target:diverted_creditor }
+		show_portrait = event_target:diverted_target
+	}
+
+	option = {
+		name = EVTOPTCcrusade52
+		trigger = {
+			religion = FROM
+			NOR = {
+				character = event_target:diverted_target
+				character = event_target:diverted_creditor
+			}
+		}
+		show_portrait = event_target:diverted_target
+	}
+
+	option = {
+		name = EVTOPTDcrusade52
+		trigger = {
+			NOR = {
+				religion = FROM
+				character = event_target:diverted_target
+				character = event_target:diverted_creditor
+			}
+		}
+		show_portrait = event_target:diverted_target
+	}
+}
+
+# crusade.53 The sack
+# The port falls and is plundered. The master's house earns a black name;
+# the faithful of the Lady think less of the knight who turned the
+# Errantry on Old World folk. News to every ruler.
+# Scope: ROOT is any ruler; FROM is the master of the order; event targets
+#   diverted_port_title, diverted_target, diverted_creditor (CB
+#   diverted_errantry_war).
+narrative_event = {
+	id = crusade.53
+	title = EVTNAMEcrusade53
+	desc = EVTDESCcrusade53
+	picture = GFX_evt_burning_house
+	border = GFX_event_narrative_frame_war
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = { limit = { character = FROM } sound_effect = bloodline_added }
+	}
+
+	option = {
+		name = EVTOPTAcrusade53
+		trigger = { character = FROM }
+		custom_tooltip = { text = crusade_diverted_bloodline_TT }
+	}
+
+	option = {
+		name = EVTOPTBcrusade53
+		trigger = { character = event_target:diverted_creditor }
+	}
+
+	option = {
+		name = EVTOPTCcrusade53
+		trigger = { character = event_target:diverted_target }
+	}
+
+	option = {
+		name = EVTOPTDcrusade53
+		trigger = {
+			religion = FROM
+			NOR = {
+				character = FROM
+				character = event_target:diverted_creditor
+				character = event_target:diverted_target
+			}
+		}
+		opinion = { modifier = fourth_crusade_crusader who = FROM years = 20 }
+	}
+
+	option = {
+		name = EVTOPTEcrusade53
+		trigger = {
+			NOR = {
+				religion = FROM
+				character = event_target:diverted_creditor
+				character = event_target:diverted_target
+			}
+		}
+	}
+
+	after = {
+		if = {
+			limit = {
+				character = FROM
+				NOT = { any_owned_bloodline = { has_bloodline_flag = diverted_errantry_bloodline } }
+			}
+			if = {
+				limit = { is_female = yes }
+				create_bloodline = { type = destroyer_of_byzantium inheritance = matrilineal }
+			}
+			else = { create_bloodline = { type = destroyer_of_byzantium } }
+		}
+	}
+}
+
+# crusade.54 The siege is broken
+# The knights are driven off the port. To the master, the city's ruler and
+# the creditor.
+# Scope: ROOT is one of them; FROM is the master of the order; event
+#   targets diverted_port_title, diverted_target, diverted_creditor (CB
+#   diverted_errantry_war).
+narrative_event = {
+	id = crusade.54
+	title = EVTNAMEcrusade54
+	desc = EVTDESCcrusade54
+	picture = GFX_evt_siege
+	border = GFX_event_narrative_frame_war
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAcrusade54
+		trigger = { character = FROM }
+	}
+
+	option = {
+		name = EVTOPTBcrusade54
+		trigger = { character = event_target:diverted_target }
+	}
+
+	option = {
+		name = EVTOPTCcrusade54
+		trigger = { NOR = { character = FROM character = event_target:diverted_target } }
+		event_target:diverted_target = {
+			opinion = { modifier = opinion_furious who = ROOT years = 10 }
+		}
 	}
 }

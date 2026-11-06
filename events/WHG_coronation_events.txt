@@ -16,11 +16,21 @@
 # follow their title, never the dead ruler's own heir. (Bretonnia's crown
 # is handled by bretonnia.9/10 in wh_bretonnia_events.)
 #
-# Choosing the priest and the price    coronation.200 - coronation.217,
+# Choosing the priest and the price    coronation.200 - coronation.210,
+#                                      coronation.212, coronation.217,
 #                                      coronation.235 - coronation.241
+# The cult's harder prices            coronation.211 (free the temple),
+#                                      coronation.214 (war on the cast-out),
+#                                      coronation.215 (depose the pretender),
+#                                      coronation.218 (the target is told),
+#                                      coronation.216, coronation.219,
+#                                      coronation.221, coronation.222
+#                                      (take back a holy site in ten years)
 # Wars for a coronation               coronation.220, coronation.224,
 #                                      coronation.227 - coronation.229,
 #                                      coronation.418 - coronation.420
+#   (CBs excommunicated_ruler in 00_cb_types, depose_cult_pretender in
+#   wh_cb_types)
 # Priest dies, ruler converts         coronation.231 - coronation.234,
 #                                      coronation.408, coronation.409
 # Budget, invitations, guests         coronation.300 - coronation.304
@@ -35,10 +45,12 @@
 # The crowns                          coronation.399 - coronation.407,
 #                                      coronation.414
 #
-# Saved: character flags flag_crowned_by_* and flag_*_for_coronation, many
+# Saved: character flags flag_crowned_by_*, flag_*_for_coronation and
+#   flag_holy_site_for_coronation, many
 #   coronation progress flags; global flags crown_of_sigmar_made and
 #   kislev_frost_crown_made; event targets coronation_ruler,
-#   coronation_priest, crown_heir_empire, crown_heir_kislev.
+#   coronation_priest, crown_heir_empire, crown_heir_kislev,
+#   excommunication_war_target, pretender_war_target, coronation_holy_site.
 #
 # Callers:
 #   decisions/HF_coronation_decisions.txt (200),
@@ -341,7 +353,7 @@ letter_event = {
 	option = { #For powerful theocrat
 		name = EVTOPTBcoronation201
 		trigger = {
-			Ncoronation_cult_head_trigger = yes
+			coronation_cult_head_trigger = no
 			OR = {
 				has_landed_title = k_cult_of_sigmar
 				higher_real_tier_than = BARON
@@ -681,7 +693,89 @@ letter_event = {
 						modifier = opinion_requested_artifact
 					}
 				}
-				FROM = { letter_event = { id = coronation.241 } } #Give lands to the Holy Orders.
+				FROM = { letter_event = { id = coronation.241 } } # Give me a relic.
+			}
+			15 = { # Free the temple from your rule
+				modifier = { factor = 0 NOT = { vassal_of = FROM } }
+				modifier = {
+					factor = 3
+					has_opinion_modifier = { who = FROM modifier = opinion_requested_independence }
+				}
+				modifier = { factor = 1.5 trait = ambitious }
+				modifier = { factor = 1.5 trait = proud }
+				modifier = { factor = 0.5 opinion = { who = FROM value = 50 } }
+				FROM = { letter_event = { id = coronation.211 } }
+			}
+			15 = { # Make war on a ruler cast out of the faith
+				trigger = { FROM = { war = no } }
+				modifier = {
+					factor = 0
+					NOT = {
+						any_independent_ruler = {
+							is_within_diplo_range = FROM
+							excommunicated_for = ROOT
+							in_revolt = no
+							NOT = { character = FROM }
+							NOT = { is_liege_of = FROM }
+							NOT = { is_allied_with = FROM }
+							NOT = { is_allied_with = ROOT }
+						}
+					}
+				}
+				modifier = {
+					factor = 3
+					has_opinion_modifier = {
+						who = FROM
+						modifier = opinion_requested_excommunication_war
+					}
+				}
+				modifier = { factor = 0.35 FROM = { lower_tier_than = EMPEROR } }
+				modifier = { factor = 0.5 FROM = { NOT = { realm_size = 80 } } }
+				modifier = { factor = 1.5 trait = zealous }
+				FROM = { letter_event = { id = coronation.214 } }
+			}
+			40 = { # Depose a pretender to the high seat: a rival comes first
+				trigger = { FROM = { war = no } }
+				modifier = {
+					factor = 0
+					NOT = {
+						any_independent_ruler = {
+							is_within_diplo_range = FROM
+							in_revolt = no
+							NOT = { character = FROM }
+							NOT = { character = ROOT }
+							NOT = { is_liege_of = FROM }
+							NOT = { is_allied_with = FROM }
+							NOT = { is_allied_with = ROOT }
+							coronation_pretender_host_trigger = yes
+						}
+					}
+				}
+				modifier = {
+					factor = 3
+					has_opinion_modifier = { who = FROM modifier = opinion_requested_antipope_war }
+				}
+				modifier = { factor = 0.5 FROM = { NOT = { realm_size = 80 } } }
+				FROM = { letter_event = { id = coronation.215 } }
+			}
+			10 = { # Take back a holy site from the unbelievers
+				trigger = { FROM = { war = no } }
+				modifier = {
+					factor = 0
+					NOT = {
+						any_province = {
+							county = { is_holy_site = ROOT }
+							owner = { NOT = { religion_group = ROOT } }
+						}
+					}
+				}
+				modifier = {
+					factor = 3
+					has_opinion_modifier = { who = FROM modifier = opinion_requested_papal_land }
+				}
+				modifier = { factor = 0.5 FROM = { NOT = { realm_size = 80 } } }
+				modifier = { factor = 1.5 trait = zealous }
+				FROM = { letter_event = { id = coronation.216 } }
 			}
 		}
 	}
@@ -1608,6 +1702,399 @@ letter_event = {
 
 #Back to uncrowned King, start the war.
 #}#
+# coronation.211 Free the temple
+# The head of the cult is the ruler's own vassal, and will only crown them
+# once the temple answers to no throne.
+# Scope: ROOT is the ruler; FROM is the head of the cult (coronation.201).
+letter_event = {
+	id = coronation.211
+	desc = EVTDESCAcoronation211
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		coronation_faith_trigger = yes
+		FROM = { vassal_of = ROOT }
+	}
+
+	option = {
+		name = EVTOPTAcoronation211
+		custom_tooltip = { text = TT_EVTOPTAcoronation211 }
+		set_character_flag = flag_crowned_by_pope
+		FROM = {
+			save_event_target_as = coronation_priest
+			show_scope_change = no
+			opinion = { modifier = opinion_supposed_to_crown months = 1 who = ROOT }
+			reverse_opinion = { modifier = opinion_supposed_to_crown months = 1 who = ROOT }
+			hidden_tooltip = { character_event = { id = coronation.234 } }
+		}
+		piety = 50
+		hidden_tooltip = { character_event = { id = coronation.300 } } # Go to the budget
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = zealous }
+			modifier = { factor = 0.3 trait = ambitious }
+			modifier = { factor = 0.5 trait = proud }
+			modifier = { factor = 0.5 trait = cynical }
+		}
+	}
+	option = { # End of the line
+		name = EVTOPTBcoronation211
+		custom_tooltip = { text = coronation_canceled }
+		FROM = {
+			show_scope_change = no
+			opinion = { modifier = opinion_requested_independence years = 10 who = ROOT }
+		}
+		ai_chance = { factor = 80 }
+	}
+}
+
+# coronation.214 War on the cast-out
+# The head of the cult names a ruler cast out of the faith, and the crown
+# waits until that ruler is brought down (excommunicated_ruler CB).
+# Scope: ROOT is the ruler; FROM is the head of the cult (coronation.201).
+letter_event = {
+	id = coronation.214
+	desc = {
+		trigger = { event_target:excommunication_war_target = { always = yes } }
+		text = EVTDESCAcoronation214
+	}
+	desc = {
+		trigger = { NOT = { event_target:excommunication_war_target = { always = yes } } }
+		text = EVTDESCBcoronation214
+	}
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		coronation_faith_trigger = yes
+	}
+
+	immediate = {
+		random_independent_ruler = {
+			limit = {
+				is_within_diplo_range = ROOT
+				excommunicated_for = ROOT
+				in_revolt = no
+				NOT = { character = ROOT }
+				NOT = { is_liege_of = ROOT }
+				NOT = { is_allied_with = ROOT }
+				NOT = { is_allied_with = FROM }
+				NOT = { any_current_enemy = { NOT = { religion_group = ROOT } } }
+			}
+			preferred_limit = {
+				NOT = { distance_from_realm = { who = ROOT value = 100 } }
+				NOT = { relative_power = { who = ROOT power = 2 } }
+			}
+			preferred_limit = { NOT = { relative_power = { who = ROOT power = 3 } } }
+			save_event_target_as = excommunication_war_target
+		}
+	}
+
+	option = {
+		name = EVTOPTAcoronation214
+		trigger = { event_target:excommunication_war_target = { always = yes } }
+		custom_tooltip = { text = tooltip_coronation_depose_excommunicate }
+		show_portrait = event_target:excommunication_war_target
+		set_character_flag = flag_excommunicated_for_coronation
+		war = {
+			target = event_target:excommunication_war_target
+			casus_belli = excommunicated_ruler
+		}
+		hidden_tooltip = {
+			event_target:excommunication_war_target = { character_event = { id = coronation.218 } }
+		}
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 1.5 trait = brave }
+			modifier = { factor = 0.3 trait = craven }
+		}
+	}
+	option = { # End of the line
+		name = EVTOPTBcoronation214
+		trigger = { event_target:excommunication_war_target = { always = yes } }
+		custom_tooltip = { text = coronation_canceled }
+		FROM = {
+			show_scope_change = no
+			opinion = { modifier = opinion_requested_excommunication_war years = 10 who = ROOT }
+		}
+		ai_chance = { factor = 40 }
+	}
+	option = { # The cast-out ruler is gone: gold will do instead
+		name = EVTOPTCcoronation214
+		trigger = { NOT = { event_target:excommunication_war_target = { always = yes } } }
+		coronation_war_demand_paid_in_gold_effect = yes
+	}
+}
+
+# coronation.215 Depose the pretender
+# Another ruler of the faith backs a pretender to the high seat of the cult.
+# The crown waits until the pretender is put down (depose_cult_pretender CB).
+# Scope: ROOT is the ruler; FROM is the head of the cult (coronation.201).
+letter_event = {
+	id = coronation.215
+	desc = {
+		trigger = { event_target:pretender_war_target = { always = yes } }
+		text = EVTDESCAcoronation215
+	}
+	desc = {
+		trigger = { NOT = { event_target:pretender_war_target = { always = yes } } }
+		text = EVTDESCBcoronation214
+	}
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		coronation_faith_trigger = yes
+	}
+
+	immediate = {
+		random_independent_ruler = {
+			limit = {
+				is_within_diplo_range = ROOT
+				in_revolt = no
+				NOT = { character = ROOT }
+				NOT = { character = FROM }
+				NOT = { is_liege_of = ROOT }
+				NOT = { is_allied_with = ROOT }
+				NOT = { is_allied_with = FROM }
+				coronation_pretender_host_trigger = yes
+			}
+			preferred_limit = {
+				NOT = { distance_from_realm = { who = ROOT value = 100 } }
+				NOT = { relative_power = { who = ROOT power = 2 } }
+			}
+			preferred_limit = { NOT = { relative_power = { who = ROOT power = 3 } } }
+			save_event_target_as = pretender_war_target
+		}
+	}
+
+	option = {
+		name = EVTOPTAcoronation215
+		trigger = { event_target:pretender_war_target = { always = yes } }
+		custom_tooltip = { text = tooltip_coronation_depose_antipope }
+		show_portrait = event_target:pretender_war_target
+		set_character_flag = flag_antipope_for_coronation
+		war = { target = event_target:pretender_war_target casus_belli = depose_cult_pretender }
+		hidden_tooltip = {
+			event_target:pretender_war_target = { character_event = { id = coronation.218 } }
+		}
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 1.5 trait = brave }
+			modifier = { factor = 0.3 trait = craven }
+		}
+	}
+	option = { # End of the line
+		name = EVTOPTBcoronation215
+		trigger = { event_target:pretender_war_target = { always = yes } }
+		custom_tooltip = { text = coronation_canceled }
+		FROM = {
+			show_scope_change = no
+			opinion = { modifier = opinion_requested_antipope_war years = 10 who = ROOT }
+		}
+		ai_chance = { factor = 40 }
+	}
+	option = { # The pretender is gone: gold will do instead
+		name = EVTOPTCcoronation214
+		trigger = { NOT = { event_target:pretender_war_target = { always = yes } } }
+		coronation_war_demand_paid_in_gold_effect = yes
+	}
+}
+
+# coronation.218 Marked by the cult
+# The target of a war demand learns who is coming for them.
+# Scope: ROOT is the target; FROM is the ruler who accepted the demand
+#   (coronation.214, coronation.215).
+character_event = {
+	id = coronation.218
+	desc = {
+		trigger = { FROM = { has_character_flag = flag_excommunicated_for_coronation } }
+		text = EVTDESCAcoronation218
+	}
+	desc = {
+		trigger = { FROM = { NOT = { has_character_flag = flag_excommunicated_for_coronation } } }
+		text = EVTDESCBcoronation218
+	}
+	picture = GFX_evt_crusaders
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAcoronation218
+		show_portrait = FROM
+		opinion = { modifier = opinion_hate who = FROM years = 10 }
+	}
+}
+
+# coronation.216 Take back the holy site
+# A holy site of the faith lies in the hands of unbelievers. The head of the
+# cult will crown the ruler once it is back in their realm. The ruler has ten
+# years and must make the war themselves (coronation.219 keeps watch).
+# Scope: ROOT is the ruler; FROM is the head of the cult (coronation.201).
+letter_event = {
+	id = coronation.216
+	desc = {
+		trigger = { event_target:coronation_holy_site = { always = yes } }
+		text = EVTDESCAcoronation216
+	}
+	desc = {
+		trigger = { NOT = { event_target:coronation_holy_site = { always = yes } } }
+		text = EVTDESCBcoronation214
+	}
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		coronation_faith_trigger = yes
+	}
+
+	immediate = {
+		random_province = {
+			limit = { county = { is_holy_site = ROOT } owner = { NOT = { religion_group = ROOT } } }
+			county = { save_event_target_as = coronation_holy_site }
+		}
+		FROM = { save_event_target_as = coronation_priest }
+	}
+
+	option = {
+		name = EVTOPTAcoronation216
+		trigger = { event_target:coronation_holy_site = { always = yes } }
+		custom_tooltip = { text = tooltip_coronation_holy_site }
+		set_character_flag = flag_holy_site_for_coronation
+		hidden_tooltip = { character_event = { id = coronation.219 days = 90 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 0.3 trait = craven }
+		}
+	}
+	option = { # End of the line
+		name = EVTOPTBcoronation216
+		trigger = { event_target:coronation_holy_site = { always = yes } }
+		custom_tooltip = { text = coronation_canceled }
+		FROM = {
+			show_scope_change = no
+			opinion = { modifier = opinion_requested_papal_land years = 10 who = ROOT }
+		}
+		ai_chance = { factor = 50 }
+	}
+	option = { # The holy site is already safe: gold will do instead
+		name = EVTOPTCcoronation214
+		trigger = { NOT = { event_target:coronation_holy_site = { always = yes } } }
+		coronation_war_demand_paid_in_gold_effect = yes
+	}
+}
+
+# coronation.219 Watching the holy site
+# Every three months: is the holy site in the realm yet, or has the pledge
+# run out?
+# Scope: ROOT is the ruler (coronation.216, itself).
+character_event = {
+	id = coronation.219
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	has_character_flag = flag_holy_site_for_coronation
+
+	immediate = {
+		if = {
+			limit = {
+				event_target:coronation_holy_site = {
+					holder_scope = { OR = { character = ROOT is_liege_or_above = ROOT } }
+				}
+			}
+			character_event = { id = coronation.221 }
+		}
+		else_if = {
+			limit = {
+				OR = {
+					had_character_flag = { flag = flag_holy_site_for_coronation days = 3650 }
+					coronation_faith_trigger = no
+					lower_real_tier_than = KING
+				}
+			}
+			clr_character_flag = flag_holy_site_for_coronation
+			character_event = { id = coronation.222 }
+		}
+		else = { character_event = { id = coronation.219 days = 90 } }
+	}
+}
+
+# coronation.221 The holy site retaken
+# Scope: ROOT is the ruler (coronation.219).
+character_event = {
+	id = coronation.221
+	desc = EVTDESCAcoronation221
+	picture = GFX_evt_crusaders
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = flag_holy_site_for_coronation
+		religion_head = { save_event_target_as = coronation_priest }
+	}
+
+	option = { # Keep it, and be crowned
+		name = EVTOPTAcoronation221
+		piety = 100
+		coronation_holy_site_crowning_effect = yes
+	}
+	option = { # Give it to the temple, and be crowned
+		name = EVTOPTBcoronation221
+		trigger = {
+			event_target:coronation_holy_site = {
+				holder = ROOT
+				NOT = { location = { is_capital = yes } }
+			}
+			event_target:coronation_priest = { always = yes }
+		}
+		event_target:coronation_holy_site = { grant_title = event_target:coronation_priest }
+		piety = 250
+		event_target:coronation_priest = {
+			show_scope_change = no
+			opinion = { modifier = opinion_grateful who = ROOT years = 20 }
+		}
+		coronation_holy_site_crowning_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = zealous }
+			modifier = { factor = 0.2 trait = greedy }
+		}
+	}
+}
+
+# coronation.222 The pledge broken
+# The holy site was not retaken in time.
+# Scope: ROOT is the ruler (coronation.219).
+character_event = {
+	id = coronation.222
+	desc = EVTDESCAcoronation222
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAcoronation222
+		piety = -50
+		custom_tooltip = { text = coronation_canceled }
+		religion_head = {
+			show_scope_change = no
+			opinion = { modifier = opinion_requested_papal_land years = 10 who = ROOT }
+		}
+	}
+}
+
 #On_success of Excommunication/pretender CB: congratulate with ruler, resume the coronation event chain.
 character_event = {
 	id = coronation.220
@@ -1727,7 +2214,7 @@ character_event = {
 	has_character_flag = flag_antipope_for_coronation
 
 	trigger = {
-		any_war = { using_cb = depose_antipope }
+		any_war = { using_cb = depose_cult_pretender }
 	}
 
 	immediate = {
@@ -6279,7 +6766,7 @@ character_event = {
 									has_landed_title = d_arch_lectory_nuln
 									has_landed_title = d_arch_lectory_talabheim
 								}
-								Ncoronation_cult_head_trigger = yes
+								coronation_cult_head_trigger = no
 							}
 						}
 					}
@@ -6308,7 +6795,7 @@ character_event = {
 								any_claim = { title = k_cult_of_sigmar } #pretender
 								any_claim = { title = k_cult_of_ulric } #pretender
 							}
-							Ncoronation_cult_head_trigger = yes
+							coronation_cult_head_trigger = no
 						}
 					}
 					add_trait = crowned_by_priest
@@ -6352,7 +6839,7 @@ character_event = {
 					has_landed_title = d_arch_lectory_nuln
 					has_landed_title = d_arch_lectory_talabheim
 				}
-				Ncoronation_cult_head_trigger = yes
+				coronation_cult_head_trigger = no
 			}
 			ROOT = { save_persistent_event_target = { name = coronation_priest_per scope = PREV } }
 		}
@@ -6424,7 +6911,7 @@ character_event = {
 			}
 			20 = {
 				modifier = { factor = 0 is_married = no }
-				modifier = { factor = 0 spouse = { Ncoronation_faith_trigger = yes } }
+				modifier = { factor = 0 spouse = { coronation_faith_trigger = no } }
 				modifier = { factor = 1.75 spouse = { trait = wroth } }
 				modifier = {
 					factor = 1.75
@@ -7630,7 +8117,7 @@ character_event = {
 #On_conversion. Ruler converted when in the middle of a coronation, cancel everything.
 character_event = {
 	id = coronation.408
-	desc = { text = EVTDESCAcoronation408 trigger = { Ncoronation_faith_trigger = yes } }
+	desc = { text = EVTDESCAcoronation408 trigger = { coronation_faith_trigger = no } }
 	desc = { text = EVTDESCBcoronation408 trigger = { coronation_faith_trigger = yes } }
 
 	picture = GFX_evt_heretic
@@ -7666,7 +8153,7 @@ character_event = {
 		clr_character_flag = flag_pepin_for_coronation
 	}
 	option = {
-		name = { text = EVTOPTAcoronation408 trigger = { Ncoronation_faith_trigger = yes } }
+		name = { text = EVTOPTAcoronation408 trigger = { coronation_faith_trigger = no } }
 		name = { text = EVTOPTAHF20058 trigger = { coronation_faith_trigger = yes } }
 		hidden_tooltip = { remove_trait = travelling }
 		hidden_tooltip = { remove_character_modifier = out_traveling }
@@ -8204,7 +8691,7 @@ character_event = {
 
 	trigger = {
 		has_character_modifier = uncrowned_modifier
-		Ncoronation_faith_trigger = yes
+		coronation_faith_trigger = no
 	}
 
 	immediate = {
@@ -8245,7 +8732,7 @@ character_event = {
 	has_character_flag = flag_antipope_for_coronation
 
 	trigger = {
-		NOT = { any_war = { using_cb = depose_antipope } }
+		NOT = { any_war = { using_cb = depose_cult_pretender } }
 	}
 
 	immediate = {

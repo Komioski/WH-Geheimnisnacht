@@ -1,0 +1,927 @@
+###############################################################################
+# Araby events
+# Namespace: holyfast (was 88500 - 88522 in the vanilla ramadan_events, never
+#   copied into the mod)
+# Faction: Araby & Southlands
+# Serves: the faithful of Ormazd and the Kitabid
+#
+# The Fast of the Prophets, the vanilla Ramadan moved to Araby: a ruler of
+# Ormazd or the Kitabid keeps a month of fasting by daylight before the
+# Holy Flame. Three times during the month a trial of the fast comes
+# (holyfast.4 - 10, 13); a ruler with a weakness may break the fast in
+# secret (holyfast.30 - 34); war or illness ends it early (holyfast.11 -
+# 12). At the end of the month the ruler feasts the vassals (holyfast.20 -
+# 24) and gives the customary gifts to the household (holyfast.25 - 26).
+# The vanilla mean-time-to-happen checks (war, illness, sins) are now
+# scheduled rolls run by holyfast.2 and holyfast.3, so nothing polls.
+#
+# The fast begins               holyfast.1
+# The rolls (hidden)            holyfast.2 - holyfast.3
+# Trials of the fast            holyfast.4 - holyfast.10, holyfast.13
+# The fast broken off           holyfast.11 - holyfast.12
+# The fast-breaking feast       holyfast.20 - holyfast.24
+# Gifts for the household       holyfast.25 - holyfast.26
+# Secret sins                   holyfast.30 - holyfast.34
+# The fast ends                 holyfast.40
+#
+# Saved: character flags holy_fast (also read by the hajj, on_hajj.txt and
+#   go_on_hajj in decisions/minor_decisions.txt), holy_fast_<prisoners|
+#   charity|prayers|ill|djinn|gluttonous|lustful|drunkard|greedy|cynical>,
+#   attending_holy_fast_feast; character modifier observed_holy_fast.
+#
+# Callers:
+#   decisions/WHG_araby_decisions.txt (observe_holy_fast: 1).
+###############################################################################
+
+namespace = holyfast
+
+###############################################################################
+# The fast begins
+###############################################################################
+
+# holyfast.1 The fast begins
+# From observe_holy_fast. Schedules the three trials, two sin checks, the
+# feast, the gifts and the end of the month.
+# Scope: the fasting ruler.
+character_event = {
+	id = holyfast.1
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast1
+	picture = GFX_evt_imam
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAholyfast1
+		hidden_tooltip = {
+			character_event = { id = holyfast.2 days = 3 }
+			character_event = { id = holyfast.3 days = 7 }
+			character_event = { id = holyfast.2 days = 10 }
+			character_event = { id = holyfast.2 days = 17 }
+			character_event = { id = holyfast.3 days = 20 }
+			character_event = { id = holyfast.20 days = 26 }
+			character_event = { id = holyfast.25 days = 31 }
+			character_event = { id = holyfast.26 days = 31 }
+			character_event = { id = holyfast.40 days = 35 }
+		}
+	}
+}
+
+###############################################################################
+# The rolls
+###############################################################################
+
+# holyfast.2 A day of the fast (hidden)
+# Run three times by holyfast.1. War or illness ends the fast; otherwise
+# one trial of the fast comes, if any fits.
+# Scope: the fasting ruler.
+character_event = {
+	id = holyfast.2
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+	}
+
+	immediate = {
+		if = {
+			limit = { war = yes }
+			character_event = { id = holyfast.11 }
+		}
+		else_if = {
+			limit = {
+				NOT = { has_character_flag = holy_fast_ill }
+				OR = {
+					is_ill = yes
+					has_symptom_trigger = yes
+				}
+			}
+			character_event = { id = holyfast.12 }
+		}
+		else = {
+			random_list = {
+				10 = {
+					trigger = { holyfast_prisoners_to_free_trigger = yes NOT = { has_character_flag = holy_fast_prisoners } }
+					character_event = { id = holyfast.4 }
+				}
+				10 = {
+					trigger = { scaled_wealth = 0.2 NOT = { has_character_flag = holy_fast_charity } }
+					character_event = { id = holyfast.5 }
+				}
+				10 = {
+					trigger = { NOT = { has_character_flag = holy_fast_prayers } }
+					character_event = { id = holyfast.6 }
+				}
+				10 = {
+					trigger = {
+						NOT = { has_character_flag = holy_fast_ill }
+						OR = {
+							age = 50
+							is_weak_trigger = yes
+						}
+					}
+					character_event = { id = holyfast.7 }
+				}
+				20 = {
+					trigger = {
+						has_character_flag = holy_fast_ill
+						OR = {
+							is_ill = yes
+							has_symptom_trigger = yes
+						}
+						NOT = { trait = infirm }
+					}
+					character_event = { id = holyfast.8 }
+				}
+				4 = {
+					trigger = { NOR = { trait = gluttonous trait = temperate } }
+					character_event = { id = holyfast.9 }
+				}
+				4 = {
+					trigger = { NOR = { trait = greedy trait = charitable } }
+					character_event = { id = holyfast.10 }
+				}
+				2 = {
+					trigger = { NOT = { has_character_flag = holy_fast_djinn } }
+					character_event = { id = holyfast.13 }
+				}
+				10 = { } # a quiet day
+			}
+		}
+	}
+}
+
+# holyfast.3 A weakness of the flesh (hidden)
+# Run twice by holyfast.1. A ruler with a sinful trait may break the fast
+# in secret, at most once per sin each month.
+# Scope: the fasting ruler.
+character_event = {
+	id = holyfast.3
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+		war = no
+		prisoner = no
+		is_incapable = no
+	}
+
+	immediate = {
+		random_list = {
+			10 = {
+				trigger = { trait = gluttonous NOT = { has_character_flag = holy_fast_gluttonous } }
+				character_event = { id = holyfast.30 }
+			}
+			10 = {
+				trigger = {
+					OR = { trait = lustful trait = hedonist }
+					NOT = { has_character_flag = holy_fast_lustful }
+				}
+				character_event = { id = holyfast.31 }
+			}
+			10 = {
+				trigger = { trait = drunkard NOT = { has_character_flag = holy_fast_drunkard } }
+				character_event = { id = holyfast.32 }
+			}
+			10 = {
+				trigger = {
+					trait = greedy
+					NOT = { trait = just }
+					NOT = { has_character_flag = holy_fast_greedy }
+				}
+				character_event = { id = holyfast.33 }
+			}
+			10 = {
+				trigger = { trait = cynical NOT = { has_character_flag = holy_fast_cynical } }
+				character_event = { id = holyfast.34 }
+			}
+			15 = { } # the flesh holds firm
+		}
+	}
+}
+
+###############################################################################
+# Trials of the fast
+###############################################################################
+
+# holyfast.4 Mercy for the prisoners
+# Scope: the fasting ruler, who holds prisoners.
+character_event = {
+	id = holyfast.4
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast4
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+		holyfast_prisoners_to_free_trigger = yes
+	}
+
+	option = {
+		name = EVTOPTAholyfast4
+		set_character_flag = holy_fast_prisoners
+		any_courtier = {
+			limit = { holyfast_prisoner_to_free_trigger = yes }
+			imprison = no
+		}
+		decadence = -1
+		piety = 15
+	}
+	option = {
+		name = EVTOPTBholyfast4
+		set_character_flag = holy_fast_prisoners
+		decadence = 1
+		piety = -15
+	}
+}
+
+# holyfast.5 Alms for the poor
+# Scope: the fasting ruler.
+character_event = {
+	id = holyfast.5
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast5
+	picture = GFX_evt_market
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+		scaled_wealth = 0.2
+	}
+
+	option = {
+		name = EVTOPTAholyfast5
+		set_character_flag = holy_fast_charity
+		scaled_wealth = -0.25
+		decadence = -1
+		piety = 15
+	}
+	option = {
+		name = EVTOPTBholyfast5
+		set_character_flag = holy_fast_charity
+		decadence = 1
+		piety = -15
+	}
+}
+
+# holyfast.6 The night prayers
+# Scope: the fasting ruler.
+character_event = {
+	id = holyfast.6
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast6
+	picture = GFX_evt_monk
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+	}
+
+	option = {
+		name = EVTOPTAholyfast6
+		set_character_flag = holy_fast_prayers
+		decadence = -1
+		piety = 15
+	}
+	option = {
+		name = EVTOPTBholyfast6
+		set_character_flag = holy_fast_prayers
+		decadence = 1
+		piety = -15
+	}
+}
+
+# holyfast.7 The fast weakens the body
+# The old or the weak fall ill. They may give up the fast, or keep it and
+# risk worse (holyfast.8).
+# Scope: the fasting ruler.
+character_event = {
+	id = holyfast.7
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast7
+	picture = GFX_evt_illness
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+	}
+
+	option = {
+		name = EVTOPTAholyfast7
+		add_symptom_effect = yes
+		character_event = { id = holyfast.40 days = 1 tooltip = EVTTOOLTIPholyfast40 }
+	}
+	option = {
+		name = EVTOPTBholyfast7
+		add_symptom_effect = yes
+		set_character_flag = holy_fast_ill
+		decadence = -1
+		piety = 15
+	}
+}
+
+# holyfast.8 The fast breaks the body
+# Scope: the fasting ruler, who kept the fast while ill (holyfast.7).
+character_event = {
+	id = holyfast.8
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast8
+	picture = GFX_evt_illness
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+		has_character_flag = holy_fast_ill
+	}
+
+	option = {
+		name = EVTOPTAholyfast8
+		add_trait = infirm
+		piety = 25
+		character_event = { id = holyfast.40 days = 1 tooltip = EVTTOOLTIPholyfast40 }
+	}
+}
+
+# holyfast.9 The discipline of hunger
+# Scope: the fasting ruler.
+character_event = {
+	id = holyfast.9
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast9
+	picture = GFX_evt_monk
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+		NOR = {
+			trait = gluttonous
+			trait = temperate
+		}
+	}
+
+	option = {
+		name = EVTOPTAholyfast9
+		add_trait = temperate
+		lose_weight_small_effect = yes
+		weight_trait_check_effect = yes
+		decadence = -1
+		piety = 15
+	}
+}
+
+# holyfast.10 An open hand
+# Scope: the fasting ruler.
+character_event = {
+	id = holyfast.10
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast10
+	picture = GFX_evt_market
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+		NOR = {
+			trait = greedy
+			trait = charitable
+		}
+	}
+
+	option = {
+		name = EVTOPTAholyfast10
+		add_trait = charitable
+		decadence = -1
+		piety = 15
+	}
+}
+
+# holyfast.13 A guest at the fast-break
+# New: a djinn comes to the evening table in a stranger's shape and offers
+# a bargain. Once per fast, and rare.
+# Scope: the fasting ruler.
+character_event = {
+	id = holyfast.13
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast13
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+		NOT = { has_character_flag = holy_fast_djinn }
+	}
+
+	immediate = {
+		set_character_flag = holy_fast_djinn
+	}
+
+	# Send the guest away in the name of Ormazd
+	option = {
+		name = EVTOPTAholyfast13
+		piety = 50
+		decadence = -2
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = zealous }
+		}
+	}
+	# Ask for gold
+	option = {
+		name = EVTOPTBholyfast13
+		wealth = 150
+		piety = -40
+		decadence = 3
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = greedy }
+			modifier = { factor = 0 trait = zealous }
+		}
+	}
+	# Ask for secrets
+	option = {
+		name = EVTOPTCholyfast13
+		trigger = { learning = 8 }
+		change_learning = 1
+		piety = -40
+		decadence = 3
+		random = {
+			chance = 15
+			add_trait = possessed
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = scholar }
+			modifier = { factor = 0 trait = zealous }
+		}
+	}
+}
+
+###############################################################################
+# The fast broken off
+###############################################################################
+
+# holyfast.11 War breaks the fast
+# From holyfast.2.
+# Scope: the fasting ruler, now at war.
+character_event = {
+	id = holyfast.11
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast11
+	picture = GFX_evt_moors
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAholyfast11
+		character_event = { id = holyfast.40 days = 1 }
+	}
+}
+
+# holyfast.12 Illness breaks the fast
+# From holyfast.2.
+# Scope: the fasting ruler, now ill.
+character_event = {
+	id = holyfast.12
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast12
+	picture = GFX_evt_illness
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAholyfast12
+		character_event = { id = holyfast.40 days = 1 }
+	}
+}
+
+###############################################################################
+# The fast-breaking feast
+###############################################################################
+
+# holyfast.20 The fast-breaking feast
+# Scope: the fasting ruler, who has vassals.
+character_event = {
+	id = holyfast.20
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast20
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+		num_of_vassals = 1
+	}
+
+	option = {
+		name = EVTOPTAholyfast20
+		scaled_wealth = -0.3
+		any_vassal = {
+			limit = {
+				prisoner = no
+				war = no
+				is_inaccessible_trigger = no
+			}
+			letter_event = { id = holyfast.21 tooltip = EVTTOOLTIPholyfast21 }
+		}
+		character_event = { id = holyfast.23 days = 3 tooltip = EVTTOOLTIPholyfast23 }
+	}
+	option = {
+		name = EVTOPTBholyfast20
+	}
+}
+
+# holyfast.21 An invitation to the feast
+# From holyfast.20.
+# Scope: a vassal; FROM is the host.
+letter_event = {
+	id = holyfast.21
+	desc = EVTDESCholyfast21
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_inaccessible_trigger = no
+	}
+
+	option = {
+		name = EVTOPTAholyfast21
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 2
+				opinion = { who = FROM value = -40 }
+			}
+			modifier = {
+				factor = 2
+				opinion = { who = FROM value = -20 }
+			}
+		}
+		set_character_flag = attending_holy_fast_feast
+		character_event = { id = holyfast.24 days = 4 tooltip = EVTTOOLTIPholyfast24 }
+	}
+	option = {
+		name = EVTOPTBholyfast21
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 0
+				opinion = { who = FROM value = 0 }
+			}
+			modifier = {
+				factor = 2
+				NOT = { opinion = { who = FROM value = -60 } }
+			}
+			modifier = {
+				factor = 2
+				NOT = { opinion = { who = FROM value = -80 } }
+			}
+		}
+		FROM = {
+			letter_event = { id = holyfast.22 days = 1 tooltip = EVTTOOLTIPholyfast22 }
+			opinion = {
+				who = ROOT
+				modifier = opinion_disappointed
+				years = 1
+			}
+		}
+	}
+}
+
+# holyfast.22 A guest stays away
+# From holyfast.21.
+# Scope: the host; FROM is the vassal who refused.
+letter_event = {
+	id = holyfast.22
+	desc = EVTDESCholyfast22
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAholyfast22
+	}
+}
+
+# holyfast.23 The feast is held
+# From holyfast.20.
+# Scope: the host.
+character_event = {
+	id = holyfast.23
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast23
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAholyfast23
+		any_vassal = {
+			limit = { has_character_flag = attending_holy_fast_feast }
+			opinion = {
+				who = ROOT
+				modifier = opinion_impressed
+				years = 1
+			}
+		}
+	}
+}
+
+# holyfast.24 At the liege's table
+# From holyfast.21.
+# Scope: a vassal who came to the feast.
+character_event = {
+	id = holyfast.24
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast24
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAholyfast24
+		clr_character_flag = attending_holy_fast_feast
+	}
+}
+
+###############################################################################
+# Gifts for the household
+###############################################################################
+
+# holyfast.25 A gift for the spouse
+# Scope: the fasting ruler, who has one spouse.
+character_event = {
+	id = holyfast.25
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast25
+	picture = GFX_evt_marriage
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+		is_married = yes
+		NOT = { any_spouse = { is_main_spouse = no } }
+	}
+
+	option = {
+		name = EVTOPTAholyfast25
+		scaled_wealth = -0.25
+		spouse = {
+			opinion = {
+				who = ROOT
+				modifier = opinion_happy
+				years = 1
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBholyfast25
+		spouse = {
+			opinion = {
+				who = ROOT
+				modifier = spouse_ignores_me
+				years = 1
+			}
+		}
+	}
+}
+
+# holyfast.26 Gifts for the wives
+# Scope: the fasting ruler, who has more than one wife.
+character_event = {
+	id = holyfast.26
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast26
+	picture = GFX_evt_marriage
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+		is_married = yes
+		any_spouse = { is_main_spouse = no }
+	}
+
+	option = {
+		name = EVTOPTAholyfast26
+		scaled_wealth = -0.25
+		any_spouse = {
+			limit = { is_main_spouse = yes }
+			opinion = {
+				who = ROOT
+				modifier = opinion_happy
+				years = 1
+			}
+		}
+		any_spouse = {
+			limit = { is_main_spouse = no }
+			opinion = {
+				who = ROOT
+				modifier = opinion_unhappy
+				years = 1
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBholyfast26
+		scaled_wealth = -0.5
+		any_spouse = {
+			opinion = {
+				who = ROOT
+				modifier = opinion_happy
+				years = 1
+			}
+		}
+	}
+	option = {
+		name = EVTOPTCholyfast26
+		any_spouse = {
+			opinion = {
+				who = ROOT
+				modifier = spouse_ignores_me
+				years = 1
+			}
+		}
+	}
+}
+
+###############################################################################
+# Secret sins
+###############################################################################
+
+# holyfast.30 Dates by daylight
+# From holyfast.3.
+# Scope: the fasting ruler, gluttonous.
+character_event = {
+	id = holyfast.30
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast30
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+	}
+
+	option = {
+		name = EVTOPTAholyfast30
+		set_character_flag = holy_fast_gluttonous
+		decadence = 1
+		piety = -15
+	}
+}
+
+# holyfast.31 The harem by daylight
+# From holyfast.3.
+# Scope: the fasting ruler, lustful or hedonist.
+character_event = {
+	id = holyfast.31
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast31
+	picture = GFX_evt_jugglers
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+	}
+
+	option = {
+		name = EVTOPTAholyfast31
+		set_character_flag = holy_fast_lustful
+		decadence = 1
+		piety = -15
+	}
+}
+
+# holyfast.32 Wine in the water jar
+# From holyfast.3.
+# Scope: the fasting ruler, a drunkard.
+character_event = {
+	id = holyfast.32
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast32
+	picture = GFX_evt_drunk
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+	}
+
+	option = {
+		name = EVTOPTAholyfast32
+		set_character_flag = holy_fast_drunkard
+		decadence = 1
+		piety = -15
+	}
+}
+
+# holyfast.33 The alms counted twice
+# From holyfast.3.
+# Scope: the fasting ruler, greedy.
+character_event = {
+	id = holyfast.33
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast33
+	picture = GFX_evt_market
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+	}
+
+	option = {
+		name = EVTOPTAholyfast33
+		set_character_flag = holy_fast_greedy
+		decadence = 1
+		piety = -15
+		wealth = 25
+	}
+}
+
+# holyfast.34 Empty words
+# From holyfast.3.
+# Scope: the fasting ruler, cynical.
+character_event = {
+	id = holyfast.34
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast34
+	picture = GFX_evt_monk
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+	}
+
+	option = {
+		name = EVTOPTAholyfast34
+		set_character_flag = holy_fast_cynical
+		decadence = 1
+		piety = -15
+	}
+}
+
+###############################################################################
+# The fast ends
+###############################################################################
+
+# holyfast.40 The fast ends
+# From holyfast.1 at the end of the month, or early from 7, 8, 11 and 12.
+# Scope: the fasting ruler.
+character_event = {
+	id = holyfast.40
+	title = EVTTITLEholyfast
+	desc = EVTDESCholyfast40
+	picture = GFX_evt_imam
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = holy_fast
+	}
+
+	option = {
+		name = EVTOPTAholyfast40
+		holyfast_end_effect = yes
+	}
+}

@@ -1,0 +1,3461 @@
+###############################################################################
+# Warrior lodges
+# Namespace: lodge (was HF.10003 - HF.10071 in hf_warrior_lodge_events)
+# Faction: the warrior lodges (Warriors of Ulric, the Knightly Orders, the
+#   Warriors Guild of the Dawi); the joining trial, the rank-up duel and the
+#   AI rank-ups also serve the warbands (Chaos, Skaven, Gork and Mork)
+#
+# A character who asks to join a lodge or a warband is met by one of its
+# champions and must win (or at least survive) a sparring duel against a
+# member. The champion's voice is the society's voice: a Chosen of the Dark
+# Gods, a Skaven Warlord, an Orc boss, a Wolf-priest's warrior, a knight of
+# an Imperial order or a Dawi veteran. A parent in the society can push an
+# adult child into the trial; the child's success or failure comes home to
+# dinner. The powers of the lodges follow: the military path (duelist,
+# strategist or hunter), warrior training, the toughness of greenskins, the
+# berserk rage of Ulric's warriors and the Norscans (in the hall or in a
+# cell) and the call to arms. Hidden upkeep fills the lodges with AI members,
+# ranks them up and refounds a lodge that died out. A member at rank 3 can
+# fight a Hero for a seat at the table; a Hero's household may follow the
+# winner.
+#
+# The joining trial            lodge.1 - lodge.9
+# A child joins the lodge      lodge.10 - lodge.15
+# The military path            lodge.20 - lodge.28
+# Warrior training             lodge.30
+# Toughness                    lodge.35
+# Berserk rage                 lodge.40 - lodge.44
+# The call to arms             lodge.45
+# Upkeep                       lodge.50 - lodge.54
+# The seat at the table        lodge.60 - lodge.64
+#
+# Saved: character flags awaiting_initiation_trial, society_join_block,
+#   they_accepted@, they_declined@, mock_duel, show_once_flag,
+#   accepted_trial, refused_trial, parent_was_supportive, parent_was_mean,
+#   choosing_military_aspect, choosing_warrior_training, opt_A/B/C,
+#   no_harm, someone_is_hurt, hurt_self, may_join_society,
+#   lodge_got_wolf_pelt, lodge_got_household (once per life); character
+#   modifiers warband_failed_joining_cd (ten-year ban after a failed trial),
+#   lodge_growth_cooldown, lost_rank_up_duel_cooldown; earmark
+#   lodge_household; event targets martial_society_to_join, new_recruit,
+#   champion_character, duel_target, combatant_1, combatant_2,
+#   recruiting_parent, mentor_target, kinslayer_target.
+#
+# Callers: common/on_actions/00_on_actions.txt (on_character_ask_to_join_
+#   society 1, on_five_year_pulse 50, on_society_bi_yearly_pulse 54,
+#   on_society_destroyed 53); decisions/warrior_lodge_decisions.txt (20,
+#   21, 30, 35, 40, 43, 45); decisions/hf_warrior_lodge_decisions.txt (10);
+#   decisions/mnm_society_decisions.txt (60);
+#   common/scripted_effects/01_scripted_effects_duels.txt (9, 61);
+#   events/hfp_duel_events.txt (13).
+# Support: common/scripted_triggers/wh_warband_triggers.txt (voices, lodge
+#   recruits), common/scripted_effects/wh_warband_effects.txt
+#   (lodge_household_spawn_effect), common/event_modifiers/
+#   wh_warband_modifiers.txt (lodge_growth_cooldown).
+#
+# Fixed from vanilla: a captive leader made two champions answer the same
+# recruit, and the gating event could send the verdict three times; the ten
+# year ban after a failed trial was promised but never set; the hunter path
+# showed Chaos torturer text to every lodge; "kill your son" killed no one
+# and had no text; berserk rage looked for fellows of a lodge that does not
+# exist in the mod and could hurt nobody while saying someone was hurt; the
+# prison rage could pick no victim; the revival made every courtier join and
+# paid the leader twice; AI recruits of the Old World faith picked the
+# Knights or Ulric at fixed odds, now their temper decides; Kislev's
+# warriors could never reach the Circle of the Bear; the growth notice used
+# a cooldown modifier that did not exist; the seclusion clean-up HFP.19000
+# moved to WHG_maintenance_events (aiclean.53).
+###############################################################################
+
+namespace = lodge
+
+###############################################################################
+# The joining trial
+###############################################################################
+
+# lodge.1 A recruit knocks
+# From on_character_ask_to_join_society. A free champion of the society
+# (the leader if free, else the highest-ranked free member) is told about
+# the recruit.
+# Scope: ROOT is the recruit, FROM the society.
+character_event = {
+	id = lodge.1
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { has_character_flag = is_being_recruited_to_warband_by_parent }
+		NOT = { has_character_flag = awaiting_initiation_trial }
+		FROM = {
+			leader = {
+				OR = {
+					is_member_of_any_warrior_lodge_trigger = yes
+					is_member_of_any_warband_trigger = yes
+				}
+			}
+		}
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = martial_society_to_join }
+		set_character_flag = society_join_block
+		set_character_flag = awaiting_initiation_trial
+		save_event_target_as = new_recruit
+		# The leader if free, else the highest-ranked free member
+		event_target:martial_society_to_join = {
+			any_society_member = {
+				limit = { prisoner = no }
+				score_value = {
+					value = 1
+					additive_modifier = { value = 10000 is_society_grandmaster = yes }
+					additive_modifier = { value = 1000 society_rank == 4 }
+					additive_modifier = { value = 100 society_rank == 3 }
+					additive_modifier = { value = 10 society_rank == 2 }
+				}
+				count = 1
+				save_event_target_as = lodge_free_champion
+			}
+		}
+		if = {
+			limit = { event_target:lodge_free_champion = { always = yes } }
+			event_target:lodge_free_champion = { character_event = { id = lodge.2 } }
+		}
+		else = {
+			event_target:martial_society_to_join = {
+				leader = { character_event = { id = lodge.2 } }
+			}
+		}
+	}
+}
+
+# lodge.2 The champion meets the recruit
+# Scope: ROOT is the champion.
+character_event = {
+	id = lodge.2
+	desc = EVTDESClodge2
+	picture = {
+		trigger = { warband_voice_any_chaos_trigger = yes }
+		picture = GFX_evt_chaos_warband
+	}
+	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_war }
+	picture = {
+		trigger = { warband_voice_greenskin_trigger = yes }
+		picture = GFX_evt_greenskinanimosity
+	}
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
+	picture = { trigger = { warband_voice_knight_trigger = yes } picture = GFX_evt_imperial_knight }
+	picture = { trigger = { warband_voice_dawi_trigger = yes } picture = GFX_evt_dwarf_fighter }
+	picture = {
+		trigger = {
+			NOR = {
+				warband_voice_any_chaos_trigger = yes
+				warband_voice_skaven_trigger = yes
+				warband_voice_greenskin_trigger = yes
+				warband_voice_ulric_trigger = yes
+				warband_voice_knight_trigger = yes
+				warband_voice_dawi_trigger = yes
+			}
+		}
+		picture = GFX_evt_melee
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_effect = { save_event_target_as = champion_character }
+	}
+
+	option = {
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTAlodge2_chaos }
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAlodge2_skaven }
+		name = {
+			trigger = { warband_voice_greenskin_trigger = yes }
+			text = EVTOPTAlodge2_greenskin
+		}
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTAlodge2_ulric }
+		name = { trigger = { warband_voice_knight_trigger = yes } text = EVTOPTAlodge2_knight }
+		name = { trigger = { warband_voice_dawi_trigger = yes } text = EVTOPTAlodge2_dawi }
+		name = {
+			trigger = {
+				NOR = {
+					warband_voice_any_chaos_trigger = yes
+					warband_voice_skaven_trigger = yes
+					warband_voice_greenskin_trigger = yes
+					warband_voice_ulric_trigger = yes
+					warband_voice_knight_trigger = yes
+					warband_voice_dawi_trigger = yes
+				}
+			}
+			text = EVTOPTAlodge2_any
+		}
+		custom_tooltip = { text = EVTOPTAlodge2_TT }
+		add_legend_progress_trivial_effect = yes
+		hidden_effect = { event_target:new_recruit = { character_event = { id = lodge.3 } } }
+	}
+}
+
+# lodge.3 The challenge
+# Fight one of ours, or walk away. A recruit of a legendary warrior's
+# bloodline is greeted as such.
+# Scope: ROOT is the recruit, FROM the champion.
+character_event = {
+	id = lodge.3
+	desc = {
+		trigger = {
+			NOT = { any_owned_bloodline = { has_bloodline_flag = bloodline_legendary_warrior } }
+			event_target:champion_character = { warband_voice_any_chaos_trigger = yes }
+		}
+		text = EVTDESClodge3_chaos
+	}
+	desc = {
+		trigger = {
+			NOT = { any_owned_bloodline = { has_bloodline_flag = bloodline_legendary_warrior } }
+			event_target:champion_character = { warband_voice_skaven_trigger = yes }
+		}
+		text = EVTDESClodge3_skaven
+	}
+	desc = {
+		trigger = {
+			NOT = { any_owned_bloodline = { has_bloodline_flag = bloodline_legendary_warrior } }
+			event_target:champion_character = { warband_voice_greenskin_trigger = yes }
+		}
+		text = EVTDESClodge3_greenskin
+	}
+	desc = {
+		trigger = {
+			NOT = { any_owned_bloodline = { has_bloodline_flag = bloodline_legendary_warrior } }
+			event_target:champion_character = { warband_voice_ulric_trigger = yes }
+		}
+		text = EVTDESClodge3_ulric
+	}
+	desc = {
+		trigger = {
+			NOT = { any_owned_bloodline = { has_bloodline_flag = bloodline_legendary_warrior } }
+			event_target:champion_character = { warband_voice_knight_trigger = yes }
+		}
+		text = EVTDESClodge3_knight
+	}
+	desc = {
+		trigger = {
+			NOT = { any_owned_bloodline = { has_bloodline_flag = bloodline_legendary_warrior } }
+			event_target:champion_character = { warband_voice_dawi_trigger = yes }
+		}
+		text = EVTDESClodge3_dawi
+	}
+	desc = {
+		trigger = {
+			NOT = { any_owned_bloodline = { has_bloodline_flag = bloodline_legendary_warrior } }
+			event_target:champion_character = {
+				NOR = {
+					warband_voice_any_chaos_trigger = yes
+					warband_voice_skaven_trigger = yes
+					warband_voice_greenskin_trigger = yes
+					warband_voice_ulric_trigger = yes
+					warband_voice_knight_trigger = yes
+					warband_voice_dawi_trigger = yes
+				}
+			}
+		}
+		text = EVTDESClodge3_any
+	}
+	desc = {
+		trigger = { any_owned_bloodline = { has_bloodline_flag = bloodline_legendary_warrior } }
+		text = EVTDESClodge3_bloodline
+	}
+	picture = {
+		trigger = { event_target:champion_character = { warband_voice_any_chaos_trigger = yes } }
+		picture = GFX_evt_chaos_warband
+	}
+	picture = {
+		trigger = { event_target:champion_character = { warband_voice_skaven_trigger = yes } }
+		picture = GFX_evt_skaven_war
+	}
+	picture = {
+		trigger = { event_target:champion_character = { warband_voice_greenskin_trigger = yes } }
+		picture = GFX_evt_greenskinanimosity
+	}
+	picture = {
+		trigger = { event_target:champion_character = { warband_voice_ulric_trigger = yes } }
+		picture = GFX_evt_ulric_warriors
+	}
+	picture = {
+		trigger = { event_target:champion_character = { warband_voice_knight_trigger = yes } }
+		picture = GFX_evt_imperial_knight
+	}
+	picture = {
+		trigger = { event_target:champion_character = { warband_voice_dawi_trigger = yes } }
+		picture = GFX_evt_dwarf_fighter
+	}
+	picture = {
+		trigger = {
+			event_target:champion_character = {
+				NOR = {
+					warband_voice_any_chaos_trigger = yes
+					warband_voice_skaven_trigger = yes
+					warband_voice_greenskin_trigger = yes
+					warband_voice_ulric_trigger = yes
+					warband_voice_knight_trigger = yes
+					warband_voice_dawi_trigger = yes
+				}
+			}
+		}
+		picture = GFX_evt_melee
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { any_owned_bloodline = { has_bloodline_flag = bloodline_legendary_warrior } }
+			random_owned_bloodline = {
+				limit = { has_bloodline_flag = bloodline_legendary_warrior }
+				preferred_limit = { founder = { NOT = { character = ROOT } } }
+				founder = { save_event_target_as = founder_target }
+			}
+		}
+	}
+
+	# I'll fight
+	option = {
+		name = {
+			trigger = {
+				event_target:champion_character = { warband_voice_any_chaos_trigger = yes }
+			}
+			text = EVTOPTAlodge3_chaos
+		}
+		name = {
+			trigger = { event_target:champion_character = { warband_voice_skaven_trigger = yes } }
+			text = EVTOPTAlodge3_skaven
+		}
+		name = {
+			trigger = {
+				event_target:champion_character = { warband_voice_greenskin_trigger = yes }
+			}
+			text = EVTOPTAlodge3_greenskin
+		}
+		name = {
+			trigger = { event_target:champion_character = { warband_voice_ulric_trigger = yes } }
+			text = EVTOPTAlodge3_ulric
+		}
+		name = {
+			trigger = { event_target:champion_character = { warband_voice_knight_trigger = yes } }
+			text = EVTOPTAlodge3_knight
+		}
+		name = {
+			trigger = { event_target:champion_character = { warband_voice_dawi_trigger = yes } }
+			text = EVTOPTAlodge3_dawi
+		}
+		name = {
+			trigger = {
+				event_target:champion_character = {
+					NOR = {
+						warband_voice_any_chaos_trigger = yes
+						warband_voice_skaven_trigger = yes
+						warband_voice_greenskin_trigger = yes
+						warband_voice_ulric_trigger = yes
+						warband_voice_knight_trigger = yes
+						warband_voice_dawi_trigger = yes
+					}
+				}
+			}
+			text = EVTOPTAlodge3_any
+		}
+		custom_tooltip = { text = EVTOPTAlodge3_TT }
+		hidden_effect = {
+			event_target:champion_character = {
+				set_character_flag = they_accepted@ROOT
+				character_event = { id = lodge.4 }
+			}
+		}
+		if = {
+			limit = { FROM = { NOT = { is_alive = yes } } }
+			reset_martial_joining_chain_effect = yes
+		}
+		ai_chance = { factor = 100 }
+	}
+
+	# I changed my mind
+	option = {
+		name = {
+			trigger = {
+				event_target:champion_character = { warband_voice_any_chaos_trigger = yes }
+			}
+			text = EVTOPTBlodge3_chaos
+		}
+		name = {
+			trigger = { event_target:champion_character = { warband_voice_skaven_trigger = yes } }
+			text = EVTOPTBlodge3_skaven
+		}
+		name = {
+			trigger = {
+				event_target:champion_character = { warband_voice_greenskin_trigger = yes }
+			}
+			text = EVTOPTBlodge3_greenskin
+		}
+		name = {
+			trigger = { event_target:champion_character = { warband_voice_ulric_trigger = yes } }
+			text = EVTOPTBlodge3_ulric
+		}
+		name = {
+			trigger = { event_target:champion_character = { warband_voice_knight_trigger = yes } }
+			text = EVTOPTBlodge3_knight
+		}
+		name = {
+			trigger = { event_target:champion_character = { warband_voice_dawi_trigger = yes } }
+			text = EVTOPTBlodge3_dawi
+		}
+		name = {
+			trigger = {
+				event_target:champion_character = {
+					NOR = {
+						warband_voice_any_chaos_trigger = yes
+						warband_voice_skaven_trigger = yes
+						warband_voice_greenskin_trigger = yes
+						warband_voice_ulric_trigger = yes
+						warband_voice_knight_trigger = yes
+						warband_voice_dawi_trigger = yes
+					}
+				}
+			}
+			text = EVTOPTBlodge3_any
+		}
+		custom_tooltip = { text = EVTOPTBlodge3_TT }
+		tooltip = {
+			reverse_opinion = {
+				who = event_target:champion_character
+				modifier = opinion_disappointed
+				years = 5
+			}
+		}
+		hidden_effect = {
+			clr_character_flag = society_join_block
+			clr_character_flag = awaiting_initiation_trial
+			event_target:champion_character = {
+				set_character_flag = they_declined@ROOT
+				character_event = { id = lodge.4 }
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 has_character_flag = is_being_recruited_to_warband_by_parent }
+		}
+	}
+}
+
+# lodge.4 The champion picks a sparring partner
+# A free AI member close to the recruit's skill, ideally of low rank, takes
+# up the challenge. If the recruit walked away, the champion is scornful.
+# Scope: ROOT is the champion, FROM the recruit.
+character_event = {
+	id = lodge.4
+	desc = { trigger = { has_character_flag = they_accepted@FROM } text = EVTDESClodge4_yes }
+	desc = { trigger = { has_character_flag = they_declined@FROM } text = EVTDESClodge4_no }
+	picture = {
+		trigger = { warband_voice_any_chaos_trigger = yes }
+		picture = GFX_evt_chaos_warband
+	}
+	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_war }
+	picture = {
+		trigger = { warband_voice_greenskin_trigger = yes }
+		picture = GFX_evt_greenskinanimosity
+	}
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
+	picture = { trigger = { warband_voice_knight_trigger = yes } picture = GFX_evt_imperial_knight }
+	picture = { trigger = { warband_voice_dawi_trigger = yes } picture = GFX_evt_dwarf_fighter }
+	picture = {
+		trigger = {
+			NOR = {
+				warband_voice_any_chaos_trigger = yes
+				warband_voice_skaven_trigger = yes
+				warband_voice_greenskin_trigger = yes
+				warband_voice_ulric_trigger = yes
+				warband_voice_knight_trigger = yes
+				warband_voice_dawi_trigger = yes
+			}
+		}
+		picture = GFX_evt_melee
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_effect = {
+			if = {
+				limit = { has_character_flag = they_accepted@FROM }
+				any_society_member = {
+					limit = { same_society_as = ROOT }
+					score_value = {
+						value = 1
+						# Low ranks first
+						additive_modifier = { value = 100000 society_rank == 1 }
+						additive_modifier = { value = 1000 society_rank == 2 }
+						additive_modifier = { value = 10 society_rank == 3 }
+						additive_modifier = { value = 1 society_rank == 4 }
+						# An even match
+						additive_modifier = {
+							value = 1000
+							OR = {
+								AND = {
+									duelist_skill_is_low_group_trigger = yes
+									FROM = { duelist_skill_is_low_group_trigger = yes }
+								}
+								AND = {
+									duelist_skill_is_medium_group_trigger = yes
+									FROM = { duelist_skill_is_medium_group_trigger = yes }
+								}
+								AND = {
+									duelist_skill_is_high_group_trigger = yes
+									FROM = { duelist_skill_is_high_group_trigger = yes }
+								}
+							}
+						}
+						additive_modifier = {
+							value = 1000
+							OR = {
+								AND = {
+									is_the_worst_duelist_trigger = yes
+									FROM = { is_the_worst_duelist_trigger = yes }
+								}
+								AND = {
+									is_terrible_duelist_trigger = yes
+									FROM = { is_terrible_duelist_trigger = yes }
+								}
+								AND = {
+									is_bad_duelist_trigger = yes
+									FROM = { is_bad_duelist_trigger = yes }
+								}
+							}
+						}
+						# New bonds can form
+						additive_modifier = {
+							value = 100
+							NOR = { is_rival = FROM is_lover = FROM is_friend = FROM }
+						}
+						additive_modifier = {
+							value = 100
+							OR = {
+								reverse_has_opinion_modifier = {
+									who = FROM
+									modifier = opinion_hate
+								}
+								reverse_has_opinion_modifier = {
+									who = FROM
+									modifier = opinion_tortured_me
+								}
+								reverse_has_opinion_modifier = {
+									who = FROM
+									modifier = opinion_mutilated_me
+								}
+								reverse_has_opinion_modifier = {
+									who = FROM
+									modifier = opinion_imprisoned
+								}
+							}
+						}
+						additive_modifier = {
+							value = 200
+							FROM = {
+								PREV = { prev_is_lonely_this_romance_makes_sense_trigger = yes }
+							}
+						}
+						# Free, healthy, AI and not the champion
+						additive_modifier = { value = -5000 block_general_event_trigger = yes }
+						additive_modifier = { value = -1000 character = ROOT }
+						additive_modifier = { value = -1000 NOT = { ai = yes } }
+						additive_modifier = {
+							value = -500
+							OR = {
+								has_character_modifier = bedridden_illness
+								has_character_modifier = severe_illness
+								character_disease_trigger = yes
+								has_severe_disability_trigger = yes
+							}
+							NOR = { religion = nurgle trait = norscan_patron_nurgleth }
+						}
+						additive_modifier = {
+							value = -500
+							OR = { age = 60 is_maimed_trigger = yes }
+						}
+					}
+					count = 1
+					save_event_target_as = duel_target
+				}
+			}
+		}
+	}
+
+	# Show them the ropes
+	option = {
+		name = EVTOPTAlodge4
+		trigger = { has_character_flag = they_accepted@FROM }
+		custom_tooltip = { text = EVTOPTAlodge4_TT }
+		show_portrait = event_target:duel_target
+	}
+
+	# That little coward
+	option = {
+		name = EVTOPTBlodge4
+		trigger = { has_character_flag = they_declined@FROM }
+		opinion = { who = FROM modifier = opinion_disappointed years = 5 }
+	}
+
+	after = {
+		hidden_effect = {
+			if = {
+				limit = { has_character_flag = they_accepted@FROM }
+				event_target:new_recruit = { character_event = { id = lodge.5 } }
+			}
+			clr_character_flag = they_accepted@FROM
+			clr_character_flag = they_declined@FROM
+		}
+	}
+}
+
+# lodge.5 The duel is set
+# Sets the duel scopes and sends the challenge (HFP.10095 in the duel
+# events). The duel's clean-up sends lodge.9.
+# Scope: ROOT is the recruit.
+character_event = {
+	id = lodge.5
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { event_target:duel_target = { NOT = { is_alive = yes } } }
+			reset_martial_joining_chain_effect = yes
+		}
+		set_character_flag = mock_duel
+		save_event_target_as = combatant_1
+		event_target:duel_target = {
+			save_event_target_as = combatant_2
+			character_event = { id = HFP.10095 }
+		}
+	}
+}
+
+# lodge.6 The verdict
+# The champion judges the duel and writes the welcome (lodge.7) or the
+# refusal (lodge.8).
+# Scope: ROOT is the champion, FROM the recruit.
+character_event = {
+	id = lodge.6
+	desc = {
+		trigger = {
+			FROM = {
+				NOR = {
+					has_character_flag = was_mildly_injured
+					has_character_flag = was_actually_injured
+					has_character_flag = duel_fled
+				}
+			}
+		}
+		text = EVTDESClodge6_great
+	}
+	desc = {
+		trigger = {
+			FROM = {
+				has_character_flag = was_mildly_injured
+				NOT = { has_character_flag = duel_fled }
+			}
+		}
+		text = EVTDESClodge6_mild
+	}
+	desc = {
+		trigger = {
+			FROM = {
+				has_character_flag = was_actually_injured
+				NOR = { has_character_flag = was_mildly_injured has_character_flag = duel_fled }
+			}
+		}
+		text = EVTDESClodge6_serious
+	}
+	desc = { trigger = { FROM = { has_character_flag = duel_fled } } text = EVTDESClodge6_fled }
+	picture = {
+		trigger = { warband_voice_any_chaos_trigger = yes }
+		picture = GFX_evt_chaos_warband
+	}
+	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_war }
+	picture = {
+		trigger = { warband_voice_greenskin_trigger = yes }
+		picture = GFX_evt_greenskinanimosity
+	}
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
+	picture = { trigger = { warband_voice_knight_trigger = yes } picture = GFX_evt_imperial_knight }
+	picture = { trigger = { warband_voice_dawi_trigger = yes } picture = GFX_evt_dwarf_fighter }
+	picture = {
+		trigger = {
+			NOR = {
+				warband_voice_any_chaos_trigger = yes
+				warband_voice_skaven_trigger = yes
+				warband_voice_greenskin_trigger = yes
+				warband_voice_ulric_trigger = yes
+				warband_voice_knight_trigger = yes
+				warband_voice_dawi_trigger = yes
+			}
+		}
+		picture = GFX_evt_melee
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = {
+			trigger = {
+				FROM = {
+					NOR = {
+						has_character_flag = was_mildly_injured
+						has_character_flag = was_actually_injured
+						has_character_flag = duel_fled
+					}
+				}
+			}
+			text = EVTOPTAlodge6
+		}
+		name = {
+			trigger = {
+				FROM = {
+					has_character_flag = was_mildly_injured
+					NOT = { has_character_flag = duel_fled }
+				}
+			}
+			text = EVTOPTAlodge6b
+		}
+		name = {
+			trigger = {
+				FROM = {
+					has_character_flag = was_actually_injured
+					NOR = { has_character_flag = was_mildly_injured has_character_flag = duel_fled }
+				}
+			}
+			text = EVTOPTAlodge6c
+		}
+		name = { trigger = { FROM = { has_character_flag = duel_fled } } text = EVTOPTAlodge6d }
+		if = {
+			limit = { FROM = { NOT = { has_character_flag = duel_fled } } }
+			custom_tooltip = { text = EVTOPTAlodge6_TT }
+			add_legend_progress_trivial_effect = yes
+			FROM = { letter_event = { id = lodge.7 days = 5 } }
+		}
+		else = {
+			custom_tooltip = { text = EVTOPTAlodge6_TTb }
+			FROM = { letter_event = { id = lodge.8 days = 5 } }
+		}
+	}
+}
+
+# lodge.7 Welcome to the society
+# Written in the voice of the society. A recruit of Ulric's warriors who came
+# through without a scratch may, once in a life, be given a white wolf pelt.
+# Scope: ROOT is the recruit, FROM the champion.
+letter_event = {
+	id = lodge.7
+	desc = {
+		trigger = {
+			NOR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = { warband_voice_any_chaos_trigger = yes }
+		}
+		text = EVTDESClodge7_chaos
+	}
+	desc = {
+		trigger = {
+			NOR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = { warband_voice_skaven_trigger = yes }
+		}
+		text = EVTDESClodge7_skaven
+	}
+	desc = {
+		trigger = {
+			NOR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = { warband_voice_greenskin_trigger = yes }
+		}
+		text = EVTDESClodge7_greenskin
+	}
+	desc = {
+		trigger = {
+			NOR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = { warband_voice_ulric_trigger = yes }
+		}
+		text = EVTDESClodge7_ulric
+	}
+	desc = {
+		trigger = {
+			NOR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = { warband_voice_knight_trigger = yes }
+		}
+		text = EVTDESClodge7_knight
+	}
+	desc = {
+		trigger = {
+			NOR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = { warband_voice_dawi_trigger = yes }
+		}
+		text = EVTDESClodge7_dawi
+	}
+	desc = {
+		trigger = {
+			NOR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = {
+				NOR = {
+					warband_voice_any_chaos_trigger = yes
+					warband_voice_skaven_trigger = yes
+					warband_voice_greenskin_trigger = yes
+					warband_voice_ulric_trigger = yes
+					warband_voice_knight_trigger = yes
+					warband_voice_dawi_trigger = yes
+				}
+			}
+		}
+		text = EVTDESClodge7_any
+	}
+	desc = {
+		trigger = {
+			OR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = { warband_voice_any_chaos_trigger = yes }
+		}
+		text = EVTDESClodge7b_chaos
+	}
+	desc = {
+		trigger = {
+			OR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = { warband_voice_skaven_trigger = yes }
+		}
+		text = EVTDESClodge7b_skaven
+	}
+	desc = {
+		trigger = {
+			OR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = { warband_voice_greenskin_trigger = yes }
+		}
+		text = EVTDESClodge7b_greenskin
+	}
+	desc = {
+		trigger = {
+			OR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = { warband_voice_ulric_trigger = yes }
+		}
+		text = EVTDESClodge7b_ulric
+	}
+	desc = {
+		trigger = {
+			OR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = { warband_voice_knight_trigger = yes }
+		}
+		text = EVTDESClodge7b_knight
+	}
+	desc = {
+		trigger = {
+			OR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = { warband_voice_dawi_trigger = yes }
+		}
+		text = EVTDESClodge7b_dawi
+	}
+	desc = {
+		trigger = {
+			OR = {
+				has_character_flag = was_mildly_injured
+				has_character_flag = was_actually_injured
+			}
+			FROM = {
+				NOR = {
+					warband_voice_any_chaos_trigger = yes
+					warband_voice_skaven_trigger = yes
+					warband_voice_greenskin_trigger = yes
+					warband_voice_ulric_trigger = yes
+					warband_voice_knight_trigger = yes
+					warband_voice_dawi_trigger = yes
+				}
+			}
+		}
+		text = EVTDESClodge7b_any
+	}
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { has_character_flag = show_once_flag }
+	}
+
+	immediate = {
+		set_character_flag = show_once_flag
+	}
+
+	option = {
+		name = {
+			trigger = { FROM = { warband_voice_any_chaos_trigger = yes } }
+			text = EVTOPTAlodge7_chaos
+		}
+		name = {
+			trigger = { FROM = { warband_voice_skaven_trigger = yes } }
+			text = EVTOPTAlodge7_skaven
+		}
+		name = {
+			trigger = { FROM = { warband_voice_greenskin_trigger = yes } }
+			text = EVTOPTAlodge7_greenskin
+		}
+		name = {
+			trigger = { FROM = { warband_voice_ulric_trigger = yes } }
+			text = EVTOPTAlodge7_ulric
+		}
+		name = {
+			trigger = { FROM = { warband_voice_knight_trigger = yes } }
+			text = EVTOPTAlodge7_knight
+		}
+		name = {
+			trigger = { FROM = { warband_voice_dawi_trigger = yes } }
+			text = EVTOPTAlodge7_dawi
+		}
+		name = {
+			trigger = {
+				FROM = {
+					NOR = {
+						warband_voice_any_chaos_trigger = yes
+						warband_voice_skaven_trigger = yes
+						warband_voice_greenskin_trigger = yes
+						warband_voice_ulric_trigger = yes
+						warband_voice_knight_trigger = yes
+						warband_voice_dawi_trigger = yes
+					}
+				}
+			}
+			text = EVTOPTAlodge7_any
+		}
+		join_society = event_target:martial_society_to_join
+		if = {
+			limit = { has_character_flag = minor_reward }
+			add_society_currency_minor_effect = yes
+		}
+		if = {
+			limit = { has_character_flag = medium_reward }
+			add_society_currency_medium_effect = yes
+		}
+		if = {
+			limit = {
+				society_member_of = warriors_of_ulric
+				NOR = {
+					has_character_flag = was_mildly_injured
+					has_character_flag = was_actually_injured
+					has_character_flag = lodge_got_wolf_pelt
+					has_artifact = white_wolf_pelt
+				}
+			}
+			random = {
+				chance = 10
+				set_character_flag = lodge_got_wolf_pelt
+				custom_tooltip = { text = EVTOPTAlodge7_pelt_TT }
+				add_artifact = white_wolf_pelt
+			}
+		}
+		hidden_effect = {
+			clr_character_flag = was_actually_injured
+			clr_character_flag = was_mildly_injured
+			clr_character_flag = awaiting_initiation_trial
+			clr_character_flag = duel_fled
+			clr_character_flag = minor_reward
+			clr_character_flag = medium_reward
+			clr_character_flag = show_once_flag
+		}
+		if = {
+			limit = {
+				has_character_flag = is_being_recruited_to_warband_by_parent
+				event_target:recruiting_parent = { is_alive = yes }
+			}
+			custom_tooltip = { text = your_parent_will_be_proud_tt }
+			tooltip = {
+				opinion = {
+					modifier = opinion_grateful
+					who = event_target:recruiting_parent
+					years = 5
+				}
+				reverse_opinion = {
+					modifier = opinion_impressed
+					who = event_target:recruiting_parent
+					years = 5
+				}
+			}
+			set_character_flag = passed_initiation
+			event_target:recruiting_parent = { character_event = { id = lodge.12 } }
+		}
+		clr_character_flag = society_join_block
+	}
+}
+
+# lodge.8 Turned away
+# The recruit fled the duel and may not ask again for ten years.
+# Scope: ROOT is the recruit, FROM the champion.
+letter_event = {
+	id = lodge.8
+	desc = {
+		trigger = { FROM = { warband_voice_any_chaos_trigger = yes } }
+		text = EVTDESClodge8_chaos
+	}
+	desc = {
+		trigger = { FROM = { warband_voice_skaven_trigger = yes } }
+		text = EVTDESClodge8_skaven
+	}
+	desc = {
+		trigger = { FROM = { warband_voice_greenskin_trigger = yes } }
+		text = EVTDESClodge8_greenskin
+	}
+	desc = { trigger = { FROM = { warband_voice_ulric_trigger = yes } } text = EVTDESClodge8_ulric }
+	desc = {
+		trigger = { FROM = { warband_voice_knight_trigger = yes } }
+		text = EVTDESClodge8_knight
+	}
+	desc = { trigger = { FROM = { warband_voice_dawi_trigger = yes } } text = EVTDESClodge8_dawi }
+	desc = {
+		trigger = {
+			FROM = {
+				NOR = {
+					warband_voice_any_chaos_trigger = yes
+					warband_voice_skaven_trigger = yes
+					warband_voice_greenskin_trigger = yes
+					warband_voice_ulric_trigger = yes
+					warband_voice_knight_trigger = yes
+					warband_voice_dawi_trigger = yes
+				}
+			}
+		}
+		text = EVTDESClodge8_any
+	}
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = {
+			trigger = { FROM = { warband_voice_any_chaos_trigger = yes } }
+			text = EVTOPTAlodge8_chaos
+		}
+		name = {
+			trigger = { FROM = { warband_voice_skaven_trigger = yes } }
+			text = EVTOPTAlodge8_skaven
+		}
+		name = {
+			trigger = { FROM = { warband_voice_greenskin_trigger = yes } }
+			text = EVTOPTAlodge8_greenskin
+		}
+		name = {
+			trigger = { FROM = { warband_voice_ulric_trigger = yes } }
+			text = EVTOPTAlodge8_ulric
+		}
+		name = {
+			trigger = { FROM = { warband_voice_knight_trigger = yes } }
+			text = EVTOPTAlodge8_knight
+		}
+		name = {
+			trigger = { FROM = { warband_voice_dawi_trigger = yes } }
+			text = EVTOPTAlodge8_dawi
+		}
+		name = {
+			trigger = {
+				FROM = {
+					NOR = {
+						warband_voice_any_chaos_trigger = yes
+						warband_voice_skaven_trigger = yes
+						warband_voice_greenskin_trigger = yes
+						warband_voice_ulric_trigger = yes
+						warband_voice_knight_trigger = yes
+						warband_voice_dawi_trigger = yes
+					}
+				}
+			}
+			text = EVTOPTAlodge8_any
+		}
+		custom_tooltip = { text = EVTOPTAlodge8_TT }
+		hidden_effect = {
+			add_character_modifier = { name = warband_failed_joining_cd years = 10 hidden = yes }
+			clr_character_flag = was_actually_injured
+			clr_character_flag = was_mildly_injured
+			clr_character_flag = awaiting_initiation_trial
+			clr_character_flag = duel_fled
+			clr_character_flag = minor_reward
+			clr_character_flag = medium_reward
+		}
+		if = {
+			limit = {
+				has_character_flag = is_being_recruited_to_warband_by_parent
+				event_target:recruiting_parent = { is_alive = yes }
+			}
+			custom_tooltip = { text = notify_parent_recruiter_tt }
+			set_character_flag = failed_initiation
+			event_target:recruiting_parent = { character_event = { id = lodge.13 } }
+		}
+		clr_character_flag = society_join_block
+	}
+}
+
+# lodge.9 The duel is over
+# Ten days after the duel the champion (or, if the champion cannot answer,
+# another free champion) gives the verdict (lodge.6).
+# Scope: ROOT is the recruit.
+character_event = {
+	id = lodge.9
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { event_target:champion_character = { block_general_event_trigger = no } }
+			event_target:champion_character = { character_event = { id = lodge.6 } }
+		}
+		else = {
+			event_target:martial_society_to_join = {
+				any_society_member = {
+					limit = { prisoner = no }
+					score_value = {
+						value = 1
+						additive_modifier = { value = 10000 is_society_grandmaster = yes }
+						additive_modifier = { value = 1000 society_rank == 4 }
+						additive_modifier = { value = 100 society_rank == 3 }
+						additive_modifier = { value = 10 society_rank == 2 }
+					}
+					count = 1
+					save_event_target_as = lodge_free_champion
+				}
+			}
+			if = {
+				limit = { event_target:lodge_free_champion = { always = yes } }
+				event_target:lodge_free_champion = { character_event = { id = lodge.6 } }
+			}
+			else = {
+				event_target:martial_society_to_join = {
+					leader = { character_event = { id = lodge.6 } }
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# A child joins the lodge
+###############################################################################
+
+# lodge.10 The parent's question
+# From the decision warband_recruit_child (hf_warrior_lodge_decisions). An
+# adult child is asked over dinner to take the trial of the parent's society.
+# Scope: ROOT is the child; event target recruiting_parent.
+character_event = {
+	id = lodge.10
+	desc = {
+		trigger = { event_target:recruiting_parent = { warband_voice_any_chaos_trigger = yes } }
+		text = EVTDESClodge10_chaos
+	}
+	desc = {
+		trigger = { event_target:recruiting_parent = { warband_voice_skaven_trigger = yes } }
+		text = EVTDESClodge10_skaven
+	}
+	desc = {
+		trigger = { event_target:recruiting_parent = { warband_voice_greenskin_trigger = yes } }
+		text = EVTDESClodge10_greenskin
+	}
+	desc = {
+		trigger = { event_target:recruiting_parent = { warband_voice_ulric_trigger = yes } }
+		text = EVTDESClodge10_ulric
+	}
+	desc = {
+		trigger = { event_target:recruiting_parent = { warband_voice_knight_trigger = yes } }
+		text = EVTDESClodge10_knight
+	}
+	desc = {
+		trigger = { event_target:recruiting_parent = { warband_voice_dawi_trigger = yes } }
+		text = EVTDESClodge10_dawi
+	}
+	desc = {
+		trigger = {
+			event_target:recruiting_parent = {
+				NOR = {
+					warband_voice_any_chaos_trigger = yes
+					warband_voice_skaven_trigger = yes
+					warband_voice_greenskin_trigger = yes
+					warband_voice_ulric_trigger = yes
+					warband_voice_knight_trigger = yes
+					warband_voice_dawi_trigger = yes
+				}
+			}
+		}
+		text = EVTDESClodge10_any
+	}
+	picture = {
+		trigger = { event_target:recruiting_parent = { warband_voice_any_chaos_trigger = yes } }
+		picture = GFX_evt_chaos_warband
+	}
+	picture = {
+		trigger = { event_target:recruiting_parent = { warband_voice_skaven_trigger = yes } }
+		picture = GFX_evt_skaven_war
+	}
+	picture = {
+		trigger = { event_target:recruiting_parent = { warband_voice_greenskin_trigger = yes } }
+		picture = GFX_evt_greenskinanimosity
+	}
+	picture = {
+		trigger = { event_target:recruiting_parent = { warband_voice_ulric_trigger = yes } }
+		picture = GFX_evt_ulric_warriors
+	}
+	picture = {
+		trigger = { event_target:recruiting_parent = { warband_voice_knight_trigger = yes } }
+		picture = GFX_evt_imperial_knight
+	}
+	picture = {
+		trigger = { event_target:recruiting_parent = { warband_voice_dawi_trigger = yes } }
+		picture = GFX_evt_dwarf_fighter
+	}
+	picture = {
+		trigger = {
+			event_target:recruiting_parent = {
+				NOR = {
+					warband_voice_any_chaos_trigger = yes
+					warband_voice_skaven_trigger = yes
+					warband_voice_greenskin_trigger = yes
+					warband_voice_ulric_trigger = yes
+					warband_voice_knight_trigger = yes
+					warband_voice_dawi_trigger = yes
+				}
+			}
+		}
+		picture = GFX_evt_melee
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		event_target:martial_society_to_join = {
+			any_society_member = {
+				limit = { prisoner = no }
+				score_value = { value = 10 warrior_hero_score = yes }
+				count = 1
+				save_event_target_as = champion_character
+			}
+		}
+		if = {
+			limit = { NOT = { event_target:champion_character = { always = yes } } }
+			event_target:martial_society_to_join = {
+				leader = { save_event_target_as = champion_character }
+			}
+		}
+	}
+
+	# It's what I always wanted
+	option = {
+		name = EVTOPTAlodge10
+		trigger = {
+			is_secret_religious_society_member_trigger = no
+			is_devil_worshiper_trigger = no
+			NOT = { society_member_of = the_assassins }
+		}
+		custom_tooltip = { text = EVTOPTAlodge10_TT }
+		event_target:champion_character = { character_event = { id = lodge.2 } }
+		set_character_flag = accepted_trial
+		ai_chance = { factor = 100 modifier = { factor = 0 is_in_society = yes } }
+	}
+
+	# I will carve my own path
+	option = {
+		name = EVTOPTBlodge10
+		trigger = {
+			OR = {
+				NOT = {
+					event_target:recruiting_parent = {
+						has_quest = quest_warband_recruit
+						quest_target = { character = ROOT }
+					}
+				}
+				is_secret_religious_society_member_trigger = yes
+				is_devil_worshiper_trigger = yes
+				society_member_of = the_assassins
+			}
+		}
+		custom_tooltip = { text = EVTOPTBlodge10_TT }
+		set_character_flag = refused_trial
+		clr_character_flag = society_join_block
+		clr_character_flag = awaiting_initiation_trial
+		hidden_effect = { character_event = { id = lodge.15 days = 365 } }
+		ai_chance = { factor = 10 modifier = { factor = 1.5 trait = stubborn } }
+	}
+
+	after = {
+		event_target:recruiting_parent = { character_event = { id = lodge.11 days = 1 } }
+	}
+}
+
+# lodge.11 The child's answer
+# Scope: ROOT is the parent, FROM the child.
+character_event = {
+	id = lodge.11
+	desc = {
+		trigger = {
+			FROM = { has_character_flag = accepted_trial }
+			NOT = { event_target:champion_character = { character = ROOT } }
+		}
+		text = EVTDESClodge11_yes
+	}
+	desc = {
+		trigger = {
+			FROM = { has_character_flag = accepted_trial }
+			event_target:champion_character = { character = ROOT }
+		}
+		text = EVTDESClodge11_yes_self
+	}
+	desc = {
+		trigger = {
+			FROM = { has_character_flag = refused_trial }
+			NOT = { event_target:champion_character = { character = ROOT } }
+		}
+		text = EVTDESClodge11_no
+	}
+	desc = {
+		trigger = {
+			FROM = { has_character_flag = refused_trial }
+			event_target:champion_character = { character = ROOT }
+		}
+		text = EVTDESClodge11_no_self
+	}
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	# I was waiting for you to be ready
+	option = {
+		name = {
+			trigger = { event_target:champion_character = { NOT = { character = ROOT } } }
+			text = EVTOPTAlodge11
+		}
+		name = {
+			trigger = { event_target:champion_character = { character = ROOT } }
+			text = EVTOPTAlodge11b
+		}
+		trigger = { FROM = { has_character_flag = accepted_trial } }
+		if = {
+			limit = { event_target:champion_character = { NOT = { character = ROOT } } }
+			custom_tooltip = { text = EVTOPTAlodge11_TT }
+			show_portrait = event_target:champion_character
+		}
+	}
+
+	# Why, you ungrateful little...
+	option = {
+		name = EVTOPTBlodge11
+		trigger = { FROM = { has_character_flag = refused_trial } }
+		custom_tooltip = { text = EVTOPTBlodge11_TT }
+		if = {
+			limit = { event_target:champion_character = { NOT = { character = ROOT } } }
+			show_portrait = event_target:champion_character
+		}
+	}
+
+	after = {
+		FROM = { clr_character_flag = accepted_trial clr_character_flag = refused_trial }
+	}
+}
+
+# lodge.12 The child passed
+# Scope: ROOT is the parent, FROM the child.
+character_event = {
+	id = lodge.12
+	desc = EVTDESClodge12
+	picture = GFX_evt_camaraderie
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { has_character_flag = show_only_once@FROM }
+	}
+
+	immediate = {
+		set_character_flag = show_only_once@FROM
+	}
+
+	# I knew you had it in you
+	option = {
+		name = EVTOPTAlodge12
+		trigger = { same_society_as = FROM }
+		custom_tooltip = { text = EVTOPTAlodge12_TT }
+		prestige = 20
+		reverse_opinion = { modifier = opinion_grateful who = FROM years = 5 }
+		opinion = { modifier = opinion_impressed who = FROM years = 5 }
+		if = {
+			limit = { has_quest = quest_warband_recruit quest_target = { character = FROM } }
+			clr_quest = quest_warband_recruit
+			add_society_currency_medium_effect = yes
+		}
+		add_legend_progress_trivial_effect = yes
+	}
+
+	# You make me miss it (if the parent has left)
+	option = {
+		name = EVTOPTBlodge12
+		trigger = { NOT = { same_society_as = FROM } }
+		custom_tooltip = { text = EVTOPTBlodge12_TT }
+		if = {
+			limit = { NOT = { trait = depressed } }
+			random = { chance = 10 add_trait_depressed_effect = yes }
+		}
+	}
+
+	# I'm not impressed
+	option = {
+		name = EVTOPTClodge12
+		trigger = { NOT = { same_society_as = FROM } }
+		custom_tooltip = { text = EVTOPTClodge12_TT }
+		if = { limit = { NOR = { trait = kind trait = cruel } } add_trait = cruel }
+		else_if = { limit = { trait = kind } remove_trait = kind }
+		reverse_opinion = { modifier = opinion_disappointed who = FROM years = 5 }
+	}
+
+	after = {
+		FROM = {
+			clr_character_flag = passed_initiation
+			clr_character_flag = is_being_recruited_to_warband_by_parent
+			hidden_tooltip = { character_event = { id = HF.25400 } } # The young recruit's flavour (lodge child events)
+		}
+		clr_character_flag = show_only_once@FROM
+	}
+}
+
+# lodge.13 The child failed
+# Also sent by the duel events when the child turns the duel down. A cruel
+# parent of the Dark Gods, the Horned Rat or the greenskins may decide that
+# weakness has no place in the bloodline.
+# Scope: ROOT is the parent, FROM the child.
+character_event = {
+	id = lodge.13
+	desc = {
+		trigger = { FROM = { NOT = { has_character_flag = chickened_out } } }
+		text = EVTDESClodge13_failed
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = chickened_out } }
+		text = EVTDESClodge13_fled
+	}
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { has_character_flag = show_only_once@FROM }
+	}
+
+	immediate = {
+		set_character_flag = show_only_once@FROM
+	}
+
+	# I'm still proud to call you family
+	option = {
+		name = EVTOPTAlodge13
+		custom_tooltip = { text = EVTOPTAlodge13_TT }
+		if = { limit = { NOR = { trait = kind trait = cruel religion = khorne } } add_trait = kind }
+		else_if = { limit = { trait = cruel NOT = { religion = khorne } } remove_trait = cruel }
+		FROM = { set_character_flag = parent_was_supportive }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 0.2 trait = cruel }
+		}
+	}
+
+	# I expected more
+	option = {
+		name = EVTOPTBlodge13
+		custom_tooltip = { text = EVTOPTBlodge13_TT }
+		prestige = 20
+		if = { limit = { NOR = { trait = kind trait = cruel } } add_trait = cruel }
+		else_if = { limit = { trait = kind } remove_trait = kind }
+		else_if = { limit = { NOT = { trait = honest } } add_trait = honest }
+		FROM = { set_character_flag = parent_was_mean }
+		ai_chance = { factor = 50 }
+	}
+
+	# Weakness has no place in my blood
+	option = {
+		name = EVTOPTClodge13
+		trigger = {
+			NOT = { trait = kind }
+			OR = {
+				warband_voice_any_chaos_trigger = yes
+				warband_voice_skaven_trigger = yes
+				warband_voice_greenskin_trigger = yes
+				AND = { trait = cruel OR = { trait = wroth trait = lunatic trait = possessed } }
+			}
+		}
+		custom_tooltip = { text = EVTOPTClodge13_TT }
+		prestige = 20
+		if = { limit = { NOT = { trait = cruel } } add_trait = cruel }
+		FROM = {
+			save_event_target_as = kinslayer_target
+			death = { death_reason = death_murder killer = ROOT }
+		}
+		if = {
+			limit = {
+				NOR = {
+					warband_voice_any_chaos_trigger = yes
+					warband_voice_skaven_trigger = yes
+					warband_voice_greenskin_trigger = yes
+				}
+			}
+			add_kinslayer_trait_effect = yes
+		}
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 5 religion = khorne }
+			modifier = { factor = 3 warband_voice_skaven_trigger = yes }
+			modifier = { factor = 2 trait = wroth }
+			modifier = { factor = 0 is_close_relative = FROM NOT = { trait = cruel } }
+		}
+	}
+
+	after = {
+		if = {
+			limit = { has_quest = quest_warband_recruit quest_target = { character = FROM } }
+			clr_quest = { id = quest_warband_recruit failure = yes }
+		}
+		FROM = {
+			clr_character_flag = failed_initiation
+			clr_character_flag = chickened_out
+			clr_character_flag = is_being_recruited_to_warband_by_parent
+			if = { limit = { is_alive = yes } character_event = { id = lodge.14 days = 5 } }
+		}
+		clr_character_flag = show_only_once@FROM
+	}
+}
+
+# lodge.14 What the parent said
+# Scope: ROOT is the child, FROM the parent.
+character_event = {
+	id = lodge.14
+	desc = { trigger = { has_character_flag = parent_was_supportive } text = EVTDESClodge14_kind }
+	desc = { trigger = { has_character_flag = parent_was_mean } text = EVTDESClodge14_mean }
+	picture = GFX_evt_camaraderie
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	# Family comes first
+	option = {
+		name = EVTOPTAlodge14
+		trigger = { has_character_flag = parent_was_supportive }
+		if = { limit = { has_dlc = "Way of Life" } set_focus = focus_family }
+		opinion = { modifier = comforted_opinion who = FROM years = 5 }
+	}
+
+	# I'm lucky to have them
+	option = {
+		name = EVTOPTBlodge14
+		trigger = { has_character_flag = parent_was_supportive }
+		opinion = { modifier = comforted_opinion who = FROM years = 5 }
+	}
+
+	# This is not the end of my story
+	option = {
+		name = EVTOPTClodge14
+		trigger = { has_character_flag = parent_was_mean }
+		custom_tooltip = { text = EVTOPTClodge14_TT }
+		if = { limit = { NOT = { trait = stressed } } add_trait = stressed }
+		if = { limit = { NOT = { trait = ambitious } } add_trait = ambitious }
+	}
+
+	# I am an embarrassment
+	option = {
+		name = EVTOPTDlodge14
+		trigger = { has_character_flag = parent_was_mean }
+	}
+
+	after = {
+		clr_character_flag = parent_was_supportive
+		clr_character_flag = parent_was_mean
+	}
+}
+
+# lodge.15 Clean-up a year after a refusal
+# Scope: ROOT is the child.
+character_event = {
+	id = lodge.15
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = is_being_recruited_to_warband_by_parent
+		clr_character_flag = refused_trial
+	}
+}
+
+###############################################################################
+# The military path (rank 4 power of Ulric, the Knights and the Dawi)
+###############################################################################
+
+# lodge.20 A new path
+# The member already walks one path and may take another.
+# Scope: ROOT is the member.
+character_event = {
+	id = lodge.20
+	desc = { trigger = { trait = duelist } text = EVTDESClodge20_duelist }
+	desc = {
+		trigger = { trait = strategist NOT = { trait = duelist } }
+		text = EVTDESClodge20_strategist
+	}
+	desc = {
+		trigger = { trait = hunter NOR = { trait = duelist trait = strategist } }
+		text = EVTDESClodge20_hunter
+	}
+	picture = GFX_evt_armory
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge20
+		trigger = { NOT = { trait = duelist } }
+		if = { limit = { trait = strategist } remove_trait = strategist }
+		if = { limit = { trait = hunter } remove_trait = hunter }
+		add_trait = duelist
+	}
+	option = {
+		name = EVTOPTBlodge20
+		trigger = { NOT = { trait = strategist } }
+		if = { limit = { trait = duelist } remove_trait = duelist }
+		if = { limit = { trait = hunter } remove_trait = hunter }
+		add_trait = strategist
+	}
+	option = {
+		name = EVTOPTClodge20
+		trigger = { NOT = { trait = hunter } }
+		if = { limit = { trait = duelist } remove_trait = duelist }
+		if = { limit = { trait = strategist } remove_trait = strategist }
+		add_trait = hunter
+	}
+	option = {
+		name = EVTOPTDlodge20
+		add_society_currency_minor_effect = yes
+	}
+
+	after = {
+		clr_character_flag = choosing_military_aspect
+	}
+}
+
+# lodge.21 Choose a path
+# Scope: ROOT is the member.
+character_event = {
+	id = lodge.21
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge21_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge21_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge21_dawi }
+	desc = {
+		trigger = {
+			NOR = {
+				warband_voice_ulric_trigger = yes
+				warband_voice_knight_trigger = yes
+				warband_voice_dawi_trigger = yes
+			}
+		}
+		text = EVTDESClodge21_any
+	}
+	picture = GFX_evt_armory
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	# The blade
+	option = {
+		name = EVTOPTAlodge21
+		show_trait = duelist
+		custom_tooltip = {
+			text = EVTOPTAlodge21_TT
+			character_event = { id = lodge.22 days = 20 random = 20 }
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 1.1 has_duel_exp_modifier_trigger = yes }
+			modifier = { factor = 3 trait = brave }
+		}
+	}
+
+	# The war table
+	option = {
+		name = EVTOPTBlodge21
+		show_trait = strategist
+		custom_tooltip = {
+			text = EVTOPTBlodge21_TT
+			character_event = { id = lodge.25 days = 20 random = 20 }
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 1.5 has_education_stewardship_trigger = yes }
+		}
+	}
+
+	# The hunt
+	option = {
+		name = EVTOPTClodge21
+		show_trait = hunter
+		custom_tooltip = {
+			text = EVTOPTClodge21_TT
+			character_event = { id = lodge.27 days = 20 random = 20 }
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 5 trait = falconer }
+			modifier = { factor = 2 warband_voice_ulric_trigger = yes }
+		}
+	}
+
+	# Not now
+	option = {
+		name = EVTOPTD_MNM_1900
+		add_society_currency_minor_effect = yes
+		clr_character_flag = choosing_military_aspect
+	}
+}
+
+# lodge.22 The way of the blade
+# Ask a fellow member to teach you, hire a fencing master, or train alone.
+# Scope: ROOT is the member.
+character_event = {
+	id = lodge.22
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge22_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge22_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge22_dawi }
+	desc = {
+		trigger = {
+			NOR = {
+				warband_voice_ulric_trigger = yes
+				warband_voice_knight_trigger = yes
+				warband_voice_dawi_trigger = yes
+			}
+		}
+		text = EVTDESClodge22_any
+	}
+	picture = GFX_evt_armory
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_effect = {
+			random_society_member = {
+				limit = {
+					same_society_as = ROOT
+					ai = yes
+					NOT = { character = ROOT }
+					NOT = { block_general_event_trigger = yes }
+					trait = duelist
+				}
+				save_event_target_as = mentor_target
+			}
+		}
+	}
+
+	# Ask a fellow member
+	option = {
+		name = EVTOPTAlodge22
+		trigger = { event_target:mentor_target = { always = yes } }
+		set_character_flag = opt_A
+		if = {
+			limit = {
+				OR = {
+					reverse_has_opinion_modifier = {
+						who = event_target:mentor_target
+						modifier = opinion_budding_friendship
+					}
+					has_opinion_modifier = {
+						who = event_target:mentor_target
+						modifier = opinion_budding_friendship
+					}
+				}
+			}
+			tooltip = { add_friend = event_target:mentor_target }
+		}
+		else_if = {
+			limit = {
+				event_target:mentor_target = {
+					potentially_interested_in_rivaling_root_trigger = no
+				}
+			}
+			tooltip = {
+				reverse_opinion = {
+					who = event_target:mentor_target
+					modifier = opinion_was_praised
+					years = 10
+				}
+			}
+		}
+		else = {
+			tooltip = {
+				reverse_opinion = {
+					who = event_target:mentor_target
+					modifier = opinion_strangely_flattered
+					years = 10
+				}
+			}
+		}
+		prestige = -25
+		if = {
+			limit = { event_target:mentor_target = { is_alive = yes } }
+			event_target:mentor_target = { character_event = { id = lodge.23 } }
+		}
+		else = {
+			clr_character_flag = choosing_military_aspect
+			add_society_currency_minor_effect = yes
+		}
+		ai_chance = { factor = 1 modifier = { factor = 2 has_pleasant_personality_trigger = yes } }
+	}
+
+	# Hire a master
+	option = {
+		name = EVTOPTBlodge22
+		set_character_flag = opt_B
+		scaled_wealth = { value = -0.4 min = -40 }
+		add_trait_silently_diligent_effect = yes
+		remove_trait_silently_slothful_effect = yes
+		add_character_modifier = { modifier = rigorous_practice duration = 3650 }
+		hidden_effect = {
+			clear_event_target = mentor_target
+			character_event = { id = lodge.24 days = 60 random = 30 }
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0.2 trait = greedy }
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 0 NOT = { wealth = 50 } }
+		}
+	}
+
+	# Alone
+	option = {
+		name = EVTOPTClodge22
+		set_character_flag = opt_C
+		hidden_effect = {
+			clear_event_target = mentor_target
+			character_event = { id = lodge.24 days = 90 random = 30 }
+		}
+		ai_chance = { factor = 1 }
+	}
+}
+
+# lodge.23 A fellow asks for lessons
+# Scope: ROOT is the mentor, FROM the pupil.
+character_event = {
+	id = lodge.23
+	desc = EVTDESClodge23
+	picture = GFX_evt_teaching_moment
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+		is_alive = yes
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = { NOT = { is_alive = yes } }
+			FROM = {
+				clr_character_flag = choosing_military_aspect
+				add_society_currency_minor_effect = yes
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAlodge23
+		add_character_modifier = { modifier = duelist_mentor duration = 730 }
+	}
+	option = {
+		name = EVTOPTBlodge23
+		scaled_wealth = { value = -0.2 min = -20 }
+	}
+
+	after = {
+		if = {
+			limit = {
+				OR = {
+					reverse_has_opinion_modifier = {
+						who = FROM
+						modifier = opinion_budding_friendship
+					}
+					has_opinion_modifier = { who = FROM modifier = opinion_budding_friendship }
+				}
+			}
+			add_friend = FROM
+		}
+		else_if = {
+			limit = { FROM = { root_potentially_interested_in_rivaling_this_trigger = no } }
+			reverse_opinion = { who = FROM modifier = opinion_was_praised years = 10 }
+		}
+		else = {
+			reverse_opinion = { who = FROM modifier = opinion_strangely_flattered years = 10 }
+		}
+		FROM = { character_event = { id = lodge.24 days = 60 random = 30 } }
+	}
+}
+
+# lodge.24 A duelist
+# Scope: ROOT is the member, FROM the mentor (path A).
+character_event = {
+	id = lodge.24
+	desc = {
+		trigger = { has_character_flag = opt_A FROM = { NOT = { is_alive = yes } } }
+		text = EVTDESClodge24_mentor_died
+	}
+	desc = {
+		trigger = { has_character_flag = opt_A FROM = { is_alive = yes } }
+		text = EVTDESClodge24_mentor
+	}
+	desc = { trigger = { NOT = { has_character_flag = opt_A } } text = EVTDESClodge24 }
+	picture = GFX_evt_duel_team
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = { trigger = { has_character_flag = opt_A } text = EVTOPTAlodge24 }
+		name = {
+			trigger = { has_character_flag = opt_B NOT = { has_character_flag = opt_A } }
+			text = EVTOPTAlodge24b
+		}
+		name = {
+			trigger = { NOR = { has_character_flag = opt_A has_character_flag = opt_B } }
+			text = EVTOPTAlodge24c
+		}
+		hidden_tooltip = {
+			if = { limit = { lifestyle_traits = 1 } remove_lifestyle_trait_effect = yes }
+		}
+		add_trait = duelist
+		add_legend_progress_trivial_effect = yes
+		clr_character_flag = choosing_military_aspect
+		clr_character_flag = opt_A
+		clr_character_flag = opt_B
+		clr_character_flag = opt_C
+	}
+}
+
+# lodge.25 The war table
+# Scope: ROOT is the member.
+character_event = {
+	id = lodge.25
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge25_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge25_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge25_dawi }
+	desc = {
+		trigger = {
+			NOR = {
+				warband_voice_ulric_trigger = yes
+				warband_voice_knight_trigger = yes
+				warband_voice_dawi_trigger = yes
+			}
+		}
+		text = EVTDESClodge25_any
+	}
+	picture = GFX_evt_upsetting_letter
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	# The old campaigns
+	option = {
+		name = EVTOPTAlodge25
+		if = { limit = { NOR = { trait = patient trait = wroth } } add_trait = patient }
+		add_character_modifier = { modifier = hitting_the_books duration = 730 }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 4 trait = brave }
+			modifier = { factor = 3 trait = ambitious }
+		}
+	}
+
+	# The drill yard
+	option = {
+		name = EVTOPTBlodge25
+		if = { limit = { NOR = { trait = diligent trait = slothful } } add_trait = diligent }
+		if = { limit = { trait = slothful } remove_trait = slothful }
+		add_character_modifier = { modifier = observing_the_troops duration = 730 }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 4 trait = craven }
+			modifier = { factor = 3 trait = erudite }
+		}
+	}
+
+	after = {
+		character_event = { id = lodge.26 days = 60 random = 30 }
+	}
+}
+
+# lodge.26 A strategist
+# Scope: ROOT is the member.
+character_event = {
+	id = lodge.26
+	desc = EVTDESClodge26
+	picture = GFX_evt_teaching_moment
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge26
+		custom_tooltip = { text = EVTOPTAlodge26_TT }
+		hidden_tooltip = {
+			if = { limit = { lifestyle_traits = 1 } remove_lifestyle_trait_effect = yes }
+		}
+		add_trait = strategist
+		add_legend_progress_trivial_effect = yes
+		clr_character_flag = choosing_military_aspect
+	}
+}
+
+# lodge.27 The hunt
+# Learn to track, or learn to trap.
+# Scope: ROOT is the member.
+character_event = {
+	id = lodge.27
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge27_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge27_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge27_dawi }
+	desc = {
+		trigger = {
+			NOR = {
+				warband_voice_ulric_trigger = yes
+				warband_voice_knight_trigger = yes
+				warband_voice_dawi_trigger = yes
+			}
+		}
+		text = EVTDESClodge27_any
+	}
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	# Tracking
+	option = {
+		name = EVTOPTAlodge27
+		add_character_modifier = { modifier = tracker_student duration = 3650 }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 4 trait = erudite }
+			modifier = { factor = 4 trait = honest }
+		}
+	}
+
+	# Trapping
+	option = {
+		name = EVTOPTBlodge27
+		add_character_modifier = { modifier = trapper_student duration = 3650 }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 5 trait = deceitful }
+			modifier = { factor = 3 trait = cynical }
+		}
+	}
+
+	after = {
+		character_event = { id = lodge.28 days = 60 random = 30 }
+	}
+}
+
+# lodge.28 A hunter
+# Scope: ROOT is the member.
+character_event = {
+	id = lodge.28
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge28_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge28_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge28_dawi }
+	desc = {
+		trigger = {
+			NOR = {
+				warband_voice_ulric_trigger = yes
+				warband_voice_knight_trigger = yes
+				warband_voice_dawi_trigger = yes
+			}
+		}
+		text = EVTDESClodge28_any
+	}
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge28
+		hidden_tooltip = {
+			if = { limit = { lifestyle_traits = 1 } remove_lifestyle_trait_effect = yes }
+		}
+		if = { limit = { has_nickname = no } give_nickname = nick_the_hunter }
+		add_trait = hunter
+		add_legend_progress_trivial_effect = yes
+		clr_character_flag = choosing_military_aspect
+	}
+}
+
+###############################################################################
+# Warrior training (rank 2 power of Ulric's warriors and the pirates)
+###############################################################################
+
+# lodge.30 Training complete
+# Ulric's warriors become Fearsome; pirates and corsairs pick plunder,
+# raiding or slaving. A member who does not share the lodge's faith loses
+# piety.
+# Scope: ROOT is the member.
+character_event = {
+	id = lodge.30
+	desc = { trigger = { society_member_of = warriors_of_ulric } text = EVTDESClodge30_ulric }
+	desc = {
+		trigger = { society_member_of = adventurers_druchii_corsairs }
+		text = EVTDESClodge30_corsair
+	}
+	desc = { trigger = { society_member_of = adventurers_pirates } text = EVTDESClodge30_pirate }
+	desc = {
+		trigger = {
+			NOR = {
+				society_member_of = warriors_of_ulric
+				society_member_of = adventurers_druchii_corsairs
+				society_member_of = adventurers_pirates
+			}
+		}
+		text = EVTDESClodge30_any
+	}
+	picture = {
+		trigger = { society_member_of = adventurers_druchii_corsairs }
+		picture = GFX_evt_dark_elf_corsair
+	}
+	picture = {
+		trigger = { society_member_of = adventurers_pirates }
+		picture = GFX_evt_pirate_crew
+	}
+	picture = {
+		trigger = { society_member_of = warriors_of_ulric }
+		picture = GFX_evt_ulric_warriors
+	}
+	picture = {
+		trigger = {
+			NOR = {
+				society_member_of = warriors_of_ulric
+				society_member_of = adventurers_druchii_corsairs
+				society_member_of = adventurers_pirates
+			}
+		}
+		picture = GFX_evt_teaching_moment
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_effect = { select_and_save_fellow_society_member_effect = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge30
+		trigger = { is_member_of_any_piratic_society_trigger = no }
+		if = {
+			limit = { has_religion_matching_joined_warrior_society_trigger = no }
+			custom_tooltip = { text = EVTOPTAlodge30_piety_TT }
+			piety = -150
+		}
+		add_warrior_lodge_leader_trait_effect = yes
+	}
+	option = {
+		name = EVTOPTBlodge30
+		trigger = { is_member_of_any_piratic_society_trigger = yes }
+		add_trait = plunderer_leader
+	}
+	option = {
+		name = EVTOPTClodge30
+		trigger = { is_member_of_any_piratic_society_trigger = yes }
+		add_trait = reaver_leader
+	}
+	option = {
+		name = EVTOPTDlodge30
+		trigger = { is_member_of_any_piratic_society_trigger = yes }
+		add_trait = slaver_leader
+	}
+
+	after = {
+		clr_character_flag = choosing_warrior_training
+		add_legend_progress_trivial_effect = yes
+	}
+}
+
+###############################################################################
+# Toughness (rank 1 power of Gork and Mork)
+###############################################################################
+
+# lodge.35 Too tough to stay hurt
+# The worst wound closes. Greenskins heal like no other race.
+# Scope: ROOT is the member.
+character_event = {
+	id = lodge.35
+	desc = { trigger = { has_character_flag = removed_wounded } text = EVTDESClodge35_wounded }
+	desc = {
+		trigger = { has_character_flag = removed_severely_injured }
+		text = EVTDESClodge35_severe
+	}
+	desc = { trigger = { has_character_flag = removed_maimed } text = EVTDESClodge35_maimed }
+	desc = { trigger = { has_character_flag = removed_mangled } text = EVTDESClodge35_mangled }
+	desc = { trigger = { has_character_flag = removed_infection } text = EVTDESClodge35_infection }
+	picture = GFX_evt_greenskinanimosity
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_effect = {
+			random_list = {
+				1 = { trigger = { trait = wounded } set_character_flag = removed_wounded }
+				100 = {
+					trigger = { trait = severely_injured }
+					set_character_flag = removed_severely_injured
+				}
+				100 = { trigger = { trait = maimed } set_character_flag = removed_maimed }
+				1000 = { trigger = { trait = mangled } set_character_flag = removed_mangled }
+				100 = { trigger = { trait = infection } set_character_flag = removed_infection }
+			}
+			if = {
+				limit = { has_character_flag = pending_infection }
+				clr_character_flag = pending_infection
+			}
+		}
+	}
+
+	# Good as new
+	option = {
+		name = EVTOPTAlodge35
+		lodge_toughness_heal_effect = yes
+		if = {
+			limit = { has_character_modifier = swollen_wrist }
+			remove_character_modifier = swollen_wrist
+		}
+		else_if = {
+			limit = { has_character_modifier = black_eye }
+			remove_character_modifier = black_eye
+		}
+		else_if = {
+			limit = { has_character_modifier = swollen_ankle }
+			remove_character_modifier = swollen_ankle
+		}
+		else_if = {
+			limit = { has_character_modifier = concussion }
+			remove_character_modifier = concussion
+		}
+		else_if = {
+			limit = { has_character_modifier = cracked_ribs }
+			remove_character_modifier = cracked_ribs
+		}
+		else_if = {
+			limit = { has_character_modifier = badly_bruised }
+			remove_character_modifier = badly_bruised
+		}
+		else_if = {
+			limit = { has_character_modifier = sore_muscles }
+			remove_character_modifier = sore_muscles
+		}
+		add_scarred_tiered_effect = yes
+	}
+
+	# Gork (or Mork) is wiv me
+	option = {
+		name = { trigger = { society_member_of = warband_gork } text = EVTOPTBlodge35_gork }
+		name = {
+			trigger = { NOT = { society_member_of = warband_gork } }
+			text = EVTOPTBlodge35_mork
+		}
+		trigger = { NOT = { trait = zealous } }
+		piety = 5
+		lodge_toughness_heal_effect = yes
+		add_trait = zealous
+		add_scarred_tiered_effect = yes
+	}
+
+	after = {
+		hidden_effect = {
+			random_list = {
+				10 = { sound_effect = toughness_01 }
+				10 = { sound_effect = toughness_02 }
+				10 = { sound_effect = toughness_03 }
+			}
+		}
+		clr_character_flag = using_toughness
+		clr_character_flag = removed_wounded
+		clr_character_flag = removed_severely_injured
+		clr_character_flag = removed_maimed
+		clr_character_flag = removed_mangled
+		clr_character_flag = removed_infection
+	}
+}
+
+###############################################################################
+# Berserk rage (rank 1 power of Ulric's warriors and the Norscans)
+###############################################################################
+
+# lodge.40 The rage in the hall
+# One time in five someone gets in the way: a loved one, a courtier or a
+# fellow member. Killing them makes the berserker; sparing them makes the
+# berserker gentler.
+# Scope: ROOT is the member.
+character_event = {
+	id = lodge.40
+	desc = {
+		trigger = { has_character_flag = no_harm event_target:fellow_member = { always = yes } }
+		text = EVTDESClodge40_fellow
+	}
+	desc = {
+		trigger = {
+			has_character_flag = no_harm
+			event_target:my_beloved = { always = yes }
+			NOT = { event_target:fellow_member = { always = yes } }
+		}
+		text = EVTDESClodge40_beloved
+	}
+	desc = {
+		trigger = {
+			has_character_flag = no_harm
+			NOR = {
+				event_target:fellow_member = { always = yes }
+				event_target:my_beloved = { always = yes }
+			}
+		}
+		text = EVTDESClodge40_alone
+	}
+	desc = { trigger = { has_character_flag = someone_is_hurt } text = EVTDESClodge40_hurt }
+	picture = GFX_evt_duel_team
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	portrait = event_target:kinslayer_target
+
+	immediate = {
+		hidden_effect = {
+			if = {
+				limit = { is_female = yes }
+				random_list = {
+					10 = { sound_effect = berserk_female_01 }
+					10 = { sound_effect = berserk_female_02 }
+					10 = { sound_effect = berserk_female_03 }
+				}
+			}
+			else = {
+				random_list = {
+					10 = { sound_effect = berserk_male_01 }
+					10 = { sound_effect = berserk_male_02 }
+					10 = { sound_effect = berserk_male_03 }
+				}
+			}
+			# Who stands closest?
+			random = {
+				chance = 50
+				any_courtier_or_vassal = {
+					limit = { is_adult = yes ai = yes prisoner = no }
+					score_value = {
+						value = 1
+						beloved_target_selection_score = yes
+						bad_soldier_outcome_score = yes
+					}
+					count = 1
+					save_event_target_as = my_beloved
+				}
+			}
+			if = {
+				limit = { NOT = { event_target:my_beloved = { always = yes } } }
+				society = {
+					any_society_member = {
+						limit = { NOT = { character = ROOT } ai = yes prisoner = no }
+						score_value = { value = 10 bad_soldier_outcome_score = yes }
+						count = 1
+						save_event_target_as = fellow_member
+					}
+				}
+			}
+			if = {
+				limit = {
+					NOR = {
+						event_target:my_beloved = { always = yes }
+						event_target:fellow_member = { always = yes }
+					}
+				}
+				any_courtier_or_vassal = {
+					limit = { is_adult = yes ai = yes prisoner = no }
+					score_value = { value = 1 beloved_target_selection_score = yes }
+					count = 1
+					save_event_target_as = my_beloved
+				}
+			}
+			if = {
+				limit = { event_target:fellow_member = { always = yes } }
+				event_target:fellow_member = { save_event_target_as = kinslayer_target }
+			}
+			else_if = {
+				limit = { event_target:my_beloved = { always = yes } }
+				event_target:my_beloved = { save_event_target_as = kinslayer_target }
+			}
+			# Does anyone get hurt?
+			if = {
+				limit = { event_target:kinslayer_target = { always = yes } }
+				random_list = {
+					2 = { set_character_flag = someone_is_hurt }
+					8 = { set_character_flag = no_harm }
+				}
+			}
+			else = { set_character_flag = no_harm }
+		}
+	}
+
+	# I am stronger than ever
+	option = {
+		name = { trigger = { has_character_flag = no_harm } text = EVTOPTAlodge40 }
+		name = { trigger = { has_character_flag = someone_is_hurt } text = EVTOPTAlodge40b }
+		prestige = 15
+		add_trait = berserker
+		if = {
+			limit = { has_character_flag = someone_is_hurt }
+			event_target:kinslayer_target = {
+				show_scope_change = no
+				hidden_effect = {
+					lodge_find_avenger_effect = yes
+					event_target:potential_rival = { character_event = { id = lodge.41 days = 3 } }
+				}
+				death = { death_reason = death_berserker_rage killer = ROOT }
+			}
+			add_kinslayer_trait_effect = yes
+		}
+		else_if = {
+			limit = { event_target:kinslayer_target = { any_spouse = { character = ROOT } } }
+			reverse_opinion = {
+				who = event_target:kinslayer_target
+				modifier = opinion_impressed_infatuated
+				years = 10
+			}
+		}
+		else_if = {
+			limit = { event_target:kinslayer_target = { always = yes } }
+			reverse_opinion = {
+				who = event_target:kinslayer_target
+				modifier = opinion_impressed
+				years = 5
+			}
+		}
+	}
+
+	# Whose blood is this?
+	option = {
+		name = EVTOPTBlodge40
+		trigger = { has_character_flag = someone_is_hurt NOT = { trait = kind } }
+		add_trait = berserker
+		event_target:kinslayer_target = { show_scope_change = no add_maimed_trait_effect = yes }
+		if = { limit = { trait = cruel } remove_trait = cruel }
+		else = { add_trait = kind }
+		lodge_rage_lunacy_effect = yes
+	}
+
+	# Someone help us (kind)
+	option = {
+		name = EVTOPTClodge40
+		trigger = { has_character_flag = someone_is_hurt trait = kind }
+		tooltip_info = kind
+		add_trait = berserker
+		event_target:kinslayer_target = { show_scope_change = no add_maimed_trait_effect = yes }
+	}
+
+	after = {
+		clr_character_flag = no_harm
+		clr_character_flag = someone_is_hurt
+		clr_character_flag = going_berserk
+	}
+}
+
+# lodge.41 Caught in the rage
+# Someone close to the victim may swear vengeance.
+# Scope: ROOT is the victim's kin or friend, FROM the berserker.
+character_event = {
+	id = lodge.41
+	desc = EVTDESClodge41
+	picture = GFX_evt_duel_team
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = incapable }
+		is_alive = yes
+	}
+
+	option = {
+		name = EVTOPTAlodge41
+		prestige = 10
+		tooltip = { add_rival = FROM }
+		FROM = { character_event = { id = lodge.42 } }
+	}
+	option = {
+		name = EVTOPTBlodge41
+		if = { limit = { NOT = { trait = cruel } } add_trait = cruel }
+	}
+}
+
+# lodge.42 Sworn vengeance
+# Scope: ROOT is the berserker, FROM the avenger.
+character_event = {
+	id = lodge.42
+	desc = EVTDESClodge42
+	picture = GFX_evt_upsetting_letter
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+		is_alive = yes
+	}
+
+	option = {
+		name = EVTOPTAlodge42
+		add_rival = FROM
+	}
+}
+
+# lodge.43 The rage in the cell
+# A prisoner in a dungeon or oubliette goes berserk: half the time they only
+# hurt themselves, otherwise they kill someone and break out.
+# Scope: ROOT is the prisoner.
+character_event = {
+	id = lodge.43
+	title = EVTNAMElodge43
+	desc = {
+		trigger = {
+			has_character_flag = hurt_self
+			event_target:crossfire_target = { prisoner = no }
+		}
+		text = EVTDESClodge43_jailer
+	}
+	desc = {
+		trigger = {
+			has_character_flag = hurt_self
+			event_target:crossfire_target = { prisoner = yes }
+		}
+		text = EVTDESClodge43_cellmate
+	}
+	desc = { trigger = { has_character_flag = someone_is_hurt } text = EVTDESClodge43_escape }
+	picture = GFX_evt_jailbreak
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	portrait = event_target:kinslayer_target
+
+	only_capable = yes
+	prisoner = yes
+
+	trigger = {
+		is_adult = yes
+		OR = { has_character_modifier = the_oubliette has_character_modifier = the_dungeon }
+		host = {
+			any_courtier = {
+				NOT = { character = PREV }
+				NOT = { character = ROOT }
+				NOT = { trait = incapable }
+				NOT = { is_friend = ROOT }
+				ai = yes
+				OR = { prisoner = yes NOR = { is_lover = PREV is_friend = PREV is_rival = PREV } }
+			}
+		}
+	}
+
+	immediate = {
+		hidden_effect = {
+			if = {
+				limit = { is_female = yes }
+				random_list = {
+					10 = { sound_effect = berserk_female_01 }
+					10 = { sound_effect = berserk_female_02 }
+					10 = { sound_effect = berserk_female_03 }
+				}
+			}
+			else = {
+				random_list = {
+					10 = { sound_effect = berserk_male_01 }
+					10 = { sound_effect = berserk_male_02 }
+					10 = { sound_effect = berserk_male_03 }
+				}
+			}
+			random_list = {
+				5 = { set_character_flag = someone_is_hurt }
+				5 = { set_character_flag = hurt_self }
+			}
+			host = { save_event_target_as = host_target }
+			random_list = {
+				# A fellow prisoner
+				100 = {
+					trigger = {
+						host = {
+							any_courtier = {
+								NOT = { character = PREV }
+								NOT = { character = ROOT }
+								NOT = { trait = incapable }
+								prisoner = yes
+								NOT = { is_friend = ROOT }
+								ai = yes
+							}
+						}
+					}
+					host = {
+						random_courtier = {
+							limit = {
+								NOT = { character = ROOT }
+								NOT = { character = PREV }
+								NOT = { trait = incapable }
+								prisoner = yes
+								NOT = { is_friend = ROOT }
+								ai = yes
+							}
+							preferred_limit = { is_unimportant_trigger = yes }
+							save_event_target_as = crossfire_target
+						}
+					}
+				}
+				# Someone unimportant who came to look
+				10 = {
+					trigger = {
+						host = {
+							any_courtier = {
+								NOT = { character = PREV }
+								NOT = { character = ROOT }
+								NOT = { trait = incapable }
+								prisoner = no
+								NOT = { is_friend = ROOT }
+								NOR = { is_lover = PREV is_friend = PREV is_rival = PREV }
+								ai = yes
+							}
+						}
+					}
+					host = {
+						random_courtier = {
+							limit = {
+								NOT = { character = ROOT }
+								NOT = { character = PREV }
+								NOT = { trait = incapable }
+								prisoner = no
+								NOT = { is_friend = ROOT }
+								NOR = { is_lover = PREV is_friend = PREV is_rival = PREV }
+								ai = yes
+							}
+							preferred_limit = { is_unimportant_trigger = yes }
+							save_event_target_as = crossfire_target
+						}
+					}
+				}
+			}
+			event_target:crossfire_target = { save_event_target_as = kinslayer_target }
+		}
+	}
+
+	option = {
+		name = {
+			trigger = {
+				has_character_flag = hurt_self
+				event_target:crossfire_target = { prisoner = no }
+			}
+			text = EVTOPTAlodge43
+		}
+		name = {
+			trigger = {
+				has_character_flag = hurt_self
+				event_target:crossfire_target = { prisoner = yes }
+			}
+			text = EVTOPTAlodge43b
+		}
+		name = { trigger = { has_character_flag = someone_is_hurt } text = EVTOPTAlodge43c }
+		if = {
+			limit = {
+				has_character_flag = hurt_self
+				event_target:crossfire_target = { prisoner = no }
+			}
+			if = {
+				limit = { NOT = { trait = one_handed } }
+				random_list = {
+					50 = {
+						add_trait = one_handed
+						hidden_effect = {
+							add_trait = severely_injured
+							resolve_severely_injured_effect = yes
+						}
+					}
+					50 = { add_character_modifier = { modifier = swollen_wrist months = 12 } }
+				}
+			}
+			else = { add_trait = severely_injured resolve_severely_injured_effect = yes }
+			event_target:kinslayer_target = { show_scope_change = no add_maimed_trait_effect = yes }
+		}
+		else_if = {
+			limit = {
+				has_character_flag = hurt_self
+				event_target:crossfire_target = { prisoner = yes }
+			}
+			add_maimed_trait_effect = yes
+			event_target:kinslayer_target = { show_scope_change = no add_maimed_trait_effect = yes }
+		}
+		else_if = {
+			limit = { has_character_flag = someone_is_hurt }
+			custom_tooltip = { text = you_break_out_of_prison_tt prisoner = no }
+			event_target:kinslayer_target = {
+				show_scope_change = no
+				hidden_effect = {
+					lodge_find_avenger_effect = yes
+					event_target:potential_rival = { character_event = { id = lodge.44 days = 3 } }
+				}
+				if = {
+					limit = { event_target:potential_rival = { always = yes } }
+					if = {
+						limit = {
+							event_target:potential_rival = { character = event_target:host_target }
+						}
+						event_target:potential_rival = {
+							set_character_flag = i_am_hurt_and_original_captor
+						}
+					}
+					else = {
+						event_target:host_target = { character_event = { id = lodge.44 days = 1 } }
+					}
+				}
+				if = {
+					limit = { prisoner = yes }
+					custom_tooltip = {
+						text = fellow_prisoner_dies_tt
+						death = { death_reason = death_berserker_rage killer = ROOT }
+					}
+				}
+				else = {
+					custom_tooltip = {
+						text = courtier_dies_tt
+						death = { death_reason = death_berserker_rage killer = ROOT }
+					}
+				}
+			}
+			add_kinslayer_trait_effect = yes
+		}
+		prestige = 15
+		if = { limit = { NOT = { trait = berserker } } add_trait = berserker }
+	}
+
+	# Are you hurt?
+	option = {
+		name = EVTOPTBlodge43
+		trigger = { has_character_flag = someone_is_hurt NOT = { trait = kind } }
+		if = { limit = { NOT = { trait = berserker } } add_trait = berserker }
+		if = { limit = { trait = cruel } remove_trait = cruel }
+		else = { add_trait = kind }
+		event_target:kinslayer_target = { show_scope_change = no add_maimed_trait_effect = yes }
+		lodge_rage_lunacy_effect = yes
+	}
+
+	# Someone help us (kind)
+	option = {
+		name = EVTOPTClodge40
+		trigger = { has_character_flag = someone_is_hurt trait = kind }
+		tooltip_info = kind
+		if = { limit = { NOT = { trait = berserker } } add_trait = berserker }
+		event_target:kinslayer_target = { show_scope_change = no add_maimed_trait_effect = yes }
+	}
+
+	after = {
+		clr_character_flag = hurt_self
+		clr_character_flag = someone_is_hurt
+		clr_character_flag = going_berserk
+	}
+}
+
+# lodge.44 The prisoner broke out
+# The victim's kin, and the captor, may swear vengeance.
+# Scope: ROOT is the victim's kin or the captor, FROM the berserker.
+character_event = {
+	id = lodge.44
+	title = EVTNAMElodge43
+	desc = {
+		trigger = { has_character_flag = i_am_hurt_and_original_captor }
+		text = EVTDESClodge44_captor
+	}
+	desc = {
+		trigger = {
+			NOT = { has_character_flag = i_am_hurt_and_original_captor }
+			event_target:host_target = { character = ROOT }
+		}
+		text = EVTDESClodge44_host
+	}
+	desc = {
+		trigger = {
+			NOT = { has_character_flag = i_am_hurt_and_original_captor }
+			NOT = { event_target:host_target = { character = ROOT } }
+		}
+		text = EVTDESClodge44
+	}
+	picture = GFX_evt_jailbreak
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = incapable }
+		is_alive = yes
+	}
+
+	option = {
+		name = EVTOPTAlodge41
+		prestige = 10
+		tooltip = { add_rival = FROM }
+		FROM = { character_event = { id = lodge.42 } }
+	}
+	option = {
+		name = EVTOPTBlodge41
+		if = { limit = { NOT = { trait = cruel } } add_trait = cruel }
+	}
+
+	after = {
+		clr_character_flag = i_am_hurt_and_original_captor
+	}
+}
+
+###############################################################################
+# The call to arms (rank 3 power of the Norscans and the greenskins)
+###############################################################################
+
+# lodge.45 Warriors flock to the banner
+# The holding's levy is refilled.
+# Scope: ROOT is the member; event target target_holding.
+character_event = {
+	id = lodge.45
+	desc = { trigger = { warband_voice_greenskin_trigger = yes } text = EVTDESClodge45_greenskin }
+	desc = { trigger = { warband_voice_greenskin_trigger = no } text = EVTDESClodge45 }
+	picture = { trigger = { warband_voice_greenskin_trigger = yes } picture = GFX_evt_orcs }
+	picture = { trigger = { warband_voice_greenskin_trigger = no } picture = GFX_evt_battle }
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+	notification = yes
+
+	immediate = {
+		event_target:target_holding = { refill_holding_levy = yes }
+	}
+
+	option = {
+		name = EXCELLENT
+		clr_character_flag = inspiring_warriors
+		hidden_effect = {
+			random_list = {
+				10 = { sound_effect = inspire_warriors_01 }
+				10 = { sound_effect = inspire_warriors_02 }
+				10 = { sound_effect = inspire_warriors_03 }
+			}
+		}
+	}
+}
+
+###############################################################################
+# Upkeep
+###############################################################################
+
+# lodge.50 The lodges look for recruits
+# From on_five_year_pulse. Two AI lords and one other AI character of an
+# independent realm whose lodge needs members are sent to join (lodge.51);
+# so is the ruler, if AI.
+# Scope: ROOT is an independent ruler.
+character_event = {
+	id = lodge.50
+	hide_window = yes
+
+	is_triggered_only = yes
+	only_independent = yes
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		any_realm_lord = {
+			limit = {
+				lodge_recruit_candidate_trigger = yes
+				higher_tier_than = BARON
+				NOT = { character = ROOT }
+			}
+			score_value = { value = 10 warrior_recruit_score = yes }
+			count = 2
+			character_event = { id = lodge.51 }
+		}
+		any_realm_character = {
+			limit = { lodge_recruit_candidate_trigger = yes }
+			score_value = { value = 10 warrior_recruit_score = yes }
+			count = 1
+			character_event = { id = lodge.51 }
+		}
+		if = {
+			limit = { lodge_recruit_candidate_trigger = yes }
+			character_event = { id = lodge.51 }
+		}
+	}
+}
+
+# lodge.51 An AI recruit joins
+# Ulric's faithful join the Warriors of Ulric (now and then the Knights);
+# Kislevites join the Circle of the Bear; the other Old World faithful join
+# the Knightly Orders or, if their temper is wild, the Warriors of Ulric;
+# the Dawi join the Warriors Guild. The duel leaves a mark.
+# Scope: ROOT is the recruit.
+character_event = {
+	id = lodge.51
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = {
+				OR = { religion = ulrican trait = norscan_patron_ulric }
+				can_join_society = warriors_of_ulric
+			}
+			random_list = {
+				25 = { join_society = warriors_of_ulric }
+				5 = {
+					trigger = { can_join_society = knights_of_old_world }
+					modifier = { factor = 2 trait = honest }
+					modifier = { factor = 2 trait = chaste }
+					modifier = { factor = 0.5 trait = wroth }
+					join_society = knights_of_old_world
+				}
+			}
+		}
+		else_if = {
+			limit = { religion = kislev_gods can_join_society = circle_of_the_bear }
+			join_society = circle_of_the_bear
+		}
+		else_if = {
+			limit = {
+				religion_group = old_world_group
+				OR = {
+					can_join_society = knights_of_old_world
+					can_join_society = warriors_of_ulric
+				}
+			}
+			# The Knightly Orders take the proud, the pious and the
+			# well-mannered; Ulric's warriors take the wild ones.
+			random_list = {
+				20 = {
+					trigger = { can_join_society = knights_of_old_world }
+					modifier = { factor = 1.5 trait = honest }
+					modifier = { factor = 1.5 trait = proud }
+					modifier = { factor = 1.5 trait = zealous }
+					modifier = { factor = 1.3 trait = chaste }
+					modifier = { factor = 1.3 trait = duelist }
+					modifier = { factor = 1.3 trait = strategist }
+					modifier = { factor = 0.7 trait = wroth }
+					modifier = { factor = 0.7 trait = gluttonous }
+					join_society = knights_of_old_world
+				}
+				5 = {
+					trigger = { can_join_society = warriors_of_ulric }
+					modifier = { factor = 2 trait = wroth }
+					modifier = { factor = 1.5 trait = brave }
+					modifier = { factor = 1.5 trait = hunter }
+					modifier = { factor = 1.5 trait = berserker }
+					modifier = { factor = 1.3 trait = gluttonous }
+					modifier = { factor = 1.3 trait = cynical }
+					modifier = { factor = 0.5 trait = zealous }
+					modifier = { factor = 0.5 trait = craven }
+					join_society = warriors_of_ulric
+				}
+			}
+		}
+		else_if = {
+			limit = { religion_group = dwarf_gods_group can_join_society = warriors_guild_dawi }
+			join_society = warriors_guild_dawi
+		}
+		if = {
+			limit = { is_in_society = yes }
+			apply_random_minor_injury_effect = yes
+			if = {
+				limit = {
+					society = { NOT = { any_society_member = { is_society_grandmaster = yes } } }
+				}
+				set_society_grandmaster = yes
+				add_society_currency_massive_effect = yes
+			}
+			society = {
+				any_society_member = {
+					limit = { ai = no society_rank = 4 }
+					character_event = { id = lodge.52 days = 1 random = 15 }
+				}
+			}
+		}
+	}
+}
+
+# lodge.52 The lodge grows
+# Scope: a rank-4 player of the lodge.
+character_event = {
+	id = lodge.52
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge52_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge52_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge52_dawi }
+	desc = {
+		trigger = {
+			NOR = {
+				warband_voice_ulric_trigger = yes
+				warband_voice_knight_trigger = yes
+				warband_voice_dawi_trigger = yes
+			}
+		}
+		text = EVTDESClodge52_any
+	}
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
+	picture = { trigger = { warband_voice_knight_trigger = yes } picture = GFX_evt_imperial_knight }
+	picture = { trigger = { warband_voice_dawi_trigger = yes } picture = GFX_evt_dwarf_fighter }
+	picture = {
+		trigger = {
+			NOR = {
+				warband_voice_ulric_trigger = yes
+				warband_voice_knight_trigger = yes
+				warband_voice_dawi_trigger = yes
+			}
+		}
+		picture = GFX_evt_melee
+	}
+
+	is_triggered_only = yes
+	notification = yes
+	hide_from = yes
+
+	trigger = {
+		is_alive = yes
+		NOT = { has_character_modifier = lodge_growth_cooldown }
+	}
+
+	immediate = {
+		hidden_effect = {
+			add_character_modifier = { name = lodge_growth_cooldown duration = 30 hidden = yes }
+		}
+	}
+
+	option = {
+		name = EXCELLENT
+	}
+}
+
+# lodge.53 A fallen lodge rises again
+# From on_society_destroyed. A fitting courtier or vassal of the last member
+# (or of their liege) refounds the lodge and leads it.
+# Scope: ROOT is the last member; FROM is the society.
+character_event = {
+	id = lodge.53
+	hide_window = yes
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	trigger = {
+		FROM = { this_society_is_a_warrior_lodge_trigger = yes }
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = warrior_lodge_to_revive }
+		if = {
+			limit = { is_landed = yes }
+			any_courtier_or_vassal = {
+				limit = { lodge_revive_candidate_trigger = yes }
+				score_value = {
+					value = 10
+					warrior_recruit_score = yes
+					warrior_lodge_revival_selection_score = yes
+				}
+				count = 1
+				lodge_revive_effect = yes
+			}
+		}
+		else = {
+			liege = {
+				any_courtier_or_vassal = {
+					limit = { lodge_revive_candidate_trigger = yes }
+					score_value = {
+						value = 10
+						warrior_recruit_score = yes
+						warrior_lodge_revival_selection_score = yes
+					}
+					count = 1
+					lodge_revive_effect = yes
+				}
+			}
+		}
+	}
+}
+
+# lodge.54 AI members climb the ranks
+# From on_society_bi_yearly_pulse. Also resets the Legendary Gathering after
+# a century.
+# Scope: an AI member of a lodge or warband.
+character_event = {
+	id = lodge.54
+	hide_window = yes
+
+	is_triggered_only = yes
+	ai = yes
+	is_in_society = yes
+
+	trigger = {
+		OR = { is_member_of_any_warrior_lodge_trigger = yes is_member_of_any_warband_trigger = yes }
+		is_inaccessible_or_incapable_trigger = no
+		society_can_rank_up = yes
+		has_society_currency_minor_trigger = yes
+	}
+
+	immediate = {
+		society = { save_event_target_as = my_warrior_lodge }
+		random_list = {
+			50 = { }
+			50 = {
+				trigger = { society_rank < 3 }
+				society_rank_up = 1
+				detract_society_currency_medium_effect = yes
+			}
+			500 = {
+				trigger = {
+					society_rank == 3
+					NOT = {
+						is_society_rank_full = { society = event_target:my_warrior_lodge rank = 4 }
+					}
+				}
+				society_rank_up = 1
+				detract_society_currency_medium_effect = yes
+			}
+		}
+		if = {
+			limit = {
+				event_target:my_warrior_lodge = {
+					had_flag = { flag = used_legendary_gathering years = 100 }
+				}
+			}
+			event_target:my_warrior_lodge = {
+				clr_flag = used_legendary_gathering
+				clr_flag = block_society_progress
+				set_society_progress = 0
+			}
+		}
+	}
+}
+
+###############################################################################
+# The seat at the table
+###############################################################################
+
+# lodge.60 Fight for the seat
+# From the rank-up decision (mnm_society_decisions) when every Hero seat is
+# taken: a rank-3 player may challenge a Hero (duel in HFP.10100).
+# Scope: ROOT is the player; event target my_society.
+character_event = {
+	id = lodge.60
+	title = proving_your_worth_title
+	desc = {
+		trigger = { event_target:combatant_2 = { warband_voice_any_chaos_trigger = yes } }
+		text = EVTDESClodge60_chaos
+	}
+	desc = {
+		trigger = { event_target:combatant_2 = { warband_voice_skaven_trigger = yes } }
+		text = EVTDESClodge60_skaven
+	}
+	desc = {
+		trigger = { event_target:combatant_2 = { warband_voice_greenskin_trigger = yes } }
+		text = EVTDESClodge60_greenskin
+	}
+	desc = {
+		trigger = { event_target:combatant_2 = { warband_voice_ulric_trigger = yes } }
+		text = EVTDESClodge60_ulric
+	}
+	desc = {
+		trigger = { event_target:combatant_2 = { warband_voice_knight_trigger = yes } }
+		text = EVTDESClodge60_knight
+	}
+	desc = {
+		trigger = { event_target:combatant_2 = { warband_voice_dawi_trigger = yes } }
+		text = EVTDESClodge60_dawi
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_2 = {
+				NOR = {
+					warband_voice_any_chaos_trigger = yes
+					warband_voice_skaven_trigger = yes
+					warband_voice_greenskin_trigger = yes
+					warband_voice_ulric_trigger = yes
+					warband_voice_knight_trigger = yes
+					warband_voice_dawi_trigger = yes
+				}
+			}
+		}
+		text = EVTDESClodge60_any
+	}
+	picture = GFX_evt_camaraderie
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+	ai = no
+
+	portrait = event_target:combatant_2
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		event_target:my_society = {
+			any_society_member = {
+				limit = {
+					prisoner = no
+					society_rank == 4
+					ai = yes
+					NOT = { trait = incapable }
+					NOT = { has_character_flag = call_to_legend_active }
+				}
+				score_value = { value = 10 bad_soldier_outcome_score = yes }
+				count = 1
+				save_event_target_as = combatant_2
+			}
+		}
+		save_event_target_as = combatant_1
+	}
+
+	# I have been itching for a fight
+	option = {
+		name = EVTOPTAlodge60
+		change_society_currency = -2000
+		set_character_flag = fighting_to_rank_up
+		character_event = { id = HFP.10100 }
+	}
+
+	# You misunderstand me
+	option = {
+		name = EVTOPTBlodge60
+		clr_character_flag = has_sent_request_to_rank_up
+	}
+}
+
+# lodge.61 The duel is over
+# Sent by the duel (rank_up_to_hero_level_effect) to the Hero or, if the
+# Hero died, another Hero, who writes the verdict.
+# Scope: ROOT is the Hero who answers.
+character_event = {
+	id = lodge.61
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = may_join_society }
+			clr_character_flag = may_join_society
+			event_target:combatant_1 = { letter_event = { id = lodge.62 } }
+		}
+		else = { event_target:combatant_1 = { letter_event = { id = lodge.63 } } }
+	}
+}
+
+# lodge.62 The seat is yours
+# The beaten Hero steps down. Once in a life, the Hero's household may
+# follow the new Hero.
+# Scope: ROOT is the winner, FROM the Hero who writes.
+letter_event = {
+	id = lodge.62
+	desc = { trigger = { event_target:combatant_2 = { character = FROM } } text = EVTDESClodge62 }
+	desc = {
+		trigger = { event_target:combatant_2 = { NOT = { character = FROM } } }
+		text = EVTDESClodge62_dead
+	}
+	border = GFX_event_letter_frame_intrigue
+
+	is_triggered_only = yes
+	ai = no
+
+	trigger = {
+		is_alive = yes
+	}
+
+	option = {
+		name = EVTOPTAlodge62
+		society_rank_up = 1
+		clr_character_flag = has_sent_request_to_rank_up
+		clr_character_flag = fighting_to_rank_up
+		hidden_effect = {
+			if = {
+				limit = { FROM = { character = event_target:combatant_2 } }
+				FROM = { society_rank_down = 1 }
+			}
+		}
+		if = {
+			limit = { is_landed = yes NOT = { has_character_flag = lodge_got_household } }
+			random = {
+				chance = 25
+				set_character_flag = lodge_got_household
+				hidden_tooltip = { character_event = { id = lodge.64 days = 15 } }
+			}
+		}
+	}
+}
+
+# lodge.63 Not yet
+# Scope: ROOT is the challenger, FROM the Hero who writes.
+letter_event = {
+	id = lodge.63
+	desc = EVTDESClodge63
+	border = GFX_event_letter_frame_intrigue
+
+	is_triggered_only = yes
+	ai = no
+
+	option = {
+		name = EVTOPTAlodge63
+		change_society_currency = 500
+		clr_character_flag = has_sent_request_to_rank_up
+		clr_character_flag = fighting_to_rank_up
+		hidden_effect = {
+			add_character_modifier = {
+				name = lost_rank_up_duel_cooldown
+				duration = 600
+				hidden = yes
+			}
+		}
+	}
+}
+
+# lodge.64 The household follows
+# Warriors who served the beaten Hero come to serve the new one (half
+# upkeep, kept for good).
+# Scope: ROOT is the new Hero.
+character_event = {
+	id = lodge.64
+	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESClodge64_chaos }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESClodge64_skaven }
+	desc = { trigger = { warband_voice_greenskin_trigger = yes } text = EVTDESClodge64_greenskin }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge64_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge64_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge64_dawi }
+	desc = {
+		trigger = {
+			NOR = {
+				warband_voice_any_chaos_trigger = yes
+				warband_voice_skaven_trigger = yes
+				warband_voice_greenskin_trigger = yes
+				warband_voice_ulric_trigger = yes
+				warband_voice_knight_trigger = yes
+				warband_voice_dawi_trigger = yes
+			}
+		}
+		text = EVTDESClodge64_any
+	}
+	picture = {
+		trigger = { warband_voice_any_chaos_trigger = yes }
+		picture = GFX_evt_chaos_warband
+	}
+	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_war }
+	picture = {
+		trigger = { warband_voice_greenskin_trigger = yes }
+		picture = GFX_evt_greenskinanimosity
+	}
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
+	picture = { trigger = { warband_voice_knight_trigger = yes } picture = GFX_evt_imperial_knight }
+	picture = { trigger = { warband_voice_dawi_trigger = yes } picture = GFX_evt_dwarf_fighter }
+	picture = {
+		trigger = {
+			NOR = {
+				warband_voice_any_chaos_trigger = yes
+				warband_voice_skaven_trigger = yes
+				warband_voice_greenskin_trigger = yes
+				warband_voice_ulric_trigger = yes
+				warband_voice_knight_trigger = yes
+				warband_voice_dawi_trigger = yes
+			}
+		}
+		picture = GFX_evt_melee
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_landed = yes
+	}
+
+	option = {
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTAlodge64_chaos }
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAlodge64_skaven }
+		name = {
+			trigger = { warband_voice_greenskin_trigger = yes }
+			text = EVTOPTAlodge64_greenskin
+		}
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTAlodge64_ulric }
+		name = { trigger = { warband_voice_knight_trigger = yes } text = EVTOPTAlodge64_knight }
+		name = { trigger = { warband_voice_dawi_trigger = yes } text = EVTOPTAlodge64_dawi }
+		name = {
+			trigger = {
+				NOR = {
+					warband_voice_any_chaos_trigger = yes
+					warband_voice_skaven_trigger = yes
+					warband_voice_greenskin_trigger = yes
+					warband_voice_ulric_trigger = yes
+					warband_voice_knight_trigger = yes
+					warband_voice_dawi_trigger = yes
+				}
+			}
+			text = EVTOPTAlodge64_any
+		}
+		lodge_household_spawn_effect = yes
+	}
+}

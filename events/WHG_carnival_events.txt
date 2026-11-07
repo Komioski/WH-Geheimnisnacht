@@ -17,8 +17,8 @@
 #   carnival.10-15    Act II: omens in the night, the truth uncovered
 #   carnival.20-23    Act III: the performance, the Master's offer, the patron
 #   carnival.25       The camp raided before the show (truth seen early)
-#   carnival.30-35    Act IV: sunset, victory, the ravaged town, the Great
-#                     Unclean One (very rare), the Master taken
+#   carnival.30-35    Act IV: sunset, victory, the ravaged town, the Master
+#                     ascends to Daemon Prince (rare), the Master taken
 #   carnival.40-42    Act V: the hunt for the Master
 #   carnival.80-81    The Carnival moves on (hidden), news of where it went
 #   carnival.90-91    The Carnival vanishes (hidden), word to its patron
@@ -28,7 +28,7 @@
 # State: global flag carnival_on_the_road; global targets carnival_master,
 # carnival_town, carnival_host, carnival_watcher, carnival_patron and
 # carnival_next_host (the patron's choice), and the troupe carnival_jester,
-# carnival_brute, carnival_plaguebearer and carnival_guo; global variable
+# carnival_brute and carnival_plaguebearer; global variable
 # global_carnival_realms. Host flags are cleared by
 # carnival_clear_host_effect.
 #
@@ -113,6 +113,7 @@ character_event = {
 			save_global_event_target_as = carnival_master
 			set_character_flag = carnival_master
 			set_character_flag = carnival_troupe
+			add_trait = cannot_marry
 			set_secret_religion = nurgle
 			give_nickname = nick_the_carnival_master
 		}
@@ -861,15 +862,15 @@ character_event = {
 	immediate = {
 		event_target:carnival_master = { carnival_reveal_master_effect = yes }
 		carnival_reveal_troupe_effect = yes
-		# Very rarely the Master finishes the great summoning (carnival.33)
+		# If the sunset is lost, the Master may ascend (carnival.33)
 		random_list = {
-			2 = {
+			10 = {
 				modifier = { factor = 2 is_doom_high_trigger = yes }
 				modifier = { factor = 3 is_doom_very_high_trigger = yes }
 				modifier = { factor = 2 check_variable = { which = carnival_risk value = 3 } }
-				set_character_flag = carnival_guo
+				set_character_flag = carnival_ascension
 			}
-			98 = { }
+			90 = { }
 		}
 	}
 
@@ -989,122 +990,147 @@ character_event = {
 	}
 }
 
-# carnival.33 The Great Unclean One
-# Very rare (carnival.30 rolls it). The Master finishes the great summoning:
-# a Great Unclean One heaves itself out of the Plague Cart. The town and its
-# neighbours are drowned in Nurgle's Rot, a courtier dies, others are taken
-# and the doom rises. Flee, stand and fight (a slim chance, death likely),
-# or, for a follower of Nurgle, kneel to Grandfather's chosen. The greater
-# daemon then sinks back into the Garden and the Carnival moves on.
+# carnival.33 The Master ascends
+# Rare (carnival.30 rolls it; it happens only when the sunset is lost). On the
+# bodies of the town the Master is raised to a Daemon Prince of Nurgle and
+# forges a small realm: the town's county and up to two of its neighbours
+# break away under him, with a daemon host to hold them. His troupe stays at
+# his court. The doom rises, the host keeps claims on the lost counties, and
+# the Carnival is over.
 # Scope: ROOT is the host.
 character_event = {
 	id = carnival.33
 	desc = EVTDESCcarnival33
 	title = EVTNAMEcarnival33
-	picture = GFX_evt_nurgle_horde
-	portrait = event_target:carnival_guo
+	picture = GFX_evt_daemon_prince
+	portrait = event_target:carnival_prince
 
 	is_triggered_only = yes
 
 	immediate = {
-		clr_character_flag = carnival_guo
+		clr_character_flag = carnival_ascension
 		clr_character_flag = carnival_fled
-		create_character = {
-			random_traits = no
-			dynasty = none
-			religion = nurgle
-			culture = prince_nurgle
-			female = no
-			age = 4000
-			attributes = { diplomacy = 12 martial = 20 stewardship = 30 intrigue = 8 learning = 25 }
-			trait = content
-			trait = gregarious
-			trait = charitable
-			flag = ai_flag_refuse_conversion
-		}
-		new_character = {
-			save_global_event_target_as = carnival_guo
-			set_character_flag = carnival_troupe
-			set_graphical_culture = prince_nurgle
-			add_trait = nurgle_demon
-			add_trait = has_nurgles_rot
-			add_trait = lore_nurgle
-			give_nickname = nick_the_great_unclean_one
-		}
+		event_target:carnival_master = { save_event_target_as = carnival_prince }
+		clear_global_event_target = carnival_master
 		event_target:carnival_town = {
-			add_province_modifier = { name = carnival_plague_town duration = 3650 }
-			spawn_disease = nurgles_rot
-			any_neighbor_province = {
-				limit = { has_owner = yes }
-				add_province_modifier = { name = carnival_plague_town duration = 1825 }
+			owner = { top_liege = { save_event_target_as = carnival_old_liege } }
+		}
+		event_target:carnival_prince = {
+			clr_character_flag = carnival_master
+			clr_character_flag = carnival_troupe
+			remove_trait = cannot_marry
+			set_character_flag = carnival_daemon_prince
+			set_graphical_culture = prince_nurgle
+			remove_race_trait_effect = yes
+			religion = nurgle
+			if = { limit = { NOT = { trait = nurgle_demon } } add_trait = nurgle_demon }
+			add_trait = prince_nurgle
+			add_doom_prince_effect = yes
+		}
+		# The town's county, then up to two neighbours of the same realm
+		event_target:carnival_town = {
+			county = {
+				grant_title_no_opinion = { target = event_target:carnival_prince type = invasion }
+			}
+			random_neighbor_province = {
+				limit = {
+					has_owner = yes
+					owner = { top_liege = { character = event_target:carnival_old_liege } }
+					NOT = { owner = { character = event_target:carnival_prince } }
+					is_capital = no
+				}
+				county = {
+					grant_title_no_opinion = {
+						target = event_target:carnival_prince
+						type = invasion
+					}
+				}
+				random_neighbor_province = {
+					limit = {
+						has_owner = yes
+						owner = { top_liege = { character = event_target:carnival_old_liege } }
+						NOT = { owner = { character = event_target:carnival_prince } }
+						is_capital = no
+					}
+					county = {
+						grant_title_no_opinion = {
+							target = event_target:carnival_prince
+							type = invasion
+						}
+					}
+				}
 			}
 		}
-		add_doom_progress_medium_effect = yes
-		random_courtier = {
-			limit = { is_ruler = no prisoner = no NOT = { is_close_relative = ROOT } }
-			save_event_target_as = carnival_guo_victim
-			death = { death_reason = death_murder killer = event_target:carnival_guo }
+		event_target:carnival_prince = {
+			set_defacto_liege = THIS
+			any_demesne_title = {
+				limit = { higher_tier_than = BARON NOT = { higher_tier_than = COUNT } }
+				ROOT = { add_pressed_claim = PREV }
+				if = {
+					limit = { NOT = { event_target:carnival_old_liege = { character = ROOT } } }
+					event_target:carnival_old_liege = { add_pressed_claim = PREV }
+				}
+			}
+			capital_scope = {
+				PREV = {
+					spawn_unit = {
+						province = PREV
+						owner = PREV
+						troops = { daemonic_host = { 1000 1000 } light_infantry = { 1500 1500 } }
+						earmark = carnival_prince_host
+						attrition = 0.5
+					}
+				}
+			}
 		}
+		# His troupe stays at his court
+		event_target:carnival_jester = {
+			if = {
+				limit = { is_alive = yes prisoner = no }
+				move_character = event_target:carnival_prince
+				clr_character_flag = carnival_troupe
+				remove_trait = cannot_marry
+			}
+		}
+		event_target:carnival_brute = {
+			if = {
+				limit = { is_alive = yes prisoner = no }
+				move_character = event_target:carnival_prince
+				clr_character_flag = carnival_troupe
+				remove_trait = cannot_marry
+			}
+		}
+		event_target:carnival_plaguebearer = {
+			if = {
+				limit = { is_alive = yes }
+				move_character = event_target:carnival_prince
+				clr_character_flag = carnival_troupe
+			}
+		}
+		clear_global_event_target = carnival_jester
+		clear_global_event_target = carnival_brute
+		clear_global_event_target = carnival_plaguebearer
+		add_doom_progress_medium_effect = yes
 		carnival_taken_effect = yes
 	}
 
-	option = { # Run
+	option = { # We will take it back
 		name = EVTOPTAcarnival33
 		trigger = { follower_of_nurgle = no }
-		random = { chance = 50 add_trait = wounded }
-		random = { chance = 30 carnival_infect_effect = yes }
-		hidden_effect = {
-			event_target:carnival_guo = { death = { death_reason = death_vanished } }
-			character_event = { id = carnival.80 days = 7 }
-		}
-		ai_chance = { factor = 70 }
+		prestige = -100
+		custom_tooltip = { text = EVTOPTAcarnival33_TT }
+		hidden_effect = { character_event = { id = carnival.90 days = 7 } }
+		ai_chance = { factor = 100 }
 	}
-	option = { # Stand and fight
+	option = { # Hail the new prince
 		name = EVTOPTBcarnival33
-		trigger = { follower_of_nurgle = no }
-		custom_tooltip = { text = EVTOPTBcarnival33_TT }
-		random_list = {
-			10 = {
-				modifier = {
-					factor = 2
-					any_courtier_or_vassal = { carnival_seer_trigger = yes is_adult = yes }
-				}
-				modifier = { factor = 2 is_trained_mage_trigger = yes }
-				modifier = { factor = 1.5 martial = 18 }
-				prestige = 300
-				reduce_doom_progress_major_effect = yes
-				hidden_effect = {
-					event_target:carnival_guo = {
-						death = { death_reason = death_battle killer = ROOT }
-					}
-					character_event = { id = carnival.40 days = 3 }
-				}
-			}
-			50 = {
-				add_trait = maimed
-				carnival_infect_effect = yes
-				hidden_effect = {
-					event_target:carnival_guo = { death = { death_reason = death_vanished } }
-					character_event = { id = carnival.80 days = 7 }
-				}
-			}
-			40 = { death = { death_reason = death_battle killer = event_target:carnival_guo } }
-		}
-		ai_chance = {
-			factor = 10
-			modifier = { factor = 3 trait = brave }
-			modifier = { factor = 0 trait = craven }
-		}
-	}
-	option = { # Kneel to Grandfather's chosen
-		name = EVTOPTCcarnival33
 		trigger = { follower_of_nurgle = yes }
-		piety = 200
-		if = { limit = { NOT = { trait = has_nurgles_rot } } add_trait = has_nurgles_rot }
-		nurgle_blessing_check_effect = yes
+		piety = 100
 		hidden_effect = {
-			event_target:carnival_guo = { death = { death_reason = death_vanished } }
-			character_event = { id = carnival.80 days = 7 }
+			event_target:carnival_prince = {
+				opinion = { modifier = opinion_friend who = ROOT years = 20 }
+			}
+			character_event = { id = carnival.90 days = 7 }
 		}
 		ai_chance = { factor = 100 }
 	}
@@ -1507,7 +1533,6 @@ character_event = {
 		clear_global_event_target = carnival_jester
 		clear_global_event_target = carnival_brute
 		clear_global_event_target = carnival_plaguebearer
-		clear_global_event_target = carnival_guo
 	}
 }
 

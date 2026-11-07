@@ -27,7 +27,10 @@
 # warriors, thunderers and hammerers, who may become a friend or a lover.
 # The call to war speeds the levies of any lodge or Chaos warband; a
 # knight of the Knightly Orders swears to one order of the Old World,
-# picked by region and faith.
+# picked by region and faith. Heroes set weak members to spar, strong
+# warriors seek duels to the death with rival societies, members teach
+# each other courage, ambition, patience and diligence, and the friend or
+# lover of a fallen warrior may forge a soulbound blade by a forbidden rite.
 #
 # The joining trial            lodge.1 - lodge.9
 # A child joins the lodge      lodge.10 - lodge.15
@@ -45,6 +48,10 @@
 # Missions                     lodge.200 - lodge.247 (was HF.25500 - HF.25511,
 #                              HF.10500 - HF.10521, WULRIC.1 - WULRIC.8 and
 #                              their WB twins)
+# Flavour                      lodge.300 - lodge.351 (was HF.500, HFP.501 -
+#                              HFP.506, HF.550, HF.560 - HF.561, HF.14000 -
+#                              HF.14009 and WB.51000 - WB.51011, with their
+#                              WB twins)
 #
 # Saved: character flags awaiting_initiation_trial, society_join_block,
 #   they_accepted@, they_declined@, mock_duel, show_once_flag,
@@ -72,7 +79,18 @@
 #   flag_renounce_focus_for_*, won_war@/white_peace@/lost_war@,
 #   impressed@ and deadly_duel@, and the event targets lodge_hero,
 #   home_capital, wl_looting_target, duel_target, my_war_target,
-#   my_war_target_holder, recruit_to_be, attacker_target, defender_target.
+#   my_war_target_holder, recruit_to_be, attacker_target, defender_target;
+#   for the flavour the flags easy_duel/even_duel/hard_duel,
+#   notify_instigating_hero, appreciated_duel, beneath_me_duel,
+#   feared_for_life_duel, learning_*@ and teaching_*@ (the lesson),
+#   they_gained_*/they_lost_*, great/good/bad_outcome, kiss_of_gratitude,
+#   lodge_got_soulbound (once per life), lodge_soulbound_forging,
+#   decided_to_dig_up/kidnap and crucible_steel_axe/sword/mace, the
+#   modifiers teaching_moment_cooldown, lodge_soulbound_strength and
+#   crucible_weapon_*, and the event targets hero_instigating_duel,
+#   society_practice_duelist_target_1 - 3, lodge_member_killed/killer,
+#   teacher, student, mourning_friend/lover, dead_warrior, weapon_forger,
+#   potential_sacrifice, witness1/2 and unfortunate_child.
 #
 # Callers: common/on_actions/00_on_actions.txt (on_character_ask_to_join_
 #   society 1, on_five_year_pulse 50, on_society_bi_yearly_pulse 54,
@@ -86,13 +104,17 @@
 #   (200), on_loot_settlement (203), on_focus_selected (206 - 209),
 #   on_new_holder* (210), on_death (222), on_war_ended_* (230 - 234),
 #   events/DoW_Adventurers.txt (DoWA.200, DoWA.250: 201, 204, 220, 225,
-#   227, 235, 242);
-#   common/scripted_effects/01_scripted_effects_duels.txt (9, 61);
+#   227, 235, 242); flavour: on_society_bi_yearly_pulse (300, 310, 320),
+#   on_death (311, 340), the duel effects (301 - 306);
+#   common/scripted_effects/01_scripted_effects_duels.txt (9, 61, 301 -
+#   306);
 #   events/hfp_duel_events.txt (13).
 # Support: common/scripted_triggers/wh_warband_triggers.txt (voices, lodge
 #   recruits), common/scripted_effects/wh_warband_effects.txt
-#   (lodge_household_spawn_effect, lodge_child_*), common/event_modifiers/
-#   wh_warband_modifiers.txt (lodge_growth_cooldown).
+#   (lodge_household_spawn_effect, lodge_child_*, lodge_sparring_*,
+#   lodge_teach_*, lodge_soulbound_*), common/event_modifiers/
+#   wh_warband_modifiers.txt (lodge_growth_cooldown,
+#   lodge_soulbound_strength).
 #
 # Fixed from vanilla: a captive leader made two champions answer the same
 # recruit, and the gating event could send the verdict three times; the ten
@@ -125,7 +147,22 @@
 # the grudge mission looked for the holder of a character and never ended
 # after a lost war; the raid target was cleared only for lodge members;
 # Norscans were checked by a religion the mod does not have; the Warriors
-# of Ulric's reclaim of the old lands is back.
+# of Ulric's reclaim of the old lands is back. The flavour: the witch
+# hunters' captains could never train their members (a stray rank check
+# shut them out); the sparring report cleared the wound notice on the wrong
+# character, so a member read as wounded in every later report; a lesson
+# left its flags on the student for good, and one meant to cure cowardice,
+# contentment or sloth either did nothing or never removed the vice; the
+# "nice students learn" weights read the teacher; the "no friends yet"
+# weight could never be true; the gear meant to cost players only was
+# paid by all; the kiss was allowed only by real-world faiths (now
+# Slaanesh and faiths of the holy family). The soulbound weapon, cut from
+# the lodges, is back for lodges and warbands, once per life: its luck
+# weights favoured getting caught, the kin to be bled was looked up in the
+# mourner's own family and never bled, "only running late" had the forger
+# executed, the legendary blade was the same as the whispering one, the
+# fallback made a hurt child a hundred times likelier, and a mourner with
+# artifacts counted as having none.
 #
 # Also in this file (each part keeps its own header and namespace):
 #   Warbands (namespace warband, was WHG_warband_events)
@@ -8400,6 +8437,1999 @@ society_quest_event = {
 		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
 
 		ai_chance = { factor = 0 }
+	}
+}
+
+###############################################################################
+# Flavour: sparring, duels, teaching and the soulbound weapon
+###############################################################################
+
+# lodge.300 A sparring match
+# A Hero of a lodge or warband (or a captain of the witch hunters) notices a
+# member who fights badly and picks a sparring partner for them: an easy
+# match to build confidence, an even one, or a beating as a lesson. How the
+# member takes the choice shows in the report (lodge.301 - lodge.306).
+# Scope: ROOT is the Hero; event_target:combatant_1 the weak member.
+character_event = {
+	id = lodge.300
+	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESClodge300_chaos }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESClodge300_skaven }
+	desc = { trigger = { warband_voice_greenskin_trigger = yes } text = EVTDESClodge300_greenskin }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge300_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge300_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge300_dawi }
+	desc = { trigger = { lodge_voice_other_trigger = yes } text = EVTDESClodge300_any }
+	picture = GFX_evt_melee
+	border = GFX_event_normal_frame_war
+	portrait = event_target:combatant_1
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse (warrior_lodge_champion_train_other_members)
+	is_in_society = yes
+
+	trigger = {
+		NOT = { has_character_flag = call_to_legend_active }
+		war = no
+		OR = {
+			AND = { society_rank == 4 lodge_tombola_member_trigger = yes }
+			AND = { society_rank == 3 is_state_witch_hunter_trigger = yes }
+		}
+		is_inaccessible_or_incapable_trigger = no
+		is_adult = yes
+		any_society_member = { count = 4 lodge_sparring_partner_trigger = yes }
+	}
+
+	immediate = {
+		random_list = {
+			10 = { sound_effect = fighting_instructions_01 }
+			10 = { sound_effect = fighting_instructions_02 }
+		}
+		hidden_effect = {
+			save_event_target_as = hero_instigating_duel
+			random_society_member = { # Someone who needs the training
+				limit = { lodge_sparring_partner_trigger = yes }
+				preferred_limit = { NOT = { combat_rating = 11 } }
+				preferred_limit = { NOT = { combat_rating = 16 } }
+				preferred_limit = { NOT = { combat_rating = 21 } }
+				preferred_limit = { NOT = { combat_rating = 26 } }
+				save_event_target_as = combatant_1
+			}
+			event_target:combatant_1 = {
+				any_society_member = { # An even match
+					limit = {
+						lodge_sparring_partner_trigger = yes
+						NOT = { character = event_target:combatant_1 }
+					}
+					score_value = { value = 10 matching_soldier_score = yes }
+					save_event_target_as = society_practice_duelist_target_2
+				}
+			}
+			any_society_member = { # An easy match
+				limit = {
+					lodge_sparring_partner_trigger = yes
+					NOR = {
+						character = event_target:combatant_1
+						character = event_target:society_practice_duelist_target_2
+					}
+				}
+				score_value = { value = 10 bad_soldier_outcome_score = yes }
+				save_event_target_as = society_practice_duelist_target_1
+			}
+			any_society_member = { # A beating
+				limit = {
+					lodge_sparring_partner_trigger = yes
+					NOR = {
+						character = event_target:combatant_1
+						character = event_target:society_practice_duelist_target_1
+						character = event_target:society_practice_duelist_target_2
+					}
+				}
+				score_value = { value = 10 good_soldier_outcome_score = yes }
+				save_event_target_as = society_practice_duelist_target_3
+			}
+		}
+	}
+
+	option = { # An easy match
+		name = EVTOPTAlodge300
+		show_portrait = event_target:society_practice_duelist_target_1
+		custom_tooltip = { text = easy_duel_tt }
+		hidden_effect = {
+			event_target:combatant_1 = {
+				set_character_flag = mock_duel
+				set_character_flag = easy_duel
+				set_character_flag = notify_instigating_hero
+			}
+			event_target:society_practice_duelist_target_1 = {
+				lodge_sparring_challenge_effect = yes
+			}
+		}
+	}
+
+	option = { # An even match
+		name = EVTOPTBlodge300
+		show_portrait = event_target:society_practice_duelist_target_2
+		custom_tooltip = { text = even_duel_tt }
+		hidden_effect = {
+			event_target:combatant_1 = {
+				set_character_flag = mock_duel
+				set_character_flag = even_duel
+				set_character_flag = notify_instigating_hero
+			}
+			event_target:society_practice_duelist_target_2 = {
+				lodge_sparring_challenge_effect = yes
+			}
+		}
+	}
+
+	option = { # A beating
+		name = EVTOPTClodge300
+		show_portrait = event_target:society_practice_duelist_target_3
+		custom_tooltip = { text = dangerous_duel_tt }
+		hidden_effect = {
+			event_target:combatant_1 = {
+				set_character_flag = mock_duel
+				set_character_flag = hard_duel
+				set_character_flag = notify_instigating_hero
+			}
+			event_target:society_practice_duelist_target_3 = {
+				lodge_sparring_challenge_effect = yes
+			}
+		}
+	}
+
+	option = { # Leave it
+		name = EVTOPTDlodge300
+		detract_society_currency_trivial_effect = yes
+		ai_chance = { factor = 0 }
+	}
+}
+
+# lodge.301 The bout is won
+# The member beat the partner. Grateful, insulted or shaken, the member
+# tells the Hero what they think of the choice.
+# Scope: ROOT is the Hero; event_target:combatant_1 the member.
+character_event = {
+	id = lodge.301
+	desc = EVTDESClodge301
+	picture = GFX_evt_melee
+	border = GFX_event_normal_frame_war
+	portrait = event_target:combatant_1
+
+	is_triggered_only = yes # common/scripted_effects/01_scripted_effects_duels.txt
+
+	trigger = {
+		event_target:combatant_1 = { is_alive = yes }
+	}
+
+	immediate = {
+		sound_effect = duel_win
+		event_target:combatant_1 = { lodge_sparring_win_mood_effect = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge301
+		show_portrait = event_target:combatant_2
+		event_target:combatant_1 = {
+			show_scope_change = no
+			trigger_switch = {
+				on_trigger = has_character_flag
+				easy_duel = { add_society_currency_tiny_effect = yes }
+				even_duel = { add_society_currency_minor_effect = yes }
+				hard_duel = { add_society_currency_medium_effect = yes }
+			}
+			lodge_sparring_verdict_effect = yes
+		}
+	}
+
+	after = {
+		event_target:combatant_1 = { lodge_sparring_clear_effect = yes }
+	}
+}
+
+# lodge.302 The bout is lost
+# Scope: ROOT is the Hero; event_target:combatant_1 the member.
+character_event = {
+	id = lodge.302
+	desc = EVTDESClodge302
+	picture = GFX_evt_melee
+	border = GFX_event_normal_frame_war
+	portrait = event_target:combatant_1
+
+	is_triggered_only = yes # common/scripted_effects/01_scripted_effects_duels.txt
+
+	trigger = {
+		event_target:combatant_1 = { is_alive = yes }
+	}
+
+	immediate = {
+		sound_effect = duel_lose
+		event_target:combatant_1 = { lodge_sparring_lose_mood_effect = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge301
+		show_portrait = event_target:combatant_2
+		event_target:combatant_1 = {
+			show_scope_change = no
+			trigger_switch = {
+				on_trigger = has_character_flag
+				easy_duel = { detract_society_currency_trivial_effect = yes }
+				even_duel = { detract_society_currency_tiny_effect = yes }
+				hard_duel = { detract_society_currency_minor_effect = yes }
+			}
+			lodge_sparring_verdict_effect = yes
+		}
+	}
+
+	after = {
+		event_target:combatant_1 = { lodge_sparring_clear_effect = yes }
+	}
+}
+
+# lodge.303 The partner ran away
+# Scope: ROOT is the Hero; event_target:combatant_1 the member.
+character_event = {
+	id = lodge.303
+	desc = EVTDESClodge303
+	picture = GFX_evt_melee
+	border = GFX_event_normal_frame_war
+	portrait = event_target:combatant_1
+
+	is_triggered_only = yes # common/scripted_effects/01_scripted_effects_duels.txt
+
+	trigger = {
+		event_target:combatant_1 = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge303
+		show_portrait = event_target:combatant_2
+		event_target:combatant_1 = {
+			show_scope_change = no
+			add_society_currency_trivial_effect = yes
+		}
+	}
+
+	after = {
+		event_target:combatant_1 = { lodge_sparring_clear_effect = yes }
+	}
+}
+
+# lodge.304 The member ran away
+# Scope: ROOT is the Hero; event_target:combatant_1 the member.
+character_event = {
+	id = lodge.304
+	desc = EVTDESClodge304
+	picture = GFX_evt_melee
+	border = GFX_event_normal_frame_war
+	portrait = event_target:combatant_1
+
+	is_triggered_only = yes # common/scripted_effects/01_scripted_effects_duels.txt
+
+	trigger = {
+		event_target:combatant_1 = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge304
+		show_portrait = event_target:combatant_2
+		event_target:combatant_1 = {
+			show_scope_change = no
+			detract_society_currency_trivial_effect = yes
+		}
+	}
+
+	after = {
+		event_target:combatant_1 = { lodge_sparring_clear_effect = yes }
+	}
+}
+
+# lodge.305 Won, but both bleed
+# Scope: ROOT is the Hero; event_target:combatant_1 the member.
+character_event = {
+	id = lodge.305
+	desc = EVTDESClodge305
+	picture = GFX_evt_melee
+	border = GFX_event_normal_frame_war
+	portrait = event_target:combatant_1
+
+	is_triggered_only = yes # common/scripted_effects/01_scripted_effects_duels.txt
+
+	trigger = {
+		event_target:combatant_1 = { is_alive = yes }
+	}
+
+	immediate = {
+		sound_effect = duel_win
+		event_target:combatant_1 = { lodge_sparring_win_mood_effect = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge301
+		show_portrait = event_target:combatant_2
+		event_target:combatant_1 = {
+			show_scope_change = no
+			trigger_switch = {
+				on_trigger = has_character_flag
+				easy_duel = { add_society_currency_tiny_effect = yes }
+				even_duel = { add_society_currency_minor_effect = yes }
+				hard_duel = { add_society_currency_medium_effect = yes }
+			}
+			lodge_sparring_verdict_effect = yes
+		}
+	}
+
+	after = {
+		event_target:combatant_1 = { lodge_sparring_clear_effect = yes }
+	}
+}
+
+# lodge.306 Lost, and both bleed
+# Scope: ROOT is the Hero; event_target:combatant_1 the member.
+character_event = {
+	id = lodge.306
+	desc = EVTDESClodge306
+	picture = GFX_evt_melee
+	border = GFX_event_normal_frame_war
+	portrait = event_target:combatant_1
+
+	is_triggered_only = yes # common/scripted_effects/01_scripted_effects_duels.txt
+
+	trigger = {
+		event_target:combatant_1 = { is_alive = yes }
+	}
+
+	immediate = {
+		sound_effect = duel_lose
+		event_target:combatant_1 = { lodge_sparring_lose_mood_effect = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge301
+		show_portrait = event_target:combatant_2
+		event_target:combatant_1 = {
+			show_scope_change = no
+			trigger_switch = {
+				on_trigger = has_character_flag
+				easy_duel = { detract_society_currency_trivial_effect = yes }
+				even_duel = { detract_society_currency_tiny_effect = yes }
+				hard_duel = { detract_society_currency_minor_effect = yes }
+			}
+			lodge_sparring_verdict_effect = yes
+		}
+	}
+
+	after = {
+		event_target:combatant_1 = { lodge_sparring_clear_effect = yes }
+	}
+}
+
+# lodge.310 A duel to the death (hidden)
+# A strong AI warrior of a lodge or warband goes looking for a warrior of
+# another society and another faith, in the realm or across the border,
+# and challenges them to a duel to the death. Stands in for the deeds the
+# warrior societies are known for. Likelier for the bold and the proud, and
+# for one who has never killed in a duel.
+# Scope: ROOT is the duelist.
+character_event = {
+	id = lodge.310
+	hide_window = yes
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse (warrior_lodge_members_duel_enemies)
+	ai = yes
+	is_in_society = yes
+
+	trigger = {
+		lodge_tombola_member_trigger = yes
+		NOT = { has_character_flag = call_to_legend_active }
+		OR = { combat_rating = 25 society_rank == 4 AND = { society_rank == 3 combat_rating = 15 } }
+		is_inaccessible_or_incapable_trigger = no
+		is_adult = yes
+		in_command = no
+		NOR = {
+			has_injury_trigger = yes
+			has_disease_trigger = yes
+			has_symptom_trigger = yes
+			has_character_modifier = recent_duel_timer
+		}
+		top_liege = {
+			OR = {
+				any_realm_character = { lodge_duel_foe_trigger = yes same_sex = ROOT }
+				any_neighbor_independent_ruler = {
+					any_realm_character = { lodge_duel_foe_trigger = yes same_sex = ROOT }
+				}
+			}
+		}
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 25 NOT = { any_kill_list_character = { death_reason = death_duel } } }
+		modifier = { factor = 3 society_rank == 4 }
+		modifier = { factor = 2 society_rank == 3 }
+		modifier = { factor = 2 combat_rating = 50 }
+		modifier = { factor = 2 combat_rating = 70 }
+		modifier = { factor = 2 combat_rating = 90 }
+		modifier = { factor = 3 trait = ambitious }
+		modifier = { factor = 3 trait = brave }
+		modifier = { factor = 2 trait = gregarious }
+		modifier = { factor = 2 trait = zealous }
+		modifier = { factor = 2 trait = wroth }
+		modifier = { factor = 2 trait = diligent }
+		modifier = { factor = 2 trait = proud }
+		modifier = { factor = 0 trait = shy }
+		modifier = { factor = 0.5 trait = content }
+		modifier = { factor = 0.5 trait = patient }
+		modifier = { factor = 0.5 trait = temperate }
+		modifier = { factor = 0.5 trait = slothful }
+	}
+
+	immediate = {
+		save_event_target_as = combatant_1
+		if = {
+			limit = {
+				top_liege = {
+					any_realm_character = { lodge_duel_foe_trigger = yes same_sex = ROOT }
+				}
+			}
+			top_liege = {
+				any_realm_character = {
+					limit = { lodge_duel_foe_trigger = yes same_sex = ROOT }
+					score_value = { value = 10 bad_soldier_outcome_score = yes }
+					save_event_target_as = combatant_2
+				}
+			}
+		}
+		else = {
+			top_liege = {
+				random_neighbor_independent_ruler = {
+					limit = {
+						any_realm_character = { lodge_duel_foe_trigger = yes same_sex = ROOT }
+					}
+					any_realm_character = {
+						limit = { lodge_duel_foe_trigger = yes same_sex = ROOT }
+						score_value = { value = 10 bad_soldier_outcome_score = yes }
+						save_event_target_as = combatant_2
+					}
+				}
+			}
+		}
+		event_target:combatant_2 = {
+			apply_degree_of_dishonorable_duel_effect = yes
+			character_event = { id = HFP.10095 }
+		}
+	}
+}
+
+# lodge.311 A member falls in a duel (hidden)
+# Tells the players of the society that one of their own was killed in a
+# duel (lodge.312).
+# Scope: ROOT is the dead member.
+character_event = {
+	id = lodge.311
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+	is_in_society = yes
+
+	trigger = {
+		lodge_tombola_member_trigger = yes
+		OR = {
+			death_reason = death_duel
+			death_reason = death_battle_duel
+			death_reason = death_mission_duel
+		}
+	}
+
+	immediate = {
+		save_event_target_as = lodge_member_killed
+		killer = { save_event_target_as = lodge_member_killer }
+		any_player = {
+			limit = { same_society_as = ROOT NOT = { character = ROOT } }
+			character_event = { id = lodge.312 }
+		}
+	}
+}
+
+# lodge.312 One of ours has fallen
+# Scope: ROOT is a player of the society; FROM the dead member.
+character_event = {
+	id = lodge.312
+	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESClodge312_chaos }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESClodge312_skaven }
+	desc = { trigger = { warband_voice_greenskin_trigger = yes } text = EVTDESClodge312_greenskin }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge312_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge312_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge312_dawi }
+	desc = { trigger = { lodge_voice_other_trigger = yes } text = EVTDESClodge312_any }
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # lodge.311
+	notification = yes
+
+	option = {
+		name = EVTOPTAlodge312
+	}
+}
+
+# lodge.320 A teaching moment (hidden)
+# A brave, ambitious, patient or diligent member looks for a fellow member
+# who lacks that virtue (a coward, a content soul or a sluggard first) and
+# offers to teach them. Five years before either can try again.
+# Scope: ROOT is the teacher; event_target:student is saved here.
+character_event = {
+	id = lodge.320
+	hide_window = yes
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse
+	is_in_society = yes
+
+	trigger = {
+		lodge_tombola_member_trigger = yes
+		is_inaccessible_or_incapable_trigger = no
+		NOT = { has_character_flag = do_not_disturb }
+		war = no
+		is_adult = yes
+		NOT = { has_character_modifier = teaching_moment_cooldown }
+		OR = {
+			AND = {
+				trait = brave
+				any_society_member = {
+					is_available_fellow_society_member_trigger = yes
+					NOT = { trait = brave }
+					NOT = { has_character_modifier = teaching_moment_cooldown }
+				}
+			}
+			AND = {
+				trait = ambitious
+				any_society_member = {
+					is_available_fellow_society_member_trigger = yes
+					NOT = { trait = ambitious }
+					NOT = { has_character_modifier = teaching_moment_cooldown }
+				}
+			}
+			AND = {
+				trait = patient
+				any_society_member = {
+					is_available_fellow_society_member_trigger = yes
+					NOT = { trait = patient }
+					NOT = { has_character_modifier = teaching_moment_cooldown }
+				}
+			}
+			AND = {
+				trait = diligent
+				any_society_member = {
+					is_available_fellow_society_member_trigger = yes
+					NOT = { trait = diligent }
+					NOT = { has_character_modifier = teaching_moment_cooldown }
+				}
+			}
+		}
+	}
+
+	immediate = {
+		save_event_target_as = teacher
+		add_character_modifier = { name = teaching_moment_cooldown duration = 1825 hidden = yes }
+		random_list = {
+			10 = { # Courage
+				trigger = {
+					trait = brave
+					any_society_member = {
+						is_available_fellow_society_member_trigger = yes
+						NOT = { trait = brave }
+						NOT = { has_character_modifier = teaching_moment_cooldown }
+					}
+				}
+				modifier = {
+					factor = 2
+					any_society_member = {
+						is_available_fellow_society_member_trigger = yes
+						trait = craven
+						NOT = { has_character_modifier = teaching_moment_cooldown }
+					}
+				}
+				random_society_member = {
+					limit = {
+						is_available_fellow_society_member_trigger = yes
+						NOT = { trait = brave }
+						NOT = { has_character_modifier = teaching_moment_cooldown }
+					}
+					preferred_limit = { trait = craven }
+					preferred_limit = { NOT = { society_rank == 4 } }
+					preferred_limit = { war = no }
+					set_character_flag = learning_bravery@event_target:teacher
+					save_event_target_as = student
+				}
+				set_character_flag = teaching_bravery@event_target:student
+			}
+			10 = { # Ambition
+				trigger = {
+					trait = ambitious
+					any_society_member = {
+						is_available_fellow_society_member_trigger = yes
+						NOT = { trait = ambitious }
+						NOT = { has_character_modifier = teaching_moment_cooldown }
+					}
+				}
+				modifier = {
+					factor = 2
+					any_society_member = {
+						is_available_fellow_society_member_trigger = yes
+						trait = content
+						NOT = { has_character_modifier = teaching_moment_cooldown }
+					}
+				}
+				random_society_member = {
+					limit = {
+						is_available_fellow_society_member_trigger = yes
+						NOT = { trait = ambitious }
+						NOT = { has_character_modifier = teaching_moment_cooldown }
+					}
+					preferred_limit = { trait = content }
+					preferred_limit = { NOT = { society_rank == 4 } }
+					preferred_limit = { war = no }
+					set_character_flag = learning_ambition@event_target:teacher
+					save_event_target_as = student
+				}
+				set_character_flag = teaching_ambition@event_target:student
+			}
+			10 = { # Patience
+				trigger = {
+					trait = patient
+					any_society_member = {
+						is_available_fellow_society_member_trigger = yes
+						NOT = { trait = patient }
+						NOT = { has_character_modifier = teaching_moment_cooldown }
+					}
+				}
+				random_society_member = {
+					limit = {
+						is_available_fellow_society_member_trigger = yes
+						NOT = { trait = patient }
+						NOT = { has_character_modifier = teaching_moment_cooldown }
+					}
+					preferred_limit = { trait = wroth }
+					preferred_limit = { NOT = { society_rank == 4 } }
+					preferred_limit = { war = no }
+					set_character_flag = learning_patience@event_target:teacher
+					save_event_target_as = student
+				}
+				set_character_flag = teaching_patience@event_target:student
+			}
+			10 = { # Diligence
+				trigger = {
+					trait = diligent
+					any_society_member = {
+						is_available_fellow_society_member_trigger = yes
+						NOT = { trait = diligent }
+						NOT = { has_character_modifier = teaching_moment_cooldown }
+					}
+				}
+				modifier = {
+					factor = 2
+					any_society_member = {
+						is_available_fellow_society_member_trigger = yes
+						trait = slothful
+						NOT = { has_character_modifier = teaching_moment_cooldown }
+					}
+				}
+				random_society_member = {
+					limit = {
+						is_available_fellow_society_member_trigger = yes
+						NOT = { trait = diligent }
+						NOT = { has_character_modifier = teaching_moment_cooldown }
+					}
+					preferred_limit = { trait = slothful }
+					preferred_limit = { NOT = { society_rank == 4 } }
+					preferred_limit = { war = no }
+					set_character_flag = learning_diligence@event_target:teacher
+					save_event_target_as = student
+				}
+				set_character_flag = teaching_diligence@event_target:student
+			}
+		}
+		event_target:student = {
+			add_character_modifier = {
+				name = teaching_moment_cooldown
+				duration = 1825
+				hidden = yes
+			}
+		}
+		character_event = { id = lodge.321 }
+	}
+}
+
+# lodge.321 The teacher sees a lack
+# Offer the lesson, or leave the student be.
+# Scope: ROOT is the teacher; event_target:student.
+character_event = {
+	id = lodge.321
+	title = EVTTITLElodge320
+	desc = {
+		text = EVTDESClodge321_bravery
+		trigger = { has_character_flag = teaching_bravery@event_target:student }
+	}
+	desc = {
+		text = EVTDESClodge321_ambition
+		trigger = { has_character_flag = teaching_ambition@event_target:student }
+	}
+	desc = {
+		text = EVTDESClodge321_patience
+		trigger = { has_character_flag = teaching_patience@event_target:student }
+	}
+	desc = {
+		text = EVTDESClodge321_diligence
+		trigger = { has_character_flag = teaching_diligence@event_target:student }
+	}
+	picture = GFX_evt_teaching_moment
+	border = GFX_event_normal_frame_war
+	portrait = event_target:student
+	sound = fighting_instructions_01
+
+	is_triggered_only = yes # lodge.320
+
+	trigger = {
+		is_alive = yes
+		event_target:student = { is_alive = yes }
+	}
+
+	option = { # Offer guidance
+		name = {
+			text = EVTOPTAlodge321_bravery
+			trigger = { has_character_flag = teaching_bravery@event_target:student }
+		}
+		name = {
+			text = EVTOPTAlodge321_ambition
+			trigger = { has_character_flag = teaching_ambition@event_target:student }
+		}
+		name = {
+			text = EVTOPTAlodge321_patience
+			trigger = { has_character_flag = teaching_patience@event_target:student }
+		}
+		name = {
+			text = EVTOPTAlodge321_diligence
+			trigger = { has_character_flag = teaching_diligence@event_target:student }
+		}
+		custom_tooltip = { text = EVTOPTAlodge321_TT }
+		add_society_currency_tiny_effect = yes
+		event_target:student = { character_event = { id = lodge.322 days = 1 } }
+	}
+
+	option = { # Not my business
+		name = EVTOPTBlodge321
+		custom_tooltip = { text = EVTOPTBlodge321_TT }
+		lodge_teach_clear_teacher_effect = yes
+		event_target:student = { lodge_teach_clear_student_effect = yes }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# lodge.322 Someone offers guidance
+# Accept the lesson, take offence, or decline politely.
+# Scope: ROOT is the student; FROM and event_target:teacher the teacher.
+character_event = {
+	id = lodge.322
+	title = EVTTITLElodge320
+	desc = {
+		text = EVTDESClodge322_bravery
+		trigger = { has_character_flag = learning_bravery@event_target:teacher }
+	}
+	desc = {
+		text = EVTDESClodge322_ambition
+		trigger = { has_character_flag = learning_ambition@event_target:teacher }
+	}
+	desc = {
+		text = EVTDESClodge322_patience
+		trigger = { has_character_flag = learning_patience@event_target:teacher }
+	}
+	desc = {
+		text = EVTDESClodge322_diligence
+		trigger = { has_character_flag = learning_diligence@event_target:teacher }
+	}
+	picture = GFX_evt_teaching_moment
+	border = GFX_event_normal_frame_war
+	portrait = event_target:teacher
+	sound = fighting_instructions_02
+
+	is_triggered_only = yes # lodge.321
+
+	trigger = {
+		is_alive = yes
+		event_target:teacher = { is_alive = yes }
+	}
+
+	option = { # Yes, teach me
+		name = EVTOPTAlodge322
+		custom_tooltip = { text = EVTOPTAlodge322_TT }
+		trigger_switch = {
+			on_trigger = has_character_flag
+			learning_bravery@event_target:teacher = {
+				show_trait = brave
+				custom_tooltip = { text = could_lead_to_brave_tt }
+			}
+			learning_ambition@event_target:teacher = {
+				show_trait = ambitious
+				custom_tooltip = { text = could_lead_to_ambitious_tt }
+			}
+			learning_patience@event_target:teacher = {
+				show_trait = patient
+				custom_tooltip = { text = could_lead_to_patient_tt }
+			}
+			learning_diligence@event_target:teacher = {
+				show_trait = diligent
+				custom_tooltip = { text = could_lead_to_diligent_tt }
+			}
+		}
+		event_target:teacher = { character_event = { id = lodge.323 days = 3 } }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0 is_rival = FROM }
+			modifier = { factor = 10 has_pleasant_personality_trigger = yes }
+			modifier = { factor = 10 is_friend = FROM }
+			modifier = {
+				factor = 10
+				FROM = { ROOT_possibly_romantically_interested_trigger = yes }
+			}
+		}
+	}
+
+	option = { # How dare you
+		name = EVTOPTBlodge322
+		custom_tooltip = { text = EVTOPTBlodge322_TT }
+		prestige = 10
+		event_target:teacher = {
+			set_character_flag = they_insulted_me
+			character_event = { id = lodge.324 days = 5 }
+		}
+		lodge_teach_clear_student_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 100 is_rival = FROM }
+			modifier = { factor = 0 is_friend = FROM }
+			modifier = { factor = 10 is_evil_trigger = yes }
+			modifier = { factor = 10 has_unpleasant_personality_trigger = yes }
+		}
+	}
+
+	option = { # No, thank you
+		name = EVTOPTClodge322
+		custom_tooltip = { text = EVTOPTClodge322_TT }
+		event_target:teacher = { character_event = { id = lodge.324 days = 3 } }
+		lodge_teach_clear_student_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 10 trait = depressed }
+			modifier = { factor = 10 trait = stressed }
+			modifier = { factor = 10 is_pregnant = yes }
+		}
+	}
+}
+
+# lodge.323 The student accepts
+# Make a show of it, or keep it simple. How the lesson goes depends on the
+# student's nature: the kind and the pleasant learn, the cruel and the
+# unpleasant do not.
+# Scope: ROOT is the teacher; FROM and event_target:student the student.
+character_event = {
+	id = lodge.323
+	title = EVTTITLElodge320
+	desc = EVTDESClodge323
+	picture = GFX_evt_teaching_moment
+	border = GFX_event_normal_frame_war
+	portrait = event_target:student
+
+	is_triggered_only = yes # lodge.322
+
+	trigger = {
+		is_alive = yes
+		event_target:student = { is_alive = yes }
+	}
+
+	option = { # Bring the gear
+		name = EVTOPTAlodge323
+		custom_tooltip = { text = EVTOPTAlodge323_TT }
+		if = { limit = { ai = no } scaled_wealth = { value = -1 min = -15 } }
+		prestige = 5
+		if = {
+			limit = { NOT = { trait = proud } }
+			random = {
+				chance = 25
+				add_trait = proud
+				hidden_effect = { character_event = { id = 38261 } }
+			}
+		}
+		ai_chance = { factor = 1 modifier = { factor = 10 trait = proud } }
+	}
+
+	option = { # Keep it simple
+		name = EVTOPTBlodge323
+		custom_tooltip = { text = EVTOPTBlodge323_TT }
+		if = {
+			limit = { NOT = { trait = humble } }
+			random = {
+				chance = 25
+				add_trait = humble
+				hidden_effect = { character_event = { id = 38260 } }
+			}
+		}
+		ai_chance = { factor = 1 modifier = { factor = 10 trait = humble } }
+	}
+
+	after = {
+		hidden_effect = {
+			random_list = {
+				10 = { # A great lesson
+					modifier = {
+						factor = 10
+						event_target:student = { is_benevolent_trigger = yes }
+					}
+					modifier = {
+						factor = 10
+						event_target:student = { has_pleasant_personality_trigger = yes }
+					}
+					modifier = {
+						factor = 1.5
+						event_target:student = { has_pleasant_trait_trigger = yes }
+					}
+					event_target:student = {
+						character_event = { id = lodge.326 days = 10 random = 25 }
+					}
+				}
+				20 = { # A fair lesson
+					event_target:student = {
+						character_event = { id = lodge.327 days = 10 random = 25 }
+					}
+				}
+				5 = { # A failure
+					modifier = { factor = 10 event_target:student = { is_evil_trigger = yes } }
+					modifier = {
+						factor = 10
+						event_target:student = { has_unpleasant_personality_trigger = yes }
+					}
+					modifier = {
+						factor = 1.5
+						event_target:student = { has_unpleasant_trait_trigger = yes }
+					}
+					event_target:student = {
+						character_event = { id = lodge.328 days = 10 random = 25 }
+					}
+				}
+			}
+		}
+	}
+}
+
+# lodge.324 The student refuses
+# A rude refusal may make a rival (lodge.325).
+# Scope: ROOT is the teacher; FROM the student.
+character_event = {
+	id = lodge.324
+	title = EVTTITLElodge320
+	desc = { text = EVTDESClodge324 trigger = { NOT = { has_character_flag = they_insulted_me } } }
+	desc = { text = EVTDESClodge324_insulted trigger = { has_character_flag = they_insulted_me } }
+	picture = GFX_evt_teaching_moment
+	border = GFX_event_normal_frame_war
+	portrait = event_target:student
+
+	is_triggered_only = yes # lodge.322
+
+	option = { # That ungrateful...
+		name = EVTOPTAlodge324
+		trigger = { has_character_flag = they_insulted_me }
+		tooltip = { add_rival = FROM }
+		event_target:student = { character_event = { id = lodge.325 days = 3 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 10 trait = wroth }
+			modifier = { factor = 10 has_unpleasant_personality_trigger = yes }
+			modifier = {
+				factor = 10
+				event_target:student = {
+					root_potentially_interested_in_rivaling_this_trigger = yes
+				}
+			}
+		}
+	}
+
+	option = { # Let it go
+		name = EVTOPTBlodge324
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 10 trait = humble }
+			modifier = { factor = 10 trait = patient }
+		}
+	}
+
+	after = {
+		lodge_teach_clear_result_effect = yes
+	}
+}
+
+# lodge.325 The teacher takes offence
+# Scope: ROOT is the student; FROM the teacher.
+character_event = {
+	id = lodge.325
+	title = EVTTITLElodge320
+	desc = EVTDESClodge325
+	picture = GFX_evt_teaching_moment
+	border = GFX_event_normal_frame_war
+	portrait = FROM
+
+	is_triggered_only = yes # lodge.324
+
+	option = {
+		name = EVTOPTAlodge325
+		add_rival = FROM
+	}
+}
+
+# lodge.326 A great lesson
+# The student gains the virtue, and may thank the teacher with a kiss.
+# Scope: ROOT is the student; FROM and event_target:teacher the teacher.
+character_event = {
+	id = lodge.326
+	title = EVTTITLElodge320
+	desc = {
+		text = EVTDESClodge326_bravery
+		trigger = { has_character_flag = learning_bravery@event_target:teacher }
+	}
+	desc = {
+		text = EVTDESClodge326_ambition
+		trigger = { has_character_flag = learning_ambition@event_target:teacher }
+	}
+	desc = {
+		text = EVTDESClodge326_patience
+		trigger = { has_character_flag = learning_patience@event_target:teacher }
+	}
+	desc = {
+		text = EVTDESClodge326_diligence
+		trigger = { has_character_flag = learning_diligence@event_target:teacher }
+	}
+	picture = GFX_evt_teaching_moment
+	border = GFX_event_normal_frame_war
+	portrait = event_target:teacher
+	sound = fighting_instructions_01
+
+	is_triggered_only = yes # lodge.323
+
+	trigger = {
+		is_alive = yes
+	}
+
+	option = { # Thank you
+		name = EVTOPTAlodge326
+		prestige = 15
+		add_society_currency_trivial_effect = yes
+		lodge_teach_great_effect = yes
+		tooltip = { add_friend = FROM }
+		ai_chance = {
+			factor = 10
+			modifier = {
+				factor = 10
+				event_target:teacher = { NOT = { any_friend = { always = yes } } }
+			}
+		}
+	}
+
+	option = { # A kiss
+		name = EVTOPTBlodge326
+		trigger = {
+			event_target:teacher = {
+				NOT = { is_lover = ROOT }
+				OR = {
+					ROOT = { has_religion_feature = religion_holy_family }
+					ROOT = { religion = slaanesh }
+					NOT = { is_close_relative = ROOT }
+				}
+				root_attraction_trigger = yes
+				attacted_to_root_trigger = yes
+				is_adult = yes
+			}
+			NOT = { trait = celibate }
+			is_adult = yes
+		}
+		prestige = 15
+		add_society_currency_trivial_effect = yes
+		FROM = { set_character_flag = kiss_of_gratitude }
+		lodge_teach_great_effect = yes
+		if = { limit = { trait = chaste } remove_trait = chaste }
+		else_if = { limit = { NOT = { trait = lustful } } add_trait = lustful }
+		if = {
+			limit = {
+				event_target:teacher = {
+					OR = {
+						has_opinion_modifier = { who = ROOT modifier = opinion_budding_romance }
+						has_character_flag = carried_torch_for@ROOT
+						has_character_flag = carrying_torch_for@ROOT
+					}
+				}
+			}
+			custom_tooltip = { text = EVTOPTBlodge326_TT_romance }
+			tooltip = { add_lover = event_target:teacher }
+			event_target:teacher = { set_character_flag = become_lovers }
+		}
+		else_if = {
+			limit = {
+				event_target:teacher = {
+					root_attraction_trigger = yes
+					attacted_to_root_trigger = yes
+					opinion = { who = ROOT value = 15 }
+					NOT = { trait = chaste }
+					NOT = { trait = celibate }
+				}
+			}
+			custom_tooltip = { text = EVTOPTBlodge326_TT_romance }
+			tooltip = {
+				opinion = { who = FROM modifier = opinion_budding_romance years = 10 }
+				reverse_opinion = { who = FROM modifier = opinion_budding_romance years = 10 }
+			}
+			event_target:teacher = { set_character_flag = both_gain_romance }
+		}
+		else_if = {
+			limit = { event_target:teacher = { root_attraction_trigger = yes } }
+			custom_tooltip = { text = EVTOPTBlodge326_TT_student_crushes }
+			tooltip = { opinion = { who = FROM modifier = opinion_budding_romance years = 10 } }
+			event_target:teacher = { set_character_flag = student_gains_crush }
+		}
+		else_if = {
+			limit = { event_target:teacher = { attacted_to_root_trigger = yes } }
+			custom_tooltip = { text = EVTOPTBlodge326_TT_teacher_crushes }
+			tooltip = {
+				reverse_opinion = { who = FROM modifier = opinion_budding_romance years = 10 }
+			}
+			event_target:teacher = { set_character_flag = teacher_gains_crush }
+		}
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 100
+				event_target:teacher = { prev_is_lonely_this_romance_makes_sense_trigger = yes }
+			}
+			modifier = { factor = 10 event_target:teacher = { has_lover = no } }
+			modifier = { factor = 10 trait = lustful }
+			modifier = { factor = 0.1 trait = chaste }
+			modifier = { factor = 0.1 trait = eunuch }
+		}
+	}
+
+	after = {
+		lodge_teach_clear_student_effect = yes
+		FROM = { set_character_flag = great_outcome character_event = { id = lodge.329 } }
+	}
+}
+
+# lodge.327 A fair lesson
+# One step towards the virtue, and a budding friendship.
+# Scope: ROOT is the student; FROM and event_target:teacher the teacher.
+character_event = {
+	id = lodge.327
+	title = EVTTITLElodge320
+	desc = {
+		text = EVTDESClodge327_bravery
+		trigger = { has_character_flag = learning_bravery@event_target:teacher }
+	}
+	desc = {
+		text = EVTDESClodge327_ambition
+		trigger = { has_character_flag = learning_ambition@event_target:teacher }
+	}
+	desc = {
+		text = EVTDESClodge327_patience
+		trigger = { has_character_flag = learning_patience@event_target:teacher }
+	}
+	desc = {
+		text = EVTDESClodge327_diligence
+		trigger = { has_character_flag = learning_diligence@event_target:teacher }
+	}
+	picture = GFX_evt_teaching_moment
+	border = GFX_event_normal_frame_war
+	portrait = event_target:teacher
+	sound = fighting_instructions_01
+
+	is_triggered_only = yes # lodge.323
+
+	trigger = {
+		is_alive = yes
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAlodge327_bravery
+			trigger = { has_character_flag = learning_bravery@event_target:teacher }
+		}
+		name = {
+			text = EVTOPTAlodge327_ambition
+			trigger = { has_character_flag = learning_ambition@event_target:teacher }
+		}
+		name = {
+			text = EVTOPTAlodge327_patience
+			trigger = { has_character_flag = learning_patience@event_target:teacher }
+		}
+		name = {
+			text = EVTOPTAlodge327_diligence
+			trigger = { has_character_flag = learning_diligence@event_target:teacher }
+		}
+		add_society_currency_tiny_effect = yes
+		lodge_teach_good_step_effect = yes
+		if = {
+			limit = {
+				OR = {
+					reverse_has_opinion_modifier = {
+						who = FROM
+						modifier = opinion_budding_friendship
+					}
+					has_opinion_modifier = { who = FROM modifier = opinion_budding_friendship }
+				}
+			}
+			tooltip = { add_friend = FROM }
+		}
+		else = {
+			tooltip = {
+				opinion = { who = FROM modifier = opinion_budding_friendship years = 10 }
+				reverse_opinion = { who = FROM modifier = opinion_budding_friendship years = 10 }
+			}
+		}
+	}
+
+	after = {
+		lodge_teach_clear_student_effect = yes
+		FROM = { set_character_flag = good_outcome character_event = { id = lodge.329 } }
+	}
+}
+
+# lodge.328 A failed lesson
+# One step away from the virtue. Blame yourself, or blame the teacher. A
+# coward who failed to learn courage in the woods may have eaten something
+# that disagreed with them.
+# Scope: ROOT is the student; FROM and event_target:teacher the teacher.
+character_event = {
+	id = lodge.328
+	title = EVTTITLElodge320
+	desc = {
+		text = EVTDESClodge328_bravery
+		trigger = { has_character_flag = learning_bravery@event_target:teacher }
+	}
+	desc = {
+		text = EVTDESClodge328_ambition
+		trigger = { has_character_flag = learning_ambition@event_target:teacher }
+	}
+	desc = {
+		text = EVTDESClodge328_patience
+		trigger = { has_character_flag = learning_patience@event_target:teacher }
+	}
+	desc = {
+		text = EVTDESClodge328_diligence
+		trigger = { has_character_flag = learning_diligence@event_target:teacher }
+	}
+	picture = GFX_evt_teaching_moment
+	border = GFX_event_normal_frame_war
+	portrait = event_target:teacher
+	sound = fighting_instructions_01
+
+	is_triggered_only = yes # lodge.323
+
+	trigger = {
+		is_alive = yes
+	}
+
+	option = { # My own fault
+		name = EVTOPTAlodge328
+		prestige = -15
+		if = {
+			limit = {
+				has_character_flag = learning_bravery@event_target:teacher
+				NOT = { trait = vomiting }
+			}
+			add_trait = vomiting
+			set_character_flag = disease_not_serious
+			hidden_effect = { character_event = { id = treatment.6 days = 10 random = 30 } }
+		}
+		lodge_teach_bad_step_effect = yes
+	}
+
+	option = { # The teacher's fault
+		name = EVTOPTBlodge328
+		FROM = { set_character_flag = they_blame_me }
+		tooltip = {
+			opinion = { who = FROM modifier = opinion_lousy_teacher years = 10 }
+			reverse_opinion = { who = FROM modifier = opinion_spoiled_ingrate years = 10 }
+		}
+		lodge_teach_bad_step_effect = yes
+	}
+
+	after = {
+		lodge_teach_clear_student_effect = yes
+		FROM = { set_character_flag = bad_outcome character_event = { id = lodge.329 } }
+	}
+}
+
+# lodge.329 How the lesson went
+# The teacher sees the result: a friend, a lover, a budding friendship, or
+# bad blood.
+# Scope: ROOT is the teacher; FROM and event_target:student the student.
+character_event = {
+	id = lodge.329
+	title = EVTTITLElodge320
+	desc = {
+		text = EVTDESClodge329_bravery
+		trigger = { has_character_flag = teaching_bravery@event_target:student }
+	}
+	desc = {
+		text = EVTDESClodge329_ambition
+		trigger = { has_character_flag = teaching_ambition@event_target:student }
+	}
+	desc = {
+		text = EVTDESClodge329_patience
+		trigger = { has_character_flag = teaching_patience@event_target:student }
+	}
+	desc = {
+		text = EVTDESClodge329_diligence
+		trigger = { has_character_flag = teaching_diligence@event_target:student }
+	}
+	picture = GFX_evt_teaching_moment
+	border = GFX_event_normal_frame_war
+	portrait = event_target:student
+	sound = fighting_instructions_02
+
+	is_triggered_only = yes # lodge.326 - lodge.328
+
+	option = { # A great student
+		name = EVTOPTAlodge329
+		trigger = {
+			has_character_flag = great_outcome
+			NOT = { has_character_flag = kiss_of_gratitude }
+		}
+		lodge_teach_result_effect = yes
+		add_friend = FROM
+	}
+
+	option = { # A kiss
+		name = EVTOPTAlodge329_romance
+		trigger = { has_character_flag = great_outcome has_character_flag = kiss_of_gratitude }
+		lodge_teach_result_effect = yes
+		trigger_switch = {
+			on_trigger = has_character_flag
+			become_lovers = { add_lover = event_target:student }
+			both_gain_romance = {
+				opinion = { who = FROM modifier = opinion_budding_romance years = 10 }
+				reverse_opinion = { who = FROM modifier = opinion_budding_romance years = 10 }
+			}
+			student_gains_crush = {
+				reverse_opinion = { who = FROM modifier = opinion_budding_romance years = 10 }
+			}
+			teacher_gains_crush = {
+				opinion = { who = FROM modifier = opinion_budding_romance years = 10 }
+			}
+		}
+	}
+
+	option = { # A fair student
+		name = EVTOPTBlodge329
+		trigger = { has_character_flag = good_outcome }
+		lodge_teach_result_effect = yes
+		if = {
+			limit = {
+				OR = {
+					reverse_has_opinion_modifier = {
+						who = FROM
+						modifier = opinion_budding_friendship
+					}
+					has_opinion_modifier = { who = FROM modifier = opinion_budding_friendship }
+				}
+			}
+			add_friend = FROM
+		}
+		else = {
+			opinion = { who = FROM modifier = opinion_budding_friendship years = 10 }
+			reverse_opinion = { who = FROM modifier = opinion_budding_friendship years = 10 }
+		}
+	}
+
+	option = { # A failure
+		name = { text = EVTOPTClodge329_blamed trigger = { has_character_flag = they_blame_me } }
+		name = { text = EVTOPTClodge329 trigger = { NOT = { has_character_flag = they_blame_me } } }
+		trigger = { has_character_flag = bad_outcome }
+		lodge_teach_result_effect = yes
+		if = {
+			limit = { has_character_flag = they_blame_me }
+			opinion = { who = FROM modifier = opinion_spoiled_ingrate years = 10 }
+			reverse_opinion = { who = FROM modifier = opinion_lousy_teacher years = 10 }
+		}
+	}
+
+	after = {
+		lodge_teach_clear_result_effect = yes
+	}
+}
+
+# lodge.340 A great warrior falls (hidden)
+# A warrior of note dies in battle or in a duel. A friend or a lover in the
+# same society, who has not done so before in this life, may honour them
+# (lodge.341); a mourner with no artifacts is likelier to be the one.
+# Scope: ROOT is the dead warrior.
+character_event = {
+	id = lodge.340
+	hide_window = yes
+
+	is_triggered_only = yes # on_death (random_events)
+	is_in_society = yes
+
+	trigger = {
+		lodge_mission_member_trigger = yes
+		has_any_leadership_trait_trigger = yes
+		is_adult = yes
+		OR = {
+			death_reason = death_battle
+			death_reason = death_duel
+			death_reason = death_battle_duel
+			death_reason = death_mission_duel
+		}
+		calc_true_if = {
+			amount = 2
+			martial = 18
+			combat_rating = 50
+			trait = berserker
+			has_lifestyle_martial_trigger = yes
+			this_is_sea_raider_trigger = yes
+			has_crusade_trait_trigger = yes
+		}
+		OR = {
+			any_friend = { lodge_soulbound_mourner_trigger = yes }
+			any_lover = { lodge_soulbound_mourner_trigger = yes }
+		}
+	}
+
+	immediate = {
+		random_friend = {
+			limit = { lodge_soulbound_mourner_trigger = yes }
+			save_event_target_as = mourning_friend
+		}
+		random_lover = {
+			limit = { lodge_soulbound_mourner_trigger = yes }
+			save_event_target_as = mourning_lover
+		}
+		random_list = {
+			40 = {
+				trigger = { event_target:mourning_friend = { is_alive = yes } }
+				modifier = {
+					factor = 2
+					event_target:mourning_friend = { NOT = { num_of_artifacts = 1 } }
+				}
+				event_target:mourning_friend = { character_event = { id = lodge.341 } }
+			}
+			40 = {
+				trigger = { event_target:mourning_lover = { is_alive = yes } }
+				modifier = {
+					factor = 2
+					event_target:mourning_lover = { NOT = { num_of_artifacts = 1 } }
+				}
+				event_target:mourning_lover = { character_event = { id = lodge.341 } }
+			}
+			20 = { }
+		}
+	}
+}
+
+# lodge.341 Mourning a warrior
+# Have a weapon forged in the dead warrior's honour (if a learned courtier
+# can do it), keep the dead warrior's teachings alive, or grieve alone.
+# Written in the voice of the society: where the dead warrior has gone.
+# Scope: ROOT is the mourner; FROM the dead warrior.
+character_event = {
+	id = lodge.341
+	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESClodge341_chaos }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESClodge341_skaven }
+	desc = { trigger = { warband_voice_greenskin_trigger = yes } text = EVTDESClodge341_greenskin }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge341_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge341_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge341_dawi }
+	desc = { trigger = { lodge_voice_other_trigger = yes } text = EVTDESClodge341_any }
+	picture = GFX_evt_died_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # lodge.340
+
+	trigger = {
+		FROM = { is_alive = no }
+		lodge_mission_member_trigger = yes
+		is_inaccessible_or_incapable_trigger = no
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = dead_warrior }
+	}
+
+	option = { # A weapon in their honour
+		name = EVTOPTAlodge341
+		trigger = { any_courtier = { lodge_weapon_forger_trigger = yes } }
+		custom_tooltip = { text = EVTOPTAlodge341_TT }
+		set_character_flag = lodge_got_soulbound
+		set_character_flag = lodge_soulbound_forging
+		character_event = { id = lodge.342 days = 35 }
+	}
+
+	option = { # Their way of fighting lives on
+		name = EVTOPTBlodge341
+		trigger = { can_have_more_leadership_traits = yes }
+		add_same_commander_trait_as_FROM = yes
+	}
+
+	option = { # Grieve alone
+		name = EVTOPTClodge341
+		custom_tooltip = { text = EVTOPTClodge341_TT }
+		hidden_tooltip = { this_post_weight_gain_flavor_effect = yes }
+	}
+}
+
+# lodge.342 The ritual
+# The learned courtier knows a rite that binds the strength of the dead into
+# a blade, but it needs the warrior's remains or the blood of their kin.
+# Rob the grave, bleed a relative, or send the courtier away.
+# Scope: ROOT is the mourner; event_target:dead_warrior.
+character_event = {
+	id = lodge.342
+	desc = EVTDESClodge342
+	picture = GFX_evt_armory
+	border = GFX_event_normal_frame_war
+	portrait = event_target:weapon_forger
+
+	is_triggered_only = yes # lodge.341
+
+	trigger = {
+		any_courtier = { lodge_weapon_forger_trigger = yes }
+	}
+
+	immediate = {
+		event_target:dead_warrior = {
+			random_close_relative = {
+				limit = { is_alive = yes prisoner = no NOT = { character = ROOT } }
+				save_event_target_as = potential_sacrifice
+			}
+		}
+		lodge_find_weapon_forger_effect = yes
+	}
+
+	option = { # Rob the grave
+		name = EVTOPTAlodge342
+		show_portrait = event_target:dead_warrior
+		custom_tooltip = { text = EVTOPTAlodge342_TT }
+		set_character_flag = decided_to_dig_up
+		hidden_tooltip = { lodge_soulbound_attempt_effect = yes }
+	}
+
+	option = { # The blood of kin
+		name = EVTOPTBlodge342
+		trigger = { event_target:potential_sacrifice = { is_alive = yes } }
+		show_portrait = event_target:potential_sacrifice
+		custom_tooltip = { text = EVTOPTBlodge342_TT }
+		set_character_flag = decided_to_kidnap
+		hidden_tooltip = { lodge_soulbound_attempt_effect = yes }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 is_benevolent_trigger = yes }
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+
+	option = { # Away with you
+		name = EVTOPTClodge342
+		event_target:weapon_forger = {
+			opinion = { modifier = opinion_extremely_disappointed who = ROOT years = 5 }
+		}
+		lodge_soulbound_clear_effect = yes
+	}
+}
+
+# lodge.343 Caught in the act
+# Two courtiers see what the mourner was doing. Deny it, or blame the
+# courtier who knew the rite. A relative who was to be bled will not forget.
+# Scope: ROOT is the mourner.
+character_event = {
+	id = lodge.343
+	desc = EVTDESClodge343
+	picture = GFX_evt_armory
+	border = GFX_event_normal_frame_war
+	portrait = event_target:witness1
+
+	is_triggered_only = yes # lodge_soulbound_attempt_effect
+
+	trigger = {
+		any_courtier = { count = 2 block_general_event_trigger = no }
+	}
+
+	fail_trigger_effect = { character_event = { id = lodge.344 days = 35 } }
+
+	immediate = {
+		random_courtier = {
+			limit = { block_general_event_trigger = no }
+			save_event_target_as = witness1
+		}
+		random_courtier = {
+			limit = { block_general_event_trigger = no NOT = { character = event_target:witness1 } }
+			save_event_target_as = witness2
+		}
+	}
+
+	option = { # It is not what you think
+		name = EVTOPTAlodge343
+		reverse_opinion = { modifier = opinion_heretic who = event_target:witness1 years = 5 }
+		reverse_opinion = { modifier = opinion_heretic who = event_target:witness2 years = 5 }
+	}
+
+	option = { # The courtier made me do it
+		name = EVTOPTBlodge343
+		reverse_opinion = { modifier = opinion_heretic who = event_target:weapon_forger years = 5 }
+	}
+
+	after = {
+		add_character_modifier = { name = crucible_weapon_caught_heretic duration = 1825 }
+		if = {
+			limit = {
+				has_character_flag = decided_to_kidnap
+				event_target:potential_sacrifice = { is_alive = yes }
+			}
+			reverse_opinion = {
+				modifier = opinion_tried_to_get_me_killed
+				who = event_target:potential_sacrifice
+				years = 10
+			}
+		}
+		lodge_soulbound_clear_effect = yes
+	}
+}
+
+# lodge.344 The rite is done
+# The grave gave up its dead, or the kin bled out. Choose the weapon.
+# Scope: ROOT is the mourner.
+character_event = {
+	id = lodge.344
+	desc = { text = EVTDESClodge344 trigger = { has_character_flag = decided_to_dig_up } }
+	desc = { text = EVTDESClodge344_blood trigger = { has_character_flag = decided_to_kidnap } }
+	picture = GFX_evt_camaraderie
+	border = GFX_event_normal_frame_war
+	portrait = event_target:dead_warrior
+
+	is_triggered_only = yes # lodge_soulbound_attempt_effect, lodge.343
+
+	trigger = {
+		OR = {
+			event_target:weapon_forger = { is_alive = yes }
+			any_courtier = { lodge_weapon_forger_trigger = yes }
+		}
+	}
+
+	immediate = {
+		lodge_find_weapon_forger_effect = yes
+		if = {
+			limit = {
+				has_character_flag = decided_to_kidnap
+				event_target:potential_sacrifice = { is_alive = yes }
+			}
+			event_target:potential_sacrifice = {
+				death = { death_reason = death_sacrificed killer = ROOT }
+			}
+		}
+	}
+
+	option = { # An axe
+		name = EVTOPTAlodge344
+		show_portrait = event_target:weapon_forger
+		set_character_flag = crucible_steel_axe
+	}
+
+	option = { # A sword
+		name = EVTOPTBlodge344
+		show_portrait = event_target:weapon_forger
+		set_character_flag = crucible_steel_sword
+	}
+
+	option = { # A mace
+		name = EVTOPTClodge344
+		show_portrait = event_target:weapon_forger
+		set_character_flag = crucible_steel_mace
+	}
+
+	after = {
+		clr_character_flag = decided_to_kidnap
+		clr_character_flag = decided_to_dig_up
+		hidden_effect = { lodge_soulbound_outcome_effect = yes }
+	}
+}
+
+# lodge.345 The blade shatters
+# Scope: ROOT is the mourner.
+character_event = {
+	id = lodge.345
+	desc = EVTDESClodge345
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	portrait = event_target:dead_warrior
+
+	is_triggered_only = yes # lodge.344, lodge.351
+
+	trigger = {
+		is_inaccessible_or_incapable_trigger = no
+	}
+
+	fail_trigger_effect = { character_event = { id = lodge.351 days = 65 } }
+
+	immediate = {
+		lodge_find_weapon_forger_effect = yes
+	}
+
+	option = { # Bad luck
+		name = EVTOPTAlodge345
+		add_character_modifier = { name = crucible_weapon_very_bad_omen duration = 1825 }
+	}
+
+	option = { # Your fault
+		name = EVTOPTBlodge345
+		reverse_opinion = {
+			modifier = opinion_horrified
+			who = event_target:weapon_forger
+			years = 5
+		}
+	}
+
+	option = { # A life for the gods
+		name = EVTOPTClodge345
+		event_target:weapon_forger = { death = { death_reason = death_sacrificed killer = ROOT } }
+	}
+
+	after = {
+		lodge_soulbound_clear_effect = yes
+	}
+}
+
+# lodge.346 The forger is gone
+# Hunt the forger down, or wait. Either way the forger may be gone for
+# good, with the blade.
+# Scope: ROOT is the mourner.
+character_event = {
+	id = lodge.346
+	desc = EVTDESClodge346
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	portrait = event_target:dead_warrior
+
+	is_triggered_only = yes # lodge.344, lodge.351
+
+	trigger = {
+		is_inaccessible_or_incapable_trigger = no
+	}
+
+	fail_trigger_effect = { character_event = { id = lodge.351 days = 65 } }
+
+	immediate = {
+		lodge_find_weapon_forger_effect = yes
+	}
+
+	option = { # Hunt them down
+		name = EVTOPTAlodge346
+		random_list = {
+			30 = { # Gone with the blade
+				lodge_soulbound_forger_flees_effect = yes
+			}
+			70 = {
+				event_target:weapon_forger = {
+					death = { death_reason = death_execution killer = ROOT }
+				}
+				remove_trait_patient_effect = yes
+				add_trait_wroth_effect = yes
+			}
+		}
+	}
+
+	option = { # Wait
+		name = EVTOPTBlodge346
+		random_list = {
+			50 = { # Gone with the blade
+				lodge_soulbound_forger_flees_effect = yes
+				add_character_modifier = { name = crucible_weapon_very_bad_omen duration = 1825 }
+			}
+			50 = { # Only late
+				custom_tooltip = { text = EVTOPTBlodge346_TT }
+				lodge_soulbound_weapon_effect = yes
+				add_trait_trusting_effect = yes
+				add_trait_patient_effect = yes
+			}
+		}
+	}
+
+	after = {
+		lodge_soulbound_clear_effect = yes
+	}
+}
+
+# lodge.347 A child and the blade
+# A child of the court got hold of the new blade and hurt themselves. Throw
+# the cursed thing away, or keep it.
+# Scope: ROOT is the mourner.
+character_event = {
+	id = lodge.347
+	desc = EVTDESClodge347
+	picture = GFX_evt_child_play
+	border = GFX_event_normal_frame_war
+	portrait = event_target:dead_warrior
+
+	is_triggered_only = yes # lodge.344, lodge.351
+
+	trigger = {
+		is_inaccessible_or_incapable_trigger = no
+		any_courtier = { is_adult = no is_inaccessible_or_incapable_trigger = no }
+	}
+
+	fail_trigger_effect = { character_event = { id = lodge.351 days = 65 } }
+
+	immediate = {
+		lodge_find_weapon_forger_effect = yes
+		random_courtier = {
+			limit = { is_adult = no is_inaccessible_or_incapable_trigger = no }
+			save_event_target_as = unfortunate_child
+		}
+	}
+
+	option = { # Get rid of it
+		name = EVTOPTAlodge347
+		event_target:unfortunate_child = { show_scope_change = no add_maimed_trait_effect = yes }
+	}
+
+	option = { # Keep it
+		name = EVTOPTBlodge347
+		lodge_soulbound_weapon_effect = yes
+		event_target:unfortunate_child = { show_scope_change = no add_maimed_trait_effect = yes }
+		reverse_opinion = {
+			modifier = opinion_horrified
+			who = event_target:weapon_forger
+			years = 5
+		}
+		add_character_modifier = { name = crucible_weapon_very_bad_omen duration = 1825 }
+	}
+
+	after = {
+		lodge_soulbound_clear_effect = yes
+	}
+}
+
+# lodge.348 A plain blade
+# The forger swears the rite worked; the weapon feels ordinary.
+# Scope: ROOT is the mourner.
+character_event = {
+	id = lodge.348
+	desc = EVTDESClodge348
+	picture = GFX_evt_armory
+	border = GFX_event_normal_frame_war
+	portrait = event_target:dead_warrior
+
+	is_triggered_only = yes # lodge.344, lodge.351
+
+	trigger = {
+		is_inaccessible_or_incapable_trigger = no
+	}
+
+	fail_trigger_effect = { character_event = { id = lodge.351 days = 65 } }
+
+	immediate = {
+		lodge_find_weapon_forger_effect = yes
+	}
+
+	option = { # Rest
+		name = EVTOPTAlodge348
+		custom_tooltip = { text = EVTOPTClodge341_TT }
+		hidden_tooltip = { this_post_weight_gain_flavor_effect = yes }
+	}
+
+	option = { # If you say so
+		name = EVTOPTBlodge348
+		remove_trait_trusting_effect = yes
+		add_trait_cynical_effect = yes
+	}
+
+	option = { # A liar
+		name = EVTOPTClodge348
+		add_trait_cruel_effect = yes
+		remove_trait_kind_effect = yes
+		event_target:weapon_forger = { death = { death_reason = death_execution killer = ROOT } }
+	}
+
+	after = {
+		if = { limit = { has_character_flag = crucible_steel_axe } add_artifact = axe_tier_1_new }
+		else_if = {
+			limit = { has_character_flag = crucible_steel_sword }
+			add_artifact = sword_tier_1_new
+		}
+		else = { add_artifact = mace_tier_1_new }
+		lodge_soulbound_clear_effect = yes
+	}
+}
+
+# lodge.349 The blade whispers
+# The dead warrior's voice speaks from the steel. Keep the soulbound blade
+# or cast it away.
+# Scope: ROOT is the mourner.
+character_event = {
+	id = lodge.349
+	desc = EVTDESClodge349
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	portrait = event_target:dead_warrior
+
+	is_triggered_only = yes # lodge.344, lodge.351
+
+	trigger = {
+		is_inaccessible_or_incapable_trigger = no
+	}
+
+	fail_trigger_effect = { character_event = { id = lodge.351 days = 65 } }
+
+	immediate = {
+		lodge_find_weapon_forger_effect = yes
+	}
+
+	option = { # Keep it
+		name = EVTOPTAlodge349
+		lodge_soulbound_weapon_effect = yes
+	}
+
+	option = { # Cast it away
+		name = EVTOPTBlodge349
+	}
+
+	after = {
+		lodge_soulbound_clear_effect = yes
+	}
+}
+
+# lodge.350 The blade laughs
+# The dead warrior's strength floods into the mourner: the soulbound blade
+# and ten years of their fury.
+# Scope: ROOT is the mourner.
+character_event = {
+	id = lodge.350
+	desc = EVTDESClodge350
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	portrait = event_target:dead_warrior
+
+	is_triggered_only = yes # lodge.344, lodge.351
+
+	trigger = {
+		is_inaccessible_or_incapable_trigger = no
+	}
+
+	fail_trigger_effect = { character_event = { id = lodge.351 days = 65 } }
+
+	immediate = {
+		lodge_find_weapon_forger_effect = yes
+	}
+
+	option = { # Keep it
+		name = EVTOPTAlodge350
+		lodge_soulbound_weapon_effect = yes
+		add_character_modifier = { name = lodge_soulbound_strength years = 10 }
+	}
+
+	option = { # Cast it away
+		name = EVTOPTBlodge349
+	}
+
+	after = {
+		lodge_soulbound_clear_effect = yes
+	}
+}
+
+# lodge.351 The forging waits (hidden)
+# The mourner was away or unable when the blade was ready: try again in 65
+# days.
+# Scope: ROOT is the mourner.
+character_event = {
+	id = lodge.351
+	hide_window = yes
+
+	is_triggered_only = yes # lodge.345 - lodge.350
+
+	immediate = {
+		lodge_soulbound_outcome_effect = yes
 	}
 }
 

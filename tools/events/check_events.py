@@ -14,7 +14,8 @@ WARN   missing localisation (mod events only), non-cp1252-safe encoding,
        event that is never in a random_events list (the weights do nothing),
        on_action listing an event that does not exist
 STYLE  space-indented lines, `break = yes` (use else_if), commented-out code,
-       event numbers of 1000+ or namespaces longer than 12 characters (mod files)
+       event numbers of 1000+ or namespaces longer than 12 characters (mod files),
+       a `# Faction:` tag that is not one of factions.CATEGORIES
 """
 import os
 import re
@@ -24,6 +25,7 @@ from collections import Counter, defaultdict
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pdx  # noqa: E402
 from mod_index import Index, STRONG_PRE, PULSES  # noqa: E402
+from factions import CATEGORIES  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 LOC_KEY = re.compile(r'^[A-Za-z0-9_.\-]+$')
@@ -44,6 +46,9 @@ def check(idx, only=None):
             continue
         if info['brace_errors']:
             out.append(('ERROR', path, 0, '%d unbalanced brace(s)' % info['brace_errors']))
+        if info['faction'] and info['faction'] not in CATEGORIES:
+            out.append(('STYLE', path, 0, 'Faction tag "%s" is not one of factions.CATEGORIES'
+                        % info['faction']))
         if info['encoding'].startswith('utf-8'):
             out.append(('WARN', path, 0, 'file is %s; CK2 reads cp1252' % info['encoding']))
     for eid, path, line in idx.duplicates:
@@ -57,6 +62,9 @@ def check(idx, only=None):
             out.append(('ERROR', ev.path, ev.line, 'namespace %s is never declared' % ev.namespace))
         elif ev.namespace and ev.namespace not in spaces and ev.origin == 'mod':
             out.append(('STYLE', ev.path, ev.line, '%s uses a namespace declared in another file' % ev.id))
+        if ev.doc_faction and ev.doc_faction not in CATEGORIES:
+            out.append(('STYLE', ev.path, ev.line, '%s: Faction tag "%s" is not one of '
+                        'factions.CATEGORIES' % (ev.id, ev.doc_faction)))
         if only is not None and ev.origin == 'mod':
             num = ev.id.split('.')[-1]
             if num.isdigit() and int(num) >= 1000:

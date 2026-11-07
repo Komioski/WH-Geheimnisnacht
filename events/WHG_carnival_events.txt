@@ -1,0 +1,1438 @@
+###############################################################################
+# The Carnival of Chaos
+#
+# Namespace carnival
+# Faction: Chaos
+# Serves: human lords (duke and higher) of the Empire, Tilea, Estalia,
+# Bretonnia and Kislev, and the Nurgle cultists among them.
+#
+# A Nurgle warband disguised as a travelling show rolls into a lord's lands,
+# plays its pieces, infects the crowd and, at sunset, shows its true face.
+# Lore: Mordheim: Empire in Flames, White Dwarf 119, Realm of Chaos: The Lost
+# and the Damned. Only one Carnival roams the map at a time. It visits up to
+# three realms, then vanishes until the next one.
+#
+#   carnival.1        Starter (hidden, on_decade_pulse random list)
+#   carnival.2-3      Act I: the wagons arrive, an arrest that fails
+#   carnival.10-15    Act II: omens in the night, the truth uncovered
+#   carnival.20-23    Act III: the performance, the Master's offer, the patron
+#   carnival.25       The camp raided before the show (truth seen early)
+#   carnival.30-35    Act IV: sunset, victory, the ravaged town, the Master
+#                     taken
+#   carnival.40-42    Act V: the hunt for the Master
+#   carnival.80-81    The Carnival moves on (hidden), news of where it went
+#   carnival.90-91    The Carnival vanishes (hidden), word to its patron
+#   carnival.92-93    Safety (hidden): the Master or host dies, the chain
+#                     stalls
+#
+# State: global flag carnival_on_the_road; global targets carnival_master,
+# carnival_town, carnival_host, carnival_watcher, carnival_patron and
+# carnival_next_host (the patron's choice); global variable
+# global_carnival_realms. Host flags are cleared by
+# carnival_clear_host_effect.
+#
+# Scripted triggers: common/scripted_triggers/wh_carnival_triggers.txt
+# Scripted effects: common/scripted_effects/wh_carnival_effects.txt
+# Event modifiers: common/event_modifiers/wh_carnival_modifiers.txt
+# On actions: common/on_actions/wh_carnival_on_actions.txt
+# Artifact: common/artifacts/35_artifacts_carnival.txt
+# Loc: localisation/00_WHG_carnival_events.csv
+###############################################################################
+
+namespace = carnival
+
+###############################################################################
+# Act I: the wagons arrive
+###############################################################################
+
+# carnival.1 The Carnival takes to the road
+# Hidden. Picks a rural town in the ruler's lands, creates the Carnival
+# Master (a secret sorcerer of Nurgle in a fine mask) and sends the arrival.
+# More likely when the doom is high and for players.
+# Scope: ROOT is the ruler. Fired from the on_decade_pulse random list
+# carnival_of_chaos.
+character_event = {
+	id = carnival.1
+	hide_window = yes
+	is_triggered_only = yes
+
+	only_rulers = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		NOT = { has_global_flag = carnival_on_the_road }
+		carnival_host_trigger = yes
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 5 ai = no }
+		modifier = { factor = 1.5 is_doom_medium_trigger = yes }
+		modifier = { factor = 2 is_doom_high_trigger = yes }
+		modifier = { factor = 3 is_doom_very_high_trigger = yes }
+		modifier = {
+			factor = 2
+			any_realm_province = {
+				OR = {
+					disease = nurgles_rot
+					disease = creeping_buboes
+					disease = typhus
+					disease = measles
+				}
+			}
+		}
+	}
+
+	immediate = {
+		set_global_flag = carnival_on_the_road
+		set_variable = { which = global_carnival_realms value = 0 }
+		random_realm_province = {
+			limit = { carnival_region_trigger = yes is_capital = no }
+			save_global_event_target_as = carnival_town
+		}
+		save_global_event_target_as = carnival_host
+		create_character = {
+			random_traits = no
+			dynasty = none
+			religion = ROOT
+			culture = ROOT
+			female = no
+			age = 55
+			attributes = { diplomacy = 16 martial = 8 stewardship = 4 intrigue = 16 learning = 14 }
+			trait = gregarious
+			trait = deceitful
+			trait = cruel
+			trait = content
+			flag = ai_flag_refuse_conversion
+		}
+		new_character = {
+			save_global_event_target_as = carnival_master
+			set_character_flag = carnival_master
+			set_secret_religion = nurgle
+			give_nickname = nick_the_carnival_master
+		}
+		character_event = { id = carnival.2 days = 7 random = 14 }
+	}
+}
+
+# carnival.2 Painted wagons
+# The Carnival stops outside a town of the ruler's and promises a play.
+# Welcome them, have them watched, turn them away or arrest the lot. The text
+# changes with the land: an Empire burgher fair, a Tilean commedia troupe, an
+# Estalian fiesta, Bretonnian mummers or Kislevite wandering players.
+# Scope: ROOT is the host. Fired by carnival.1 or carnival.80.
+character_event = {
+	id = carnival.2
+	desc = { text = EVTDESCcarnival2_tilea trigger = { carnival_voice_tilea_trigger = yes } }
+	desc = { text = EVTDESCcarnival2_estalia trigger = { carnival_voice_estalia_trigger = yes } }
+	desc = {
+		text = EVTDESCcarnival2_bretonnia
+		trigger = { carnival_voice_bretonnia_trigger = yes }
+	}
+	desc = { text = EVTDESCcarnival2_kislev trigger = { carnival_voice_kislev_trigger = yes } }
+	desc = { text = EVTDESCcarnival2_empire }
+	title = EVTNAMEcarnival2
+	picture = GFX_evt_nurgle_carnival
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_global_flag = carnival_on_the_road
+		carnival_master_free_trigger = yes
+	}
+
+	immediate = {
+		set_character_flag = carnival_host
+		set_character_flag = carnival_visited
+		set_variable = { which = carnival_omens value = 0 }
+		set_variable = { which = carnival_risk value = 0 }
+		save_global_event_target_as = carnival_host
+		event_target:carnival_master = {
+			clr_character_flag = carnival_arrived
+			set_character_flag = carnival_arrived
+			character_event = { id = carnival.93 days = 1825 }
+		}
+	}
+
+	option = { # Welcome them
+		name = EVTOPTAcarnival2
+		event_target:carnival_town = {
+			show_scope_change = no
+			add_province_modifier = { name = carnival_fair duration = 120 }
+		}
+		prestige = 10
+		hidden_effect = {
+			change_variable = { which = carnival_risk value = 1 }
+			character_event = { id = carnival.10 days = 15 random = 10 }
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = gregarious }
+			modifier = { factor = 2 trait = content }
+			modifier = { factor = 0.5 trait = paranoid }
+			modifier = { factor = 3 follower_of_nurgle = yes }
+		}
+	}
+	option = { # Have them watched
+		name = EVTOPTBcarnival2
+		custom_tooltip = { text = EVTOPTBcarnival2_TT }
+		set_character_flag = carnival_watched
+		hidden_effect = {
+			carnival_pick_watcher_effect = yes
+			character_event = { id = carnival.10 days = 15 random = 10 }
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = paranoid }
+			modifier = { factor = 2 intrigue = 14 }
+			modifier = { factor = 2 any_courtier_or_vassal = { carnival_seer_trigger = yes } }
+			modifier = { factor = 0 follower_of_nurgle = yes }
+		}
+	}
+	option = { # Turn them away
+		name = EVTOPTCcarnival2
+		prestige = -10
+		custom_tooltip = { text = EVTOPTCcarnival2_TT }
+		hidden_effect = { character_event = { id = carnival.80 days = 3 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 2 trait = paranoid }
+			modifier = { factor = 0.5 trait = gregarious }
+			modifier = { factor = 0 follower_of_nurgle = yes }
+		}
+	}
+	option = { # Arrest the lot
+		name = EVTOPTDcarnival2
+		scaled_wealth = -0.1
+		custom_tooltip = { text = EVTOPTDcarnival2_TT }
+		hidden_effect = { character_event = { id = carnival.3 days = 7 } }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 2 is_witch_hunter_trigger = yes }
+			modifier = { factor = 0 follower_of_nurgle = yes }
+		}
+	}
+}
+
+# carnival.3 Empty cells
+# The arrested players die in the night of a bloating sickness, the gaolers
+# sicken, and the painted wagon and its Master are gone. The Carnival moves
+# on.
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.3
+	desc = EVTDESCcarnival3
+	title = EVTNAMEcarnival3
+	picture = GFX_evt_plague_spreading
+
+	is_triggered_only = yes
+
+	option = { # Burn the bodies
+		name = EVTOPTAcarnival3
+		event_target:carnival_town = {
+			show_scope_change = no
+			add_province_modifier = { name = carnival_burned_edge duration = 365 }
+		}
+		random = { chance = 25 carnival_infect_effect = yes }
+		hidden_effect = { character_event = { id = carnival.80 days = 3 } }
+	}
+}
+
+###############################################################################
+# Act II: omens in the night
+###############################################################################
+
+# carnival.10 The omens begin
+# Hidden. Sends one omen the host has not had yet (carnival.11-14). After two
+# omens the play comes (carnival.20). If the truth was seen, the camp can be
+# raided before the show (carnival.25).
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.10
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { carnival_master_free_trigger = no }
+			character_event = { id = carnival.90 }
+		}
+		else_if = {
+			limit = { has_character_flag = carnival_truth_seen }
+			character_event = { id = carnival.25 days = 3 }
+		}
+		else_if = {
+			limit = { check_variable = { which = carnival_omens value = 2 } }
+			character_event = { id = carnival.20 days = 7 random = 7 }
+		}
+		else = {
+			change_variable = { which = carnival_omens value = 1 }
+			random_list = {
+				25 = {
+					modifier = { factor = 0 has_character_flag = carnival_omen_11 }
+					character_event = { id = carnival.11 }
+				}
+				25 = {
+					modifier = { factor = 0 has_character_flag = carnival_omen_12 }
+					character_event = { id = carnival.12 }
+				}
+				25 = {
+					modifier = { factor = 0 has_character_flag = carnival_omen_13 }
+					character_event = { id = carnival.13 }
+				}
+				25 = {
+					modifier = { factor = 0 has_character_flag = carnival_omen_14 }
+					character_event = { id = carnival.14 }
+				}
+			}
+		}
+	}
+}
+
+# carnival.11 Sour milk
+# The milk sours in the pail, the butter will not come and the dogs howl all
+# night at the wagons. Look into it or let it be. A Strigany realm can blame
+# the Strigany instead: easy, and wrong.
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.11
+	desc = EVTDESCcarnival11
+	title = EVTNAMEcarnival11
+	picture = GFX_evt_market
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = carnival_omen_11
+	}
+
+	option = { # Look into it
+		name = EVTOPTAcarnival11
+		custom_tooltip = { text = carnival_investigate_tt }
+		hidden_effect = { character_event = { id = carnival.15 days = 3 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 has_character_flag = carnival_watched }
+			modifier = { factor = 0 follower_of_nurgle = yes }
+		}
+	}
+	option = { # Let it be
+		name = EVTOPTBcarnival11
+		custom_tooltip = { text = carnival_risk_up_tt }
+		hidden_effect = {
+			change_variable = { which = carnival_risk value = 1 }
+			character_event = { id = carnival.10 days = 10 random = 5 }
+		}
+		ai_chance = { factor = 40 }
+	}
+	option = { # Blame the Strigany
+		name = EVTOPTCcarnival11
+		trigger = { blame_strigany_present_trigger = yes }
+		add_character_modifier = { name = expelled_strigany duration = 3650 inherit = yes }
+		custom_tooltip = { text = blame_strigany_expelled_tt }
+		hidden_effect = {
+			expel_strigany_effect = yes
+			change_variable = { which = carnival_risk value = 1 }
+			character_event = { id = carnival.10 days = 10 random = 5 }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 0 follower_of_nurgle = yes }
+		}
+	}
+}
+
+# carnival.12 Flies, flies
+# A child of the town wakes screaming from a dream of a fat, laughing
+# grandfather, saying "Flies, flies, eat up his eyes!". Then other children
+# have the same dream.
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.12
+	desc = EVTDESCcarnival12
+	title = EVTNAMEcarnival12
+	picture = GFX_evt_child_play
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = carnival_omen_12
+	}
+
+	option = { # Look into it
+		name = EVTOPTAcarnival12
+		custom_tooltip = { text = carnival_investigate_tt }
+		hidden_effect = { character_event = { id = carnival.15 days = 3 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 has_character_flag = carnival_watched }
+			modifier = { factor = 0 follower_of_nurgle = yes }
+		}
+	}
+	option = { # Children have bad dreams
+		name = EVTOPTBcarnival12
+		custom_tooltip = { text = carnival_risk_up_tt }
+		hidden_effect = {
+			change_variable = { which = carnival_risk value = 1 }
+			character_event = { id = carnival.10 days = 10 random = 5 }
+		}
+		ai_chance = { factor = 40 }
+	}
+}
+
+# carnival.13 The jester's touch
+# The watcher saw a jester take a girl's hand while he joked with her. By
+# morning she has a weeping sore. Look into it, or burn the sore out and say
+# nothing.
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.13
+	desc = EVTDESCcarnival13
+	title = EVTNAMEcarnival13
+	picture = GFX_evt_plague_spreading
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = carnival_omen_13
+		if = {
+			limit = { NOT = { event_target:carnival_watcher = { always = yes } } }
+			carnival_pick_watcher_effect = yes
+		}
+	}
+
+	option = { # Look into it
+		name = EVTOPTAcarnival13
+		custom_tooltip = { text = carnival_investigate_tt }
+		hidden_effect = { character_event = { id = carnival.15 days = 3 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 has_character_flag = carnival_watched }
+			modifier = { factor = 0 follower_of_nurgle = yes }
+		}
+	}
+	option = { # Send a physician
+		name = EVTOPTBcarnival13
+		scaled_wealth = -0.05
+		custom_tooltip = { text = carnival_risk_up_tt }
+		hidden_effect = {
+			change_variable = { which = carnival_risk value = 1 }
+			character_event = { id = carnival.10 days = 10 random = 5 }
+		}
+		ai_chance = { factor = 40 }
+	}
+}
+
+# carnival.14 The Dance of Death
+# At dusk a line of townsfolk dances behind the piper, three times round the
+# town, laughing. Not all of them come home. (White Dwarf 119: the night
+# before the attack, three circuits round the village.)
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.14
+	desc = EVTDESCcarnival14
+	title = EVTNAMEcarnival14
+	picture = GFX_evt_dancing
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = carnival_omen_14
+	}
+
+	option = { # Look into it
+		name = EVTOPTAcarnival14
+		custom_tooltip = { text = carnival_investigate_tt }
+		hidden_effect = { character_event = { id = carnival.15 days = 3 } }
+		ai_chance = { factor = 60 modifier = { factor = 0 follower_of_nurgle = yes } }
+	}
+	option = { # Let them dance
+		name = EVTOPTBcarnival14
+		custom_tooltip = { text = carnival_risk_up_tt }
+		hidden_effect = {
+			change_variable = { which = carnival_risk value = 1 }
+			character_event = { id = carnival.10 days = 10 random = 5 }
+		}
+		ai_chance = { factor = 30 }
+	}
+}
+
+# carnival.15 What the watcher found
+# The watcher reports. A seer (witch hunter, wizard, Ice Witch, Grail Knight,
+# Damsel), a sharp spymaster or a sharp ruler may see through the paint: then
+# the camp can be raided before the show. Otherwise nothing is found.
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.15
+	desc = { text = EVTDESCcarnival15_truth trigger = { has_character_flag = carnival_truth_seen } }
+	desc = { text = EVTDESCcarnival15_nothing }
+	title = EVTNAMEcarnival15
+	picture = GFX_evt_spymaster
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { NOT = { event_target:carnival_watcher = { always = yes } } }
+			carnival_pick_watcher_effect = yes
+		}
+		random_list = {
+			30 = {
+				modifier = {
+					factor = 3
+					event_target:carnival_watcher = { carnival_seer_trigger = yes }
+				}
+				modifier = { factor = 1.5 event_target:carnival_watcher = { intrigue = 14 } }
+				modifier = { factor = 1.5 event_target:carnival_watcher = { learning = 14 } }
+				modifier = { factor = 1.5 has_character_flag = carnival_watched }
+				set_character_flag = carnival_truth_seen
+			}
+			70 = { }
+		}
+	}
+
+	option = { # Gather the guard
+		name = EVTOPTAcarnival15
+		trigger = { has_character_flag = carnival_truth_seen }
+		custom_tooltip = { text = carnival_truth_seen_tt }
+		hidden_effect = { character_event = { id = carnival.10 days = 2 } }
+	}
+	option = { # Keep watching
+		name = EVTOPTBcarnival15
+		trigger = { NOT = { has_character_flag = carnival_truth_seen } }
+		hidden_effect = { character_event = { id = carnival.10 days = 10 random = 5 } }
+	}
+}
+
+###############################################################################
+# Act III: the performance
+###############################################################################
+
+# carnival.20 The play
+# The big night: a crude, funny, filthy piece that mocks the ruler. The play
+# changes with the land (The Emperor's True Face, Orfeo and Pustulate, A
+# Midsummer Nightmare, Papa Noigul's Festering Children). Laugh along (the
+# jesters' touch may infect the court), walk out, look closer, or watch the
+# Master instead of the stage. Sunset follows (carnival.30).
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.20
+	desc = { text = EVTDESCcarnival20_tilea trigger = { carnival_voice_tilea_trigger = yes } }
+	desc = { text = EVTDESCcarnival20_estalia trigger = { carnival_voice_estalia_trigger = yes } }
+	desc = {
+		text = EVTDESCcarnival20_bretonnia
+		trigger = { carnival_voice_bretonnia_trigger = yes }
+	}
+	desc = { text = EVTDESCcarnival20_kislev trigger = { carnival_voice_kislev_trigger = yes } }
+	desc = { text = EVTDESCcarnival20_empire }
+	title = EVTNAMEcarnival20
+	picture = GFX_evt_nurgle_carnival
+
+	is_triggered_only = yes
+
+	trigger = {
+		carnival_master_free_trigger = yes
+	}
+
+	option = { # Laugh along
+		name = EVTOPTAcarnival20
+		prestige = 15
+		custom_tooltip = { text = carnival_court_infected_tt }
+		hidden_effect = {
+			carnival_infect_effect = yes
+			any_courtier = {
+				limit = { is_adult = yes prisoner = no }
+				random = { chance = 20 carnival_infect_effect = yes }
+			}
+			character_event = { id = carnival.30 days = 1 }
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = gregarious }
+			modifier = { factor = 2 trait = drunkard }
+			modifier = { factor = 3 follower_of_nurgle = yes }
+		}
+	}
+	option = { # Walk out
+		name = EVTOPTBcarnival20
+		add_character_modifier = { name = carnival_mocked years = 2 }
+		hidden_effect = { character_event = { id = carnival.30 days = 1 } }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 2 trait = zealous }
+		}
+	}
+	option = { # Look closer
+		name = EVTOPTCcarnival20
+		custom_tooltip = { text = EVTOPTCcarnival20_TT }
+		random_list = {
+			40 = {
+				modifier = { factor = 2 carnival_seer_trigger = yes }
+				modifier = { factor = 1.5 intrigue = 14 }
+				modifier = { factor = 1.5 learning = 14 }
+				set_character_flag = carnival_forewarned
+				custom_tooltip = { text = carnival_forewarned_tt }
+			}
+			60 = { carnival_infect_effect = yes }
+		}
+		hidden_effect = { character_event = { id = carnival.30 days = 1 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 is_witch_hunter_trigger = yes }
+			modifier = { factor = 0 follower_of_nurgle = yes }
+		}
+	}
+	option = { # Watch the Master
+		name = EVTOPTDcarnival20
+		set_character_flag = carnival_master_noticed
+		custom_tooltip = { text = EVTOPTDcarnival20_TT }
+		hidden_effect = { character_event = { id = carnival.22 days = 1 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = deceitful }
+			modifier = { factor = 5 follower_of_nurgle = yes }
+		}
+	}
+}
+
+# carnival.22 Grandfather's gift
+# Between the acts the Master comes to the ruler's seat and offers a gift
+# from Grandfather Nurgle: the patron's bond (a secret fall to Nurgle, doom
+# up, once in a life a Plague Cart). Refuse him, or seize him before
+# sunset.
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.22
+	desc = { text = EVTDESCcarnival22_nurgle trigger = { follower_of_nurgle = yes } }
+	desc = { text = EVTDESCcarnival22 }
+	title = EVTNAMEcarnival22
+	picture = GFX_evt_nurgle_sorcerer
+
+	is_triggered_only = yes
+
+	trigger = {
+		carnival_master_free_trigger = yes
+	}
+
+	option = { # Take the gift
+		name = EVTOPTAcarnival22
+		carnival_patron_effect = yes
+		hidden_effect = { character_event = { id = carnival.23 days = 1 } }
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 40 follower_of_nurgle = yes }
+			modifier = { factor = 2 trait = ambitious }
+			modifier = { factor = 2 trait = ill }
+			modifier = { factor = 0 trait = zealous follower_of_nurgle = no }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBcarnival22
+		trigger = { follower_of_nurgle = no }
+		piety = 10
+		hidden_effect = { character_event = { id = carnival.30 days = 1 } }
+		ai_chance = { factor = 50 }
+	}
+	option = { # Seize him
+		name = EVTOPTCcarnival22
+		trigger = { follower_of_nurgle = no }
+		custom_tooltip = { text = EVTOPTCcarnival22_TT }
+		random_list = {
+			40 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = {
+					factor = 1.5
+					attribute_diff = {
+						character = event_target:carnival_master
+						attribute = combat_rating
+						value = 10
+					}
+				}
+				modifier = {
+					factor = 2
+					any_courtier_or_vassal = { carnival_seer_trigger = yes is_adult = yes }
+				}
+				event_target:carnival_master = { show_scope_change = no imprison = ROOT }
+				hidden_effect = { character_event = { id = carnival.35 days = 1 } }
+			}
+			60 = { add_trait = wounded hidden_effect = { character_event = { id = carnival.30 } } }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0 trait = craven }
+		}
+	}
+}
+
+# carnival.23 Where shall we play next
+# The new patron chooses where the Carnival goes next: a rival, an enemy, or
+# wherever the road leads. The town is spared, and the Carnival leaves.
+# Scope: ROOT is the patron.
+character_event = {
+	id = carnival.23
+	desc = EVTDESCcarnival23
+	title = EVTNAMEcarnival23
+	picture = GFX_evt_dark_prayer
+
+	is_triggered_only = yes
+
+	option = { # To my rival
+		name = EVTOPTAcarnival23
+		trigger = { any_rival = { carnival_host_trigger = yes NOT = { character = ROOT } } }
+		random_rival = {
+			limit = { carnival_host_trigger = yes NOT = { character = ROOT } }
+			save_global_event_target_as = carnival_next_host
+			show_scope_change = no
+		}
+		hidden_effect = { character_event = { id = carnival.80 days = 3 } }
+		ai_chance = { factor = 50 }
+	}
+	option = { # To my enemy
+		name = EVTOPTBcarnival23
+		trigger = {
+			war = yes
+			any_neighbor_independent_ruler = { war_with = ROOT carnival_host_trigger = yes }
+		}
+		random_neighbor_independent_ruler = {
+			limit = { war_with = ROOT carnival_host_trigger = yes }
+			save_global_event_target_as = carnival_next_host
+			show_scope_change = no
+		}
+		hidden_effect = { character_event = { id = carnival.80 days = 3 } }
+		ai_chance = { factor = 80 }
+	}
+	option = { # Wherever the road goes
+		name = EVTOPTCcarnival23
+		hidden_effect = { character_event = { id = carnival.80 days = 3 } }
+		ai_chance = { factor = 20 }
+	}
+}
+
+# carnival.25 Before the show
+# The truth was seen in time. Burn the wagons at dawn (the Master flees),
+# storm the camp with the guard, or call in the witch hunters. Ice Witches,
+# Grail Knights and paid Tilean blades give their own options.
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.25
+	desc = EVTDESCcarnival25
+	title = EVTNAMEcarnival25
+	picture = GFX_evt_witch_hunters
+
+	is_triggered_only = yes
+
+	trigger = {
+		carnival_master_free_trigger = yes
+	}
+
+	option = { # Burn the wagons at dawn
+		name = EVTOPTAcarnival25
+		reduce_doom_progress_tiny_effect = yes
+		event_target:carnival_town = {
+			show_scope_change = no
+			add_province_modifier = { name = carnival_burned_edge duration = 730 }
+		}
+		hidden_effect = { character_event = { id = carnival.40 days = 2 } }
+		ai_chance = { factor = 40 }
+	}
+	option = { # Storm the camp
+		name = EVTOPTBcarnival25
+		set_character_flag = carnival_forewarned
+		custom_tooltip = { text = carnival_fight_tt }
+		hidden_effect = { character_event = { id = carnival.30 days = 1 } }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 martial = 12 }
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+	option = { # Send for the witch hunters
+		name = EVTOPTCcarnival25
+		piety = 25
+		custom_tooltip = { text = EVTOPTCcarnival25_TT }
+		reduce_doom_progress_tiny_effect = yes
+		hidden_effect = { character_event = { id = carnival.90 days = 30 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 2 is_witch_hunter_trigger = yes }
+		}
+	}
+	option = { # The Ice Witch
+		name = EVTOPTDcarnival25
+		trigger = {
+			carnival_voice_kislev_trigger = yes
+			any_courtier_or_vassal = { trait = ice_witch prisoner = no }
+		}
+		reduce_doom_progress_tiny_effect = yes
+		custom_tooltip = { text = EVTOPTDcarnival25_TT }
+		hidden_effect = {
+			event_target:carnival_master = { imprison = ROOT }
+			character_event = { id = carnival.35 days = 2 }
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { # A Grail Knight's challenge
+		name = EVTOPTEcarnival25
+		trigger = {
+			carnival_voice_bretonnia_trigger = yes
+			any_courtier_or_vassal = { trait = grail_knight prisoner = no }
+		}
+		random_courtier_or_vassal = {
+			limit = { trait = grail_knight prisoner = no }
+			save_event_target_as = carnival_champion
+		}
+		custom_tooltip = { text = EVTOPTEcarnival25_TT }
+		random_list = {
+			75 = {
+				event_target:carnival_champion = { prestige = 100 }
+				hidden_effect = {
+					set_character_flag = carnival_master_killed
+					event_target:carnival_master = {
+						death = {
+							death_reason = death_duel
+							killer = event_target:carnival_champion
+						}
+					}
+					character_event = { id = carnival.35 days = 2 }
+				}
+			}
+			25 = {
+				event_target:carnival_champion = { add_trait = wounded }
+				hidden_effect = { character_event = { id = carnival.40 days = 2 } }
+			}
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { # Pay Tilean blades
+		name = EVTOPTFcarnival25
+		trigger = { carnival_voice_tilea_trigger = yes }
+		scaled_wealth = -0.25
+		set_character_flag = carnival_forewarned
+		set_character_flag = carnival_paid_blades
+		custom_tooltip = { text = carnival_fight_tt }
+		hidden_effect = { character_event = { id = carnival.30 days = 1 } }
+		ai_chance = { factor = 30 modifier = { factor = 0 NOT = { wealth = 100 } } }
+	}
+}
+
+###############################################################################
+# Act IV: sunset
+###############################################################################
+
+# carnival.30 Sunset
+# The paint runs and the costumes split: Plaguebearers chanting their
+# count, Nurglings spilling from the Plague Cart, the Tainted laughing. Fight
+# (better if forewarned), fire the wagons, flee and seal the town, or bargain
+# with the Master. The Master shows his true faith.
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.30
+	desc = {
+		text = EVTDESCcarnival30_forewarned
+		trigger = { has_character_flag = carnival_forewarned }
+	}
+	desc = { text = EVTDESCcarnival30 }
+	title = EVTNAMEcarnival30
+	picture = GFX_evt_demon_fighting
+
+	is_triggered_only = yes
+
+	trigger = {
+		carnival_master_free_trigger = yes
+	}
+
+	immediate = {
+		event_target:carnival_master = { carnival_reveal_master_effect = yes }
+	}
+
+	option = { # Fight
+		name = EVTOPTAcarnival30
+		custom_tooltip = { text = carnival_fight_tt }
+		random_list = {
+			45 = {
+				modifier = { factor = 2 has_character_flag = carnival_forewarned }
+				modifier = { factor = 1.5 has_character_flag = carnival_paid_blades }
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.5 martial = 18 }
+				modifier = {
+					factor = 1.5
+					any_courtier_or_vassal = { carnival_seer_trigger = yes is_adult = yes }
+				}
+				modifier = { factor = 0.75 check_variable = { which = carnival_risk value = 3 } }
+				hidden_effect = { character_event = { id = carnival.31 } }
+			}
+			55 = {
+				random = { chance = 30 add_trait = wounded }
+				hidden_effect = { character_event = { id = carnival.32 } }
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.5 trait = craven }
+			modifier = { factor = 0 follower_of_nurgle = yes }
+		}
+	}
+	option = { # Fire the wagons
+		name = EVTOPTBcarnival30
+		reduce_doom_progress_tiny_effect = yes
+		event_target:carnival_town = {
+			show_scope_change = no
+			add_province_modifier = { name = carnival_burned_edge duration = 730 }
+		}
+		hidden_effect = { character_event = { id = carnival.40 days = 1 } }
+		ai_chance = { factor = 30 modifier = { factor = 0 follower_of_nurgle = yes } }
+	}
+	option = { # Flee and seal the town
+		name = EVTOPTCcarnival30
+		set_character_flag = carnival_fled
+		event_target:carnival_town = {
+			show_scope_change = no
+			add_province_modifier = { name = carnival_sealed_town duration = 365 }
+		}
+		hidden_effect = { character_event = { id = carnival.32 } }
+		ai_chance = { factor = 20 modifier = { factor = 3 trait = craven } }
+	}
+	option = { # Bargain with the Master
+		name = EVTOPTDcarnival30
+		trigger = {
+			OR = { has_character_flag = carnival_master_noticed follower_of_nurgle = yes }
+			NOT = { has_character_flag = carnival_patron }
+		}
+		carnival_patron_effect = yes
+		hidden_effect = { character_event = { id = carnival.23 days = 1 } }
+		ai_chance = { factor = 5 modifier = { factor = 40 follower_of_nurgle = yes } }
+	}
+}
+
+# carnival.31 The square is held
+# The daemons are driven back into the Cart and the Brethren cut down. The
+# Master flees with the last wagons: the hunt can begin (carnival.40).
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.31
+	desc = EVTDESCcarnival31
+	title = EVTNAMEcarnival31
+	picture = GFX_evt_battle
+
+	is_triggered_only = yes
+
+	option = { # After him
+		name = EVTOPTAcarnival31
+		prestige = 50
+		reduce_doom_progress_tiny_effect = yes
+		hidden_effect = { character_event = { id = carnival.40 days = 2 } }
+	}
+}
+
+# carnival.32 The town is lost
+# The square is lost, or the gates were sealed on the living. The plague
+# takes the town, women and children of the court are led away with a
+# finger missing, and the Carnival moves on.
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.32
+	desc = { text = EVTDESCcarnival32_fled trigger = { has_character_flag = carnival_fled } }
+	desc = { text = EVTDESCcarnival32 }
+	title = EVTNAMEcarnival32
+	picture = GFX_evt_plague_spreading
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = carnival_fled
+		event_target:carnival_town = { carnival_town_ravaged_effect = yes }
+		random = { chance = 40 carnival_taken_effect = yes }
+	}
+
+	option = { # Grandfather take them all
+		name = EVTOPTAcarnival32
+		prestige = -50
+		add_doom_progress_tiny_effect = yes
+		custom_tooltip = { text = carnival_town_ravaged_tt }
+		hidden_effect = { character_event = { id = carnival.80 days = 7 } }
+	}
+}
+
+# carnival.35 The Master taken
+# The Master is in chains, or dead in the dust. Burn him (doom falls, the
+# Master's mask may be taken), or give him to the witch hunters (piety).
+# Ends the Carnival.
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.35
+	desc = {
+		text = EVTDESCcarnival35_dead
+		trigger = { has_character_flag = carnival_master_killed }
+	}
+	desc = { text = EVTDESCcarnival35 }
+	title = EVTNAMEcarnival35
+	picture = GFX_evt_witch_hunter_pyre
+
+	is_triggered_only = yes
+
+	option = { # Burn him
+		name = EVTOPTAcarnival35
+		piety = 50
+		prestige = 50
+		carnival_master_slain_effect = yes
+		hidden_effect = {
+			event_target:carnival_master = {
+				if = {
+					limit = { is_alive = yes }
+					death = { death_reason = death_execution_burning killer = ROOT }
+				}
+			}
+			character_event = { id = carnival.90 }
+		}
+		ai_chance = { factor = 80 }
+	}
+	option = { # Give him to the witch hunters
+		name = EVTOPTBcarnival35
+		trigger = { NOT = { has_character_flag = carnival_master_killed } }
+		piety = 100
+		reduce_doom_progress_minor_effect = yes
+		hidden_effect = {
+			event_target:carnival_master = { death = { death_reason = death_execution_burning } }
+			character_event = { id = carnival.90 }
+		}
+		ai_chance = { factor = 20 modifier = { factor = 3 is_witch_hunter_trigger = yes } }
+	}
+}
+
+###############################################################################
+# Act V: the hunt
+###############################################################################
+
+# carnival.40 The Master flees
+# The Master is gone with the last wagons. Hunt him across the land, or let
+# him go to plague someone else.
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.40
+	desc = EVTDESCcarnival40
+	title = EVTNAMEcarnival40
+	picture = GFX_evt_merchant_caravan
+
+	is_triggered_only = yes
+
+	trigger = {
+		carnival_master_free_trigger = yes
+	}
+
+	option = { # Hunt him
+		name = EVTOPTAcarnival40
+		set_variable = { which = carnival_hunt_steps value = 0 }
+		custom_tooltip = { text = EVTOPTAcarnival40_TT }
+		hidden_effect = { character_event = { id = carnival.41 days = 20 random = 10 } }
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 2 trait = zealous }
+		}
+	}
+	option = { # Let him go
+		name = EVTOPTBcarnival40
+		prestige = -25
+		custom_tooltip = { text = EVTOPTCcarnival2_TT }
+		hidden_effect = { character_event = { id = carnival.80 days = 3 } }
+		ai_chance = { factor = 40 }
+	}
+}
+
+# carnival.41 One town behind
+# Up to three steps of the chase, always a town behind: an emptied village,
+# a field of fingers, a child singing the Master's song. Press on (a roll that
+# may corner him, carnival.42) or give up.
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.41
+	desc = {
+		text = EVTDESCcarnival41_a
+		trigger = { NOT = { check_variable = { which = carnival_hunt_steps value = 1 } } }
+	}
+	desc = {
+		text = EVTDESCcarnival41_b
+		trigger = {
+			check_variable = { which = carnival_hunt_steps value = 1 }
+			NOT = { check_variable = { which = carnival_hunt_steps value = 2 } }
+		}
+	}
+	desc = { text = EVTDESCcarnival41_c }
+	title = EVTNAMEcarnival41
+	picture = GFX_evt_riders_night_hf
+
+	is_triggered_only = yes
+
+	trigger = {
+		carnival_master_free_trigger = yes
+	}
+
+	immediate = {
+		change_variable = { which = carnival_hunt_steps value = 1 }
+	}
+
+	option = { # Press on
+		name = EVTOPTAcarnival41
+		random_list = {
+			35 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.5 intrigue = 12 }
+				modifier = {
+					factor = 2
+					any_courtier_or_vassal = { carnival_seer_trigger = yes is_adult = yes }
+				}
+				modifier = {
+					factor = 1.5
+					check_variable = { which = carnival_hunt_steps value = 2 }
+				}
+				hidden_effect = { character_event = { id = carnival.42 days = 5 } }
+			}
+			65 = {
+				if = {
+					limit = { check_variable = { which = carnival_hunt_steps value = 3 } }
+					custom_tooltip = { text = carnival_hunt_lost_tt }
+					hidden_effect = { character_event = { id = carnival.80 days = 3 } }
+				}
+				else = {
+					custom_tooltip = { text = carnival_hunt_on_tt }
+					hidden_effect = { character_event = { id = carnival.41 days = 20 random = 10 } }
+				}
+			}
+		}
+		ai_chance = { factor = 70 }
+	}
+	option = { # Give up
+		name = EVTOPTBcarnival41
+		prestige = -25
+		custom_tooltip = { text = EVTOPTCcarnival2_TT }
+		hidden_effect = { character_event = { id = carnival.80 days = 3 } }
+		ai_chance = { factor = 30 }
+	}
+}
+
+# carnival.42 The Plague Cart
+# The Master is cornered at the Cart, chalking the pentagram that opens onto
+# Grandfather's garden. Face him yourself, or send the guard.
+# Scope: ROOT is the host.
+character_event = {
+	id = carnival.42
+	desc = EVTDESCcarnival42
+	title = EVTNAMEcarnival42
+	picture = GFX_evt_duel_against_chaos
+
+	is_triggered_only = yes
+
+	trigger = {
+		carnival_master_free_trigger = yes
+	}
+
+	option = { # Face him yourself
+		name = EVTOPTAcarnival42
+		custom_tooltip = { text = EVTOPTAcarnival42_TT }
+		random_list = {
+			50 = {
+				modifier = {
+					factor = 2
+					attribute_diff = {
+						character = event_target:carnival_master
+						attribute = combat_rating
+						value = 10
+					}
+				}
+				modifier = {
+					factor = 1.5
+					attribute_diff = {
+						character = event_target:carnival_master
+						attribute = combat_rating
+						value = 30
+					}
+				}
+				modifier = {
+					factor = 0.5
+					NOT = {
+						attribute_diff = {
+							character = event_target:carnival_master
+							attribute = combat_rating
+							value = -10
+						}
+					}
+				}
+				prestige = 100
+				hidden_effect = {
+					set_character_flag = carnival_master_killed
+					event_target:carnival_master = {
+						death = { death_reason = death_duel killer = ROOT }
+					}
+					character_event = { id = carnival.35 days = 1 }
+				}
+			}
+			45 = {
+				add_trait = wounded
+				hidden_effect = { character_event = { id = carnival.80 days = 3 } }
+			}
+			5 = { death = { death_reason = death_duel killer = event_target:carnival_master } }
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0 trait = craven }
+		}
+	}
+	option = { # Send the guard
+		name = EVTOPTBcarnival42
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.5 martial = 18 }
+				hidden_effect = {
+					event_target:carnival_master = { imprison = ROOT }
+					character_event = { id = carnival.35 days = 1 }
+				}
+			}
+			50 = {
+				custom_tooltip = { text = carnival_hunt_lost_tt }
+				hidden_effect = { character_event = { id = carnival.80 days = 3 } }
+			}
+		}
+		ai_chance = { factor = 70 }
+	}
+}
+
+###############################################################################
+# The road goes on
+###############################################################################
+
+# carnival.80 The Carnival moves on
+# Hidden. Clears the old host's flags and sends the Carnival to the next
+# realm: the patron's choice if there is one, else a lord two provinces
+# away. After three realms, or if the Master is dead or taken, or no host is
+# found, it ends (carnival.90).
+# Scope: ROOT is the old host.
+character_event = {
+	id = carnival.80
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		carnival_clear_host_effect = yes
+		change_variable = { which = global_carnival_realms value = 1 }
+		if = {
+			limit = {
+				OR = {
+					carnival_master_free_trigger = no
+					check_variable = { which = global_carnival_realms value = 3 }
+				}
+			}
+			character_event = { id = carnival.90 }
+		}
+		else = {
+			# The patron's choice
+			if = {
+				limit = {
+					event_target:carnival_next_host = { is_alive = yes carnival_host_trigger = yes }
+				}
+				event_target:carnival_next_host = {
+					save_event_target_as = carnival_new_host
+					random_realm_province = {
+						limit = { carnival_region_trigger = yes is_capital = no }
+						save_event_target_as = carnival_new_town
+					}
+				}
+			}
+			# Two provinces down the road
+			else = {
+				event_target:carnival_town = {
+					random_neighbor_province = {
+						limit = { carnival_region_trigger = yes }
+						random_neighbor_province = {
+							limit = {
+								carnival_region_trigger = yes
+								has_owner = yes
+								owner = {
+									OR = {
+										AND = {
+											higher_tier_than = COUNT
+											carnival_host_trigger = yes
+										}
+										liege = { carnival_host_trigger = yes }
+									}
+								}
+							}
+							save_event_target_as = carnival_new_town
+							owner = {
+								if = {
+									limit = { higher_tier_than = COUNT carnival_host_trigger = yes }
+									save_event_target_as = carnival_new_host
+								}
+								else = { liege = { save_event_target_as = carnival_new_host } }
+							}
+						}
+					}
+				}
+			}
+			clear_global_event_target = carnival_next_host
+			if = {
+				limit = {
+					event_target:carnival_new_host = { NOT = { character = ROOT } }
+					event_target:carnival_new_town = { always = yes }
+				}
+				event_target:carnival_new_town = { save_global_event_target_as = carnival_town }
+				event_target:carnival_new_host = {
+					save_global_event_target_as = carnival_host
+					event_target:carnival_master = { move_character = PREV }
+					character_event = { id = carnival.2 days = 60 random = 60 }
+				}
+				if = { limit = { ai = no } character_event = { id = carnival.81 days = 30 } }
+				event_target:carnival_patron = {
+					if = {
+						limit = { ai = no is_alive = yes NOT = { character = ROOT } }
+						character_event = { id = carnival.91 days = 60 }
+					}
+				}
+			}
+			else = { character_event = { id = carnival.90 } }
+		}
+	}
+}
+
+# carnival.81 The Carnival has gone
+# Word reaches the old host that the painted wagons are now in another
+# lord's lands.
+# Scope: ROOT is the old host.
+character_event = {
+	id = carnival.81
+	desc = EVTDESCcarnival81
+	title = EVTNAMEcarnival81
+	picture = GFX_evt_merchant_caravan
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:carnival_host = { always = yes }
+	}
+
+	option = { # Let it be their trouble
+		name = EVTOPTAcarnival81
+	}
+}
+
+# carnival.90 The Carnival vanishes
+# Hidden. Ends the chain: a living, free Master walks off the map, the
+# global flag and targets are cleared, and a new Carnival may start in
+# some later decade.
+# Scope: ROOT is the last host.
+character_event = {
+	id = carnival.90
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		carnival_clear_host_effect = yes
+		clr_character_flag = carnival_master_killed
+		event_target:carnival_host = { carnival_clear_host_effect = yes }
+		if = {
+			limit = { carnival_master_free_trigger = yes }
+			event_target:carnival_master = { death = { death_reason = death_vanished } }
+		}
+		clr_global_flag = carnival_on_the_road
+		set_variable = { which = global_carnival_realms value = 0 }
+		clear_global_event_target = carnival_master
+		clear_global_event_target = carnival_town
+		clear_global_event_target = carnival_host
+		clear_global_event_target = carnival_watcher
+		clear_global_event_target = carnival_next_host
+		clear_global_event_target = carnival_patron
+	}
+}
+
+# carnival.91 The Carnival plays for your enemy
+# Word to a player patron that the Carnival has reached the next realm.
+# Scope: ROOT is the patron.
+character_event = {
+	id = carnival.91
+	desc = EVTDESCcarnival91
+	title = EVTNAMEcarnival91
+	picture = GFX_evt_nurgle_loves_you
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_global_flag = carnival_on_the_road
+		event_target:carnival_host = { always = yes }
+	}
+
+	option = { # Play well, my children
+		name = EVTOPTAcarnival91
+	}
+}
+
+# carnival.92 A death on the road
+# Hidden. If the Master dies, the chain ends a month later (carnival.90 on the
+# host). If the host dies while the Carnival is in their lands, the Master
+# moves on (carnival.80 from the Master).
+# Scope: ROOT is the dying character. Fired from on_death.
+character_event = {
+	id = carnival.92
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		OR = { has_character_flag = carnival_master has_character_flag = carnival_host }
+		has_global_flag = carnival_on_the_road
+	}
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = carnival_master }
+			if = {
+				limit = {
+					event_target:carnival_host = { is_alive = yes NOT = { character = ROOT } }
+				}
+				event_target:carnival_host = { character_event = { id = carnival.90 days = 30 } }
+			}
+			else = {
+				clr_global_flag = carnival_on_the_road
+				set_variable = { which = global_carnival_realms value = 0 }
+				clear_global_event_target = carnival_master
+				clear_global_event_target = carnival_town
+				clear_global_event_target = carnival_host
+				clear_global_event_target = carnival_watcher
+				clear_global_event_target = carnival_next_host
+				clear_global_event_target = carnival_patron
+			}
+		}
+		else_if = {
+			limit = { carnival_master_free_trigger = yes }
+			event_target:carnival_master = { character_event = { id = carnival.80 days = 30 } }
+		}
+	}
+}
+
+# carnival.93 The road goes quiet
+# Hidden. Five years after the Carnival reached a realm, if it has not moved
+# since (a step that could not fire), it ends.
+# Scope: ROOT is the Master. Fired by carnival.2.
+character_event = {
+	id = carnival.93
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_global_flag = carnival_on_the_road
+		has_character_flag = carnival_master
+		had_character_flag = { flag = carnival_arrived days = 1800 }
+	}
+
+	immediate = {
+		character_event = { id = carnival.90 }
+	}
+}

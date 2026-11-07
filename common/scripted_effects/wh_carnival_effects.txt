@@ -1,0 +1,200 @@
+###############################################################################
+# Carnival of Chaos effects (events/WHG_carnival_events.txt)
+###############################################################################
+
+# The jester's touch: the character may catch the Red Pox, the Green Pox or,
+# rarely, Nurgle's Rot. Uses the same flags as the disease events, so the
+# symptoms develop as usual.
+# Scope: a character.
+carnival_infect_effect = {
+	random_list = {
+		50 = { }
+		22 = {
+			modifier = { factor = 0 has_character_flag = immune_typhus }
+			modifier = { factor = 0 trait = has_typhus }
+			if = {
+				limit = {
+					NOR = {
+						has_character_flag = developing_illness
+						has_character_flag = disease_not_serious
+					}
+				}
+				set_character_flag = got_typhus
+				set_character_flag = developing_illness
+				character_event = { id = symptom.18 days = 14 random = 14 }
+			}
+		}
+		22 = {
+			modifier = { factor = 0 has_character_flag = immune_measles }
+			modifier = { factor = 0 trait = has_measles }
+			if = {
+				limit = {
+					NOR = {
+						has_character_flag = developing_illness
+						has_character_flag = disease_not_serious
+					}
+				}
+				set_character_flag = got_measles
+				set_character_flag = developing_illness
+				character_event = { id = symptom.19 days = 14 random = 14 }
+			}
+		}
+		6 = {
+			modifier = { factor = 0 trait = has_nurgles_rot }
+			add_trait = has_nurgles_rot
+			nurgle_blessing_check_effect = yes
+		}
+	}
+}
+
+# Picks who keeps an eye on the troupe: a court witch hunter, wizard or
+# other seer if there is one, else the spymaster, else the ruler.
+# Scope: the host.
+carnival_pick_watcher_effect = {
+	if = {
+		limit = {
+			any_courtier_or_vassal = { carnival_seer_trigger = yes prisoner = no is_adult = yes }
+		}
+		random_courtier_or_vassal = {
+			limit = { carnival_seer_trigger = yes prisoner = no is_adult = yes }
+			save_global_event_target_as = carnival_watcher
+		}
+	}
+	else_if = {
+		limit = { job_spymaster = { prisoner = no } }
+		job_spymaster = { save_global_event_target_as = carnival_watcher }
+	}
+	else = { save_global_event_target_as = carnival_watcher }
+}
+
+# Clears the host's chain flags once the Carnival has gone. carnival_visited
+# stays, so the Carnival never comes back to the same ruler.
+# Scope: the host.
+carnival_clear_host_effect = {
+	clr_character_flag = carnival_host
+	clr_character_flag = carnival_watched
+	clr_character_flag = carnival_truth_seen
+	clr_character_flag = carnival_forewarned
+	clr_character_flag = carnival_master_noticed
+	clr_character_flag = carnival_omen_11
+	clr_character_flag = carnival_omen_12
+	clr_character_flag = carnival_omen_13
+	clr_character_flag = carnival_omen_14
+	clr_character_flag = carnival_paid_blades
+	set_variable = { which = carnival_omens value = 0 }
+	set_variable = { which = carnival_risk value = 0 }
+	set_variable = { which = carnival_hunt_steps value = 0 }
+}
+
+# The town the Carnival played in is left half empty and sick: a long plague
+# modifier, and sometimes a true epidemic breaks out.
+# Scope: the town (a province).
+carnival_town_ravaged_effect = {
+	add_province_modifier = { name = carnival_plague_town duration = 1825 }
+	random_list = {
+		50 = { }
+		25 = { spawn_disease = typhus }
+		25 = { spawn_disease = measles }
+	}
+}
+
+# The Master takes a finger from a woman or child of the court and leads them
+# away. Never a member of the host's own dynasty.
+# Scope: the host.
+carnival_taken_effect = {
+	random_courtier = {
+		limit = {
+			is_ruler = no
+			prisoner = no
+			NOT = { dynasty = ROOT }
+			NOT = { is_close_relative = ROOT }
+			OR = { is_female = yes is_adult = no }
+		}
+		save_event_target_as = carnival_taken
+		death = { death_reason = death_vanished }
+	}
+}
+
+# At sunset the glamour slips: the Master shows his true faith and gifts.
+# Scope: the Master.
+carnival_reveal_master_effect = {
+	religion = nurgle
+	if = { limit = { NOT = { trait = lore_nurgle } } add_trait = lore_nurgle }
+	if = { limit = { NOT = { trait = mark_nurgle } } add_trait = mark_nurgle }
+}
+
+# The ruler takes Grandfather's blessing and becomes the Carnival's patron.
+# An Order ruler falls to Nurgle in secret. Raises the doom. Once in a life
+# the Master leaves a Plague Cart behind as a gift.
+# Scope: the ruler.
+carnival_patron_effect = {
+	set_character_flag = carnival_patron
+	save_global_event_target_as = carnival_patron
+	add_doom_progress_minor_effect = yes
+	if = { limit = { follower_of_nurgle = no } set_secret_religion = nurgle }
+	add_character_modifier = { name = carnival_grandfathers_favour years = 10 }
+	if = {
+		limit = { nurgle_offmap_enabled_trigger = yes }
+		add_offmap_currency = { offmap = nurgle_warp amount = 150 }
+	}
+	if = {
+		limit = { NOT = { has_character_flag = carnival_got_cart } }
+		random = {
+			chance = 50
+			set_character_flag = carnival_got_cart
+			custom_tooltip = {
+				text = carnival_plague_cart_tt
+				capital_scope = {
+					PREV = {
+						spawn_unit = {
+							province = PREV
+							owner = PREV
+							troops = { daemonic_host = { 100 100 } light_infantry = { 150 150 } }
+							earmark = carnival_plague_cart
+							maintenance_multiplier = 0.5
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# The Master is dead: the doom falls, and once in a life there is a reward.
+# One in three takes his mask (if the ruler has none), else one in three
+# brings a band of plague-hunters to the ruler's banner.
+# Scope: the ruler who ended the Carnival.
+carnival_master_slain_effect = {
+	reduce_doom_progress_minor_effect = yes
+	add_character_modifier = { name = carnival_ended_the_dance years = 10 }
+	if = {
+		limit = {
+			NOT = { has_character_flag = carnival_got_reward }
+			NOT = { has_artifact = carnival_master_mask }
+		}
+		random_list = {
+			33 = { set_character_flag = carnival_got_reward add_artifact = carnival_master_mask }
+			33 = {
+				set_character_flag = carnival_got_reward
+				custom_tooltip = {
+					text = carnival_plague_hunters_tt
+					capital_scope = {
+						PREV = {
+							spawn_unit = {
+								province = PREV
+								owner = PREV
+								troops = {
+									heavy_infantry = { 100 100 }
+									light_infantry = { 100 100 }
+								}
+								earmark = carnival_plague_hunters
+								maintenance_multiplier = 0.5
+							}
+						}
+					}
+				}
+			}
+			34 = { }
+		}
+	}
+}

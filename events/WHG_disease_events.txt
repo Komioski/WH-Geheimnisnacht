@@ -1,7 +1,7 @@
 ###############################################################################
 # Disease events: who is to blame for an epidemic, the dancing plague, the
-# Great Plague news, symptoms and diseases, treatment, court physicians and
-# hospitals
+# Great Plague news, symptoms and diseases, treatment, court physicians,
+# hospitals and seclusion
 #
 # Part 1: Blame for the epidemic (namespace blame)
 # Faction: Generic
@@ -15,6 +15,7 @@
 #   Part 5: Treatment and recovery (namespace treatment)
 #   Part 6: Finding a court physician (namespace physician)
 #   Part 7: Hospitals (namespace hospital)
+#   Part 8: Seclusion (namespace seclusion)
 #
 # When an epidemic has emptied a ruler's capital, the people look for someone
 # to blame. One of four chains runs, once in a ruler's life:
@@ -10324,7 +10325,7 @@ character_event = {
 # treatment.32 Ping the court physician
 # Hidden. The court physician looks at a sick patient: symptoms go to
 # treatment.46, a new leper to treatment.63, a disease to treatment.36. An
-# epidemic victim in seclusion needs the liege's leave first (RIP.12014).
+# epidemic victim in seclusion needs the liege's leave first (seclusion.15).
 # Scope: ROOT is the court physician, FROM the patient. Fired by the symptom
 # and diagnosis events, health.3 and the employ_court_physician decision.
 character_event = {
@@ -10381,7 +10382,7 @@ character_event = {
 			}
 			save_event_target_as = court_physician
 			FROM = { save_event_target_as = epidemic_victim }
-			liege = { character_event = { id = RIP.12014 } }
+			liege = { character_event = { id = seclusion.15 } }
 			break = yes
 		}
 		FROM = { set_character_flag = being_treated }
@@ -19583,5 +19584,4628 @@ character_event = {
 
 	option = {
 		name = I_SEE
+	}
+}
+
+###############################################################################
+# Part 8: Seclusion (namespace seclusion)
+# Faction: Generic
+# Serves: any ruler who shuts the gates of the capital against an epidemic,
+# and their court.
+#
+# Shutting the gates keeps the sickness out, for a while. Life inside goes
+# sour: food runs out, lovers sneak about, a child slips away to a peasant
+# lover, someone uses the old tunnels, and during the Red Pox or a Nurgle
+# plague a masked guest joins the revels.
+#   seclusion.1-2       The gates are shut (shut_the_gates decision)
+#   seclusion.4-15      Life in seclusion: corpses at the gate, symptoms,
+#                       lovers, boredom, nightmares, a friend, the sick
+#   seclusion.31-40     A child's peasant lover
+#   seclusion.51-67     The tunnel lurker
+#   seclusion.71-83     The masque: a herald of Nurgle at the party
+#   seclusion.98-102    Housekeeping: prison, the list, councillors
+#   seclusion.110-117   Food runs out
+#
+# seclusion.100 rolls the list about every nine months from the moment the
+# gates shut (seclusion_list_start_effect) instead of a nine-month MTTH
+# checked on every playable character.
+# Was events/rip_seclusion_events.txt: seclusion.N is RIP.(N+11999) for
+# 1-102, and RIP.11550-11557 became 110-117.
+###############################################################################
+
+namespace = seclusion
+
+# seclusion.1 The gates are shut
+# The ruler seals the castle against the epidemic and the seclusion list
+# starts.
+# Scope: ROOT is the ruler. Fired by the shut_the_gates decision and
+# seclusion.2.
+character_event = {
+	id = seclusion.1
+	picture = GFX_evt_suspicious_noble
+	desc = EVTDESCseclusion1
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		seclusion_list_start_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAseclusion1
+	}
+}
+
+# seclusion.2 The liege shuts the gates
+# An AI vassal hears the liege has gone into seclusion: approve, scorn, or
+# shut their own gates.
+# Scope: ROOT is the vassal. Fired by the shut_the_gates decision.
+character_event = {
+	id = seclusion.2
+	picture = GFX_evt_house_arrest_escape
+	desc = EVTDESCseclusion2
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+	only_rulers = yes
+	only_capable = yes
+	prisoner = no
+	ai = yes # Not really an interesting event for player vassals
+
+	immediate = {
+		liege = { capital_holding = { save_event_target_as = gates_closed_target } }
+	}
+
+	# It's necessary
+	option = {
+		name = EVTOPTAseclusion2
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 2 trait = shy }
+			modifier = { factor = 2 trait = arbitrary }
+			modifier = { factor = 2 trait = trusting }
+		}
+
+		if = { limit = { trait = craven } opinion = { modifier = craven_pos who = FROM years = 5 } }
+	}
+
+	# Such cowardice!
+	option = {
+		name = EVTOPTBseclusion2
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 2 trait = charitable }
+			modifier = { factor = 2 trait = just }
+			modifier = { factor = 2 trait = paranoid }
+		}
+
+		opinion = { modifier = opinion_coward who = FROM years = 5 }
+	}
+
+	option = { # Perhaps I should go into seclusion too...
+		name = EVTOPTCseclusion2
+
+		trigger = {
+			is_landed = yes
+			NOR = {
+				is_tribal = yes
+				is_nomadic = yes
+				is_inaccessible_trigger = yes
+				has_character_modifier = recently_opened_gates
+				has_character_flag = do_not_disturb
+			}
+		}
+
+		ai_chance = {
+			factor = 20
+			modifier = {
+				factor = 0
+				capital_scope = { NOT = { has_disease = yes } }
+				location = { NOT = { has_disease = yes } }
+			}
+			modifier = {
+				factor = 0.1
+				OR = { capital_scope = { OR = { disease = tuberculosis disease = measles } } }
+			}
+			modifier = { factor = 0.5 age = 65 }
+			modifier = { factor = 0.5 trait = brave }
+			modifier = { factor = 1.5 trait = depressed }
+			modifier = { factor = 1.5 trait = stressed }
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 5 trait = paranoid }
+			modifier = {
+				factor = 10
+				OR = {
+					capital_scope = {
+						OR = {
+							disease = bubonic_plague
+							disease = nurgles_rot
+							disease = creeping_buboes
+						}
+					}
+					location = {
+						OR = {
+							disease = bubonic_plague
+							disease = nurgles_rot
+							disease = creeping_buboes
+						}
+					}
+				}
+			}
+		}
+
+		#Achievement flag
+		if = { limit = { ai = no } set_character_flag = achievement_no_solicitors }
+		if = { limit = { has_minor_title = title_commander } remove_title = title_commander }
+		set_character_flag = do_not_disturb
+		custom_tooltip = { text = shut_the_gates_info_tooltip }
+		add_character_modifier = { name = in_seclusion duration = -1 }
+		if = { # If you are a councillor, stop working and return home
+			limit = {
+				host = { NOT = { character = ROOT } }
+				OR = {
+					is_councillor = yes
+					has_minor_title = title_councilmember_king
+					has_minor_title = title_councilmember_emperor
+				}
+			}
+			force_host = ROOT
+		}
+		hidden_tooltip = {
+			character_event = { id = seclusion.1 }
+			any_courtier = { # Unlanded councillors stop working in order to go into seclusion with their liege
+				limit = {
+					prisoner = no
+					is_councillor = yes
+					is_landed = no
+					liege = { character = ROOT }
+					NOT = { character = ROOT }
+				}
+				add_character_modifier = { name = in_seclusion duration = -1 }
+			}
+			any_courtier = { # Unlanded non-councillors join their liege in seclusion
+				limit = {
+					prisoner = no
+					is_councillor = no
+					is_landed = no
+					liege = { character = ROOT }
+					NOT = { character = ROOT }
+				}
+				add_character_modifier = { name = in_seclusion duration = -1 }
+			}
+			any_courtier = { # Landed councillors return home while you, their liege, is in seclusion
+				limit = {
+					prisoner = no
+					OR = {
+						is_councillor = yes
+						has_minor_title = title_councilmember_king
+						has_minor_title = title_councilmember_emperor
+					}
+					is_landed = yes
+					liege = { character = ROOT }
+					NOT = { character = ROOT }
+				}
+				force_host = THIS
+			}
+			any_courtier = { # Landed children being educated in your court are sent home, with the guardianship ending
+				limit = { prisoner = no is_landed = yes is_adult = no has_guardian = yes }
+				remove_guardian = yes
+			}
+			any_vassal = { character_event = { id = seclusion.2 days = 7 random = 7 } }
+			if = { #Notify employer that councillor is going into seclusion
+				limit = { is_councillor = yes liege = { ai = no } }
+				liege = { letter_event = { id = seclusion.102 days = 1 } }
+			}
+		}
+	}
+}
+
+# seclusion.110 The larders run low
+# Food is nearly gone. A gardener ruler stretches it further. Starts the food
+# chain (111-117).
+# Scope: ROOT is the secluded ruler. Fired by the seclusion list
+# (seclusion.100).
+narrative_event = {
+	id = seclusion.110
+	picture = GFX_evt_castle_construction
+	title = EVTNAMEseclusion110
+	desc = EVTDESCseclusion110 #notice food is low
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	only_rulers = yes
+
+	trigger = {
+		has_character_modifier = in_seclusion
+	}
+
+	immediate = {
+		set_character_flag = seclusion_food_events
+		set_character_flag = seclusion_events_on
+	}
+
+	option = {
+		tooltip_info = gardener
+		trigger = { trait = gardener }
+		name = EVTOPTAseclusion110 #gardens provide for a time
+		character_event = { id = seclusion.111 days = 60 random = 10 }
+		set_variable = { which = remaining_food value = 7 }
+	}
+	option = {
+		trigger = { NOT = { trait = gardener } }
+		name = EVTOPTBseclusion110 #this isn't good
+		character_event = { id = seclusion.111 days = 25 random = 10 }
+		set_variable = { which = remaining_food value = 5 }
+	}
+}
+
+# seclusion.111 Food is a problem
+# Ration, convince the court food is unneeded, or eat while you can.
+# Scope: ROOT is the secluded ruler. Fired by seclusion.110.
+character_event = {
+	id = seclusion.111
+	picture = GFX_evt_castle_construction
+	desc = EVTDESCseclusion111 #food is now a problem
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_modifier = in_seclusion
+	}
+
+	immediate = {
+		set_character_flag = seclusion_food_shortage
+	}
+
+	option = {
+		trigger = { stewardship = 15 }
+		name = EVTOPTAseclusion111 #good rationing
+		tooltip_info = stewardship
+		add_character_modifier = { name = tiny_food_shortage duration = -1 }
+		any_courtier = {
+			limit = { has_character_modifier = in_seclusion }
+			add_character_modifier = { name = tiny_food_shortage duration = -1 }
+		}
+	}
+	option = {
+		trigger = { diplomacy = 15 }
+		name = EVTOPTBseclusion111 #convince people to eat less
+		tooltip_info = diplomacy
+		add_character_modifier = { name = tiny_food_shortage duration = -1 }
+		any_courtier = {
+			limit = { has_character_modifier = in_seclusion }
+			add_character_modifier = { name = tiny_food_shortage duration = -1 }
+		}
+	}
+	option = {
+		tooltip_info = gluttonous
+		trigger = { trait = gluttonous }
+		name = EVTOPTCseclusion111 #gotta eat while you still can
+		change_variable = { which = remaining_food value = -2 }
+		#give everyone modifier with health penalty
+		add_character_modifier = { name = greedy_food_shortage duration = -1 }
+		any_courtier = {
+			limit = { has_character_modifier = in_seclusion }
+			add_character_modifier = { name = minor_food_shortage duration = -1 }
+		}
+	}
+	option = {
+		tooltip_info = hedonist
+		trigger = {
+			NOT = { trait = gluttonous } #duplicating prev option since we can only have 1 tooltip info
+			trait = hedonist
+		}
+		name = EVTOPTCseclusion111 #gotta eat while you still can
+		change_variable = { which = remaining_food value = -2 }
+		#give everyone modifier with health penalty
+		add_character_modifier = { name = greedy_food_shortage duration = -1 }
+		any_courtier = {
+			limit = { has_character_modifier = in_seclusion }
+			add_character_modifier = { name = minor_food_shortage duration = -1 }
+		}
+	}
+	option = {
+		trigger = { NOR = { trait = gluttonous trait = hedonist } }
+		name = EVTOPTEseclusion111 #average rationing
+		change_variable = { which = remaining_food value = -1 }
+		#give everyone modifier with small health penalty
+		add_character_modifier = { name = minor_food_shortage duration = -1 }
+		any_courtier = {
+			limit = { has_character_modifier = in_seclusion }
+			add_character_modifier = { name = minor_food_shortage duration = -1 }
+		}
+	}
+}
+
+# seclusion.112 Rats in the cellar
+# With food short, the rats could be eaten.
+# Scope: ROOT is the secluded ruler with seclusion_food_shortage. Mean time to
+# happen.
+character_event = {
+	id = seclusion.112
+	picture = GFX_evt_castle_construction
+	desc = EVTDESCseclusion112 #eat rats?
+	border = GFX_event_normal_frame_religion
+
+	only_rulers = yes
+	has_character_flag = seclusion_food_shortage
+
+	trigger = {
+		has_character_modifier = in_seclusion
+		OR = {
+			had_character_flag = { flag = seclusion_refuse_to_eat_rats days = 180 }
+			NOT = { has_character_flag = seclusion_refuse_to_eat_rats }
+		}
+		NOT = { has_character_flag = seclusion_rats_eaten }
+	}
+
+	mean_time_to_happen = {
+		days = 60
+	}
+
+	option = {
+		name = EVTOPTAseclusion112 # yum
+		set_character_flag = seclusion_rats_eaten
+	}
+	option = {
+		trigger = { NOR = { trait = gluttonous trait = hedonist } }
+		name = EVTOPTBseclusion112 #don't eat
+		change_variable = { which = remaining_food value = -1 }
+		if = { limit = { NOT = { trait = proud } } add_trait = proud }
+		set_character_flag = seclusion_refuse_to_eat_rats
+	}
+}
+
+# seclusion.113 The rats eat the food
+# Rats get into the stores and eat what was left.
+# Scope: ROOT is the secluded ruler with seclusion_food_shortage. Mean time to
+# happen.
+character_event = {
+	id = seclusion.113
+	picture = GFX_evt_castle_construction
+	desc = EVTDESCseclusion113 #rats eat your food
+	border = GFX_event_normal_frame_religion
+
+	only_rulers = yes
+	has_character_flag = seclusion_food_shortage
+
+	trigger = {
+		has_character_modifier = in_seclusion
+		NOT = { has_character_flag = seclusion_rats_eaten }
+		OR = {
+			NOT = { has_character_flag = rats_ate_food }
+			had_character_flag = { flag = rats_ate_food days = 120 }
+		}
+	}
+
+	mean_time_to_happen = {
+		days = 90
+	}
+
+	option = {
+		name = CURSES
+		change_variable = { which = remaining_food value = -1 }
+		set_character_flag = rats_ate_food
+	}
+}
+
+# seclusion.114 A greedy courtier
+# A courtier is caught stealing food: scold, imprison or expel them.
+# Scope: ROOT is the secluded ruler with seclusion_food_shortage. Mean time to
+# happen.
+character_event = {
+	id = seclusion.114
+	picture = GFX_evt_castle_construction
+	desc = EVTDESCseclusion114 #courtier ate your food
+	border = GFX_event_normal_frame_religion
+
+	only_rulers = yes
+	has_character_flag = seclusion_food_shortage
+
+	trigger = {
+		has_character_modifier = in_seclusion
+		check_variable = { which = remaining_food value = 1 }
+		#check for gluttons or hedonists
+		any_courtier = {
+			OR = { trait = gluttonous trait = hedonist }
+			prisoner = no
+			has_character_modifier = in_seclusion
+			is_incapable = no
+			NOT = { has_character_flag = stole_food }
+		}
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = {
+				OR = { trait = gluttonous trait = hedonist }
+				has_character_modifier = in_seclusion
+			}
+
+			remove_character_modifier = minor_food_shortage
+			remove_character_modifier = normal_food_shortage
+			add_character_modifier = { name = greedy_food_shortage duration = -1 }
+			save_event_target_as = target_greedy_courtier
+			set_character_flag = stole_food
+		}
+	}
+
+	mean_time_to_happen = {
+		days = 60
+	}
+
+	option = {
+		name = EVTOPTAseclusion114 #angry but keep them in
+		ai_chance = {
+			factor = 10
+
+			modifier = { factor = 2 trait = kind }
+
+			modifier = { factor = 2 trait = charitable }
+
+			modifier = { factor = 2 reverse_opinion = { who = ROOT value = 50 } }
+		}
+		change_variable = { which = remaining_food value = -1 }
+		event_target:target_greedy_courtier = {
+			#opinion modifier
+			reverse_opinion = { modifier = gluttonous_neg who = ROOT years = 5 }
+		}
+	}
+
+	option = { # prison
+		name = EVTOPTCseclusion114
+		ai_chance = {
+			factor = 10
+
+			modifier = { factor = 2 trait = wroth }
+
+			modifier = { factor = 2 trait = cruel }
+
+			modifier = { factor = 2 reverse_opinion = { who = ROOT value = 10 } }
+		}
+		change_variable = { which = remaining_food value = -1 }
+		event_target:target_greedy_courtier = { prisoner = ROOT }
+	}
+
+	option = {
+		name = EVTOPTBseclusion114 #expel them.
+		ai_chance = {
+			factor = 10
+
+			modifier = { factor = 2 trait = wroth }
+
+			modifier = { factor = 2 trait = cruel }
+
+			modifier = { factor = 2 NOT = { reverse_opinion = { who = ROOT value = 10 } } }
+		}
+		change_variable = { which = remaining_food value = -1 }
+		event_target:target_greedy_courtier = {
+			#unset seclusion
+			reverse_opinion = { modifier = gluttonous_neg who = ROOT years = 5 }
+			remove_character_modifier = in_seclusion
+			remove_character_modifier = greedy_food_shortage
+		}
+	}
+	#cannibal option - eat them in turn?
+	option = {
+		name = EVTOPTAseclusion115
+		ai_chance = {
+			factor = 10
+
+			modifier = {
+				factor = 0
+				NOR = { has_character_modifier = cannibal trait = cannibal_trait }
+			}
+
+			modifier = {
+				factor = 0
+				OR = {
+					father = { character = ROOT }
+					mother = { character = ROOT }
+					is_married = ROOT
+					is_child_of = ROOT
+				}
+			}
+		}
+		event_target:target_greedy_courtier = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+			death = { death_reason = death_execution_eaten killer = ROOT }
+		}
+		change_variable = { which = remaining_food value = 1 }
+		if = {
+			limit = { NOR = { has_character_modifier = cannibal trait = cannibal_trait } }
+			add_trait = cannibal_trait
+		}
+	}
+}
+
+# seclusion.115 Meat is back on the menu
+# Starving, the ruler eyes the courtiers. Eating one is possible.
+# Scope: ROOT is the secluded ruler with seclusion_food_shortage. Mean time to
+# happen.
+character_event = {
+	id = seclusion.115
+	picture = GFX_evt_castle_construction
+	desc = EVTDESCseclusion115 #eat people
+	border = GFX_event_normal_frame_religion
+
+	only_rulers = yes
+	has_character_flag = seclusion_food_shortage
+
+	trigger = {
+		has_character_modifier = in_seclusion
+		any_courtier = {
+			ai = yes
+			at_location = ROOT
+			NOT = { father = { character = ROOT } }
+			NOT = { mother = { character = ROOT } }
+			NOT = { is_married = ROOT }
+			NOT = { is_child_of = ROOT }
+			has_character_modifier = in_seclusion
+		}
+		OR = {
+			had_character_flag = { flag = seclusion_refuse_to_eat_fellow_man days = 180 }
+			NOT = { has_character_flag = seclusion_refuse_to_eat_fellow_man }
+		}
+		NOT = { check_variable = { which = remaining_food value = 1 } }
+	}
+
+	mean_time_to_happen = {
+		days = 60
+		#
+	}
+
+	option = {
+		name = EVTOPTAseclusion115
+		random_courtier = {
+			limit = {
+				ai = yes
+				at_location = ROOT
+				NOT = { father = { character = ROOT } }
+				NOT = { mother = { character = ROOT } }
+				NOT = { is_married = ROOT }
+				NOT = { is_child_of = ROOT }
+				has_character_modifier = in_seclusion
+			}
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+			death = { death_reason = death_execution_eaten killer = ROOT }
+		}
+		change_variable = { which = remaining_food value = 1 }
+		if = {
+			limit = { NOR = { has_character_modifier = cannibal trait = cannibal_trait } }
+			add_trait = cannibal_trait
+		}
+	}
+	option = {
+		trigger = {
+			NOR = {
+				trait = gluttonous
+				trait = hedonist
+				has_character_modifier = cannibal
+				trait = cannibal_trait
+			}
+		}
+		name = EVTOPTBseclusion115
+		change_variable = { which = remaining_food value = -1 }
+		#if not temperate, add it
+		if = {
+			limit = { NOT = { trait = temperate } }
+			add_trait = temperate
+			lose_weight_small_effect = yes
+			weight_trait_check_effect = yes
+		}
+		set_character_flag = seclusion_refuse_to_eat_fellow_man
+	}
+}
+
+# seclusion.116 The food is gone
+# The stores are empty; the seclusion cannot last.
+# Scope: ROOT is the secluded ruler with seclusion_food_shortage. Mean time to
+# happen.
+character_event = {
+	id = seclusion.116
+	picture = GFX_evt_castle_construction
+	desc = EVTDESCseclusion116 #out of food
+	border = GFX_event_normal_frame_religion
+
+	only_rulers = yes
+	has_character_flag = seclusion_food_shortage
+
+	trigger = {
+		has_character_modifier = in_seclusion
+		NOT = { has_character_flag = seclusion_starving }
+		NOT = { check_variable = { which = remaining_food value = 1 } }
+	}
+
+	mean_time_to_happen = {
+		days = 90
+	}
+
+	option = {
+		name = EVTOPTAseclusion116
+		set_character_flag = seclusion_starving
+		if = {
+			limit = { has_character_modifier = tiny_food_shortage }
+			remove_character_modifier = tiny_food_shortage
+		}
+		if = {
+			limit = { has_character_modifier = minor_food_shortage }
+			remove_character_modifier = minor_food_shortage
+		}
+		if = {
+			limit = { has_character_modifier = normal_food_shortage }
+			remove_character_modifier = normal_food_shortage
+		}
+		add_character_modifier = { name = starving_food_shortage duration = -1 }
+		hidden_tooltip = {
+			any_courtier = {
+				limit = { has_character_modifier = in_seclusion }
+				remove_character_modifier = tiny_food_shortage
+				remove_character_modifier = minor_food_shortage
+				remove_character_modifier = normal_food_shortage
+				add_character_modifier = { name = starving_food_shortage duration = -1 }
+			}
+		}
+	}
+}
+
+# seclusion.117 The shortage is over
+# Clears the starvation modifiers after seclusion ends.
+# Scope: ROOT is the ruler or a courtier. Fired by the open_the_gates decision
+# and the end-of-seclusion effect.
+character_event = {
+	id = seclusion.117
+	picture = GFX_evt_castle_construction
+	desc = EVTDESCseclusion117 #recovery
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes #triggered by "Open the gates"
+
+	notification = yes
+
+	trigger = {
+		OR = {
+			has_character_modifier = tiny_food_shortage
+			has_character_modifier = minor_food_shortage
+			has_character_modifier = normal_food_shortage
+			has_character_modifier = starving_food_shortage
+			has_character_modifier = greedy_food_shortage
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { has_character_modifier = tiny_food_shortage }
+			remove_character_modifier = tiny_food_shortage
+		}
+		if = {
+			limit = { has_character_modifier = minor_food_shortage }
+			remove_character_modifier = minor_food_shortage
+		}
+		if = {
+			limit = { has_character_modifier = normal_food_shortage }
+			remove_character_modifier = normal_food_shortage
+		}
+		if = {
+			limit = { has_character_modifier = starving_food_shortage }
+			remove_character_modifier = starving_food_shortage
+		}
+		if = {
+			limit = { has_character_modifier = greedy_food_shortage }
+			remove_character_modifier = greedy_food_shortage
+		}
+		clr_character_flag = seclusion_food_shortage
+		clr_character_flag = seclusion_starving
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# seclusion.4 Corpses at the gate
+# The commoners pile their dead outside the gates in protest.
+# Scope: ROOT is the secluded ruler. Fired by the seclusion list
+# (seclusion.100).
+character_event = {
+	id = seclusion.4
+	picture = GFX_evt_castle_construction
+	desc = EVTDESCseclusion4
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = seclusion_piling_corpses
+	}
+
+	option = { # guards can clear them out
+		ai_chance = { factor = 30 }
+		set_character_flag = exposed_to_outside
+		name = EVTOPTAseclusion4
+		custom_tooltip = { text = EVTOPTAseclusion4_TT }
+	}
+
+	option = { # we should all help clear out the dead
+		name = EVTOPTBseclusion4
+		tooltip_info = kind
+		trigger = { NOR = { trait = paranoid trait = craven } trait = kind }
+		ai_chance = {
+			factor = 20
+
+			modifier = { factor = 2 trait = brave }
+
+			modifier = { factor = 2 trait = charitable }
+
+			modifier = { factor = 0.5 trait = wroth }
+
+			modifier = { factor = 0.5 trait = cruel }
+		}
+		any_courtier = {
+			limit = { has_character_modifier = in_seclusion }
+			set_character_flag = exposed_to_outside
+		}
+		set_character_flag = exposed_to_outside
+		piety = 100
+	}
+
+	option = { # leave it as is
+		name = EVTOPTCseclusion4
+		ai_chance = {
+			factor = 50
+
+			modifier = { factor = 2 trait = slothful }
+
+			modifier = { factor = 2 trait = paranoid }
+
+			modifier = { factor = 2 trait = craven }
+		}
+		any_courtier = {
+			limit = { has_character_modifier = in_seclusion }
+			opinion = { who = ROOT modifier = opinion_disgusted years = 5 }
+		}
+	}
+}
+
+# seclusion.5 A courtier shows symptoms
+# A courtier may have caught it: send them away, lock them up, or trust to
+# luck.
+# Scope: ROOT is the secluded ruler. Fired by the seclusion list
+# (seclusion.100).
+character_event = {
+	id = seclusion.5
+	picture = GFX_evt_castle_construction
+	desc = EVTDESCseclusion5
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_courtier = {
+			limit = { prisoner = no has_character_modifier = in_seclusion num_of_symptoms = 1 }
+			save_event_target_as = sick_courtier
+		}
+	}
+
+	option = { # they have to go, leave seclusion
+		name = EVTOPTAseclusion5
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 2 trait = paranoid }
+
+			modifier = { factor = 2 trait = craven }
+		}
+		if = {
+			limit = {
+				event_target:sick_courtier = {
+					OR = {
+						has_character_flag = got_bubonic_plague
+						has_character_flag = manifest_bubonic_plague
+						trait = has_bubonic_plague
+					}
+				}
+				ai = no
+			}
+			set_character_flag = achievement_close_call
+		}
+		if = {
+			limit = {
+				event_target:sick_courtier = { NOT = { has_character_flag = got_bubonic_plague } }
+				ai = no
+			}
+			set_character_flag = achievement_an_honest_mistake
+		}
+		event_target:sick_courtier = {
+			remove_character_modifier = in_seclusion
+			opinion = { who = ROOT modifier = expelled_me_from_seclusion years = 2 }
+		}
+	}
+
+	option = { # they can stay, in prison
+		name = EVTOPTBseclusion5
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 2 trait = wroth }
+
+			modifier = { factor = 2 trait = cruel }
+		}
+		event_target:sick_courtier = { prisoner = ROOT remove_character_modifier = in_seclusion }
+		any_courtier = {
+			limit = { has_character_modifier = in_seclusion }
+			opinion = { who = ROOT modifier = opinion_tyrant years = 5 }
+		}
+	}
+
+	option = { # we shouldn't be worried
+		name = EVTOPTCseclusion5
+		trigger = { NOR = { trait = paranoid trait = craven } }
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 2 is_dumb_trigger = yes }
+
+			modifier = { factor = 2 trait = brave }
+
+			modifier = { factor = 2 trait = stubborn }
+		}
+	}
+
+	option = { # comfort courtier and hold them close
+		name = EVTOPTDseclusion5
+		trigger = {
+			OR = { trait = lustful trait = kind }
+			event_target:sick_courtier = { NOR = { is_friend = ROOT is_rival = ROOT } }
+		}
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 2 is_dumb_trigger = yes }
+
+			modifier = { factor = 2 trait = charitable }
+
+			modifier = { factor = 2 trait = proud }
+
+			modifier = { factor = 2 trait = brave }
+		}
+		event_target:sick_courtier = { add_friend = ROOT }
+		if = {
+			limit = { event_target:sick_courtier = { developing_epidemic_disease_trigger = yes } }
+			set_character_flag = exposed_to_outside
+		}
+	}
+}
+
+# seclusion.6 Lovers in the castle
+# Two courtiers have been sneaking off together: stop it, marry them, or let
+# it be.
+# Scope: ROOT is the secluded ruler. Fired by the seclusion list
+# (seclusion.100).
+character_event = {
+	id = seclusion.6
+	picture = GFX_evt_castle_construction
+	desc = EVTDESCseclusion6
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_courtier = {
+			limit = {
+				ai = yes
+				at_location = ROOT
+				has_character_modifier = in_seclusion
+				any_lover = {
+					ai = yes
+					NOT = { character = ROOT }
+					has_character_modifier = in_seclusion
+					at_location = ROOT
+				}
+			}
+			save_event_target_as = lover_one
+			random_lover = {
+				limit = {
+					ai = yes
+					NOT = { character = ROOT }
+					has_character_modifier = in_seclusion
+					at_location = ROOT
+				}
+				save_event_target_as = lover_two
+			}
+		}
+	}
+
+	option = { # stop lovers
+		name = EVTOPTAseclusion6
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 2 trait = wroth }
+
+			modifier = { factor = 2 trait = cruel }
+
+			modifier = { factor = 2 trait = celibate }
+		}
+		event_target:lover_one = {
+			remove_lover = event_target:lover_two
+			opinion = { who = ROOT modifier = opinion_angry years = 5 }
+		}
+		event_target:lover_two = { opinion = { who = ROOT modifier = opinion_angry years = 5 } }
+	}
+
+	option = { # let them marry
+		name = EVTOPTBseclusion6
+		trigger = {
+			event_target:lover_one = { NOT = { spouse = { always = yes } } can_marry = yes }
+			event_target:lover_two = { NOT = { spouse = { always = yes } } can_marry = yes }
+		}
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 2 trait = zealous }
+
+			modifier = { factor = 2 trait = proud }
+
+			modifier = { factor = 2 trait = chaste }
+		}
+		event_target:lover_one = { add_spouse = event_target:lover_two }
+	}
+
+	option = { # it entertains me
+		name = EVTOPTCseclusion6
+		tooltip_info = lustful
+		ai_chance = { factor = 100 }
+		custom_tooltip = { text = EVTOPTCseclusion6_TT }
+		trigger = { trait = lustful }
+		hidden_tooltip = {
+			random_list = {
+				50 = { }
+				50 = { character_event = { id = seclusion.7 days = 60 } }
+			}
+		}
+	}
+}
+
+# seclusion.7 The grateful lovers
+# The lovers thank the ruler for letting them be.
+# Scope: ROOT is the secluded ruler. Fired by seclusion.6.
+character_event = {
+	id = seclusion.7
+	picture = GFX_evt_castle_construction
+	desc = EVTDESCseclusion7
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:lover_one = { any_lover = { character = event_target:lover_two } }
+	}
+
+	option = { # receive gratitude
+		name = EXCELLENT
+		add_favor = event_target:lover_one
+		add_favor = event_target:lover_two
+		reverse_opinion = { who = event_target:lover_one modifier = opinion_grateful years = 5 }
+		reverse_opinion = { who = event_target:lover_two modifier = opinion_grateful years = 5 }
+	}
+}
+
+# seclusion.8 Boredom and a courtier
+# Bored, the ruler considers a courtier as a lover (also used by sway,
+# WHG_sway_events).
+# Scope: ROOT is the ruler. Fired by the seclusion list and sway.
+character_event = {
+	id = seclusion.8
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_intrigue
+
+	desc = {
+		text = EVTDESCseclusion8
+		trigger = {
+			NOT = { has_character_flag = seclusion_lazy_seduction_V2@event_target:target_courtier }
+		}
+	}
+	desc = {
+		text = EVTDESCseclusion8_sway_version
+		trigger = { has_character_flag = seclusion_lazy_seduction_V2@event_target:target_courtier }
+	}
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = seclusion_lazy_seduction
+		if = { # For Sway event-edge case...
+			limit = {
+				has_character_flag = seclusion_lazy_seduction_V2@persistent_event_target:sway_target
+			}
+			persistent_event_target:sway_target = { save_event_target_as = target_courtier }
+			break = yes
+		}
+		random_realm_character = {
+			limit = {
+				is_adult = yes
+				is_opposite_sex = ROOT
+				reverse_opinion = { who = ROOT value = 0 }
+				at_location = ROOT
+				has_character_modifier = in_seclusion
+				is_married = no
+				is_consort = no
+				has_lover = no
+				can_marry = yes
+			}
+			preferred_limit = {
+				character = persistent_event_target:sway_target # For Sway events...
+			}
+			save_event_target_as = target_courtier
+		}
+	}
+
+	option = { # go for it
+		name = EVTOPTAseclusion8
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 10 trait = lustful }
+
+			modifier = { factor = 2 trait = proud }
+
+			modifier = { factor = 2 trait = brave }
+		}
+		event_target:target_courtier = { character_event = { id = seclusion.9 } }
+	}
+
+	option = { # nah
+		name = EVTOPTBseclusion8
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 10 trait = craven }
+
+			modifier = { factor = 5 trait = shy }
+		}
+	}
+}
+
+# seclusion.9 A lewd suggestion
+# A courtier suggests killing time in the bedchamber.
+# Scope: ROOT is the courtier asked, FROM the suitor. Fired by seclusion.8.
+character_event = {
+	id = seclusion.9
+	picture = GFX_evt_whispers
+	desc = EVTDESCseclusion9
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = { # have some fun
+		name = EVTOPTAseclusion9
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 10 trait = lustful }
+
+			modifier = { factor = 2 trait = proud }
+
+			modifier = { factor = 2 trait = brave }
+		}
+		add_lover = FROM
+		hidden_tooltip = { FROM = { character_event = { id = seclusion.10 days = 1 } } }
+	}
+
+	option = { # respectfully disagree
+		name = EVTOPTBseclusion9
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 10 trait = craven }
+
+			modifier = { factor = 5 trait = shy }
+		}
+		reverse_opinion = { who = FROM modifier = opinion_declined_romance years = 2 }
+		hidden_tooltip = { FROM = { character_event = { id = seclusion.11 days = 1 } } }
+	}
+}
+
+# seclusion.10 Suggestion accepted
+# The courtier said yes.
+# Scope: ROOT is the suitor, FROM the courtier. Fired by seclusion.9.
+character_event = {
+	id = seclusion.10
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	desc = {
+		text = EVTDESCseclusion10
+		trigger = {
+			NOT = { has_character_flag = seclusion_lazy_seduction_V2@event_target:target_courtier }
+		}
+	}
+	desc = {
+		text = EVTDESCseclusion10_sway_version
+		trigger = { has_character_flag = seclusion_lazy_seduction_V2@event_target:target_courtier }
+	}
+
+	option = {
+		name = EVTOPTAseclusion10
+		tooltip = { add_lover = FROM }
+		clr_character_flag = seclusion_lazy_seduction_V2@event_target:target_courtier
+	}
+}
+
+# seclusion.11 Suggestion declined
+# The courtier said no.
+# Scope: ROOT is the suitor, FROM the courtier. Fired by seclusion.9.
+character_event = {
+	id = seclusion.11
+	picture = GFX_evt_bad_news
+	desc = EVTDESCseclusion11
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAseclusion11
+		tooltip = { opinion = { who = FROM modifier = opinion_declined_romance years = 2 } }
+	}
+}
+
+# seclusion.12 Nightmares
+# The people outside haunt the ruler's sleep: open the gates, harden the
+# heart, or decide only the chosen survive.
+# Scope: ROOT is the secluded ruler. Fired by the seclusion list
+# (seclusion.100).
+character_event = {
+	id = seclusion.12
+	picture = GFX_evt_shadow
+	desc = EVTDESCseclusion12
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = seclusion_nightmares
+	}
+
+	# Open the gates
+	option = {
+		name = EVTOPTAseclusion12
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 0.5 trait = craven }
+
+			modifier = { factor = 0.5 trait = paranoid }
+
+			modifier = {
+				factor = 0.5
+				location = {
+					OR = {
+						disease = bubonic_plague
+						disease = nurgles_rot
+						disease = creeping_buboes
+					}
+				}
+			}
+
+			modifier = { factor = 0.5 location = { disease = typhoid_fever } }
+
+			modifier = { factor = 0.5 location = { disease = tuberculosis } }
+
+			modifier = { factor = 0.5 location = { disease = small_pox } }
+
+			modifier = { factor = 2 trait = brave }
+
+			modifier = { factor = 2 trait = charitable }
+
+			modifier = { factor = 2 trait = kind }
+
+			modifier = {
+				factor = 0
+				OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 trait = stubborn }
+			}
+		}
+		#This is a copy paste from the decision to open the gates
+		clr_character_flag = do_not_disturb
+		clr_character_flag = exposed_to_outside
+		clr_character_flag = seclusion_piling_corpses
+		clr_character_flag = seclusion_lazy_seduction
+		clr_character_flag = seclusion_nightmares
+		clr_character_flag = seclusion_gained_friend
+		clr_character_flag = seclusion_child_has_lover
+		clr_character_flag = seclusion_tunnel
+		clr_character_flag = seclusion_food_events
+
+		custom_tooltip = { text = open_the_gates_info_tooltip }
+		hidden_tooltip = {
+			clr_character_flag = seclusion_events_on
+			remove_character_modifier = in_seclusion
+			character_event = { id = seclusion.117 days = 40 random = 20 } #clears starvation modifiers
+			any_courtier = {
+				clr_character_flag = seclusion_events_on
+				remove_character_modifier = in_seclusion
+				character_event = { id = seclusion.117 days = 40 random = 20 } #clears starvation modifiers
+			}
+		}
+		if = {
+			limit = { has_character_modifier = secluded_revelry }
+			remove_character_modifier = secluded_revelry
+		}
+		if = {
+			limit = { has_character_modifier = savoring_the_end_days }
+			remove_character_modifier = savoring_the_end_days
+		}
+		add_character_modifier = { name = recently_opened_gates duration = 365 }
+	}
+
+	option = {
+		name = EVTOPTBseclusion12
+		custom_tooltip = { text = EVTOPTBseclusion12_TT }
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 2 trait = craven }
+
+			modifier = { factor = 2 trait = paranoid }
+
+			modifier = {
+				factor = 0
+				OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 trait = stubborn }
+			}
+		}
+		if = { limit = { trait = depressed } prestige = -100 break = yes }
+		if = {
+			limit = { trait = stressed NOT = { trait = depressed } }
+			add_trait = depressed
+			break = yes
+		}
+		if = {
+			limit = { NOT = { trait = stressed } trait = craven }
+			add_trait = stressed
+			break = yes
+		}
+		if = {
+			limit = { NOT = { trait = craven } NOT = { trait = brave } NOT = { trait = berserker } }
+			add_trait = craven
+			break = yes
+		}
+		if = { limit = { trait = brave } remove_trait = brave }
+	}
+
+	option = {
+		name = EVTOPTCseclusion12
+		tooltip_info = stubborn
+		ai_chance = { factor = 200 }
+		trigger = { trait = stubborn }
+	}
+
+	option = {
+		name = EVTOPTDseclusion12
+		tooltip_info = lunatic
+		ai_chance = { factor = 200 }
+		trigger = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+	}
+}
+
+# seclusion.13 A new friend
+# Close quarters make a friend of a courtier.
+# Scope: ROOT is the secluded ruler. Fired by the seclusion list
+# (seclusion.100).
+character_event = {
+	id = seclusion.13
+	picture = GFX_evt_council
+	desc = EVTDESCseclusion13
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = seclusion_gained_friend
+		random_courtier = {
+			limit = {
+				at_location = ROOT
+				has_character_modifier = in_seclusion
+				NOT = { is_friend = ROOT }
+				NOT = { is_rival = ROOT }
+				opinion = { who = ROOT value = 0 }
+				OR = {
+					AND = { age = 6 NOT = { age = 16 } ROOT = { age = 6 NOT = { age = 16 } } }
+					AND = { age = 16 ROOT = { age = 16 } }
+				}
+			}
+			save_event_target_as = new_friend
+		}
+	}
+
+	option = {
+		name = EVTOPTAseclusion13
+		add_friend = event_target:new_friend
+	}
+}
+
+# seclusion.14 An epidemic victim at court
+# A secluded courtier has the epidemic: throw them out or stick together.
+# Scope: ROOT is the secluded ruler. Fired by the seclusion list
+# (seclusion.100).
+character_event = {
+	id = seclusion.14
+	picture = GFX_evt_illness
+	desc = EVTDESCseclusion14
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_courtier = {
+			limit = {
+				at_location = ROOT
+				has_character_modifier = in_seclusion
+				NOT = { is_friend = ROOT }
+				has_epidemic_disease_trigger = yes
+			}
+			save_event_target_as = plague_victim
+		}
+	}
+
+	option = {
+		name = EVTOPTAseclusion14
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 2 trait = craven }
+
+			modifier = { factor = 2 trait = paranoid }
+		}
+		if = {
+			limit = {
+				event_target:plague_victim = { has_epidemic_disease_trigger = yes }
+				ai = no
+				NOT = { has_character_flag = achievement_close_call }
+			}
+			set_character_flag = achievement_close_call
+		}
+		event_target:plague_victim = {
+			remove_character_modifier = in_seclusion
+			opinion = { who = ROOT modifier = expelled_me_from_seclusion years = 5 }
+		}
+	}
+
+	option = {
+		name = EVTOPTBseclusion14
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 2 trait = kind }
+
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+}
+
+# seclusion.15 The physician's diagnosis
+# The court physician reports a courtier has the epidemic and asks leave to
+# treat them.
+# Scope: ROOT is the liege. Fired by treatment.32.
+character_event = {
+	id = seclusion.15
+	picture = GFX_evt_illness
+	desc = EVTDESCseclusion15
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:court_physician = { always = yes }
+		event_target:epidemic_victim = { always = yes }
+	}
+
+	option = {
+		name = EVTOPTAseclusion15
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 2 trait = craven }
+
+			modifier = { factor = 2 trait = paranoid }
+
+			modifier = {
+				factor = 5
+				NOT = { opinion = { who = event_target:epidemic_victim value = 0 } }
+			}
+		}
+		if = {
+			limit = {
+				event_target:epidemic_victim = { has_epidemic_disease_trigger = yes }
+				ai = no
+				NOT = { has_character_flag = achievement_close_call }
+			}
+			set_character_flag = achievement_close_call
+		}
+		event_target:epidemic_victim = {
+			remove_character_modifier = in_seclusion
+			opinion = { who = ROOT modifier = expelled_me_from_seclusion years = 5 }
+		}
+	}
+
+	option = {
+		name = EVTOPTBseclusion15
+		ai_chance = {
+			factor = 25
+
+			modifier = { factor = 2 trait = brave }
+
+			modifier = { factor = 2 trait = charitable }
+
+			modifier = { factor = 2 trait = kind }
+
+			modifier = { factor = 5 opinion = { who = event_target:epidemic_victim value = 50 } }
+		}
+		event_target:epidemic_victim = {
+			set_character_flag = seclusion_treatment_approved
+			opinion = { who = ROOT modifier = opinion_grateful years = 5 }
+			custom_tooltip = {
+				text = EVTOPTBseclusion15_TT
+				hidden_tooltip = { character_event = { id = treatment.33 } }
+			}
+		}
+	}
+}
+
+# seclusion.31 A child has a lover outside
+# Hidden. Picks a secluded child of age to have a lover beyond the walls.
+# Scope: ROOT is the secluded ruler. Fired by the seclusion list
+# (seclusion.100).
+character_event = {
+	id = seclusion.31
+
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = seclusion_child_has_lover
+		save_event_target_as = seclusion_parent
+		random_child = {
+			limit = {
+				age = 16
+				NOT = { trait = craven }
+				NOT = { trait = celibate }
+				at_location = ROOT
+				has_character_modifier = in_seclusion
+			}
+			save_event_target_as = seclusion_child
+		}
+		event_target:seclusion_child = { character_event = { id = seclusion.32 } }
+	}
+}
+
+# seclusion.32 Ping the child
+# Hidden. The child asks the parent to leave (seclusion.33).
+# Scope: ROOT is the child, FROM the parent. Fired by seclusion.31.
+character_event = {
+	id = seclusion.32
+	hide_window = yes
+	is_triggered_only = yes
+
+	option = {
+		FROM = { character_event = { id = seclusion.33 } }
+	}
+}
+
+# seclusion.33 The child asks to leave
+# The child begs to leave the keep on a matter of life and death.
+# Scope: ROOT is the parent, FROM the child. Fired by seclusion.32.
+character_event = {
+	id = seclusion.33
+	picture = GFX_evt_quarrel
+	desc = EVTDESCseclusion33
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		trigger = { NOT = { trait = paranoid } }
+		name = EVTOPTAseclusion33
+		hidden_tooltip = { FROM = { character_event = { id = seclusion.34 } } }
+		reverse_opinion = { modifier = let_me_leave who = FROM }
+	}
+	option = {
+		name = EVTOPTBseclusion33
+		FROM = { remove_character_modifier = in_seclusion }
+		FROM = { set_character_flag = seclusion_child_kicked_out }
+		hidden_tooltip = { FROM = { character_event = { id = seclusion.34 } } }
+		reverse_opinion = { modifier = expelled_me_from_seclusion who = FROM }
+	}
+	option = {
+		name = EVTOPTCseclusion33
+		reverse_opinion = { modifier = forbade_me_to_leave who = FROM }
+		hidden_tooltip = {
+			FROM = {
+				random_list = {
+					50 = {
+						#Nothing happens
+						modifier = { factor = 1.5 trait = honest }
+						modifier = { factor = 1.5 trait = content }
+						modifier = { factor = 1.5 trait = chaste }
+					}
+					50 = {
+						#Sneak out
+						modifier = { factor = 1.5 trait = ambitious }
+						modifier = { factor = 1.5 trait = deceitful }
+						modifier = { factor = 1.5 trait = brave }
+						modifier = { factor = 1.5 trait = lustful }
+						modifier = { factor = 0 is_no_females_race = yes }
+						set_character_flag = escaping_seclusion
+						character_event = { id = seclusion.34 }
+						character_event = { id = seclusion.39 days = 5 }
+					}
+				}
+			}
+		}
+	}
+}
+
+# seclusion.34 The child finds the lover
+# Hidden. Creates the peasant lover and sends the child back (seclusion.35).
+# Scope: ROOT is the child. Fired by seclusion.33.
+character_event = {
+	id = seclusion.34
+	hide_window = yes
+	is_triggered_only = yes
+
+	option = {
+		if = {
+			limit = { prefers_men_trigger = yes }
+			create_character = { age = 21 female = no dynasty = none random_traits = yes }
+		}
+		if = {
+			limit = { prefers_men_trigger = no }
+			create_character = { age = 21 female = yes dynasty = none random_traits = yes }
+		}
+		new_character = {
+			# Set Racial Trait
+			character_event = { id = aiclean.31 }
+			add_trait = lustful
+			add_trait = fair
+			remove_trait = chaste
+			remove_trait = ugly
+			save_event_target_as = seclusion_childs_lover
+
+			random_list = {
+				33 = { } #Nothing
+				33 = {
+					set_character_flag = disease_not_serious
+					add_trait = fever
+					character_event = { id = treatment.4 days = 5 random = 10 }
+				}
+				33 = { set_character_flag = lover_is_ill }
+			}
+
+			if = { limit = { ROOT = { trait = homosexual } } add_trait = homosexual }
+
+			add_lover = ROOT
+		}
+
+		if = {
+			limit = { NOT = { has_character_flag = seclusion_child_kicked_out } }
+			FROM = { character_event = { id = seclusion.35 days = 12 } }
+		}
+		if = {
+			limit = { has_character_flag = seclusion_child_kicked_out }
+			character_event = { id = seclusion.36 days = 7 }
+			character_event = { id = seclusion.38 }
+		}
+	}
+}
+
+# seclusion.35 The child returns with a lover
+# The child is back with a ragged peasant lover: bless, hide, or throw them
+# out.
+# Scope: ROOT is the parent, FROM the child. Fired by seclusion.34.
+character_event = {
+	id = seclusion.35
+	border = GFX_event_normal_frame_intrigue
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes
+
+	desc = {
+		trigger = {
+			FROM = { NOT = { has_character_flag = escaping_seclusion } }
+			FROM = { NOT = { trait = homosexual } }
+		}
+		text = EVTDESCseclusion35_A
+	}
+	desc = {
+		trigger = {
+			OR = {
+				FROM = { has_character_flag = escaping_seclusion }
+				FROM = { trait = homosexual }
+			}
+		}
+		text = EVTDESCseclusion35_B
+	}
+
+	immediate = {
+		event_target:seclusion_childs_lover = {
+			add_character_modifier = { name = in_seclusion duration = -1 }
+		}
+	}
+
+	#Stay and get married
+	option = {
+		trigger = {
+			FROM = {
+				NOT = { has_character_flag = escaping_seclusion }
+				is_married = no
+				NOT = { trait = homosexual }
+			}
+			NOT = { trait = paranoid }
+		}
+
+		name = EVTOPTAseclusion35
+		FROM = {
+			if = {
+				limit = { is_female = yes }
+				add_spouse_matrilineal = event_target:seclusion_childs_lover
+			}
+			if = { limit = { is_female = no } add_spouse = event_target:seclusion_childs_lover }
+		}
+		hidden_tooltip = {
+			event_target:seclusion_child = { character_event = { id = seclusion.38 } }
+		}
+		reverse_opinion = { modifier = let_us_stay_in_seclusion who = FROM }
+		reverse_opinion = {
+			modifier = let_us_stay_in_seclusion
+			who = event_target:seclusion_childs_lover
+		}
+	}
+
+	#Stay but don't get married
+	option = {
+		trigger = {
+			FROM = { NOT = { has_character_flag = escaping_seclusion } }
+			NOT = { trait = paranoid }
+		}
+		name = EVTOPTBseclusion35
+		hidden_tooltip = { FROM = { character_event = { id = seclusion.36 } } }
+		hidden_tooltip = {
+			event_target:seclusion_child = { character_event = { id = seclusion.38 } }
+		}
+		reverse_opinion = { modifier = let_us_stay_in_seclusion who = FROM }
+		reverse_opinion = {
+			modifier = let_us_stay_in_seclusion
+			who = event_target:seclusion_childs_lover
+		}
+	}
+
+	#Make the lover go away
+	option = {
+		name = EVTOPTCseclusion35
+		event_target:seclusion_childs_lover = { remove_character_modifier = in_seclusion }
+		event_target:seclusion_child = { add_rival = ROOT }
+		reverse_opinion = { modifier = expelled_lover_from_seclusion who = FROM }
+		FROM = { clr_character_flag = escaping_seclusion }
+	}
+
+	#Make them both go away
+	option = {
+		name = EVTOPTDseclusion35
+		FROM = { remove_character_modifier = in_seclusion }
+		event_target:seclusion_childs_lover = { remove_character_modifier = in_seclusion }
+		hidden_tooltip = { FROM = { character_event = { id = seclusion.36 } } }
+		hidden_tooltip = {
+			event_target:seclusion_child = { character_event = { id = seclusion.38 } }
+		}
+		reverse_opinion = { modifier = expelled_me_from_seclusion who = FROM }
+		FROM = { clr_character_flag = escaping_seclusion }
+	}
+
+	#Let them carry on
+	option = {
+		trigger = { FROM = { has_character_flag = escaping_seclusion } NOT = { trait = paranoid } }
+		name = EVTOPTEseclusion35
+		hidden_tooltip = { FROM = { character_event = { id = seclusion.36 } } }
+		hidden_tooltip = {
+			event_target:seclusion_child = { character_event = { id = seclusion.38 } }
+		}
+		reverse_opinion = { modifier = let_us_stay_in_seclusion who = FROM }
+		FROM = { clr_character_flag = escaping_seclusion }
+	}
+}
+
+# seclusion.36 The banished child
+# Hidden. A child sent away may marry the lover in secret (seclusion.37).
+# Scope: ROOT is the child. Fired by seclusion.34 and seclusion.35.
+character_event = {
+	id = seclusion.36
+	hide_window = yes
+	is_triggered_only = yes
+
+	option = {
+		random_list = {
+			50 = {
+				#Nothing happens
+				modifier = { factor = 1.5 trait = lustful }
+			}
+			50 = {
+				modifier = { factor = 1.5 trait = chaste }
+				modifier = { factor = 0 OR = { is_married = yes trait = homosexual } }
+				event_target:seclusion_parent = {
+					character_event = { id = seclusion.37 days = 14 }
+				}
+			}
+		}
+	}
+}
+
+# seclusion.37 A secret marriage
+# The parent learns the child married the peasant.
+# Scope: ROOT is the parent, FROM the child. Fired by seclusion.36.
+character_event = {
+	id = seclusion.37
+	border = GFX_event_normal_frame_intrigue
+	picture = GFX_evt_spymaster
+
+	desc = {
+		trigger = { FROM = { has_character_modifier = in_seclusion } }
+		text = EVTDESCseclusion37_A
+		picture = GFX_evt_spymaster
+	}
+	desc = {
+		trigger = { FROM = { NOT = { has_character_modifier = in_seclusion } } }
+		text = EVTDESCseclusion37_B
+		picture = GFX_evt_recieve_letter
+	}
+
+	hide_from = yes
+
+	immediate = {
+		if = {
+			limit = { job_spymaster = { always = yes } }
+			job_spymaster = { save_event_target_as = seclusion_informant }
+		}
+		if = {
+			limit = { job_spymaster = { always = no } }
+			random_courtier = { save_event_target_as = seclusion_informant }
+		}
+	}
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAseclusion37
+		FROM = {
+			if = {
+				limit = { is_female = yes }
+				add_spouse_matrilineal = event_target:seclusion_childs_lover
+			}
+			if = { limit = { is_female = no } add_spouse = event_target:seclusion_childs_lover }
+		}
+	}
+}
+
+# seclusion.38 The lover was ill
+# Hidden. If the lover was sick, the child brings the sickness inside.
+# Scope: ROOT is the child. Fired by seclusion.34 and seclusion.35.
+character_event = {
+	id = seclusion.38
+	hide_window = yes
+	is_triggered_only = yes
+
+	option = {
+		if = {
+			limit = { event_target:seclusion_childs_lover = { has_character_flag = lover_is_ill } }
+
+			set_character_flag = exposed_to_outside
+
+			event_target:seclusion_childs_lover = { clr_character_flag = lover_is_ill }
+		}
+	}
+}
+
+# seclusion.39 Ping the sneaky child
+# Hidden. Tells the parent the child slipped out (seclusion.40).
+# Scope: ROOT is the child, FROM the parent. Fired by seclusion.33.
+character_event = {
+	id = seclusion.39
+	hide_window = yes
+	is_triggered_only = yes
+
+	option = {
+		FROM = { character_event = { id = seclusion.40 } }
+	}
+}
+
+# seclusion.40 The child sneaks out
+# Refused, the child has slipped out of the keep anyway.
+# Scope: ROOT is the parent, FROM the child. Fired by seclusion.39.
+character_event = {
+	id = seclusion.40
+	picture = GFX_evt_shadowy_cabal
+	desc = EVTDESCseclusion40
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAseclusion40
+	}
+}
+
+# seclusion.51 Maps of the tunnels
+# The treasurer wants the castle tunnels mapped and maintained. Starts the
+# tunnel chain (52-67).
+# Scope: ROOT is the secluded ruler. Fired by the seclusion list
+# (seclusion.100).
+character_event = {
+	id = seclusion.51
+	picture = GFX_evt_council
+	desc = EVTDESCseclusion51
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = seclusion_tunnel
+		set_character_flag = seclusion_events_on
+		job_treasurer = { save_event_target_as = secluded_steward }
+		ROOT = { save_event_target_as = secluded_friendly_ruler }
+	}
+
+	#Hand over maps
+	option = {
+		name = EVTOPTAseclusion51
+		custom_tooltip = { text = EVTOPTAseclusion51_TT }
+		event_target:secluded_steward = {
+			opinion = { modifier = opinion_took_my_advice who = ROOT }
+		}
+		hidden_tooltip = {
+			event_target:secluded_steward = {
+				character_event = { id = seclusion.52 days = 10 random = 5 }
+			}
+		}
+	}
+
+	#Hand over FALSE maps
+	option = {
+		tooltip_info = intrigue
+		name = EVTOPTBseclusion51
+		custom_tooltip = { text = EVTOPTBseclusion51_TT }
+
+		trigger = {
+			OR = { trait = paranoid intrigue = 12 }
+			event_target:secluded_steward = {
+				OR = { trait = deceitful NOT = { opinion = { who = ROOT value = 25 } } }
+			}
+		}
+
+		set_character_flag = did_not_trust_steward
+
+		event_target:secluded_steward = {
+			opinion = { modifier = opinion_took_my_advice who = ROOT }
+			hidden_tooltip = { character_event = { id = seclusion.52 days = 10 random = 5 } }
+		}
+	}
+
+	#Do nothing
+	option = {
+		name = EVTOPTCseclusion51
+		custom_tooltip = { text = EVTOPTCseclusion51_TT }
+
+		if = { limit = { NOT = { trait = paranoid } } add_trait = paranoid }
+	}
+}
+
+# seclusion.52 Treasurer ping
+# Hidden. Some time later the treasurer reports back (seclusion.53).
+# Scope: ROOT is the treasurer, FROM the ruler. Fired by seclusion.51.
+character_event = {
+	id = seclusion.52
+
+	is_triggered_only = yes
+
+	hide_window = yes
+
+	immediate = {
+		FROM = { character_event = { id = seclusion.53 } }
+	}
+}
+
+# seclusion.53 Someone uses the tunnels
+# Signs of intruders in the tunnels: ambush them or seal the tunnels.
+# Scope: ROOT is the ruler, FROM the treasurer. Fired by seclusion.52.
+character_event = {
+	id = seclusion.53
+	picture = GFX_evt_emissary
+	desc = EVTDESCseclusion53
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes
+
+	#Plan an ambush
+	option = {
+		name = EVTOPTAseclusion53
+		custom_tooltip = { text = EVTOPTAseclusion53_TT }
+		hidden_tooltip = { character_event = { id = seclusion.54 days = 10 } }
+	}
+
+	#Seal the tunnels!
+	option = {
+		name = EVTOPTBseclusion53
+		custom_tooltip = { text = EVTOPTBseclusion53_TT }
+
+		clr_character_flag = did_not_trust_steward
+
+		if = {
+			limit = { NOR = { trait = brave trait = craven trait = berserker } }
+			random = {
+				chance = 45
+				add_trait = craven
+				hidden_tooltip = { character_event = { id = 38257 } } # Notify craven
+			}
+		}
+		if = { limit = { trait = brave } random = { chance = 45 remove_trait = brave } }
+	}
+}
+
+# seclusion.54 The tunnel lurker
+# Hidden. Creates the lurker: a lover, a rebel leader or an assassin.
+# Scope: ROOT is the ruler. Fired by seclusion.53.
+character_event = {
+	id = seclusion.54
+
+	is_triggered_only = yes
+
+	hide_window = yes
+
+	#Create Random Person: a lover, instigator or assassin
+	immediate = {
+		random_list = {
+			10 = {
+				modifier = { factor = 0 is_female = no prefers_men_trigger = no }
+				create_character = {
+					female = no
+					age = 25
+					random_traits = yes
+					attributes = { intrigue = 12 diplomacy = 10 }
+					trait = robust
+					trait = homosexual
+					dynasty = none
+					religion = ROOT
+					culture = ROOT
+					race = ROOT
+					health = 7
+				}
+				new_character = {
+					# Set Racial Trait
+					character_event = { id = aiclean.31 }
+					save_event_target_as = captured_sneaker
+					remove_trait = homosexual
+				}
+			}
+			10 = {
+				modifier = { factor = 0 is_female = no prefers_men_trigger = no }
+				create_character = {
+					female = no
+					age = 19
+					random_traits = yes
+					attributes = { intrigue = 9 diplomacy = 9 martial = 7 }
+					trait = robust
+					trait = lustful
+					dynasty = none
+					religion = ROOT
+					culture = ROOT
+					race = ROOT
+					health = 7
+				}
+				new_character = {
+					# Set Racial Trait
+					character_event = { id = aiclean.31 }
+					save_event_target_as = captured_sneaker
+					remove_trait = homosexual
+				}
+			}
+			10 = {
+				modifier = { factor = 0 is_female = yes prefers_men_trigger = yes }
+				create_character = {
+					female = yes
+					age = 33
+					random_traits = yes
+					attributes = { martial = 12 diplomacy = 10 }
+					trait = lustful
+					dynasty = none
+					religion = ROOT
+					culture = ROOT
+					race = ROOT
+					health = 7
+				}
+				new_character = {
+					# Set Racial Trait
+					character_event = { id = aiclean.31 }
+					save_event_target_as = captured_sneaker
+					remove_trait = homosexual
+				}
+			}
+			10 = {
+				modifier = { factor = 0 is_female = yes prefers_men_trigger = yes }
+				create_character = {
+					female = yes
+					age = 19
+					random_traits = yes
+					attributes = { intrigue = 13 diplomacy = 14 }
+					trait = shrewd
+					trait = poet
+					dynasty = none
+					religion = ROOT
+					culture = ROOT
+					race = ROOT
+					health = 7
+				}
+				new_character = {
+					# Set Racial Trait
+					character_event = { id = aiclean.31 }
+					save_event_target_as = captured_sneaker
+					remove_trait = homosexual
+				}
+			}
+			10 = {
+				modifier = { factor = 0 is_female = yes prefers_men_trigger = yes }
+				create_character = {
+					female = yes
+					age = 52
+					random_traits = yes
+					attributes = { intrigue = 13 learning = 14 }
+					trait = lustful
+					trait = gardener
+					dynasty = none
+					religion = ROOT
+					culture = ROOT
+					race = ROOT
+					health = 7
+				}
+				new_character = {
+					# Set Racial Trait
+					character_event = { id = aiclean.31 }
+					save_event_target_as = captured_sneaker
+					remove_trait = homosexual
+				}
+			}
+		}
+		event_target:captured_sneaker = {
+			random_list = {
+				10 = {
+					modifier = { factor = 0 is_female = no }
+					modifier = {
+						factor = 0.1
+						ROOT = { any_courtier = { has_nickname = nick_the_silent } }
+					}
+					give_nickname = nick_the_silent
+				}
+				10 = {
+					modifier = {
+						factor = 0.1
+						ROOT = { any_courtier = { has_nickname = nick_the_hollow } }
+					}
+					give_nickname = nick_the_hollow
+				}
+				10 = {
+					modifier = {
+						factor = 0.1
+						ROOT = { any_courtier = { has_nickname = nick_the_recluse } }
+					}
+					give_nickname = nick_the_recluse
+				}
+				10 = {
+					modifier = { factor = 0 is_female = yes }
+					modifier = {
+						factor = 0.1
+						ROOT = { any_courtier = { has_nickname = nick_the_bard } }
+					}
+					give_nickname = nick_the_bard
+				}
+				10 = {
+					modifier = {
+						factor = 0.1
+						ROOT = { any_courtier = { has_nickname = nick_the_troubadour } }
+					}
+					give_nickname = nick_the_troubadour
+				}
+				10 = {
+					modifier = {
+						factor = 0.1
+						ROOT = { any_courtier = { has_nickname = nick_the_fox } }
+					}
+					give_nickname = nick_the_fox
+				}
+				10 = { modifier = { factor = 0 is_female = yes } give_nickname = nick_the_handsome }
+			}
+
+			random_list = {
+				10 = {
+					modifier = {
+						factor = 1.5
+						event_target:secluded_friendly_ruler = {
+							OR = { trait = lustful trait = kind }
+						}
+					}
+
+					set_character_flag = sneaky_lover
+				}
+
+				10 = {
+					set_character_flag = sneaky_revolutionary
+					modifier = {
+						factor = 1.5
+						event_target:secluded_friendly_ruler = {
+							OR = { trait = greedy trait = cruel trait = wroth trait = impaler }
+						}
+					}
+				}
+
+				60 = {
+					modifier = {
+						factor = 0
+						NOT = { has_character_flag = did_not_trust_steward }
+						event_target:secluded_steward = {
+							NOR = {
+								trait = deceitful
+								NOT = { opinion = { who = ROOT value = 25 } }
+							}
+						}
+					}
+
+					set_character_flag = sneaky_assassin
+					remove_trait = honest
+				}
+			}
+			add_trait = stressed
+			character_event = { id = seclusion.63 }
+		}
+		if = {
+			limit = { is_female = yes prefers_men_trigger = no }
+			event_target:captured_sneaker = { add_trait = homosexual }
+		}
+		if = {
+			limit = { is_female = no prefers_men_trigger = yes }
+			event_target:captured_sneaker = { add_trait = homosexual }
+		}
+	}
+}
+
+# seclusion.63 Captured: ping
+# Hidden. Tells the ruler the lurker was caught (seclusion.55).
+# Scope: ROOT is the lurker. Fired by seclusion.54.
+character_event = {
+	id = seclusion.63
+
+	is_triggered_only = yes
+
+	hide_window = yes
+
+	immediate = {
+		event_target:secluded_friendly_ruler = { character_event = { id = seclusion.55 } }
+	}
+}
+
+# seclusion.55 A lurker caught
+# The guards bring in a starved, jumpy lurker: question, imprison or execute
+# them.
+# Scope: ROOT is the ruler. Fired by seclusion.63.
+character_event = {
+	id = seclusion.55
+	picture = GFX_evt_drunk
+	desc = EVTDESCseclusion55
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+	hide_from = no
+
+	trigger = {
+		has_character_modifier = in_seclusion
+	}
+
+	#Hear them out
+	option = {
+		name = EVTOPTAseclusion55
+		custom_tooltip = { text = EVTOPTAseclusion55_TT }
+		hidden_tooltip = {
+			event_target:captured_sneaker = { character_event = { id = seclusion.61 days = 2 } }
+		}
+	}
+
+	#Imprison them!
+	option = {
+		name = EVTOPTBseclusion55
+		custom_tooltip = { text = EVTOPTBseclusion55_TT }
+		hidden_tooltip = {
+			event_target:captured_sneaker = {
+				imprison = ROOT
+
+				# Could lead to pitchforks coming at you:
+				if = {
+					limit = { has_character_flag = sneaky_revolutionary }
+					character_event = { id = seclusion.62 days = 30 random = 10 }
+				}
+			}
+		}
+	}
+
+	#Execute them, quickly!
+	option = {
+		name = EVTOPTCseclusion55
+		custom_tooltip = { text = EVTOPTCseclusion55_TT }
+
+		event_target:captured_sneaker = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+			death = { death_reason = death_execution_beheading Killer = ROOT }
+
+			hidden_tooltip = {
+				clr_character_flag = did_not_trust_steward
+				if = {
+					limit = { has_character_flag = sneaky_lover }
+					#event for grieving lover?
+				}
+			}
+		}
+	}
+}
+
+# seclusion.61 Hearing them out: ping
+# Hidden. Sends the lurker's story to the ruler (seclusion.56).
+# Scope: ROOT is the lurker. Fired by seclusion.55.
+character_event = {
+	id = seclusion.61
+
+	is_triggered_only = yes
+
+	hide_window = yes
+
+	trigger = {
+		is_alive = yes
+	}
+
+	option = {
+		name = EVTOPTAseclusion56
+		hidden_tooltip = {
+			event_target:secluded_friendly_ruler = { character_event = { id = seclusion.56 } }
+		}
+	}
+}
+
+# seclusion.62 The lurker acts
+# Hidden. A lurker at court or in prison makes their move: rebels, an assassin
+# or a seduction.
+# Scope: ROOT is the lurker. Fired by seclusion.55 and seclusion.56.
+character_event = {
+	id = seclusion.62
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_tooltip = {
+			# Could lead to pitchforks coming at you:
+			if = {
+				limit = { has_character_flag = sneaky_revolutionary }
+				event_target:secluded_friendly_ruler = { character_event = { id = seclusion.57 } }
+			}
+			# Could lead to assassination attempt:
+			if = {
+				limit = { has_character_flag = sneaky_assassin }
+				event_target:secluded_friendly_ruler = { character_event = { id = seclusion.58 } }
+			}
+			# Could lead to seduction attempt: add block for prison
+			if = {
+				limit = { has_character_flag = sneaky_lover }
+				event_target:secluded_friendly_ruler = { character_event = { id = seclusion.59 } }
+			}
+		}
+	}
+}
+
+# seclusion.56 The lurker's story
+# The lurker claims a lover at court died; let them join or throw them out.
+# Scope: ROOT is the ruler, FROM the lurker. Fired by seclusion.61.
+character_event = {
+	id = seclusion.56
+	desc = EVTDESCseclusion56
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+	hide_from = no
+
+	#I believe! They join court
+	option = {
+		name = EVTOPTAseclusion56
+		custom_tooltip = { text = EVTOPTAseclusion56_TT }
+
+		if = {
+			limit = { has_character_modifier = in_seclusion }
+			FROM = { add_character_modifier = { name = in_seclusion duration = -1 } }
+		}
+		FROM = {
+			hidden_tooltip = {
+				remove_trait = stressed
+				character_event = { id = seclusion.62 days = 25 random = 10 }
+			}
+		}
+		hidden_tooltip = {
+			if = {
+				limit = { FROM = { NOT = { has_character_flag = sneaky_lover } } }
+				set_character_flag = exposed_to_outside
+			}
+			set_character_flag = sneaker_joined_court
+		}
+	}
+
+	#Send them out of seclusion
+	option = {
+		name = EVTOPTBseclusion56
+		custom_tooltip = { text = EVTOPTBseclusion56_TT }
+		FROM = {
+			add_trait = depressed
+			opinion = { who = ROOT modifier = opinion_hate years = 2 }
+			hidden_tooltip = {
+				# Could still lead to pitchforks coming at you:
+				if = {
+					limit = { has_character_flag = sneaky_revolutionary }
+					character_event = { id = seclusion.62 days = 1 }
+				}
+				if = {
+					limit = { NOT = { has_character_flag = sneaky_revolutionary } }
+					clr_character_flag = did_not_trust_steward
+				}
+				event_target:captured_sneaker = { leave_court_effect = yes }
+			}
+		}
+	}
+}
+
+# seclusion.57 Pitchforks in the night
+# The lurker's friends storm the castle through the tunnels.
+# Scope: ROOT is the ruler. Fired by seclusion.62.
+character_event = {
+	id = seclusion.57
+	picture = GFX_evt_peasants
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	desc = { text = EVTDESCseclusion57_A trigger = { has_character_flag = did_not_trust_steward } }
+	desc = {
+		text = EVTDESCseclusion57_B
+		trigger = { NOT = { has_character_flag = did_not_trust_steward } }
+	}
+
+	immediate = {
+		event_target:captured_sneaker = { add_trait = peasant_leader }
+	}
+
+	#OH WTF
+	option = {
+		name = EVTOPTAseclusion57
+		custom_tooltip = { text = EVTOPTAseclusion57_TT }
+
+		hidden_tooltip = {
+			random_list = {
+				#You crushed the rebellion!
+				50 = {
+					modifier = {
+						factor = 1.5
+						has_character_flag = did_not_trust_steward
+						event_target:secluded_steward = {
+							OR = { trait = deceitful NOT = { opinion = { who = ROOT value = 25 } } }
+						}
+					}
+					hidden_tooltip = { character_event = { id = seclusion.60 days = 1 } }
+				}
+
+				#The rebels made it inside the castle
+				50 = {
+					modifier = { factor = 1.5 has_character_flag = did_not_trust_steward }
+
+					hidden_tooltip = { character_event = { id = seclusion.64 days = 1 } }
+				}
+			}
+		}
+	}
+}
+
+# seclusion.58 Footsteps in the corridor
+# Someone is following the ruler at night.
+# Scope: ROOT is the ruler. Fired by seclusion.62.
+character_event = {
+	id = seclusion.58
+	picture = GFX_evt_shadow
+	desc = EVTDESCseclusion58
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	#Oh Shit
+	option = {
+		name = EVTOPTAseclusion58
+		hidden_tooltip = {
+			random_list = {
+				#You kill the assassin!
+				30 = {
+					modifier = { factor = 2 has_character_flag = did_not_trust_steward }
+					modifier = { factor = 1.5 martial = 12 }
+					modifier = { factor = 1.5 trait = duelist }
+					modifier = { factor = 1.5 has_character_modifier = aspiring_duelist }
+
+					character_event = { id = seclusion.65 }
+				}
+
+				#You become wounded
+				30 = {
+					modifier = { factor = 1.5 trait = craven }
+
+					opinion = { who = FROM modifier = opinion_regicide_traitor }
+
+					character_event = { id = seclusion.66 }
+				}
+
+				#You are killed!
+				30 = {
+					modifier = {
+						factor = 1.5
+						event_target:secluded_steward = { trait = deceitful }
+					}
+					modifier = {
+						factor = 1.5
+						event_target:secluded_steward = {
+							NOT = { opinion = { who = ROOT value = 25 } }
+						}
+					}
+					character_event = { id = seclusion.67 }
+				}
+			}
+			clr_character_flag = did_not_trust_steward
+		}
+	}
+}
+
+# seclusion.59 A night visit
+# The lurker comes to the ruler's bedchamber.
+# Scope: ROOT is the ruler. Fired by seclusion.62.
+character_event = {
+	id = seclusion.59
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+	hide_from = no
+
+	trigger = {
+		OR = {
+			AND = { event_target:captured_sneaker = { is_female = yes } prefers_men_trigger = no }
+			AND = { event_target:captured_sneaker = { is_female = no } prefers_men_trigger = yes }
+		}
+	}
+
+	desc = {
+		text = EVTDESCseclusion59_A
+		trigger = { event_target:captured_sneaker = { is_female = yes } }
+	}
+	desc = {
+		text = EVTDESCseclusion59_B
+		trigger = { event_target:captured_sneaker = { is_female = no } }
+	}
+
+	#I like it!
+	option = {
+		name = EVTOPTAseclusion59
+		custom_tooltip = { text = EVTOPTAseclusion59_TT }
+		event_target:captured_sneaker = {
+			opinion = {
+				who = event_target:secluded_friendly_ruler
+				modifier = opinion_budding_romance
+			}
+		}
+		add_lover = event_target:captured_sneaker
+		hidden_tooltip = {
+			clr_character_flag = did_not_trust_steward
+			clr_character_flag = seclusion_events_on
+		}
+	}
+
+	#I don't think so, I'm sorry
+	option = {
+		name = EVTOPTBseclusion59
+		custom_tooltip = { text = EVTOPTBseclusion59_TT }
+		event_target:captured_sneaker = {
+			opinion = {
+				who = event_target:secluded_friendly_ruler
+				modifier = opinion_budding_friendship
+			}
+		}
+		add_friend = event_target:captured_sneaker
+		hidden_tooltip = {
+			clr_character_flag = did_not_trust_steward
+			clr_character_flag = seclusion_events_on
+		}
+	}
+
+	#Back off!
+	option = {
+		name = EVTOPTCseclusion59
+		custom_tooltip = { text = EVTOPTCseclusion59_TT }
+		event_target:captured_sneaker = {
+			opinion = {
+				who = event_target:secluded_friendly_ruler
+				modifier = opinion_advance_rejected
+				months = 36
+			}
+		}
+		hidden_tooltip = {
+			clr_character_flag = did_not_trust_steward
+			clr_character_flag = seclusion_events_on
+		}
+	}
+}
+
+# seclusion.60 The rebels crushed
+# The ruler and the guards cut down the rebels.
+# Scope: ROOT is the ruler. Fired by seclusion.57.
+character_event = {
+	id = seclusion.60
+	picture = GFX_evt_pale_rider
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	desc = { text = EVTDESCseclusion60_A trigger = { has_character_flag = did_not_trust_steward } }
+	desc = {
+		text = EVTDESCseclusion60_B
+		trigger = { NOT = { has_character_flag = did_not_trust_steward } }
+	}
+
+	#Victory!
+	option = {
+		name = EVTOPTAseclusion60
+		custom_tooltip = { text = EVTOPTAseclusion60_TT }
+		if = { limit = { NOT = { trait = cynical } } add_trait = cynical }
+		change_martial = 1
+		add_character_modifier = { name = crusched_rebels_from_seclusion duration = 730 }
+
+		if = {
+			limit = {
+				event_target:captured_sneaker = {
+					AND = { prisoner = no has_character_flag = sneaker_joined_court }
+				}
+			}
+			event_target:captured_sneaker = {
+				prisoner = yes
+				clr_character_flag = sneaker_joined_court
+			}
+		}
+		hidden_tooltip = {
+			clr_character_flag = did_not_trust_steward
+			clr_character_flag = seclusion_events_on
+		}
+	}
+}
+
+# seclusion.64 The rebels wreak havoc
+# The rebels are beaten but the ruler is maimed.
+# Scope: ROOT is the ruler. Fired by seclusion.57.
+character_event = {
+	id = seclusion.64
+	picture = GFX_evt_bloody_man
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	desc = { text = EVTDESCseclusion64_A trigger = { has_character_flag = did_not_trust_steward } }
+	desc = {
+		text = EVTDESCseclusion64_B
+		trigger = { NOT = { has_character_flag = did_not_trust_steward } }
+	}
+
+	#This sucks
+	option = {
+		name = EVTOPTAseclusion64
+		custom_tooltip = { text = EVTOPTAseclusion64_TT }
+		hidden_tooltip = {
+			add_maimed_trait_effect = yes
+			if = {
+				limit = { event_target:captured_sneaker = { prisoner = no } }
+
+				event_target:captured_sneaker = {
+					leave_court_effect = yes
+					remove_character_modifier = in_seclusion
+				}
+			}
+			clr_character_flag = did_not_trust_steward
+			clr_character_flag = seclusion_events_on
+		}
+
+		if = { limit = { NOT = { trait = cynical } } add_trait = cynical }
+		trigger = { event_target:captured_sneaker = { prisoner = no } }
+	}
+	#This sucks + the lurker was in prison
+	option = {
+		name = EVTOPTBseclusion64
+		custom_tooltip = { text = EVTOPTBseclusion64_TT }
+		hidden_tooltip = {
+			add_maimed_trait_effect = yes
+			clr_character_flag = did_not_trust_steward
+			clr_character_flag = seclusion_events_on
+		}
+		trigger = { event_target:captured_sneaker = { prisoner = yes } }
+		if = { limit = { NOT = { trait = cynical } } add_trait = cynical }
+	}
+}
+
+# seclusion.65 The assassin killed
+# The ruler ambushes and kills the assassin.
+# Scope: ROOT is the ruler. Fired by seclusion.58.
+character_event = {
+	id = seclusion.65
+	picture = GFX_evt_whispers
+	desc = EVTDESCseclusion65
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	#Victory!
+	option = {
+		name = EVTOPTAseclusion65
+		custom_tooltip = { text = EVTOPTAseclusion65_TT }
+		add_character_modifier = { name = survived_assassination duration = 48 }
+		event_target:captured_sneaker = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+			death = { death_reason = death_duel }
+		}
+		clr_character_flag = seclusion_events_on
+	}
+}
+
+# seclusion.66 Wounded by the assassin
+# The guards save the ruler, gravely hurt.
+# Scope: ROOT is the ruler. Fired by seclusion.58.
+character_event = {
+	id = seclusion.66
+	picture = GFX_evt_into_the_dungeon
+	desc = EVTDESCseclusion66
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	#Meh
+	option = {
+		name = EVTOPTAseclusion66
+		custom_tooltip = { text = EVTOPTAseclusion66_TT }
+		add_character_modifier = { name = survived_assassination duration = 48 }
+		event_target:captured_sneaker = { prisoner = yes }
+		hidden_tooltip = { add_maimed_trait_effect = yes }
+		clr_character_flag = seclusion_events_on
+	}
+}
+
+# seclusion.67 Killed by the assassin
+# The assassin's dagger finds its mark.
+# Scope: ROOT is the ruler. Fired by seclusion.58.
+character_event = {
+	id = seclusion.67
+	picture = GFX_evt_bloody_man
+	desc = EVTDESCseclusion67
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	#Damnit
+	option = {
+		name = EVTOPTAseclusion67
+		custom_tooltip = { text = EVTOPTAseclusion67_TT }
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+		death = { death_reason = death_murder_unknown killer = FROM }
+		hidden_tooltip = {
+			event_target:captured_sneaker = {
+				add_character_modifier = { name = suspected_assassin months = 48 }
+				remove_character_modifier = in_seclusion
+				leave_court_effect = yes
+			}
+		}
+	}
+}
+
+# seclusion.71 The comforts of confinement
+# The bored court wants revelry. Starts the masque (72-83): during the Red Pox
+# or a Nurgle plague, a masked guest joins the party. It is a herald of the
+# Plague God.
+# Scope: ROOT is the secluded ruler. Fired by the seclusion list
+# (seclusion.100).
+narrative_event = {
+	id = seclusion.71
+	title = EVTNAMEseclusion71
+	picture = GFX_evt_bring_out_your_dead
+	border = GFX_event_narrative_frame_religion
+
+	only_rulers = yes
+
+	desc = {
+		text = EVTDESCseclusion71_A # PIOUS - will prio over benevolent_trigger
+		trigger = { is_pious_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseclusion71_B # BENEVOLENT - will prio over impious_trigger
+		trigger = { is_benevolent_trigger = yes is_pious_trigger = no }
+	}
+	desc = {
+		text = EVTDESCseclusion71_C # EVIL - will prio over impious
+		trigger = { is_evil_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseclusion71_D # IMPIOUS - will be rare?
+		trigger = { is_impious_trigger = yes is_evil_trigger = no }
+	}
+	desc = {
+		text = EVTDESCseclusion71_E # Fallback (neutral)
+		trigger = {
+			is_pious_trigger = no
+			is_benevolent_trigger = no
+			is_impious_trigger = no
+			is_evil_trigger = no
+		}
+	}
+
+	immediate = {
+		set_character_flag = seclusion_events_on
+
+		random_courtier = {
+			limit = {
+				is_adult = yes
+				prisoner = no
+				is_incapable = no
+				has_vice_trigger = yes
+				has_character_modifier = in_seclusion
+			}
+			save_event_target_as = bored_courtier_target
+		}
+		random_courtier = {
+			limit = {
+				is_close_relative = yes
+				is_adult = yes
+				prisoner = no
+				is_incapable = no
+				is_pious_trigger = no
+				has_character_modifier = in_seclusion
+			}
+			save_event_target_as = bored_courtier_target
+		}
+		event_target:bored_courtier_target = {
+			add_character_modifier = { name = bright_eyed duration = -1 }
+		}
+		ROOT = { save_event_target_as = secluded_party_host }
+	}
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAseclusion71 # They're right, we should enjoy ourselves
+		custom_tooltip = { text = EVTOPTAseclusion71_TT }
+		set_character_flag = masque_of_red_death
+		scaled_wealth = -1
+
+		if = {
+			limit = { trait = lustful NOT = { trait = greedy } }
+			random = {
+				chance = 30
+				add_trait_greedy_effect = yes
+				remove_trait_charitable_effect = yes
+			}
+		}
+		if = {
+			limit = { NOT = { trait = lustful } }
+			random = { chance = 30 add_trait_lustful_effect = yes remove_trait_chaste_effect = yes }
+		}
+		add_character_modifier = { name = savoring_the_end_days duration = -1 }
+		event_target:bored_courtier_target = {
+			opinion = { modifier = opinion_took_my_advice who = ROOT }
+		}
+		hidden_tooltip = { character_event = { id = seclusion.72 days = 30 random = 10 } }
+	}
+
+	option = { # don't go overboard with the arrangements
+		name = EVTOPTBseclusion71
+		custom_tooltip = { text = EVTOPTBseclusion71_TT }
+		set_character_flag = masque_of_red_death
+
+		add_character_modifier = { name = savoring_the_end_days duration = -1 }
+
+		event_target:bored_courtier_target = {
+			opinion = { modifier = opinion_took_my_advice who = ROOT }
+		}
+		hidden_tooltip = { character_event = { id = seclusion.72 days = 30 random = 10 } }
+		trigger = { NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } }
+	}
+
+	option = { # lunatic option - yes
+		name = EVTOPTEseclusion71
+		custom_tooltip = { text = EVTOPTEseclusion71_TT }
+		set_character_flag = masque_of_red_death
+
+		add_character_modifier = { name = savoring_the_end_days duration = -1 }
+
+		event_target:bored_courtier_target = {
+			opinion = { modifier = opinion_took_my_advice who = ROOT }
+		}
+		hidden_tooltip = { character_event = { id = seclusion.72 days = 30 random = 10 } }
+
+		trigger = { OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } }
+	}
+
+	option = { # lunatic option - no
+		name = EVTOPTFseclusion71
+		custom_tooltip = { text = EVTOPTFseclusion71_TT }
+
+		trigger = { OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } }
+	}
+
+	option = {
+		name = EVTOPTCseclusion71 # I refuse to have fun while other suffer
+		custom_tooltip = { text = EVTOPTCseclusion71_TT }
+		trigger = {
+			OR = { is_benevolent_trigger = yes is_pious_trigger = yes }
+			NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+			NOT = { trait = depressed }
+		}
+	}
+
+	# Opt out - I am boring
+	option = {
+		name = EVTOPTDseclusion71
+		custom_tooltip = { text = EVTOPTDseclusion71_TT }
+		trigger = {
+			OR = { AND = { is_benevolent_trigger = no is_pious_trigger = no } trait = depressed }
+			NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+		}
+	}
+}
+
+# seclusion.72 The revelry
+# The castle is spruced up and the party goes on, or is called off.
+# Scope: ROOT is the ruler with masque_of_red_death. Mean time to happen.
+character_event = {
+	id = seclusion.72
+	picture = GFX_evt_castle_construction
+	border = GFX_event_normal_frame_religion
+
+	only_rulers = yes
+
+	trigger = {
+		has_character_flag = masque_of_red_death
+		OR = {
+			event_target:bored_courtier_target = { is_alive = yes }
+			any_courtier = {
+				is_adult = yes
+				prisoner = no
+				is_incapable = no
+				has_vice_trigger = yes
+				has_character_modifier = in_seclusion
+			}
+			any_courtier = {
+				is_close_relative = yes
+				is_adult = yes
+				prisoner = no
+				is_incapable = no
+				is_pious_trigger = no
+				has_character_modifier = in_seclusion
+			}
+		}
+	}
+
+	desc = {
+		text = EVTDESCseclusion72_A # we've spruced up the castle
+		trigger = { NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } }
+	}
+	desc = {
+		text = EVTDESCseclusion72_B # we've spruced up the castle - lunatic version
+		trigger = { OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } }
+	}
+
+	immediate = {
+		if = {
+			limit = { event_target:bored_courtier_target = { is_alive = no } } # fetch new event_target if old one is dead (preferably a relative)
+			random_courtier = {
+				limit = {
+					is_adult = yes
+					prisoner = no
+					is_incapable = no
+					has_vice_trigger = yes
+					has_character_modifier = in_seclusion
+				}
+				save_event_target_as = bored_courtier_target
+			}
+			random_courtier = {
+				limit = {
+					is_close_relative = yes
+					is_adult = yes
+					prisoner = no
+					is_incapable = no
+					is_pious_trigger = no
+					has_character_modifier = in_seclusion
+				}
+				save_event_target_as = bored_courtier_target
+			}
+			event_target:bored_courtier_target = {
+				add_character_modifier = { name = bright_eyed duration = -1 }
+			}
+		}
+	}
+
+	is_triggered_only = yes
+
+	option = { # Can you do something about the lights?
+		name = EVTOPTAseclusion72
+		custom_tooltip = { text = EVTOPTAseclusion72_TT }
+
+		scaled_wealth = -1
+		hidden_tooltip = { character_event = { id = seclusion.73 days = 30 random = 15 } }
+
+		if = {
+			limit = { NOT = { trait = charitable } }
+			random = { chance = 30 add_trait_charitable_effect = yes }
+		}
+		if = {
+			limit = { has_character_modifier = savoring_the_end_days }
+			remove_character_modifier = savoring_the_end_days
+		}
+		add_character_modifier = { name = secluded_revelry duration = -1 }
+		event_target:bored_courtier_target = {
+			opinion = { who = ROOT modifier = opinion_budding_friendship }
+		}
+		hidden_effect = {
+			opinion = {
+				who = event_target:bored_courtier_target
+				modifier = opinion_budding_friendship
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTBseclusion72 # you've made life in seclusion bearable!
+		custom_tooltip = { text = EVTOPTBseclusion72_TT }
+
+		event_target:bored_courtier_target = {
+			opinion = { who = ROOT modifier = opinion_budding_friendship }
+		}
+		hidden_effect = {
+			opinion = {
+				who = event_target:bored_courtier_target
+				modifier = opinion_budding_friendship
+			}
+		}
+
+		hidden_tooltip = { character_event = { id = seclusion.73 days = 30 random = 15 } }
+	}
+
+	# Perhaps enough is enough - CHAIN END.
+	option = {
+		name = EVTOPTCseclusion72
+		custom_tooltip = { text = EVTOPTCseclusion72_TT }
+		clr_character_flag = masque_of_red_death
+	}
+}
+
+# seclusion.73 Strangers among us
+# Hidden. Creates the masked stranger.
+# Scope: ROOT is the party host. Fired by seclusion.72.
+character_event = {
+	id = seclusion.73
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = masque_of_red_death
+	}
+
+	immediate = {
+		random_list = {
+			10 = {
+				create_character = {
+					female = no
+					age = 21
+					random_traits = no
+					attributes = { intrigue = 15 martial = 10 diplomacy = 9 }
+					dynasty = none
+					trait = elusive_shadow
+					trait = arbitrary
+					trait = patient
+					religion = ROOT
+					culture = ROOT
+					race = ROOT
+					health = 7
+				}
+				new_character = {
+					# Set Racial Trait
+					character_event = { id = aiclean.31 }
+					will_not_marry_effect = yes
+					add_character_modifier = { name = in_seclusion duration = -1 }
+					add_character_modifier = { name = attending_masquerade duration = -1 }
+					set_character_flag = immune_bubonic_plague
+					save_event_target_as = partying_stranger
+				}
+			}
+			10 = {
+				create_character = {
+					female = yes
+					age = 21
+					random_traits = no
+					attributes = { intrigue = 15 martial = 10 diplomacy = 9 }
+					dynasty = none
+					trait = elusive_shadow
+					trait = arbitrary
+					trait = patient
+					religion = ROOT
+					culture = ROOT
+					race = ROOT
+					health = 7
+				}
+				new_character = {
+					# Set Racial Trait
+					character_event = { id = aiclean.31 }
+					will_not_marry_effect = yes
+					add_character_modifier = { name = in_seclusion duration = -1 }
+					add_character_modifier = { name = attending_masquerade duration = -1 }
+					set_character_flag = immune_bubonic_plague
+					save_event_target_as = partying_stranger
+				}
+			}
+		}
+		event_target:secluded_party_host = { character_event = { id = seclusion.75 } }
+	}
+}
+
+# seclusion.75 Who is that?
+# A masked stranger the ruler never invited is at the party.
+# Scope: ROOT is the ruler with masque_of_red_death. Fired by seclusion.73.
+character_event = {
+	id = seclusion.75
+	picture = GFX_evt_suspicious_noble
+	border = GFX_event_normal_frame_religion
+
+	trigger = {
+		has_character_flag = masque_of_red_death
+	}
+
+	hide_new = yes
+	hide_from = yes
+
+	desc = {
+		text = EVTDESCseclusion75_A
+		trigger = {
+			has_character_modifier = in_seclusion
+			NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+		}
+	}
+	desc = {
+		text = EVTDESCseclusion75_B # if you left seclusion
+		picture = GFX_evt_prospering_province
+		trigger = { NOT = { has_character_modifier = in_seclusion } }
+	}
+	desc = {
+		text = EVTDESCseclusion75_C # lunatic
+		trigger = {
+			has_character_modifier = in_seclusion
+			OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+		}
+	}
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAseclusion75 # who is that?
+		custom_tooltip = { text = EVTOPTAseclusion75_TT }
+
+		event_target:partying_stranger = {
+			set_character_flag = marking_flag #to make char show up in option
+		}
+
+		hidden_tooltip = { character_event = { id = seclusion.76 days = 15 } }
+
+		trigger = { has_character_modifier = in_seclusion }
+	}
+
+	option = { # isn't there something off about them?
+		name = EVTOPTBseclusion75
+		custom_tooltip = { text = EVTOPTBseclusion75_TT }
+
+		event_target:partying_stranger = {
+			set_character_flag = marking_flag #to make char show up in option
+		}
+
+		if = {
+			limit = { NOT = { trait = cynical } }
+			random = {
+				chance = 50
+				add_trait_cynical_effect = yes
+				remove_trait_zealous_effect = yes
+			}
+		}
+
+		hidden_tooltip = { character_event = { id = seclusion.76 days = 15 } }
+
+		trigger = { has_character_modifier = in_seclusion }
+	}
+
+	# It was fun while it lasted. But who's that? -  if you have left seclusion
+	option = {
+		name = EVTOPTCseclusion75
+		hidden_tooltip = { character_event = { id = seclusion.77 days = 15 } }
+
+		event_target:partying_stranger = {
+			set_character_flag = marking_flag #to make char show up in option
+		}
+
+		trigger = { NOT = { has_character_modifier = in_seclusion } }
+	}
+}
+
+# seclusion.76 Approaching the stranger
+# The ruler decides how to face the masked guest.
+# Scope: ROOT is the ruler. Fired by seclusion.75.
+character_event = {
+	id = seclusion.76
+	picture = GFX_evt_suspicious_noble
+	border = GFX_event_normal_frame_religion
+
+	only_rulers = yes
+
+	trigger = {
+		has_character_flag = masque_of_red_death
+	}
+
+	desc = {
+		text = EVTDESCseclusion76_A # regular desc
+		trigger = { NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } }
+	}
+	desc = {
+		text = EVTDESCseclusion76_B # lunatic desc
+		trigger = { OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } }
+	}
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAseclusion76 # be polite about it
+		custom_tooltip = { text = EVTOPTAseclusion76_TT }
+		event_target:partying_stranger = {
+			set_character_flag = optA
+			hidden_tooltip = { character_event = { id = seclusion.83 days = 10 random = 5 } }
+		}
+		trigger = { NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } }
+	}
+
+	option = { # demand to know who they are
+		name = EVTOPTBseclusion76
+		custom_tooltip = { text = EVTOPTBseclusion76_TT }
+		event_target:partying_stranger = {
+			set_character_flag = optB
+			hidden_tooltip = { character_event = { id = seclusion.83 days = 10 random = 5 } }
+		}
+		trigger = { NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } }
+	}
+
+	# special option - IMMORTAL - see through them!
+	option = {
+		name = EVTOPTCseclusion76
+		custom_tooltip = { text = EVTOPTCseclusion76_TT }
+		tooltip_info = immortal
+		event_target:partying_stranger = {
+			set_character_flag = optC
+			hidden_tooltip = { character_event = { id = seclusion.83 days = 10 random = 5 } }
+		}
+		trigger = { trait = immortal }
+	}
+	# special option - INTRIGUE - see through them!
+	option = {
+		name = EVTOPTDseclusion76
+		custom_tooltip = { text = EVTOPTDseclusion76_TT }
+		tooltip_info = intrigue
+		event_target:partying_stranger = {
+			set_character_flag = optC
+			hidden_tooltip = { character_event = { id = seclusion.83 days = 10 random = 5 } }
+		}
+		trigger = {
+			intrigue = 15
+			NOT = { trait = immortal }
+			NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+		}
+	}
+	# special option - LUNATIC
+	option = {
+		name = EVTOPTEseclusion76
+		custom_tooltip = { text = EVTOPTEseclusion76_TT }
+		event_target:partying_stranger = {
+			set_character_flag = optC
+			hidden_tooltip = { character_event = { id = seclusion.83 days = 10 random = 5 } }
+		}
+		set_character_flag = picked_lunatic_opt
+		trigger = { OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } }
+	}
+}
+
+# seclusion.83 Masque ping
+# Hidden. Routes the ruler's choice to the right meeting (78-80).
+# Scope: ROOT is the ruler. Fired by seclusion.76.
+character_event = {
+	id = seclusion.83
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = optA }
+			event_target:secluded_party_host = { character_event = { id = seclusion.78 } }
+		}
+		if = {
+			limit = { has_character_flag = optB }
+			event_target:secluded_party_host = { character_event = { id = seclusion.79 } }
+		}
+		if = {
+			limit = { has_character_flag = optC }
+			event_target:secluded_party_host = { character_event = { id = seclusion.80 } }
+		}
+		clr_character_flag = optA
+		clr_character_flag = optB
+		clr_character_flag = optC
+	}
+}
+
+# seclusion.77 The stranger disappears
+# The guest is gone, leaving only a stinking mask.
+# Scope: ROOT is the ruler. Fired by seclusion.75.
+character_event = {
+	id = seclusion.77
+	picture = GFX_evt_prospering_province
+	desc = EVTDESCseclusion77
+	border = GFX_event_normal_frame_religion
+
+	only_rulers = yes
+	hide_from = yes
+
+	trigger = {
+		has_character_flag = masque_of_red_death
+	}
+
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_tooltip = { # Death leaves court and becomes random person
+			event_target:partying_stranger = {
+				leave_court_effect = yes
+				remove_character_modifier = attending_masquerade
+				remove_character_modifier = in_seclusion
+				remove_character_modifier = will_not_marry
+				remove_trait = cannot_marry
+				clr_character_flag = marking_flag
+				clr_character_flag = immune_bubonic_plague
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAseclusion77 # just as well?
+		custom_tooltip = { text = EVTOPTAseclusion77_TT }
+
+		add_character_modifier = { name = lucky_to_be_alive duration = 365 }
+
+		trigger = { has_character_modifier = in_seclusion }
+	}
+}
+
+# seclusion.78 A polite approach
+# The ruler tries charm, and smells the rot.
+# Scope: ROOT is the ruler. Fired by seclusion.83.
+character_event = {
+	id = seclusion.78
+	picture = GFX_evt_suspicious_noble
+	desc = EVTDESCseclusion78
+	border = GFX_event_normal_frame_religion
+
+	only_rulers = yes
+
+	trigger = {
+		has_character_flag = masque_of_red_death
+	}
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAseclusion78 # wth
+
+		random_list = {
+			10 = {
+				modifier = { factor = 1.1 trait = quick }
+				modifier = { factor = 1.1 trait = genius }
+				modifier = { factor = 1.1 has_education_martial_trigger = yes }
+				modifier = { factor = 1.1 has_lifestyle_martial_trigger = yes }
+
+				modifier = { factor = 1.1 combat_rating = 10 }
+				modifier = { factor = 1.1 combat_rating = 20 }
+				modifier = { factor = 1.1 combat_rating = 30 }
+				modifier = { factor = 1.1 combat_rating = 40 }
+				modifier = { factor = 1.1 combat_rating = 50 }
+				modifier = { factor = 1.1 combat_rating = 60 }
+				modifier = { factor = 1.1 martial = 11 }
+				modifier = { factor = 1.1 martial = 12 }
+				modifier = { factor = 1.1 martial = 14 }
+				modifier = { factor = 1.1 martial = 16 }
+				modifier = { factor = 1.1 martial = 18 }
+				modifier = { factor = 1.1 martial = 20 }
+				set_character_flag = good_outcome_A
+				character_event = { id = seclusion.82 }
+				custom_tooltip = { text = seclusion78_TT_good_outcome }
+			}
+			20 = {
+				modifier = { factor = 1.5 trait = one_handed }
+				modifier = { factor = 1.5 has_mental_disorder_trigger = yes }
+				modifier = { factor = 2 trait = blinded }
+				modifier = { factor = 2 has_severe_disability_trigger = yes }
+				set_character_flag = bad_outcome_A
+				character_event = { id = seclusion.81 }
+				custom_tooltip = { text = seclusion78_TT_bad_outcome }
+			}
+		}
+	}
+}
+
+# seclusion.79 A demanding approach
+# The ruler confronts the figure.
+# Scope: ROOT is the ruler. Fired by seclusion.83.
+character_event = {
+	id = seclusion.79
+	picture = GFX_evt_shadowy_cabal
+	desc = EVTDESCseclusion79
+	border = GFX_event_normal_frame_religion
+
+	only_rulers = yes
+
+	trigger = {
+		has_character_flag = masque_of_red_death
+	}
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAseclusion79 # wth
+		random_list = {
+			10 = {
+				modifier = { factor = 1.1 trait = quick }
+				modifier = { factor = 1.1 trait = genius }
+				modifier = { factor = 1.1 has_education_martial_trigger = yes }
+				modifier = { factor = 1.1 has_lifestyle_martial_trigger = yes }
+
+				modifier = { factor = 1.1 combat_rating = 10 }
+				modifier = { factor = 1.1 combat_rating = 20 }
+				modifier = { factor = 1.1 combat_rating = 30 }
+				modifier = { factor = 1.1 combat_rating = 40 }
+				modifier = { factor = 1.1 combat_rating = 50 }
+				modifier = { factor = 1.1 combat_rating = 60 }
+				modifier = { factor = 1.1 martial = 11 }
+				modifier = { factor = 1.1 martial = 12 }
+				modifier = { factor = 1.1 martial = 14 }
+				modifier = { factor = 1.1 martial = 16 }
+				modifier = { factor = 1.1 martial = 18 }
+				modifier = { factor = 1.1 martial = 20 }
+				custom_tooltip = { text = seclusion78_TT_good_outcome }
+				set_character_flag = good_outcome_B
+				character_event = { id = seclusion.82 }
+			}
+			20 = {
+				modifier = { factor = 1.5 trait = one_handed }
+				modifier = { factor = 1.5 has_mental_disorder_trigger = yes }
+				modifier = { factor = 2 trait = blinded }
+				modifier = { factor = 2 has_severe_disability_trigger = yes }
+				custom_tooltip = { text = seclusion78_TT_bad_outcome }
+				set_character_flag = bad_outcome_B
+				character_event = { id = seclusion.81 }
+			}
+		}
+	}
+}
+
+# seclusion.80 A special approach
+# Lunatics, the skilled and the bold meet the stranger their own way.
+# Scope: ROOT is the ruler. Fired by seclusion.83.
+character_event = {
+	id = seclusion.80
+	picture = GFX_evt_suspicious_noble
+	border = GFX_event_normal_frame_religion
+
+	only_rulers = yes
+
+	trigger = {
+		has_character_flag = masque_of_red_death
+	}
+
+	desc = {
+		text = EVTDESCseclusion80_A
+		trigger = { trait = immortal NOT = { has_character_flag = picked_lunatic_opt } }
+	}
+	desc = {
+		text = EVTDESCseclusion80_B
+		trigger = {
+			intrigue = 15
+			NOT = { trait = immortal }
+			NOT = { has_character_flag = picked_lunatic_opt }
+		}
+	}
+	desc = { text = EVTDESCseclusion80_C trigger = { has_character_flag = picked_lunatic_opt } }
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAseclusion80 # That's not good
+		random_list = {
+			10 = {
+				modifier = { factor = 1.1 trait = quick }
+				modifier = { factor = 1.1 trait = genius }
+				modifier = { factor = 1.1 has_education_martial_trigger = yes }
+				modifier = { factor = 1.1 has_lifestyle_martial_trigger = yes }
+				modifier = { factor = 1.1 combat_rating = 10 }
+				modifier = { factor = 1.1 combat_rating = 20 }
+				modifier = { factor = 1.1 combat_rating = 30 }
+				modifier = { factor = 1.1 combat_rating = 40 }
+				modifier = { factor = 1.1 combat_rating = 50 }
+				modifier = { factor = 1.1 combat_rating = 60 }
+				modifier = { factor = 1.1 martial = 11 }
+				modifier = { factor = 1.1 martial = 12 }
+				modifier = { factor = 1.1 martial = 14 }
+				modifier = { factor = 1.1 martial = 16 }
+				modifier = { factor = 1.1 martial = 18 }
+				modifier = { factor = 1.1 martial = 20 }
+				custom_tooltip = { text = seclusion78_TT_good_outcome }
+				set_character_flag = good_outcome_C
+				character_event = { id = seclusion.82 }
+			}
+			10 = {
+				modifier = { factor = 1.5 trait = one_handed }
+				modifier = { factor = 1.5 has_mental_disorder_trigger = yes }
+				modifier = { factor = 2 trait = blinded }
+				modifier = { factor = 2 has_severe_disability_trigger = yes }
+				custom_tooltip = { text = seclusion78_TT_bad_outcome }
+				set_character_flag = bad_outcome_C
+				character_event = { id = seclusion.81 }
+			}
+		}
+		trigger = { trait = immortal NOT = { has_character_flag = picked_lunatic_opt } }
+	}
+
+	option = {
+		name = EVTOPTBseclusion80 # That's not good
+		custom_tooltip = { text = EVTOPTBseclusion80_TT }
+		random_list = {
+			10 = {
+				modifier = { factor = 1.1 trait = quick }
+				modifier = { factor = 1.1 trait = genius }
+				modifier = { factor = 1.1 has_lifestyle_intrigue_trigger = yes }
+
+				modifier = { factor = 1.1 has_education_intrigue_trigger = yes }
+
+				modifier = { factor = 1.1 intrigue = 11 }
+				modifier = { factor = 1.1 intrigue = 12 }
+				modifier = { factor = 1.1 intrigue = 14 }
+				modifier = { factor = 1.1 intrigue = 16 }
+				modifier = { factor = 1.1 intrigue = 18 }
+				modifier = { factor = 1.1 intrigue = 20 }
+				custom_tooltip = { text = seclusion78_TT_good_outcome }
+				set_character_flag = good_outcome_D
+				character_event = { id = seclusion.82 }
+			}
+			20 = {
+				modifier = { factor = 1.5 trait = slow }
+				modifier = { factor = 1.5 has_mental_disorder_trigger = yes }
+				modifier = { factor = 2 trait = blinded }
+				modifier = { factor = 2 has_severe_disability_trigger = yes }
+				custom_tooltip = { text = seclusion78_TT_bad_outcome }
+				set_character_flag = bad_outcome_D
+				character_event = { id = seclusion.81 }
+			}
+		}
+		trigger = {
+			intrigue = 15
+			NOT = { trait = immortal }
+			NOT = { has_character_flag = picked_lunatic_opt }
+		}
+	}
+
+	option = {
+		name = EVTOPTCseclusion80 # lunatic - not good
+		custom_tooltip = { text = EVTOPTCseclusion80_TT }
+		random_list = {
+			10 = {
+				modifier = { factor = 1.1 has_pleasant_trait_trigger = yes }
+				modifier = { factor = 1.1 trait = genius }
+				modifier = { factor = 1.1 has_lifestyle_diplomacy_trigger = yes }
+
+				modifier = { factor = 1.1 has_education_diplomacy_trigger = yes }
+
+				modifier = { factor = 1.1 diplomacy = 11 }
+				modifier = { factor = 1.1 diplomacy = 12 }
+				modifier = { factor = 1.1 diplomacy = 14 }
+				modifier = { factor = 1.1 diplomacy = 16 }
+				modifier = { factor = 1.1 diplomacy = 18 }
+				modifier = { factor = 1.1 diplomacy = 20 }
+				custom_tooltip = { text = seclusion78_TT_good_outcome }
+				set_character_flag = good_outcome_E
+				character_event = { id = seclusion.82 }
+			}
+			20 = {
+				modifier = { factor = 1.5 trait = shy }
+				modifier = { factor = 1.5 trait = imbecile }
+				modifier = { factor = 1.5 trait = slow }
+				modifier = { factor = 1.5 trait = dull }
+				modifier = { factor = 2 has_severe_disability_trigger = yes }
+				custom_tooltip = { text = seclusion78_TT_bad_outcome }
+				set_character_flag = bad_outcome_E
+				character_event = { id = seclusion.81 }
+			}
+		}
+		trigger = { has_character_flag = picked_lunatic_opt }
+	}
+}
+
+# seclusion.81 Behind the mask
+# The herald takes what it came for: the ruler, and maybe the court.
+# Scope: ROOT is the ruler. Fired by seclusion.78-80.
+narrative_event = {
+	id = seclusion.81
+	title = EVTNAMEseclusion81
+	picture = GFX_evt_plague_spreading
+	border = GFX_event_narrative_frame_religion
+
+	trigger = {
+		has_character_flag = masque_of_red_death
+	}
+
+	desc = {
+		text = EVTDESCseclusion81_A #
+		trigger = { has_character_flag = bad_outcome_A }
+	}
+	desc = {
+		text = EVTDESCseclusion81_B #
+		trigger = { has_character_flag = bad_outcome_B }
+	}
+	desc = {
+		text = EVTDESCseclusion81_C #
+		trigger = { has_character_flag = bad_outcome_C }
+	}
+	desc = {
+		text = EVTDESCseclusion81_D #
+		trigger = { has_character_flag = bad_outcome_D }
+	}
+	desc = {
+		text = EVTDESCseclusion81_E #
+		trigger = { has_character_flag = bad_outcome_E }
+	}
+
+	immediate = {
+		hidden_tooltip = {
+			random_list = { # this list selects whether you die or become injured
+				80 = { #You die
+					set_character_flag = dies_at_the_ball_flag
+				}
+				20 = { #You are injured
+					set_character_flag = injured_at_the_ball_flag
+				}
+			}
+
+			random_list = { # this list selects how many dynasty members/children dies  (1/2/3)
+				10 = { # selects 1 dynasty members/children
+					random_courtier = {
+						limit = {
+							ROOT = {
+								any_child = {
+									NOT = { character = PREVPREV }
+									NOT = { has_character_flag = dies_at_the_ball_flag }
+								}
+							}
+							dynasty = ROOT
+							is_primary_heir = no
+							has_character_modifier = in_seclusion
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							at_location = ROOT
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+				}
+				10 = { # selects 2 dynasty members/children
+					random_courtier = {
+						limit = {
+							ROOT = {
+								any_child = {
+									NOT = { character = PREVPREV }
+									NOT = { has_character_flag = dies_at_the_ball_flag }
+								}
+							}
+							dynasty = ROOT
+							is_primary_heir = no
+							has_character_modifier = in_seclusion
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							at_location = ROOT
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+					random_courtier = {
+						limit = {
+							ROOT = {
+								any_child = {
+									NOT = { character = PREVPREV }
+									NOT = { has_character_flag = dies_at_the_ball_flag }
+								}
+							}
+							dynasty = ROOT
+							is_primary_heir = no
+							has_character_modifier = in_seclusion
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							at_location = ROOT
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+				}
+				10 = { # selects 3 dynasty members/children
+					random_courtier = {
+						limit = {
+							ROOT = {
+								any_child = {
+									NOT = { character = PREVPREV }
+									NOT = { has_character_flag = dies_at_the_ball_flag }
+								}
+							}
+							dynasty = ROOT
+							is_primary_heir = no
+							has_character_modifier = in_seclusion
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							at_location = ROOT
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+					random_courtier = {
+						limit = {
+							ROOT = {
+								any_child = {
+									NOT = { character = PREVPREV }
+									NOT = { has_character_flag = dies_at_the_ball_flag }
+								}
+							}
+							dynasty = ROOT
+							is_primary_heir = no
+							has_character_modifier = in_seclusion
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							at_location = ROOT
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+					random_courtier = {
+						limit = {
+							ROOT = {
+								any_child = {
+									NOT = { character = PREVPREV }
+									NOT = { has_character_flag = dies_at_the_ball_flag }
+								}
+							}
+							dynasty = ROOT
+							is_primary_heir = no
+							has_character_modifier = in_seclusion
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							at_location = ROOT
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+				}
+			}
+
+			random_list = { #this list selects how many random courtiers die (2/4/6)
+				10 = { # Two random dies
+					random_courtier = { #selects random non-related courtier
+						limit = {
+							NOT = { dynasty = ROOT }
+							is_alive = yes
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							NOT = { has_character_flag = marking_flag }
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+					random_courtier = { #selects random non-related courtier
+						limit = {
+							NOT = { dynasty = ROOT }
+							is_alive = yes
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							NOT = { has_character_flag = marking_flag }
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+				}
+				10 = { # four random dies
+					random_courtier = { #selects random non-related courtier
+						limit = {
+							NOT = { dynasty = ROOT }
+							is_alive = yes
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							NOT = { has_character_flag = marking_flag }
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+					random_courtier = { #selects random non-related courtier
+						limit = {
+							NOT = { dynasty = ROOT }
+							is_alive = yes
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							NOT = { has_character_flag = marking_flag }
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+					random_courtier = { #selects random non-related courtier
+						limit = {
+							NOT = { dynasty = ROOT }
+							is_alive = yes
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							NOT = { has_character_flag = marking_flag }
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+					random_courtier = { #selects random non-related courtier
+						limit = {
+							NOT = { dynasty = ROOT }
+							is_alive = yes
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							NOT = { has_character_flag = marking_flag }
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+				}
+				10 = { # six random dies
+					random_courtier = { #selects random non-related courtier
+						limit = {
+							NOT = { dynasty = ROOT }
+							is_alive = yes
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							NOT = { has_character_flag = marking_flag }
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+					random_courtier = { #selects random non-related courtier
+						limit = {
+							NOT = { dynasty = ROOT }
+							is_alive = yes
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							NOT = { has_character_flag = marking_flag }
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+					random_courtier = { #selects random non-related courtier
+						limit = {
+							NOT = { dynasty = ROOT }
+							is_alive = yes
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							NOT = { has_character_flag = marking_flag }
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+					random_courtier = { #selects random non-related courtier
+						limit = {
+							NOT = { dynasty = ROOT }
+							is_alive = yes
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							NOT = { has_character_flag = marking_flag }
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+					random_courtier = { #selects random non-related courtier
+						limit = {
+							NOT = { dynasty = ROOT }
+							is_alive = yes
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							NOT = { has_character_flag = marking_flag }
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+					random_courtier = { #selects random non-related courtier
+						limit = {
+							NOT = { dynasty = ROOT }
+							is_alive = yes
+							NOT = { has_character_flag = dies_at_the_ball_flag }
+							NOT = { has_character_flag = marking_flag }
+						}
+						set_character_flag = dies_at_the_ball_flag
+					}
+				}
+			}
+		}
+	}
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAseclusion81 # NOOOO
+		custom_tooltip = { text = EVTOPTAseclusion81_TT }
+
+		if = { #you die
+			limit = { has_character_flag = dies_at_the_ball_flag }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+			death = { death_reason = death_murder_unknown killer = event_target:partying_stranger }
+		}
+		if = { #you become injured
+			limit = { has_character_flag = injured_at_the_ball_flag }
+			add_maimed_trait_effect = yes
+		}
+
+		any_courtier = { # courtiers die
+			limit = { has_character_flag = dies_at_the_ball_flag }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+			death = { death_reason = death_murder_unknown killer = event_target:partying_stranger }
+		}
+
+		hidden_tooltip = { # Death leaves court and becomes random person
+			event_target:partying_stranger = {
+				leave_court_effect = yes
+				remove_character_modifier = attending_masquerade
+				remove_character_modifier = in_seclusion
+				remove_character_modifier = will_not_marry
+				remove_trait = cannot_marry
+				clr_character_flag = marking_flag
+				clr_character_flag = immune_bubonic_plague
+			}
+		}
+
+		clr_character_flag = bad_outcome_A
+		trigger = { has_character_flag = bad_outcome_A }
+	}
+	option = {
+		name = EVTOPTBseclusion81 # NOOOO
+		custom_tooltip = { text = EVTOPTBseclusion81_TT }
+		if = { #you die
+			limit = { has_character_flag = dies_at_the_ball_flag }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+			death = { death_reason = death_murder_unknown killer = event_target:partying_stranger }
+		}
+		if = { #you become injured
+			limit = { has_character_flag = injured_at_the_ball_flag }
+			add_maimed_trait_effect = yes
+		}
+
+		any_courtier = { # courtiers die
+			limit = { has_character_flag = dies_at_the_ball_flag }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+			death = { death_reason = death_murder_unknown killer = event_target:partying_stranger }
+		}
+
+		any_courtier = { # courtiers become injured
+			limit = { has_character_flag = injured_at_the_ball_flag }
+			add_maimed_trait_effect = yes
+		}
+
+		hidden_tooltip = { # Death leaves court and becomes random person
+			event_target:partying_stranger = {
+				leave_court_effect = yes
+				remove_character_modifier = attending_masquerade
+				remove_character_modifier = in_seclusion
+				remove_character_modifier = will_not_marry
+				remove_trait = cannot_marry
+				clr_character_flag = marking_flag
+				clr_character_flag = immune_bubonic_plague
+			}
+		}
+
+		clr_character_flag = bad_outcome_B
+		trigger = { has_character_flag = bad_outcome_B }
+	}
+	option = {
+		name = EVTOPTCseclusion81 # NOOOO
+		custom_tooltip = { text = EVTOPTCseclusion81_TT }
+
+		if = { #you die
+			limit = { has_character_flag = dies_at_the_ball_flag }
+			death = { death_reason = death_murder_unknown killer = event_target:partying_stranger }
+		}
+		if = { #you become injured
+			limit = { has_character_flag = injured_at_the_ball_flag }
+			add_maimed_trait_effect = yes
+		}
+
+		any_courtier = { # courtiers die
+			limit = { has_character_flag = dies_at_the_ball_flag }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+			death = { death_reason = death_murder_unknown killer = event_target:partying_stranger }
+		}
+
+		any_courtier = { # courtiers become injured
+			limit = { has_character_flag = injured_at_the_ball_flag }
+			add_maimed_trait_effect = yes
+		}
+
+		hidden_tooltip = { # Death leaves court and becomes random person
+			event_target:partying_stranger = {
+				leave_court_effect = yes
+				remove_character_modifier = attending_masquerade
+				remove_character_modifier = in_seclusion
+				remove_character_modifier = will_not_marry
+				remove_trait = cannot_marry
+				clr_character_flag = marking_flag
+				clr_character_flag = immune_bubonic_plague
+			}
+		}
+
+		clr_character_flag = bad_outcome_C
+		trigger = { has_character_flag = bad_outcome_C }
+	}
+	option = {
+		name = EVTOPTDseclusion81 # NOOOO
+		custom_tooltip = { text = EVTOPTDseclusion81_TT }
+
+		if = { #you die
+			limit = { has_character_flag = dies_at_the_ball_flag }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+			death = { death_reason = death_murder_unknown killer = event_target:partying_stranger }
+		}
+		if = { #you become injured
+			limit = { has_character_flag = injured_at_the_ball_flag }
+			add_maimed_trait_effect = yes
+		}
+
+		any_courtier = { # courtiers die
+			limit = { has_character_flag = dies_at_the_ball_flag }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+			death = { death_reason = death_murder_unknown killer = event_target:partying_stranger }
+		}
+
+		any_courtier = { # courtiers become injured
+			limit = { has_character_flag = injured_at_the_ball_flag }
+			add_maimed_trait_effect = yes
+		}
+
+		hidden_tooltip = { # Death leaves court and becomes random person
+			event_target:partying_stranger = {
+				leave_court_effect = yes
+				remove_character_modifier = attending_masquerade
+				remove_character_modifier = in_seclusion
+				remove_character_modifier = will_not_marry
+				remove_trait = cannot_marry
+				clr_character_flag = marking_flag
+				clr_character_flag = immune_bubonic_plague
+			}
+		}
+
+		clr_character_flag = bad_outcome_D
+		trigger = { has_character_flag = bad_outcome_D }
+	}
+	option = { #lunatic
+		name = EVTOPTEseclusion81 # NOOOO
+		custom_tooltip = { text = EVTOPTEseclusion81_TT }
+
+		if = { #you die
+			limit = { has_character_flag = dies_at_the_ball_flag }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+			death = { death_reason = death_murder_unknown killer = event_target:partying_stranger }
+		}
+		if = { #you become injured
+			limit = { has_character_flag = injured_at_the_ball_flag }
+			add_maimed_trait_effect = yes
+		}
+
+		any_courtier = { # courtiers die
+			limit = { has_character_flag = dies_at_the_ball_flag }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes break = yes }
+			death = { death_reason = death_murder_unknown killer = event_target:partying_stranger }
+		}
+
+		any_courtier = { # courtiers become injured
+			limit = { has_character_flag = injured_at_the_ball_flag }
+			add_maimed_trait_effect = yes
+		}
+
+		hidden_tooltip = { # Death leaves court and becomes random person
+			event_target:partying_stranger = {
+				leave_court_effect = yes
+				remove_character_modifier = attending_masquerade
+				remove_character_modifier = in_seclusion
+				remove_character_modifier = will_not_marry
+				remove_trait = cannot_marry
+				clr_character_flag = marking_flag
+				clr_character_flag = immune_bubonic_plague
+			}
+		}
+
+		clr_character_flag = bad_outcome_D
+		clr_character_flag = picked_lunatic_opt
+		trigger = { has_character_flag = bad_outcome_E }
+	}
+}
+
+# seclusion.82 The herald leaves
+# The ruler drives the herald off, tricks it, or strikes a deal.
+# Scope: ROOT is the ruler. Fired by seclusion.78-80.
+narrative_event = {
+	id = seclusion.82
+	title = EVTNAMEseclusion82
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+
+	trigger = {
+		has_character_flag = masque_of_red_death
+	}
+
+	desc = { text = EVTDESCseclusion82_A trigger = { has_character_flag = good_outcome_A } }
+	desc = {
+		text = EVTDESCseclusion82_B #
+		picture = GFX_evt_prospering_province
+		trigger = { has_character_flag = good_outcome_B }
+	}
+	desc = { text = EVTDESCseclusion82_C trigger = { has_character_flag = good_outcome_C } }
+	desc = { text = EVTDESCseclusion82_D trigger = { has_character_flag = good_outcome_D } }
+	desc = { text = EVTDESCseclusion82_E trigger = { has_character_flag = good_outcome_E } }
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAseclusion82 # yay
+		custom_tooltip = { text = EVTOPTAseclusion82_TT }
+
+		add_character_modifier = { name = lucky_to_be_alive duration = 1825 }
+
+		hidden_effect = { if = { limit = { has_nickname = no } give_nickname = nick_the_survivor } }
+
+		hidden_tooltip = { # Death leaves court and becomes random person
+			event_target:partying_stranger = {
+				leave_court_effect = yes
+				remove_character_modifier = attending_masquerade
+				remove_character_modifier = in_seclusion
+				remove_character_modifier = will_not_marry
+				remove_trait = cannot_marry
+				clr_character_flag = marking_flag
+				clr_character_flag = immune_bubonic_plague
+			}
+		}
+
+		clr_character_flag = good_outcome_A
+		clr_character_flag = good_outcome_B
+
+		trigger = {
+			OR = { has_character_flag = good_outcome_A has_character_flag = good_outcome_B }
+		}
+	}
+	option = {
+		name = EVTOPTCseclusion82 # yay
+		custom_tooltip = { text = EVTOPTCseclusion82_TT }
+
+		add_character_modifier = { name = seizing_the_day duration = 1825 }
+
+		hidden_effect = { if = { limit = { has_nickname = no } give_nickname = nick_the_survivor } }
+
+		hidden_tooltip = { # Death leaves court and becomes random person
+			event_target:partying_stranger = {
+				leave_court_effect = yes
+				remove_character_modifier = attending_masquerade
+				remove_character_modifier = in_seclusion
+				remove_character_modifier = will_not_marry
+				remove_trait = cannot_marry
+				clr_character_flag = marking_flag
+				clr_character_flag = immune_bubonic_plague
+			}
+		}
+
+		hidden_effect = { give_nickname = nick_the_survivor }
+
+		clr_character_flag = good_outcome_C
+
+		trigger = { has_character_flag = good_outcome_C }
+	}
+	option = {
+		name = EVTOPTDseclusion82 # yay
+		custom_tooltip = { text = EVTOPTDseclusion82_TT }
+
+		add_character_modifier = { name = lucky_to_be_alive duration = 1825 }
+
+		hidden_effect = { if = { limit = { has_nickname = no } give_nickname = nick_the_survivor } }
+
+		hidden_tooltip = { # Death leaves court and becomes random person
+			event_target:partying_stranger = {
+				leave_court_effect = yes
+				remove_character_modifier = attending_masquerade
+				remove_character_modifier = in_seclusion
+				remove_character_modifier = will_not_marry
+				remove_trait = cannot_marry
+				clr_character_flag = marking_flag
+				clr_character_flag = immune_bubonic_plague
+			}
+		}
+
+		clr_character_flag = good_outcome_D
+
+		trigger = { has_character_flag = good_outcome_D }
+	}
+	option = {
+		name = EVTOPTEseclusion82 # yay
+		custom_tooltip = { text = EVTOPTEseclusion82_TT }
+
+		add_character_modifier = { name = lucky_to_be_alive duration = 1825 }
+
+		hidden_effect = { if = { limit = { has_nickname = no } give_nickname = nick_the_lucky } }
+
+		hidden_tooltip = { # Death leaves court and becomes random person
+			event_target:partying_stranger = {
+				leave_court_effect = yes
+				remove_character_modifier = attending_masquerade
+				remove_character_modifier = in_seclusion
+				remove_character_modifier = will_not_marry
+				remove_trait = cannot_marry
+				clr_character_flag = marking_flag
+				clr_character_flag = immune_bubonic_plague
+			}
+		}
+
+		clr_character_flag = good_outcome_E
+		clr_character_flag = picked_lunatic_opt
+
+		trigger = { has_character_flag = good_outcome_E }
+	}
+}
+
+# seclusion.100 The seclusion list
+# Hidden. About every nine months rolls one seclusion event (food, tunnels,
+# lovers, corpses, nightmares, the masque...) and schedules itself again. When
+# the ruler has left seclusion it stops and frees anyone left behind.
+# Scope: ROOT is the secluded ruler. Fired by seclusion_list_start_effect and
+# itself.
+character_event = {
+	id = seclusion.100
+
+	hide_window = yes
+
+	is_triggered_only = yes # seclusion_list_loop_effect, then itself
+
+	immediate = {
+		if = {
+			limit = { has_character_modifier = in_seclusion }
+			random_list = {
+				20 = {
+					modifier = {
+						factor = 0
+						NOR = {
+							host = {
+								any_courtier = {
+									has_character_modifier = in_seclusion
+									has_epidemic_disease_trigger = yes
+								}
+							}
+							has_character_flag = exposed_to_outside
+						}
+					}
+					modifier = {
+						factor = 1.5
+						host = {
+							any_courtier = {
+								has_character_modifier = in_seclusion
+								developing_epidemic_disease_trigger = yes
+							}
+						}
+					}
+					modifier = {
+						factor = 0
+						NAND = {
+							location = { has_disease = yes }
+							NOR = { num_of_symptoms = 1 is_ill = yes }
+						}
+					}
+					give_epidemic_disease_effect = yes
+				}
+				80 = { }
+			}
+			random_list = {
+				# Commoners pile corpses outside gates
+				20 = {
+					modifier = {
+						factor = 0
+						NAND = {
+							host = { character = ROOT }
+							NOT = { has_character_flag = seclusion_piling_corpses }
+							location = {
+								OR = {
+									disease = nurgles_rot
+									disease = creeping_buboes
+									disease = typhus
+									disease = small_pox
+									disease = bubonic_plague
+								}
+							}
+						}
+					}
+					character_event = { id = seclusion.4 }
+				}
+				# Courtier has symptoms in seclusion
+				100 = {
+					modifier = {
+						factor = 0
+						NAND = {
+							host = { character = ROOT }
+							location = { has_disease = yes }
+							any_courtier = {
+								prisoner = no
+								has_character_modifier = in_seclusion
+								num_of_symptoms = 1
+							}
+						}
+					}
+					character_event = { id = seclusion.5 }
+				}
+				# Lovers discovered in seclusion
+				20 = {
+					modifier = {
+						factor = 0
+						NAND = {
+							host = { character = ROOT }
+							any_courtier = {
+								ai = yes
+								at_location = ROOT
+								has_character_modifier = in_seclusion
+								any_lover = {
+									ai = yes
+									NOT = { character = ROOT }
+									has_character_modifier = in_seclusion
+									at_location = ROOT
+								}
+							}
+						}
+					}
+					character_event = { id = seclusion.6 }
+				}
+				# Other courtier in seclusion is kind of beautiful
+				20 = {
+					modifier = {
+						factor = 0
+						NAND = {
+							NOT = { has_character_flag = seclusion_lazy_seduction }
+							NOT = { trait = celibate }
+							can_marry = yes
+							is_married = no
+							is_consort = no
+							has_lover = no
+							is_adult = yes
+							is_no_females_race = no
+							any_realm_character = {
+								is_adult = yes
+								is_opposite_sex = ROOT
+								reverse_opinion = { who = ROOT value = 0 }
+								at_location = ROOT
+								has_character_modifier = in_seclusion
+								is_married = no
+								is_consort = no
+								has_lover = no
+								can_marry = yes
+							}
+						}
+					}
+					character_event = { id = seclusion.8 }
+				}
+				# Nightmares
+				25 = {
+					modifier = {
+						factor = 0
+						NAND = {
+							NOT = { has_character_flag = seclusion_nightmares }
+							host = { character = ROOT }
+							capital_scope = { has_disease = yes }
+						}
+					}
+					character_event = { id = seclusion.12 }
+				}
+				# Gain a friend
+				20 = {
+					trigger = {
+						NOT = { has_character_flag = seclusion_gained_friend }
+						any_courtier = {
+							at_location = ROOT
+							has_character_modifier = in_seclusion
+							NOT = { is_friend = ROOT }
+							NOT = { is_rival = ROOT }
+							opinion = { who = ROOT value = 0 }
+							OR = {
+								AND = {
+									age = 6
+									NOT = { age = 16 }
+									ROOT = { age = 6 NOT = { age = 16 } }
+								}
+								AND = { age = 16 ROOT = { age = 16 } }
+							}
+						}
+					}
+					character_event = { id = seclusion.13 }
+				}
+				# Courtier has the plague
+				100 = {
+					modifier = {
+						factor = 0
+						NAND = {
+							host = { character = ROOT }
+							location = {
+								OR = {
+									disease = nurgles_rot
+									disease = creeping_buboes
+									disease = typhus
+									disease = small_pox
+									disease = bubonic_plague
+								}
+							}
+							any_courtier = {
+								at_location = ROOT
+								has_character_modifier = in_seclusion
+								NOT = { is_friend = ROOT }
+								has_epidemic_disease_trigger = yes
+							}
+						}
+					}
+					character_event = { id = seclusion.14 }
+				}
+				# Child has a peasant lover outside of seclusion
+				20 = {
+					modifier = {
+						factor = 0
+						NAND = {
+							NOT = { has_character_flag = seclusion_child_has_lover }
+							any_child = {
+								age = 16
+								NOT = { trait = craven }
+								NOT = { trait = celibate }
+								at_location = ROOT
+								has_character_modifier = in_seclusion
+							}
+						}
+					}
+					character_event = { id = seclusion.31 }
+				}
+				# Food shortage event chain start
+				25 = {
+					modifier = {
+						factor = 0
+						NAND = {
+							host = { character = ROOT }
+							NOT = { has_character_flag = seclusion_food_events }
+							NOT = { has_character_flag = seclusion_events_on }
+							is_adult = yes
+						}
+					}
+					character_event = { id = seclusion.110 }
+				}
+				# Tunnel steward
+				20 = {
+					modifier = {
+						factor = 0
+						NAND = {
+							age = 16
+							host = { character = ROOT }
+							job_treasurer = { always = yes ai = yes }
+
+							capital_holding = { holding_type = castle }
+							NOT = { has_character_flag = seclusion_tunnel }
+							NOT = { has_character_flag = seclusion_events_on }
+						}
+					}
+					character_event = { id = seclusion.51 }
+				}
+				10 = {
+					modifier = {
+						factor = 0
+						OR = {
+							# has_game_rule = {
+							# name = supernatural_events
+							# value = off
+							# }
+							ai = yes
+							war = yes
+							NOT = {
+								any_realm_province = {
+									OR = {
+										disease = typhus
+										disease = nurgles_rot
+										disease = creeping_buboes
+										disease = bubonic_plague
+									} # the Red Pox or a Nurgle plague
+								}
+							}
+							has_character_flag = masque_of_red_death
+							has_character_flag = seclusion_events_on
+							has_character_modifier = lucky_to_be_alive
+							has_character_modifier = seizing_the_day
+							has_character_modifier = savoring_the_end_days
+							has_character_modifier = secluded_revelry
+							prisoner = yes
+							is_adult = no
+							NOT = { current_heir = { dynasty = ROOT } }
+							NOR = {
+								any_courtier = {
+									is_adult = yes
+									is_incapable = no
+									has_vice_trigger = yes
+									prisoner = no
+									has_character_modifier = in_seclusion
+								}
+								any_courtier = {
+									is_close_relative = yes
+									is_adult = yes
+									prisoner = no
+									is_incapable = no
+									is_pious_trigger = no
+									has_character_modifier = in_seclusion
+								}
+							}
+						}
+					}
+					narrative_event = { id = seclusion.71 }
+				}
+				40 = { }
+			}
+
+			seclusion_list_next_effect = yes
+		}
+		else = {
+			clr_character_flag = seclusion_list_running
+			any_courtier = { # anyone left behind in seclusion
+				limit = { has_character_modifier = in_seclusion }
+				clr_character_flag = seclusion_events_on
+				clr_character_flag = do_not_disturb
+				remove_character_modifier = in_seclusion
+			}
+		}
+	}
+}
+
+# seclusion.98 Imprisoned in seclusion
+# Hidden. Being thrown in prison ends seclusion and its modifiers.
+# Scope: ROOT is the prisoner. Fired from on_become_imprisoned_any_reason.
+character_event = {
+	id = seclusion.98
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_modifier = in_seclusion
+	}
+
+	immediate = {
+		clr_character_flag = seclusion_events_on
+		clr_character_flag = do_not_disturb
+		remove_character_modifier = in_seclusion
+		if = {
+			limit = {
+				OR = { # Still has some left over modifiers...
+					has_character_modifier = tiny_food_shortage
+					has_character_modifier = minor_food_shortage
+					has_character_modifier = normal_food_shortage
+					has_character_modifier = starving_food_shortage
+				}
+			}
+			remove_character_modifier = tiny_food_shortage
+			remove_character_modifier = minor_food_shortage
+			remove_character_modifier = normal_food_shortage
+			remove_character_modifier = starving_food_shortage
+		}
+
+		if = {
+			limit = { is_ruler = yes }
+			clr_character_flag = exposed_to_outside
+			clr_character_flag = seclusion_piling_corpses
+			clr_character_flag = seclusion_lazy_seduction
+			clr_character_flag = seclusion_nightmares
+			clr_character_flag = seclusion_gained_friend
+			clr_character_flag = seclusion_child_has_lover
+			clr_character_flag = seclusion_tunnel
+			clr_character_flag = seclusion_food_events
+
+			any_courtier = {
+				limit = {
+					OR = { # Still has some left over modifiers...
+						has_character_modifier = in_seclusion
+						has_character_modifier = tiny_food_shortage
+						has_character_modifier = minor_food_shortage
+						has_character_modifier = normal_food_shortage
+						has_character_modifier = starving_food_shortage
+					}
+				}
+				remove_character_modifier = in_seclusion
+				remove_character_modifier = tiny_food_shortage
+				remove_character_modifier = minor_food_shortage
+				remove_character_modifier = normal_food_shortage
+				remove_character_modifier = starving_food_shortage
+			}
+		}
+	}
+}
+
+# seclusion.99 Left behind in seclusion
+# Hidden. Ends seclusion for a new title holder whose host is no longer
+# secluded.
+# Scope: ROOT is the new holder. Fired from on_new_holder.
+character_event = {
+	id = seclusion.99
+
+	hide_window = yes
+	is_triggered_only = yes # on_new_holder
+	only_rulers = yes
+
+	trigger = {
+		host = { NOT = { has_character_modifier = in_seclusion } }
+		has_character_modifier = in_seclusion
+		NAND = { is_landed = yes capital_scope = { has_epidemic = yes } }
+	}
+
+	immediate = {
+		clr_character_flag = seclusion_events_on
+		clr_character_flag = do_not_disturb
+		remove_character_modifier = in_seclusion
+	}
+}
+
+# seclusion.102 A councillor in seclusion
+# A councillor tells the liege they have shut their gates and cannot serve.
+# Scope: ROOT is the liege, FROM the councillor. Fired by the shut_the_gates
+# decision.
+character_event = {
+	id = seclusion.102
+	picture = GFX_evt_council
+
+	is_triggered_only = yes
+	notification = yes
+
+	desc = EVTDESCseclusion100_NOTE
+
+	#	desc = {
+	#		trigger = { NOT = { reverse_opinion = { who = FROM value = 0 } } }
+	#		text = EVTDESCseclusion100_A
+	#	}
+	#	desc = {
+	#		trigger = { reverse_opinion = { who = FROM value = 0 } }
+	#		text = EVTDESCseclusion100_B
+	#	}
+
+	option = {
+		name = {
+			trigger = { has_unpleasant_personality_trigger = yes }
+			text = EVTOPTAseclusion100_A
+		}
+		name = {
+			trigger = { has_unpleasant_personality_trigger = no }
+			text = EVTOPTAseclusion100_B
+		}
+	}
+}
+
+# seclusion.101 A councillor returns
+# The councillor is back at court and on the council.
+# Scope: ROOT is the liege, FROM the councillor. Fired by the open_the_gates
+# decision.
+character_event = {
+	id = seclusion.101
+	picture = GFX_evt_council
+	desc = EVTDESCseclusion101
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+	notification = yes
+
+	option = {
+		name = EXCELLENT
 	}
 }

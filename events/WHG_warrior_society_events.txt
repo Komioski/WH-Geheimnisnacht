@@ -33,7 +33,8 @@
 # lover of a fallen warrior may forge a soulbound blade by a forbidden rite.
 # Once in a life a Hero hunts the great beast of their faith. At feasts
 # the members arm-wrestle, throw dice, trade insults and drink each other
-# under the table.
+# under the table. When a society's legend is full, its Heroes go on a
+# legendary journey that can found a bloodline.
 #
 # The joining trial            lodge.1 - lodge.9
 # A child joins the lodge      lodge.10 - lodge.15
@@ -59,6 +60,11 @@
 #                              and their WB twins; 432 is new)
 # Feasts                       lodge.500 - lodge.601 (was HF.25200 - HF.25301
 #                              and their WB twins)
+# Legendary journey            lodge.700 - lodge.755 (was HF.11999 - HF.12405
+#                              and their WB twins: 11999 -> 700, 12000 -
+#                              12012 -> 701 - 713, 121xx -> 720 - 724,
+#                              122xx -> 730 - 735, 123xx -> 740 - 745,
+#                              124xx -> 750 - 755)
 #
 # Saved: character flags awaiting_initiation_trial, society_join_block,
 #   they_accepted@, they_declined@, mock_duel, show_once_flag,
@@ -110,7 +116,14 @@
 #   event targets arm_wrestling_fighter_1/2, wl_arm_wrestling_winner/loser,
 #   flyting_contender_1/2, warrior_lodge_drinking_finalist_1/2,
 #   WL_host_drinking_game, WL_drinking_contest_winner and
-#   random_society_winner.
+#   random_society_winner; for the legendary journey the society flag
+#   block_society_progress, the flags call_to_legend_active,
+#   start/mid/end_bracket, HF_legend_*, WL_desc_*, is_legendary_duel and
+#   rank_up_blocked, the variable legendary_event_progress, the modifier
+#   lodge_legend_news_cooldown, and the event targets legendary_society,
+#   original_hero, fellow_hero_1 - 3, target_ruler and target_title (also
+#   persistent), home_capital, my_duel_target, combatant_1/2 and
+#   new_story_owner.
 #
 # Callers: common/on_actions/00_on_actions.txt (on_character_ask_to_join_
 #   society 1, on_five_year_pulse 50, on_society_bi_yearly_pulse 54,
@@ -132,7 +145,11 @@
 #   06_scripted_effects_legendary_bloodlines.txt and the lodge legends
 #   (431); the feasts: on_society_bi_yearly_pulse (500, 526, 550, 580) and
 #   common/scripted_effects/05_scripted_effects_competitions.txt (505, 515,
-#   518, 522, 562, 586, 588, 589, 592);
+#   518, 522, 562, 586, 588, 589, 592); the legendary journey:
+#   on_society_progress_full (700), on_death (744),
+#   on_become_imprisoned_any_reason (745), HF_battle_events.txt (755),
+#   06_scripted_effects_legendary_bloodlines.txt (704, 723, 740 - 742,
+#   750, 751) and 01_scripted_effects_duels.txt (730 - 735);
 #   common/scripted_effects/01_scripted_effects_duels.txt (9, 61, 301 -
 #   306);
 #   events/hfp_duel_events.txt (13).
@@ -208,7 +225,14 @@
 # and Greek gods (now the Skull, the Sword, the Crown and the Coin); a
 # caught cheat was scorned by the whole society, the cheat included; the
 # winner's admirer could be kin only in real-world faiths (now Slaanesh
-# or the holy family); a beaten wrestler's duel had no tooltip.
+# or the holy family); a beaten wrestler's duel had no tooltip. The
+# legendary journey: the lodges and warbands had two copies of every
+# event, now one serves both; the text named the Heroes by targets that
+# were never saved, so their names were blank; the heir who hears the
+# tale was saved for any fallen duellist, not only the Hero; the warbands
+# never had the invincible check; a new eagle came after five days, a
+# test value; the news cooldown did not exist; warbands looked for a
+# foe's realm nearby and lodges anywhere (now nearby first).
 #
 # Also in this file (each part keeps its own header and namespace):
 #   Warbands (namespace warband, was WHG_warband_events)
@@ -21190,6 +21214,2999 @@ character_event = {
 
 	immediate = {
 		clr_character_flag = do_not_disturb
+	}
+}
+
+###############################################################################
+# Legendary journey (was HF.11999 - HF.12405 in hf_warrior_lodge_legends_events
+#   and WB.11999 - WB.12405 in hf_warband_legends_events)
+#
+# When the legend of a lodge or warband is full, its Heroes ride into a
+# foreign realm to fight its best: preparations at home, duels on the road
+# (ending with an old fencer, a giant or a bear), and a bloodline for the
+# Hero who comes back, or for the heir of one who does not. The eagle, dog
+# and battle bard bloodline events live here too. The shared steps are in
+# common/scripted_effects/06_scripted_effects_legendary_bloodlines.txt and
+# 01_scripted_effects_duels.txt.
+###############################################################################
+
+# lodge.700 - The legend is full
+# Hidden. The legend of a lodge or warband is full: halt its progress and pick
+# a province to run the setup from.
+# Scope: the grandmaster; FROM the society; from on_society_progress_full
+character_event = {
+	id = lodge.700
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { lodge_legend_society_trigger = yes }
+	}
+
+	immediate = {
+		FROM = {
+			set_flag = block_society_progress #So progress is halted for members...
+			save_event_target_as = legendary_society
+		}
+		random_province = { #Because societies cannot process events...! D:
+			limit = { is_land = yes }
+			set_province_flag = initiating_legendary_journey
+			province_event = { id = lodge.701 days = 5 random = 7 } #Checks status of society...
+			holder_scope = { save_event_target_as = province_holder }
+		}
+	}
+}
+
+# lodge.701 - Setup
+# Hidden. With two free Heroes, one of them (a player if possible) is called;
+# else check again later.
+# Scope: a province
+province_event = {
+	id = lodge.701
+	is_triggered_only = yes
+	hide_window = yes
+
+	trigger = {
+		event_target:legendary_society = { society_has_members = yes }
+		has_province_flag = initiating_legendary_journey
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = { NOT = { has_province_flag = initiating_legendary_journey } } #@event_target:legendary_society } }
+		}
+		else = {
+			event_target:legendary_society = {
+				clr_flag = block_society_progress
+				set_society_progress = 0
+			}
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				has_province_flag = initiating_legendary_journey #It has begun...
+				#There are at least two members at rank 4...
+				event_target:legendary_society = {
+					any_society_member = {
+						society_rank == 4
+						NOT = { is_inaccessible_trigger = yes }
+						count = 2
+					}
+				}
+			}
+			event_target:legendary_society = {
+				random_society_member = {
+					limit = { society_rank == 4 NOT = { is_inaccessible_trigger = yes } }
+					preferred_limit = { ai = no } #We'd rather it was a player...
+
+					character_event = { id = lodge.702 } #START: Sends event to a warrior lodge member/hero...
+				}
+			}
+			clr_province_flag = initiating_legendary_journey
+		}
+		else_if = {
+			limit = {
+				has_province_flag = initiating_legendary_journey #It has begun...
+				#But there are not enough members at rank 4...
+				NOT = {
+					any_society_member = {
+						society_rank == 4
+						NOT = { is_inaccessible_trigger = yes }
+						count = 2
+					}
+				}
+			}
+			province_event = { id = lodge.701 days = 165 random = 100 } #Check back in a while...
+		}
+	}
+}
+
+# lodge.702 - The start of legend
+# The Hero proposes a journey into a foreign realm to seek its best fighters;
+# up to three fellow Heroes join. A player may refuse and lose rank.
+# Scope: the first Hero
+character_event = {
+	id = lodge.702
+	title = legendary_prep_title
+	desc = EVTDESClodge702
+	sound = rowdy_banter_short
+	picture = GFX_evt_camaraderie
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		lodge_legend_member_trigger = yes
+		NOT = { is_inaccessible_trigger = yes }
+
+		#There has to be at least two members at rank 4.
+		any_society_member = { society_rank == 4 same_society_as = ROOT count = 2 }
+	}
+
+	portrait = event_target:target_ruler
+
+	immediate = {
+		#event_targets set here:
+		# original_hero
+		# fellow_hero_1
+		# fellow_hero_2 (if applicable)
+		# fellow_hero_3 (if applicable)
+
+		# For loc purposes, to have somewhere to refer to, and also for choosing a target...
+		if = { limit = { is_landed = yes } capital_scope = { save_event_target_as = home_capital } }
+		else_if = {
+			limit = { liege = { is_landed = yes } }
+			liege = { capital_scope = { save_event_target_as = home_capital } }
+		}
+		else = {
+			random_society_member = {
+				limit = { is_landed = yes }
+				capital_scope = { save_event_target_as = home_capital }
+			}
+		}
+
+		#select target realm...
+		#Close realms first, then anywhere...
+		any_independent_ruler = {
+			limit = {
+				NOT = { religion_group = ROOT }
+				distance = { where = event_target:home_capital distance < 1000 }
+			}
+			score_value = { #Prioritizes selecting some Emperor, if it can...
+				value = 10
+				title_tier_increase_score = yes
+			}
+			score_value = { #Prioritizes selecting some Emperor, if it can...
+				value = 10
+				nomad_reduction_score = yes
+			}
+			save_event_target_as = target_ruler
+			primary_title = { save_event_target_as = target_title }
+		}
+		if = {
+			limit = { NOT = { event_target:target_ruler = { always = yes } } }
+			any_independent_ruler = {
+				limit = { NOT = { religion_group = ROOT } }
+				score_value = { #Prioritizes selecting some Emperor, if it can...
+					value = 10
+					title_tier_increase_score = yes
+				}
+				score_value = { #Prioritizes selecting some Emperor, if it can...
+					value = 10
+					nomad_reduction_score = yes
+				}
+				save_event_target_as = target_ruler
+				primary_title = { save_event_target_as = target_title }
+			}
+		}
+		save_persistent_event_target = { #also saves the same as a persistent target, for safety (on_death)
+			name = target_title
+			scope = event_target:target_title
+		}
+
+		save_event_target_as = original_hero
+		set_character_flag = call_to_legend_active
+		hidden_effect = {
+			society = { #Find and save your fellow heroes (can be other players)...
+				random_society_member = {
+					limit = { society_rank == 4 NOT = { character = ROOT } }
+					set_character_flag = do_not_disturb
+					set_character_flag = call_to_legend_active
+					save_event_target_as = fellow_hero_1
+				}
+				random_society_member = {
+					limit = {
+						society_rank == 4
+						NOT = { character = ROOT }
+						NOT = { character = event_target:fellow_hero_1 }
+					}
+					set_character_flag = do_not_disturb
+					set_character_flag = call_to_legend_active
+					save_event_target_as = fellow_hero_2
+				}
+				random_society_member = {
+					limit = {
+						society_rank == 4
+						NOT = { character = ROOT }
+						NOT = { character = event_target:fellow_hero_1 }
+						NOT = { character = event_target:fellow_hero_2 }
+					}
+					set_character_flag = do_not_disturb
+					set_character_flag = call_to_legend_active
+					save_event_target_as = fellow_hero_3
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAlodge702 #Start the whole thing
+
+		show_portrait = event_target:province_holder
+
+		hidden_effect = { set_variable = { which = legendary_event_progress value = 0 } }
+		hidden_effect = { add_1_point_to_legendary_progress_effect = yes }
+		evaluate_legendary_progress_effect = yes
+
+		hidden_effect = {
+			#Other heroes, they get the choice to back out...
+			any_society_member = {
+				limit = {
+					same_society_as = ROOT
+					has_character_flag = call_to_legend_active
+					NOT = { character = ROOT }
+				}
+				character_event = { id = lodge.703 } # Give them the choice to back out...
+			}
+			any_society_member = {
+				limit = {
+					same_society_as = ROOT
+					NOT = { has_character_flag = call_to_legend_active }
+					NOT = { character = ROOT }
+				}
+				character_event = { id = lodge.712 } # Let other society members know what is going on
+			}
+		}
+
+		custom_tooltip = { text = EVTOPTAlodge702_TT }
+		hidden_effect = { character_event = { id = lodge.704 days = 5 } } #Hidden tombola...
+	}
+	option = { # (AI's don't get this option)
+		name = EVTOPTBlodge702 #I'd rather not start anything...
+		set_character_flag = rank_up_blocked
+		clr_character_flag = call_to_legend_active
+		society_rank_down = 1
+		custom_tooltip = { text = EVTOPTBlodge703_TT }
+
+		if = {
+			limit = {
+				# If there are no adventures left (because you're in a weird MP where everyone is in this lodge and at rank 4 and you all decided to turn this epic chain down for some reason)
+				NOT = {
+					any_society_member = {
+						society_rank == 4
+						same_society_as = ROOT
+						has_character_flag = call_to_legend_active
+						NOT = { character = ROOT }
+					}
+				}
+			}
+			stop_society_progress = yes # To prevent things from breaking
+		}
+
+		hidden_effect = {
+			if = { limit = { is_society_grandmaster = yes } set_society_grandmaster = no }
+		}
+
+		hidden_effect = {
+			#Other heroes get the choice to continue without you...
+			any_society_member = {
+				limit = {
+					same_society_as = ROOT
+					has_character_flag = call_to_legend_active
+					NOT = { character = ROOT }
+				}
+				character_event = { id = lodge.703 } # Give them the choice to back out...
+			}
+		}
+
+		trigger = {
+			ai = no #Because the ai will never refuse...
+		}
+	}
+}
+
+# lodge.703 - The start of legend
+# A fellow Hero joins the journey, or stays home and loses rank.
+# Scope: a fellow Hero
+character_event = {
+	id = lodge.703
+	title = legendary_prep_title
+	desc = EVTDESClodge703
+	picture = GFX_evt_camaraderie
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	immediate = {
+		capital_scope = { save_event_target_as = home_capital }
+		save_event_target_as = player_hero
+	}
+
+	option = {
+		name = EVTOPTAlodge703 #Let's go!
+		custom_tooltip = { text = EVTOPTAlodge703_TT }
+		hidden_effect = { set_variable = { which = legendary_event_progress value = 0 } }
+		add_2_points_to_legendary_progress_effect = yes
+		evaluate_legendary_progress_effect = yes
+		show_portrait = event_target:target_ruler
+		character_event = { id = lodge.704 days = 5 } #Send hidden tombola on self...
+
+		hidden_effect = { # Lower-ranking player members are notified...
+			any_society_member = {
+				limit = {
+					ai = no
+					same_society_as = ROOT
+					NOT = { has_character_flag = call_to_legend_active }
+					NOT = { character = ROOT }
+				}
+				character_event = { id = lodge.712 } # Let other society members know what is going on
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBlodge702 #I'd rather stay here.
+		custom_tooltip = { text = EVTOPTBlodge703_TT }
+		clr_character_flag = do_not_disturb
+		clr_character_flag = call_to_legend_active
+		set_character_flag = rank_up_blocked
+		society_rank_down = 1
+
+		hidden_effect = {
+			if = { limit = { is_society_grandmaster = yes } set_society_grandmaster = no }
+		}
+
+		if = {
+			limit = {
+				# If there are no adventures left (because you're in a weird MP where everyone is in this lodge and at rank 4 and you all decided to turn this epic chain down for some reason)
+				NOT = {
+					any_society_member = {
+						society_rank == 4
+						same_society_as = ROOT
+						has_character_flag = call_to_legend_active
+						NOT = { character = ROOT }
+					}
+				}
+			}
+			stop_society_progress = yes # To prevent things from breaking
+		}
+
+		trigger = { ai = no }
+	}
+}
+
+# lodge.712 - News of the journey
+# Other members hear of the journey: pride or humility.
+# Scope: a member
+character_event = {
+	id = lodge.712
+	title = legendary_prep_title
+	desc = EVTDESClodge712
+	picture = GFX_evt_camaraderie
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { has_character_modifier = lodge_legend_news_cooldown } # to prevent MP spam
+	}
+
+	immediate = {
+		hidden_effect = {
+			add_character_modifier = {
+				name = lodge_legend_news_cooldown
+				duration = 60
+				hidden = yes
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAlodge712
+		if = {
+			limit = { NOT = { trait = proud } }
+			random = {
+				chance = 40
+				add_trait = proud
+				hidden_tooltip = { character_event = { id = 38261 } } # Notify Proud
+			}
+		}
+		show_portrait = event_target:target_ruler
+	}
+
+	option = {
+		name = EVTOPTBlodge712
+		if = {
+			limit = { NOT = { trait = humble } }
+			random = {
+				chance = 40
+				add_trait = humble
+				hidden_tooltip = { character_event = { id = 38260 } } #Notify Humble
+			}
+		}
+		show_portrait = event_target:target_ruler
+	}
+}
+
+# lodge.704 - The tombola
+# Hidden. Picks the next step of the journey by its stage: preparations,
+# travel, duels, the end.
+# Scope: a Hero on the journey
+character_event = {
+	id = lodge.704
+	is_triggered_only = yes
+
+	hide_window = yes
+
+	trigger = {
+		lodge_legend_member_trigger = yes
+		has_character_flag = call_to_legend_active
+	}
+
+	immediate = {
+		# Check if you are an "additional" player_hero or the original one? In case of outcomes?
+		# Check if the other heroes are still alive?
+
+		if = { #Back up, in case the ruler we are talking about is dead...
+			limit = { persistent_event_target:target_ruler = { NOT = { is_alive = yes } } }
+			persistent_event_target:target_title = {
+				holder_scope = { top_liege = { save_event_target_as = target_ruler } }
+			}
+			save_persistent_event_target = { #also saves the same as a persistent target, for safety (on_death)
+				name = target_ruler
+				scope = event_target:target_ruler
+			}
+		}
+
+		#event_targets usable:
+		# original_hero
+		# home_capital
+		# fellow_hero_1 (can be player)
+		# fellow_hero_2 (if applicable - can be player)
+		# fellow_hero_3 (if applicable - can be player)
+		# target_ruler
+		# target_title
+
+		random_list = {
+			10 = { #AI fakes progress (start_bracket)...
+				trigger = { ai = yes has_character_flag = start_bracket }
+				random = {
+					chance = 25
+					#Run single progress point...
+					add_1_point_to_legendary_progress_effect = yes #up variable for outcomes...
+					evaluate_legendary_progress_effect = yes
+					additive_modifier = { duelist_skill_is_high_group_trigger = no value = -5 }
+				}
+				send_legendary_tombola_effect = yes #sends tombola again...
+			}
+			10 = { #Receive an artifact...
+				trigger = {
+					has_character_flag = start_bracket
+					NOT = { has_character_flag = HF_legend_artifact }
+					any_society_member = {
+						ai = yes
+						prisoner = no
+						same_society_as = ROOT
+						NOT = { character = ROOT }
+						any_artifact = {
+							OR = { has_artifact_flag = combat_weapon has_artifact_flag = armor }
+						}
+					}
+				}
+				additive_modifier = { #more likely if you have no artifacts at all...
+					num_of_artifacts > 0
+					value = 5
+				}
+
+				set_character_flag = HF_legend_artifact
+
+				random_society_member = {
+					limit = {
+						ai = yes
+						prisoner = no
+						same_society_as = ROOT
+						NOT = { character = ROOT }
+						any_artifact = {
+							OR = { has_artifact_flag = combat_weapon has_artifact_flag = armor }
+						}
+					}
+					save_event_target_as = giving_member
+					character_event = { id = lodge.705 } #Ping to select artifact...
+				}
+			}
+			10 = { #Hold a feast in honor of old hero (currently only yourself)...
+				trigger = {
+					has_character_flag = start_bracket
+					NOT = { has_character_flag = HF_legend_feast }
+					event_target:home_capital = { # Something cool happened at your capital once...
+						persistent_event_target:local_fearsome_commander_target = {
+							always = yes
+							character = ROOT
+						}
+					}
+				}
+				set_character_flag = HF_legend_feast
+				character_event = { id = lodge.707 }
+			}
+			10 = { #Turn a skull into a cup
+				trigger = {
+					has_character_flag = start_bracket
+					NOT = { has_character_flag = HF_legend_skull }
+					any_artifact = {
+						OR = { artifact_type = enemy_skull artifact_type = rival_skull }
+					}
+				}
+				set_character_flag = HF_legend_skull
+				character_event = { id = lodge.708 }
+			}
+			20 = { #Bond with your bird
+				trigger = {
+					has_character_flag = start_bracket
+					has_character_modifier = pet_hunting_eagle
+					NOT = { has_character_flag = HF_legend_eagle }
+				}
+				set_character_flag = HF_legend_eagle
+				character_event = { id = lodge.709 }
+			}
+			10 = { #Have your battlefield-weapon upgraded
+				trigger = {
+					has_character_flag = start_bracket
+					NOT = { has_character_flag = HF_legend_upgrade_weapon }
+					has_a_warrior_lodge_battle_blade_trigger = yes
+					job_marshal = {
+						NOR = {
+							character = event_target:original_hero
+							character = event_target:fellow_hero_1
+							character = event_target:fellow_hero_2
+							character = event_target:fellow_hero_3
+						}
+						is_alive = yes
+					}
+				}
+				set_character_flag = HF_legend_upgrade_weapon
+				character_event = { id = lodge.713 }
+			}
+
+			1 = { #Player fakes progress...
+				trigger = { ai = no has_character_flag = start_bracket }
+				random = {
+					chance = 75
+					#Run single progress point...
+					additive_modifier = { duelist_skill_is_high_group_trigger = no value = -5 }
+					add_1_point_to_legendary_progress_effect = yes #up variable for outcomes...
+					evaluate_legendary_progress_effect = yes
+				}
+				send_legendary_tombola_effect = yes #sends tombola again...
+			}
+
+			10 = { ### Travel starts!
+				trigger = {
+					NOT = { has_character_modifier = out_traveling }
+					has_character_flag = mid_bracket
+					OR = {
+						ai = no #Either you are a player...
+						NOT = { #Or there are no players involved...
+							any_society_member = {
+								same_society_as = PREV
+								NOT = { character = PREV }
+								has_character_flag = call_to_legend_active
+								ai = no
+							}
+						}
+					}
+				}
+
+				set_character_flag = i_am_special@ROOT
+				character_event = { id = lodge.710 } #You are now in enemy territory (branches to all heroes)...
+			}
+			1 = { #Player fakes progress...
+				trigger = { ai = no has_character_flag = mid_bracket }
+				random = {
+					chance = 85
+					#Run single progress point...
+					add_1_point_to_legendary_progress_effect = yes #up variable for outcomes...
+					evaluate_legendary_progress_effect = yes
+				}
+				send_legendary_tombola_effect = yes #sends tombola again...
+			}
+			1 = { #AI fakes progress (mid_bracker)...
+				trigger = { ai = yes has_character_flag = mid_bracket }
+				random = {
+					chance = 25
+					#Run single progress point...
+					add_1_point_to_legendary_progress_effect = yes #up variable for outcomes...
+					evaluate_legendary_progress_effect = yes
+				}
+				send_legendary_tombola_effect = yes #sends tombola again...
+			}
+
+			### No more possible prep/travel events - Continue to dueling some enemies!
+			10 = {
+				trigger = { ai = no has_character_flag = top_bracket }
+				character_event = { id = lodge.711 } #Player heroes encounter a duel opportunity...
+			}
+			10 = {
+				trigger = { ai = yes has_character_flag = top_bracket }
+				character_event = { id = lodge.720 } #AI heroes challenges a random char to a duel (risk of being imprisoned)...
+			}
+			10 = { #AI fakes progress (top_bracket)...
+				trigger = { ai = yes has_character_flag = top_bracket }
+				random = {
+					chance = 50
+					#Run single progress point...
+					add_1_point_to_legendary_progress_effect = yes #up variable for outcomes...
+					evaluate_legendary_progress_effect = yes
+				}
+				send_legendary_tombola_effect = yes #sends tombola again...
+			}
+			10 = { # FINAL EVENTS...
+				trigger = {
+					OR = { #Either you died, or you reached "the end"...
+						is_dying = yes
+						has_character_flag = call_it_a_day
+					}
+				}
+				if = {
+					limit = { lodge_legend_member_trigger = yes }
+					society = { save_event_target_as = target_society }
+				}
+				if = { #You died, but reached the end...
+					limit = {
+						is_dying = yes
+						has_character_flag = call_it_a_day
+						has_killed_at_least_1_trigger = yes
+					}
+					died_founding_a_bloodline_effect = yes
+				}
+				else_if = { #You successfully reached the end of the chain...
+					limit = { has_character_flag = call_it_a_day is_alive = yes }
+					found_a_bloodline_effect = yes #sets flag for quality and sends conclusion event...
+				}
+				else = { #means you are just dying... :D
+					died_before_achieveing_greatness_effect = yes
+				}
+
+				# To ensure that characters which the players knows about stand a chance...
+				if = {
+					limit = {
+						ai = no
+						any_society_member = {
+							same_society_as = ROOT
+							NOT = { character = ROOT }
+							has_character_flag = call_to_legend_active
+						}
+					}
+					any_society_member = {
+						limit = {
+							same_society_as = ROOT
+							NOT = { character = ROOT }
+							has_character_flag = call_to_legend_active
+							ai = yes
+						}
+						set_character_flag = player_was_involved
+					}
+				}
+			}
+		}
+	}
+}
+
+# lodge.744 - Fallen on the journey
+# Hidden. A Hero died on the journey: tell the heir and the society.
+# Scope: the dead Hero; from on_death
+character_event = {
+	id = lodge.744
+	is_triggered_only = yes
+	hide_window = yes
+
+	trigger = {
+		lodge_legend_member_trigger = yes
+		has_character_flag = call_to_legend_active
+	}
+
+	immediate = {
+		society = { save_event_target_as = target_society }
+		if = { #Back up, in case the ruler we are talking about is dead...
+			limit = { persistent_event_target:target_ruler = { NOT = { is_alive = yes } } }
+			persistent_event_target:target_title = {
+				holder_scope = { top_liege = { save_event_target_as = target_ruler } }
+			}
+			save_persistent_event_target = { #also saves the same as a persistent target, for safety (on_death)
+				name = target_ruler
+				scope = event_target:target_ruler
+			}
+		}
+		if = { #You died, but reached the end...
+			limit = {
+				is_dying = yes
+				has_character_flag = call_it_a_day
+				has_killed_at_least_1_trigger = yes
+			}
+			died_founding_a_bloodline_effect = yes
+		}
+		else = { #means you are just dying... :D
+			died_before_achieveing_greatness_effect = yes
+		}
+		# To ensure that characters which the players knows about stand a chance...
+		if = {
+			limit = {
+				ai = no
+				any_society_member = {
+					same_society_as = ROOT
+					NOT = { character = ROOT }
+					has_character_flag = call_to_legend_active
+				}
+			}
+			any_society_member = {
+				limit = {
+					same_society_as = ROOT
+					NOT = { character = ROOT }
+					has_character_flag = call_to_legend_active
+					ai = yes
+				}
+				set_character_flag = player_was_involved
+			}
+		}
+	}
+}
+
+# lodge.705 - Preparations
+# Hidden. A fellow member offers gear.
+# Scope: the giving member
+character_event = {
+	id = lodge.705
+	is_triggered_only = yes
+	hide_window = yes
+
+	immediate = {
+		any_artifact = {
+			limit = { OR = { has_artifact_flag = combat_weapon has_artifact_flag = armor } }
+			score_value = { #Prioritizes selecting an appropriate artifact...
+				value = 10
+				artifact_selection_score = yes
+			}
+			save_event_target_as = artifact_gift
+		}
+		FROM = {
+			character_event = { id = lodge.706 } #Send event
+		}
+	}
+}
+
+# lodge.706 - A gift of arms
+# A fellow member gives a weapon or armour for the journey.
+# Scope: the Hero; giving_member gives
+character_event = {
+	id = lodge.706
+	title = legendary_prep_title
+	desc = EVTDESClodge706_a #Hey, I have a gift for you, for the upcoming battles to come.
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge706 #Yes, I'll accept your gift
+
+		event_target:artifact_gift = {
+			show_scope_change = no
+			transfer_artifact = { from = FROM to = ROOT }
+		}
+		add_2_points_to_legendary_progress_effect = yes # Great progress on journey!
+	}
+	option = {
+		name = EVTOPTBlodge706 #I'll pay you for it!
+
+		event_target:artifact_gift = {
+			show_scope_change = no
+			transfer_artifact = { from = FROM to = ROOT }
+		}
+		if = { limit = { is_tribal = yes } scaled_wealth = { value = -0.5 min = -10 max = -100 } }
+		else = { scaled_wealth = { value = -1 min = -35 max = -750 } }
+
+		reverse_opinion = { who = FROM modifier = opinion_grateful years = 3 }
+
+		add_2_points_to_legendary_progress_effect = yes # Great progress on journey!
+	}
+	option = { #Uh, no thanks.
+		name = EVTOPTClodge706
+
+		add_1_point_to_legendary_progress_effect = yes # Good progress on journey...
+	}
+	after = {
+		evaluate_legendary_progress_effect = yes
+		send_legendary_tombola_effect = yes #sends tombola again...
+	}
+}
+
+# lodge.707 - Old battles
+# Tell the tales of past battles to inspire the society.
+# Scope: the Hero
+character_event = {
+	id = lodge.707
+	title = legendary_prep_title
+	desc = EVTDESClodge707 #Heroes of old are with me!
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	immediate = {
+		#Find someone to talk to...
+		save_fellow_member_effect = yes
+		random_list = {
+			100 = { #Means people remember a ruler once decapitated an enemy here...
+				trigger = {
+					event_target:home_capital = {
+						persistent_event_target:local_fearsome_commander_target = { always = yes }
+					}
+				}
+				if = { #Means YOU did it and text should reflect that.
+					limit = {
+						event_target:home_capital = {
+							persistent_event_target:local_fearsome_commander_target = {
+								character = ROOT
+							}
+						}
+					}
+					set_character_flag = i_was_fearsome_commander
+				}
+				else = {
+					set_character_flag = remember_fearsome_commander
+					event_target:home_capital = {
+						persistent_event_target:local_fearsome_commander_target = {
+							save_event_target_as = target
+						}
+					}
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAlodge707 #Yes, hold a feast in their name
+
+		scaled_wealth = { value = -0.5 min = -25 max = -50 }
+
+		add_2_points_to_legendary_progress_effect = yes # Great progress on journey!
+	}
+	option = { #Uh, no thanks.
+		name = EVTOPTBlodge707
+		add_1_point_to_legendary_progress_effect = yes # Good progress on journey...
+	}
+	after = {
+		evaluate_legendary_progress_effect = yes
+		send_legendary_tombola_effect = yes #sends tombola again...
+	}
+}
+
+# lodge.708 - The skull cup
+# Turn a skull trophy into a cup.
+# Scope: the Hero
+character_event = {
+	id = lodge.708
+	title = legendary_prep_title
+	desc = EVTDESClodge708 #"You should turn this into a cup!"
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	portrait = event_target:fellow_member
+
+	trigger = { }
+
+	immediate = {
+		random_artifact = {
+			limit = { OR = { artifact_type = enemy_skull artifact_type = rival_skull } }
+			preferred_limit = { artifact_type = enemy_skull }
+			save_event_target_as = target_artifact
+		}
+
+		#Find someone to talk to...
+		save_fellow_member_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAlodge708 #Yes!
+
+		scaled_wealth = { value = -0.6 min = -23 max = -65 }
+
+		add_artifact = skull_cup
+
+		new_artifact = { copy_artifact_history = event_target:target_artifact }
+
+		event_target:target_artifact = { show_scope_change = no destroy_artifact = yes }
+
+		add_2_points_to_legendary_progress_effect = yes # Great progress on journey!
+	}
+	option = {
+		name = EVTOPTBlodge708 #Nah...
+
+		add_1_point_to_legendary_progress_effect = yes # Good progress on journey...
+	}
+	after = {
+		evaluate_legendary_progress_effect = yes
+		send_legendary_tombola_effect = yes #sends tombola again...
+	}
+}
+
+# lodge.709 - Bird and Hero
+# Bond with your hunting eagle.
+# Scope: the Hero
+character_event = {
+	id = lodge.709
+	title = legendary_prep_title
+	desc = EVTDESClodge709 #Fierce bird
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	portrait = event_target:fellow_member
+
+	trigger = { }
+
+	immediate = {
+		#Find someone to talk to...
+		save_fellow_member_effect = yes
+	}
+
+	option = { #Stressed/Depressed
+		name = EVTOPTAlodge709 #Yes!
+		custom_tooltip = { text = EVTOPTAlodge709_TT }
+
+		if = { limit = { trait = depressed } remove_trait = depressed }
+		else_if = { limit = { trait = stressed } remove_trait = stressed }
+
+		add_2_points_to_legendary_progress_effect = yes # Great progress on journey!
+		trigger = { OR = { trait = stressed trait = depressed } }
+	}
+
+	option = {
+		name = EVTOPTAlodge709 #Yes!
+		custom_tooltip = { text = EVTOPTAlodge709_TT }
+
+		add_character_modifier = { name = friend_of_eagles years = 3 }
+
+		add_1_point_to_legendary_progress_effect = yes # Good progress on journey...
+
+		trigger = { NOR = { trait = stressed trait = depressed } }
+	}
+
+	option = {
+		name = EVTOPTBlodge709 #Nah...
+		if = { limit = { NOT = { trait = cruel } } add_trait = cruel }
+
+		add_character_modifier = { name = callous years = 3 }
+		add_1_point_to_legendary_progress_effect = yes # Good progress on journey...
+	}
+	after = {
+		evaluate_legendary_progress_effect = yes
+		send_legendary_tombola_effect = yes #sends tombola again...
+	}
+}
+
+# lodge.713 - The blade stays home
+# The marshal asks to keep the battlefield blade for the army.
+# Scope: the Hero
+character_event = {
+	id = lodge.713
+	title = legendary_prep_title
+	desc = EVTDESClodge713
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	portrait = event_target:marshal_character
+
+	immediate = {
+		if = {
+			limit = { job_marshal = { always = yes } }
+			job_marshal = { save_event_target_as = marshal_character }
+		}
+		any_artifact = {
+			limit = {
+				weapon_was_found_on_battlefield_trigger = yes
+				NOT = { has_artifact_flag = upgraded }
+			}
+			score_value = { #Prioritizes selecting an appropriate artifact...
+				value = 10
+				artifact_selection_score = yes
+			}
+			save_event_target_as = target_artifact
+		}
+	}
+
+	option = {
+		name = EVTOPTAlodge713 #Brilliant idea!
+
+		scaled_wealth = { value = -0.4 min = -25 max = -67 }
+
+		if = {
+			limit = { #In case we ever add other battlefield artifacts....
+				event_target:target_artifact = { has_artifact_flag = sword }
+			}
+			if = { #Make sure it upgrades into the correct item...
+				limit = { event_target:target_artifact = { artifact_type = sword_1_battlefield } }
+				add_artifact = sword_1_battlefield_upgraded
+			}
+			else_if = {
+				limit = { event_target:target_artifact = { artifact_type = sword_2_battlefield } }
+				add_artifact = sword_2_battlefield_upgraded
+			}
+			else_if = {
+				limit = { event_target:target_artifact = { artifact_type = sword_3_battlefield } }
+				add_artifact = sword_3_battlefield_upgraded
+			}
+		}
+
+		new_artifact = {
+			copy_artifact_history = event_target:target_artifact #Keep history...
+			set_name = weapon_battlefield_rename
+			set_description = weapon_battlefield_upgraded_desc_rename
+		}
+
+		event_target:target_artifact = { show_scope_change = no destroy_artifact = yes }
+		add_2_points_to_legendary_progress_effect = yes # Great progress on journey!
+	}
+	option = {
+		name = EVTOPTAlodge713_diplo #Brilliant idea (for free)!
+		tooltip_info = diplomacy
+
+		if = {
+			limit = { #In case we ever add other battlefield artifacts....
+				event_target:target_artifact = { has_artifact_flag = sword }
+			}
+			if = { #Make sure it upgrades into the correct item...
+				limit = { event_target:target_artifact = { artifact_type = sword_1_battlefield } }
+				add_artifact = sword_1_battlefield_upgraded
+			}
+			else_if = {
+				limit = { event_target:target_artifact = { artifact_type = sword_2_battlefield } }
+				add_artifact = sword_2_battlefield_upgraded
+			}
+			else_if = {
+				limit = { event_target:target_artifact = { artifact_type = sword_3_battlefield } }
+				add_artifact = sword_3_battlefield_upgraded
+			}
+		}
+
+		new_artifact = {
+			set_name = weapon_battlefield_rename_1
+			set_description = weapon_battlefield_upgraded_desc_rename
+			copy_artifact_history = event_target:target_artifact #Keep history...
+		}
+
+		event_target:target_artifact = { show_scope_change = no destroy_artifact = yes }
+
+		reverse_opinion = {
+			who = event_target:marshal_character
+			modifier = opinion_was_praised
+			years = 10
+		}
+
+		add_2_points_to_legendary_progress_effect = yes # Great progress on journey!
+
+		trigger = { diplomacy = 12 }
+	}
+	option = {
+		name = EVTOPTBlodge713 #Give it to your marshal?
+
+		reverse_opinion = {
+			who = event_target:marshal_character
+			modifier = opinion_inspiring_leader
+			years = 10
+		}
+
+		event_target:target_artifact = {
+			show_scope_change = no
+			transfer_artifact = { from = ROOT to = event_target:marshal_character }
+		}
+		add_1_point_to_legendary_progress_effect = yes # Good progress on journey...
+	}
+	option = {
+		name = EVTOPTClodge713
+		add_1_point_to_legendary_progress_effect = yes # Good progress on journey...
+	}
+	after = {
+		evaluate_legendary_progress_effect = yes
+		send_legendary_tombola_effect = yes #sends tombola again...
+	}
+}
+
+# lodge.710 - Into enemy lands
+# The journey reaches the target realm.
+# Scope: the Hero
+character_event = {
+	id = lodge.710
+	title = legendary_raid_title
+	desc = EVTDESClodge710
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	trigger = {
+		NOT = { has_character_modifier = out_traveling }
+	}
+
+	portrait = event_target:fellow_member
+
+	immediate = {
+		#Find someone to talk to...
+		save_fellow_member_effect = yes
+	}
+
+	option = { #We are stronger together!
+		name = EVTOPTAlodge710
+		piety = 10
+		add_2_points_to_legendary_progress_effect = yes # Great progress on journey!
+	}
+	option = { #All the glory shall be mine!
+		name = EVTOPTBlodge710
+		prestige = 20
+		add_1_point_to_legendary_progress_effect = yes # Good progress on journey...
+	}
+	after = {
+		add_character_modifier = { modifier = out_traveling duration = -1 }
+
+		if = {
+			limit = { has_character_flag = i_am_special@ROOT } #set in the tombola (to make sure the other members do not get the tombola double-running)...
+			clr_character_flag = i_am_special@ROOT
+			evaluate_legendary_progress_effect = yes
+			send_legendary_tombola_effect = yes #sends tombola again...
+		}
+
+		hidden_effect = {
+			any_society_member = {
+				limit = {
+					same_society_as = ROOT
+					NOT = { character = ROOT }
+					has_character_flag = call_to_legend_active
+				}
+				character_event = { id = lodge.710 days = 1 } #Runs this event for those who don't have the modifier yet (so everyone's on the same page)...
+			}
+		}
+	}
+}
+
+# lodge.711 - A duel!
+# A fighter of the realm is found: a hunter, a scout, a village bully, an
+# urchin's tip, and at the end an old fencer, a giant or a bear.
+# Scope: the Hero
+character_event = {
+	id = lodge.711
+	title = legendary_raid_title
+	picture = GFX_evt_bandits
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	portrait = event_target:my_duel_target
+
+	immediate = {
+		hidden_effect = {
+			#Find someone to talk to...
+			save_fellow_member_effect = yes
+			#Find someone to duel...
+			event_target:target_ruler = {
+				if = { # First fight, just find *someone*...
+					limit = {
+						ROOT = {
+							NOT = {
+								any_kill_list_character = {
+									count = 3
+									death_reason = death_legendary_win_duel
+								}
+							}
+						}
+					}
+					if = { #if there is anyone who fits the base bill...
+						limit = { #base requirements
+							any_realm_character = {
+								is_adult = yes
+								NOT = { same_society_as = ROOT }
+								is_inaccessible_or_incapable_trigger = no
+								NOT = { has_character_modifier = bedridden_illness }
+								NOT = { has_character_modifier = severe_illness }
+								NOT = { has_character_flag = do_not_disturb }
+								NOT = { has_character_flag = fought_duel_against@ROOT }
+								NOT = { character = event_target:my_duel_target } #Can't have previously dueled...
+								NOT = { character = event_target:target_ruler } #Should not be the ruler themselves...
+								NOT = { is_invincible_trigger = yes }
+								ai = yes
+							}
+						}
+						any_realm_character = {
+							limit = { #same base requirements
+								is_adult = yes
+								NOT = { same_society_as = ROOT }
+								is_inaccessible_or_incapable_trigger = no
+								NOT = { has_character_modifier = bedridden_illness }
+								NOT = { has_character_modifier = severe_illness }
+								NOT = { has_character_flag = do_not_disturb }
+								NOT = { has_character_flag = fought_duel_against@ROOT }
+								NOT = { character = event_target:my_duel_target } #Can't have previously dueled...
+								NOT = { character = event_target:target_ruler } #Should not be the ruler themselves...
+								NOT = { is_invincible_trigger = yes }
+								ai = yes
+							}
+							score_value = { #Prioritizes selecting a good warrior, if it can...
+								value = 10
+								good_soldier_outcome_score = yes
+							}
+							score_value = { #tries to make sure you fight someone the same gender as you...
+								value = 10
+								same_gender_preference_score = yes
+							}
+							save_event_target_as = my_duel_target
+							set_character_flag = fought_duel_against@ROOT
+
+							#REQUIRED event targets for setting up duel evaluation!
+							save_event_target_as = combatant_2 #the target of the duel...
+							ROOT = { save_event_target_as = combatant_1 } #the person issuing the duel...
+						}
+					}
+					else = { #There was no one available, so we spawn a character instead...
+						# Spawn a character
+						spawn_great_commander_effect = yes
+						event_target:invited_character = {
+							upgrade_education_effect = yes
+							add_one_duel_experience_modifier = yes
+							save_event_target_as = my_duel_target
+							set_character_flag = fought_duel_against@ROOT
+
+							#REQUIRED event targets for setting up duel evaluation!
+							save_event_target_as = combatant_2 #the target of the duel...
+							ROOT = { save_event_target_as = combatant_1 } #the person issuing the duel...
+						}
+					}
+				}
+
+				else = { #You have killed X amount of characters already...
+					ROOT = { randomize_XYZ_desc_flag_effect = yes }
+
+					#Spawn different characters, depending X/Y/Z-flag...
+					if = {
+						limit = { ROOT = { has_character_flag = WL_desc_X } } # Old man/woman
+						spawn_old_duelist_effect = yes
+					}
+					else_if = {
+						limit = { ROOT = { has_character_flag = WL_desc_Y } } #Giant
+						spawn_giant_duelist_effect = yes
+					}
+					else_if = {
+						limit = { ROOT = { has_character_flag = WL_desc_Z } } # Actual bear
+						spawn_creature_champion_effect = yes
+					}
+
+					event_target:invited_character = {
+						save_event_target_as = my_duel_target
+						set_character_flag = fought_duel_against@ROOT
+
+						#REQUIRED event targets for setting up duel evaluation!
+						save_event_target_as = combatant_2 #the target of the duel...
+					}
+					ROOT = { save_event_target_as = combatant_1 } #the person issuing the duel...
+				}
+
+				event_target:my_duel_target = {
+					if = {
+						limit = {
+							ROOT = { combat_rating_diff = { who = PREV value = 85 } } # if ROOT is 85 better
+						}
+						remove_trait = erudite
+						remove_disease_trait_effect = yes
+						clear_disease_level_effect = yes
+						remove_disease_flags_effect = yes
+						remove_education_effect = yes
+						add_trait = brilliant_strategist
+						remove_lifestyle_trait_effect = yes
+						add_trait = duelist
+						remove_all_negative_congenital_traits_effect = yes
+						add_trait = strong
+						add_trait = wroth
+						if = {
+							limit = { has_severe_disability_trigger = yes }
+							remove_trait = infirm
+							remove_trait = mangled
+							remove_trait = inbred
+							remove_trait = blinded
+							remove_trait = incapable
+							remove_trait = maimed
+						}
+						if = {
+							limit = { has_injury_trigger = yes }
+							remove_trait = wounded
+							remove_trait = severely_injured
+						}
+						add_one_duel_experience_modifier = yes
+						add_one_duel_experience_modifier = yes
+						add_one_duel_experience_modifier = yes
+						add_one_duel_experience_modifier = yes
+						add_one_duel_experience_modifier = yes
+						add_one_duel_experience_modifier = yes
+						add_one_duel_experience_modifier = yes
+						add_one_duel_experience_modifier = yes
+					}
+					else_if = {
+						limit = {
+							ROOT = { combat_rating_diff = { who = PREV value = 65 } } # if ROOT is 65 better
+						}
+						remove_trait = erudite
+						remove_disease_trait_effect = yes
+						clear_disease_level_effect = yes
+						remove_disease_flags_effect = yes
+						remove_education_effect = yes
+						random_list = {
+							10 = { add_trait = elusive_shadow }
+							10 = { add_trait = brilliant_strategist }
+						}
+						remove_lifestyle_trait_effect = yes
+						random_list = {
+							10 = { add_trait = hunter }
+							10 = { add_trait = duelist }
+						}
+						random_list = {
+							20 = { add_trait = robust }
+							10 = { add_trait = strong }
+							10 = { add_trait = genius }
+							5 = { health = 1 }
+						}
+						if = {
+							limit = { has_severe_disability_trigger = yes }
+							remove_trait = infirm
+							remove_trait = mangled
+							remove_trait = inbred
+							remove_trait = blinded
+							remove_trait = incapable
+							remove_trait = maimed
+						}
+						if = {
+							limit = { has_injury_trigger = yes }
+							remove_trait = wounded
+							remove_trait = severely_injured
+						}
+						add_one_duel_experience_modifier = yes
+						add_one_duel_experience_modifier = yes
+						add_one_duel_experience_modifier = yes
+					}
+					else_if = {
+						limit = {
+							ROOT = { combat_rating_diff = { who = PREV value = 50 } } # if ROOT is 50 better
+						}
+						remove_trait = erudite
+						remove_disease_trait_effect = yes
+						clear_disease_level_effect = yes
+						remove_disease_flags_effect = yes
+						remove_education_effect = yes
+						random_list = {
+							10 = { add_trait = elusive_shadow }
+							10 = { add_trait = brilliant_strategist }
+						}
+						remove_lifestyle_trait_effect = yes
+						random_list = {
+							10 = { add_trait = hunter }
+							10 = { add_trait = duelist }
+						}
+						if = {
+							limit = { has_severe_disability_trigger = yes }
+							remove_trait = infirm
+							remove_trait = mangled
+							remove_trait = inbred
+							remove_trait = blinded
+							remove_trait = incapable
+							remove_trait = maimed
+						}
+						if = {
+							limit = { has_injury_trigger = yes }
+							remove_trait = wounded
+							remove_trait = severely_injured
+						}
+						add_one_duel_experience_modifier = yes
+						add_one_duel_experience_modifier = yes
+						add_one_duel_experience_modifier = yes
+					}
+					else_if = {
+						limit = {
+							ROOT = { combat_rating_diff = { who = PREV value = 35 } } # if ROOT is 35 better
+						}
+						remove_trait = erudite
+						remove_disease_trait_effect = yes
+						clear_disease_level_effect = yes
+						remove_disease_flags_effect = yes
+						remove_education_effect = yes
+						remove_lifestyle_trait_effect = yes
+						if = {
+							limit = { has_severe_disability_trigger = yes }
+							remove_trait = infirm
+							remove_trait = mangled
+							remove_trait = inbred
+							remove_trait = blinded
+							remove_trait = incapable
+							remove_trait = maimed
+						}
+						else_if = {
+							limit = { has_injury_trigger = yes }
+							remove_trait = wounded
+							remove_trait = severely_injured
+						}
+						else = {
+							random_list = {
+								10 = {
+									add_trait = elusive_shadow
+									random_list = {
+										10 = { add_trait = impaler }
+										10 = { add_trait = schemer }
+									}
+								}
+								10 = {
+									add_trait = brilliant_strategist
+									random_list = {
+										10 = { add_trait = hunter }
+										10 = { add_trait = duelist }
+									}
+								}
+							}
+						}
+						add_one_duel_experience_modifier = yes
+						add_one_duel_experience_modifier = yes
+					}
+					else_if = {
+						limit = {
+							ROOT = { combat_rating_diff = { who = PREV value = 20 } } # if ROOT is 20 better
+						}
+						remove_trait = erudite
+						remove_lifestyle_trait_effect = yes
+						random_list = {
+							10 = { add_trait = hunter }
+							10 = { add_trait = duelist }
+						}
+						if = { limit = { NOT = { trait = brave } } add_trait = brave }
+						else_if = {
+							limit = { has_severe_disability_trigger = yes }
+							remove_trait = infirm
+							remove_trait = mangled
+							remove_trait = inbred
+							remove_trait = blinded
+							remove_trait = incapable
+							remove_trait = maimed
+						}
+						else_if = {
+							limit = { has_injury_trigger = yes }
+							remove_trait = wounded
+							remove_trait = severely_injured
+						}
+						else_if = { limit = { NOT = { trait = wroth } } add_trait = wroth }
+						else_if = { limit = { NOT = { trait = cruel } } add_trait = cruel }
+					}
+					else_if = {
+						limit = {
+							ROOT = { combat_rating_diff = { who = PREV value = 10 } } # if ROOT is 10 better
+						}
+						remove_trait = erudite
+						if = { limit = { NOT = { trait = brave } } add_trait = brave }
+						else_if = { limit = { NOT = { trait = wroth } } add_trait = wroth }
+						else_if = { limit = { NOT = { trait = cruel } } add_trait = cruel }
+						else_if = {
+							limit = { has_severe_disability_trigger = yes }
+							remove_trait = infirm
+							remove_trait = mangled
+							remove_trait = inbred
+							remove_trait = blinded
+							remove_trait = incapable
+							remove_trait = maimed
+						}
+						else_if = {
+							limit = { has_injury_trigger = yes }
+							remove_trait = wounded
+							remove_trait = severely_injured
+						}
+						else = { add_trait = strong }
+					}
+					else = {
+						#do nothing
+					}
+				}
+			}
+			if = { # Means you have not reached the "boss" fight
+				limit = {
+					NOR = {
+						has_character_flag = WL_desc_X
+						has_character_flag = WL_desc_Y
+						has_character_flag = WL_desc_Z
+					}
+				}
+				randomize_ABCDEF_desc_flag_effect = yes # Get a random desc
+			}
+		}
+	}
+
+	desc = {
+		text = EVTDESClodge711_a #Someone is hunting! Aha!
+		picture = GFX_evt_bandits
+		trigger = { has_character_flag = WL_desc_A }
+	}
+	desc = {
+		text = EVTDESClodge711_b #Outside the campfire, someone is tending to nature's call
+		picture = GFX_evt_carriage
+		trigger = { has_character_flag = WL_desc_B }
+	}
+	desc = {
+		text = EVTDESClodge711_c #In the streets of a village, accosted by locals
+		picture = GFX_evt_market
+		trigger = { has_character_flag = WL_desc_C }
+	}
+	desc = {
+		text = EVTDESClodge711_d #A moonlit night, listening to companion snoring, sneaky assassin?
+		picture = GFX_evt_mysterious_forest
+		trigger = { has_character_flag = WL_desc_D }
+	}
+	desc = {
+		text = EVTDESClodge711_e #Urchin tips you off, pointing you to finest warrior around
+		picture = GFX_evt_market
+		trigger = { has_character_flag = WL_desc_E }
+	}
+	# "Boss" fights...
+	desc = {
+		text = EVTDESClodge711_x #Boss fight nr 1 (Old Fencer)
+		picture = GFX_evt_outside_tavern_hf
+		trigger = { has_character_flag = WL_desc_X }
+	}
+	desc = {
+		text = EVTDESClodge711_y #Boss fight nr 2 (Giant)
+		picture = GFX_evt_mounted_combat_day_hf
+		trigger = { has_character_flag = WL_desc_Y }
+	}
+	desc = {
+		text = EVTDESClodge711_z #Boss fight nr 3 (Bear)
+		picture = GFX_evt_sway_hf
+		trigger = { has_character_flag = WL_desc_Z }
+	}
+
+	option = { #I shall challenge them to a duel!
+		name = {
+			text = EVTOPTAlodge711_a #A challenge! Yes, you! Let's fight!
+			trigger = { has_character_flag = WL_desc_A }
+		}
+		name = {
+			text = EVTOPTAlodge711_b #Excellent! I will duel this one!
+			trigger = { has_character_flag = WL_desc_B }
+		}
+		name = {
+			text = EVTOPTAlodge711_c #You wanna say that to me face? Let's fight!
+			trigger = { has_character_flag = WL_desc_C }
+		}
+		name = {
+			text = EVTOPTAlodge711_d #You come armed, eh...?
+			trigger = { has_character_flag = WL_desc_D }
+		}
+		name = {
+			text = EVTOPTAlodge711_e #Aah, such fortune!
+			trigger = { has_character_flag = WL_desc_E }
+		}
+		name = {
+			text = EVTOPTAlodge711_x #I won't go easy on you
+			trigger = { has_character_flag = WL_desc_X }
+		}
+		name = {
+			text = EVTOPTAlodge711_y #Finally, a challenge!
+			trigger = { has_character_flag = WL_desc_Y }
+		}
+		name = {
+			text = EVTOPTAlodge711_z #I'll duel anyone sent at me!
+			trigger = { has_character_flag = WL_desc_Z }
+		}
+		trigger_switch = { #To set/display effects properly...
+			on_trigger = has_character_flag
+			WL_desc_A = { custom_tooltip = { text = EVTOPTAlodge711_a_TT } }
+			WL_desc_D = { custom_tooltip = { text = EVTOPTAlodge711_d_TT } }
+			WL_desc_E = { custom_tooltip = { text = EVTOPTAlodge711_e_TT } }
+			WL_desc_X = { custom_tooltip = { text = EVTOPTAlodge711_x_TT } }
+			WL_desc_Y = { custom_tooltip = { text = EVTOPTAlodge711_y_TT } }
+			WL_desc_Z = { custom_tooltip = { text = EVTOPTAlodge711_z_TT } }
+		}
+		show_portrait = event_target:my_duel_target
+		duel_someone_effect = yes
+		add_2_points_to_legendary_progress_effect = yes # Great progress on journey!
+		hidden_effect = {
+			if = {
+				limit = { has_character_flag = WL_desc_Z }
+				event_target:combatant_2 = { set_graphical_culture = bear }
+			}
+		}
+	}
+
+	option = { #You somehow avoid fighting...
+		name = {
+			text = EVTOPTBlodge711_a # This one looks too big for me
+			trigger = { has_character_flag = WL_desc_A }
+		}
+		name = { text = EVTOPTBlodge711_b trigger = { has_character_flag = WL_desc_B } }
+		name = { text = EVTOPTBlodge711_c trigger = { has_character_flag = WL_desc_C } }
+		name = {
+			text = EVTOPTBlodge711_d #Guys! Wake up! Help!
+			trigger = { has_character_flag = WL_desc_D }
+		}
+		name = {
+			text = EVTOPTBlodge711_e #On second thought, maybe this one is for you, [fellow_member]?
+			trigger = { has_character_flag = WL_desc_E }
+		}
+
+		trigger_switch = { #To set/display effects properly...
+			on_trigger = has_character_flag
+			WL_desc_A = { custom_tooltip = { text = EVTOPTBlodge711_a_TT } }
+			WL_desc_D = {
+				custom_tooltip = { text = EVTOPTBlodge711_d_TT }
+				add_character_modifier = { modifier = black_eye months = 10 }
+				show_portrait = event_target:fellow_member
+			}
+			WL_desc_E = {
+				custom_tooltip = { text = EVTOPTBlodge711_e_TT }
+				if = { limit = { trait = brave } remove_trait = brave }
+				else = { add_trait = craven }
+				show_portrait = event_target:fellow_member
+			}
+		}
+
+		prestige = -50
+		add_1_point_to_legendary_progress_effect = yes # Good progress on journey...
+		evaluate_legendary_progress_effect = yes
+		send_legendary_tombola_effect = yes #EDIT: actually *not* superfluous (otehrwise fired from resolve_legendary_duel_effect, which only happens after actual duels)
+		clr_ABCDEF_desc_flag_effect = yes #to not leave any weird desc-flags behind for next time around...
+		trigger = {
+			ai = no
+			NOR = { #This is not a boss fight...
+				has_character_flag = WL_desc_X
+				has_character_flag = WL_desc_Y
+				has_character_flag = WL_desc_Z
+			}
+		}
+	}
+
+	option = { #This is getting too dangerous...
+		name = EVTOPTBlodge722
+		custom_tooltip = { text = EVTOPTBlodge711_TT } #Journey is over for you, you return home in shame...
+		add_trait = craven
+		prestige = -500
+		clean_up_after_legendary_showdown_effect = yes
+		clr_XYZ_desc_flag_effect = yes
+		set_character_flag = failed_call_to_legend
+
+		if = {
+			limit = {
+				NOT = {
+					any_society_member = {
+						same_society_as = ROOT
+						has_character_flag = call_to_legend_active
+						NOT = { character = ROOT }
+						prisoner = no
+						is_alive = yes
+						is_dying = no
+						NOT = { trait = incapable }
+					}
+				}
+			}
+			custom_tooltip = { text = EVTOPTClodge723_TT stop_society_progress = yes }
+		}
+
+		trigger = {
+			has_character_flag = call_to_legend_active
+			ai = no
+			OR = {
+				has_character_flag = WL_desc_X
+				has_character_flag = WL_desc_Y
+				has_character_flag = WL_desc_Z
+			}
+		}
+	}
+}
+
+# lodge.720 - A foe for the AI
+# Hidden. An AI Hero picks a fighter to duel.
+# Scope: an AI Hero
+character_event = {
+	id = lodge.720
+	is_triggered_only = yes
+
+	trigger = {
+		ai = yes
+	}
+
+	hide_window = yes
+
+	immediate = {
+		event_target:target_ruler = {
+			any_realm_character = {
+				limit = {
+					is_adult = yes
+					NOT = { same_society_as = ROOT }
+					is_inaccessible_or_incapable_trigger = no
+					NOT = { has_character_modifier = bedridden_illness }
+					NOT = { has_character_modifier = severe_illness }
+					NOT = { has_character_flag = do_not_disturb }
+					NOT = { has_character_flag = fought_duel_against@ROOT }
+					NOT = { character = event_target:my_duel_target } #Can't have previously dueled...
+					NOT = { character = event_target:target_ruler } #Should not be the ruler themselves...
+					is_theocracy = no #preferably not, really. It feels weird.
+					ai = yes
+				}
+				score_value = { #Prioritizes selecting a good warrior, if it can...
+					value = 10
+					matching_soldier_score = yes
+				}
+				save_event_target_as = my_duel_target
+				set_character_flag = fought_duel_against@ROOT
+				character_event = { id = lodge.721 } #give them the challenge...
+			}
+		}
+	}
+}
+
+# lodge.721 - Challenged
+# A fighter of the target realm is challenged by an AI Hero.
+# Scope: the challenged; FROM the Hero
+character_event = {
+	id = lodge.721
+	is_triggered_only = yes
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	hide_window = yes
+
+	option = { #Oh please. Whatever, let's fight.
+		#Duel calculation.
+		#REQUIRED event targets for setting up duel evaluation!
+		save_event_target_as = combatant_2 #the target of the duel...
+		FROM = {
+			set_character_flag = add_duel_xp
+			set_character_flag = is_legendary_duel
+			save_event_target_as = combatant_1 #the person issuing the duel...
+			character_event = { id = HFP.10100 }
+		}
+		ai_chance = { factor = 90 }
+	}
+	option = { #I'll do no such thing. Guards! Imprison this one.
+		FROM = { imprison = ROOT } #FROM is imprisoned *by* ROOT
+		set_character_flag = captured_wildling@FROM
+
+		ai_chance = {
+			factor = 10
+			modifier = {
+				factor = 0.1 #way less likely if there has already been one capture
+				any_society_member = {
+					same_society_as = FROM
+					NOT = { character = FROM }
+					OR = {
+						has_character_flag = call_to_legend_active
+						has_character_flag = completed_call_to_legend
+						has_character_flag = failed_call_to_legend
+					}
+					prisoner = yes
+				}
+			}
+			modifier = {
+				factor = 0.1 #way less likely if there is no player involved at all
+				NOT = {
+					any_society_member = {
+						same_society_as = FROM
+						ai = no # player
+					}
+				}
+			}
+		}
+
+		trigger = {
+			is_landed = yes
+			FROM = {
+				#if they have made it past 10, they can no longer be imprisoned...
+				NOT = { check_variable = { which = legendary_event_progress value = 10 } }
+			}
+		}
+	}
+}
+
+# lodge.745 - Taken
+# Hidden. A Hero on the journey was imprisoned: tell the others.
+# Scope: the prisoner; from on_become_imprisoned
+character_event = {
+	id = lodge.745
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = call_to_legend_active #means you were captured somehow, while on this journey
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = enemy_captor }
+
+		if = {
+			limit = {
+				any_society_member = {
+					same_society_as = ROOT
+					NOT = { character = ROOT }
+					ai = no #if there is a player in the society, basically
+				}
+			}
+			#send event to player...
+			any_society_member = {
+				limit = { same_society_as = ROOT NOT = { character = ROOT } ai = no }
+				character_event = { id = lodge.722 days = 1 } #my friend was captured (+ how)..!
+			}
+		}
+		else = { #if this is an observer game...?
+			FROM = { clr_character_flag = captured_wildling@ROOT }
+			if = {
+				limit = {
+					NOT = {
+						any_society_member = {
+							same_society_as = ROOT
+							has_character_flag = call_to_legend_active
+							NOT = { character = ROOT }
+							prisoner = no
+							is_alive = yes
+							is_dying = no
+							NOT = { trait = incapable }
+						}
+					}
+				}
+				stop_society_progress = yes
+			}
+		}
+		set_character_flag = failed_call_to_legend
+		clean_up_after_legendary_showdown_effect = yes
+	}
+}
+
+# lodge.722 - A Hero taken
+# The other Heroes learn a friend was taken prisoner.
+# Scope: a Hero; FROM the prisoner
+character_event = {
+	id = lodge.722
+	title = legendary_loss_title
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	portrait = FROM
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		if = {
+			limit = { event_target:enemy_captor = { has_character_flag = captured_wildling@FROM } }
+			set_character_flag = dueler_captured@FROM
+		}
+	}
+
+	desc = {
+		text = EVTDESClodge722 #My travel companion was imprisoned, after issuing a challenge!
+		trigger = {
+			has_character_flag = call_to_legend_active
+			has_character_flag = dueler_captured@FROM
+		}
+	}
+	desc = {
+		text = EVTDESClodge722_b #A hero was imprisoned by the enemy, after issuing a challenge!
+		trigger = {
+			NOT = { has_character_flag = call_to_legend_active }
+			has_character_flag = dueler_captured@FROM
+		}
+	}
+
+	desc = {
+		text = EVTDESClodge722_other_reason #My travel companion was imprisoned, somehow
+		trigger = {
+			has_character_flag = call_to_legend_active
+			NOT = { has_character_flag = dueler_captured@FROM }
+		}
+	}
+	desc = {
+		text = EVTDESClodge722_b_other_reason #A hero was imprisoned, somehow
+		trigger = {
+			NOT = { has_character_flag = call_to_legend_active }
+			NOT = { has_character_flag = dueler_captured@FROM }
+		}
+	}
+
+	option = { #How unfortunate (but there are still people left on the journey)
+		name = EVTOPTAlodge723
+		custom_tooltip = { text = EVTOPTAlodge722_TT } #Their journey is over
+		show_portrait = event_target:enemy_captor
+		clr_character_flag = dueler_captured@FROM
+		custom_tooltip = { text = EVTOPTAlodge723_TT } #Others will carry on
+		trigger = {
+			any_society_member = {
+				same_society_as = ROOT
+				NOT = { character = ROOT }
+				has_character_flag = call_to_legend_active
+				prisoner = no
+				is_alive = yes
+				is_dying = no
+				NOT = { trait = incapable }
+			}
+		}
+	}
+	option = { # I am the last one standing then
+		name = EVTOPTBlodge723_b
+		custom_tooltip = { text = EVTOPTAlodge722_TT } #Their journey is over
+		show_portrait = event_target:enemy_captor
+		clr_character_flag = dueler_captured@FROM
+		trigger = {
+			has_character_flag = call_to_legend_active
+			NOT = {
+				any_society_member = {
+					same_society_as = ROOT
+					has_character_flag = call_to_legend_active
+					NOT = { character = ROOT }
+					prisoner = no
+					is_alive = yes
+					is_dying = no
+					NOT = { trait = incapable }
+				}
+			}
+		}
+	}
+	option = { # That's the end of it then (all heroes are gone somehow)
+		name = EVTOPTClodge723
+		custom_tooltip = { text = EVTOPTAlodge722_TT } #Their journey is over
+		show_portrait = event_target:enemy_captor
+		clr_character_flag = dueler_captured@FROM
+		custom_tooltip = { text = EVTOPTClodge723_TT stop_society_progress = yes }
+		trigger = {
+			NOT = {
+				any_society_member = {
+					same_society_as = ROOT
+					has_character_flag = call_to_legend_active
+					prisoner = no
+					is_alive = yes
+					is_dying = no
+					NOT = { trait = incapable }
+				}
+			}
+		}
+	}
+	option = { #This is getting too dangerous...
+		name = EVTOPTBlodge722
+		custom_tooltip = { text = EVTOPTBlodge722_TT }
+		add_trait = craven
+		prestige = -500
+		show_portrait = event_target:enemy_captor
+		clean_up_after_legendary_showdown_effect = yes
+		clr_character_flag = dueler_captured@FROM
+		set_character_flag = failed_call_to_legend
+
+		if = {
+			limit = {
+				NOT = {
+					any_society_member = {
+						same_society_as = ROOT
+						has_character_flag = call_to_legend_active
+						NOT = { character = ROOT }
+						prisoner = no
+						is_alive = yes
+						is_dying = no
+						NOT = { trait = incapable }
+					}
+				}
+			}
+			custom_tooltip = { text = EVTOPTClodge723_TT stop_society_progress = yes }
+		}
+
+		trigger = {
+			ai = no
+			has_character_flag = call_to_legend_active
+			has_character_flag = dueler_captured@FROM
+		}
+	}
+	after = {
+		event_target:enemy_captor = { clr_character_flag = captured_wildling@FROM }
+	}
+}
+
+# lodge.723 - A Hero falls
+# The other Heroes learn a friend died.
+# Scope: a Hero; FROM the dead
+character_event = {
+	id = lodge.723
+	title = legendary_loss_title
+	desc = EVTDESClodge723 #They were killed by the enemy...
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { has_character_flag = viewing_event_HF_12103 } #As this might fire from multiple places...
+	}
+
+	immediate = {
+		set_character_flag = viewing_event_HF_12103
+	}
+
+	option = { #How unfortunate (but there are still people left on the journey)
+		name = EVTOPTAlodge723
+		custom_tooltip = { text = EVTOPTAlodge723_TT }
+		trigger = {
+			event_target:target_society = {
+				any_society_member = {
+					NOT = { character = ROOT }
+					has_character_flag = call_to_legend_active
+					prisoner = no
+					is_alive = yes
+					is_dying = no
+					NOT = { trait = incapable }
+				}
+			}
+		}
+	}
+	option = { # I am the last one standing then
+		name = EVTOPTBlodge723
+		custom_tooltip = { text = EVTOPTBlodge723_TT } #It is you! The last one!
+		trigger = {
+			has_character_flag = call_to_legend_active
+			society_member_of = event_target:target_society
+			NOT = {
+				event_target:target_society = {
+					any_society_member = {
+						same_society_as = ROOT
+						NOT = { character = ROOT }
+						has_character_flag = call_to_legend_active
+						prisoner = no
+						is_alive = yes
+						is_dying = no
+						NOT = { trait = incapable }
+					}
+				}
+			}
+		}
+	}
+	option = { # That's the end of it then (all heroes are gone somehow)
+		name = EVTOPTClodge723
+		if = {
+			limit = { society_member_of = event_target:target_society }
+			custom_tooltip = {
+				text = EVTOPTClodge723_TT
+				stop_society_progress = yes #Only if you are still in a warrior lodge
+			}
+		}
+		if = {
+			limit = { society_member_of = event_target:target_society }
+			add_character_modifier = { modifier = drinking_to_fallen_friends years = 10 }
+		}
+		hidden_effect = {
+			if = {
+				limit = { society_member_of = event_target:target_society }
+				any_society_member = {
+					limit = {
+						same_society_as = ROOT
+						NOT = { character = ROOT }
+						prisoner = no
+						is_alive = yes
+						is_dying = no
+						NOT = { trait = incapable }
+					}
+
+					add_character_modifier = { modifier = drinking_to_fallen_friends years = 10 }
+				}
+			}
+		}
+
+		trigger = {
+			society_member_of = event_target:target_society
+			NOT = {
+				any_society_member = {
+					same_society_as = ROOT
+					has_character_flag = call_to_legend_active
+					prisoner = no
+					is_alive = yes
+					is_dying = no
+					NOT = { trait = incapable }
+				}
+			}
+		}
+	}
+	after = {
+		clr_character_flag = viewing_event_HF_12103
+	}
+}
+
+# lodge.724 - Home again
+# The Heroes return from the journey.
+# Scope: a Hero
+character_event = {
+	id = lodge.724
+	title = legendary_victory_title
+	desc = EVTDESClodge724 #They did so well!
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = { }
+
+	option = { #So it is.
+		name = EVTOPTAlodge724
+		stop_society_progress = yes
+	}
+}
+
+# lodge.730 - The kill
+# The Hero won a legendary duel and killed the foe.
+# Scope: the winner
+character_event = {
+	id = lodge.730
+	title = getDuelTitle
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	portrait = event_target:other_combatant
+
+	immediate = {
+		set_winner_flags_and_save_opponent_effect = yes
+
+		hidden_effect = {
+			if = {
+				limit = { event_target:combatant_1 = { has_character_flag = WL_desc_Z } }
+				event_target:combatant_2 = { set_graphical_culture = bear }
+			}
+		}
+
+		random_list = {
+			5 = { # You will be injured somehow (flags already set)...
+				bad_soldier_outcome_score = yes #Increases risk, if you are bad at this...
+				bad_soldier_outcome_score = yes #Increases risk, if you are bad at this...
+			}
+			10 = { # ONLY gives the Severely Injured trait, but no maiming...
+				set_character_flag = severely_injured
+				bad_soldier_outcome_score = yes #Increases risk, if you are bad at this...
+			}
+			20 = { # ONLY gives bruises, etc...
+				set_character_flag = mildly_injured
+				good_soldier_outcome_score = yes #Increases chance, if you are good at this...
+			}
+			20 = { # You are completely safe...
+				good_soldier_outcome_score = yes #Increases chance, if you are good at this...
+				good_soldier_outcome_score = yes #Increases chance, if you are good at this...
+				set_character_flag = ignore_damage
+			}
+		}
+	}
+
+	desc = {
+		text = EVTDESClodge730_a #Someone is hunting! Aha!
+		trigger = { has_character_flag = WL_desc_A }
+	}
+	desc = {
+		text = EVTDESClodge730_b #Outside the campfire, someone is tending to nature's call
+		trigger = { has_character_flag = WL_desc_B }
+	}
+	desc = {
+		text = EVTDESClodge730_c #In the streets of a village, accosted by locals
+		trigger = { has_character_flag = WL_desc_C }
+	}
+	desc = {
+		text = EVTDESClodge730_d #A moonlit night, listening to companion snoring, sneaky assassin?
+		trigger = { has_character_flag = WL_desc_D }
+	}
+	desc = {
+		text = EVTDESClodge730_e #Urchin tips you off, pointing you to finest warrior around
+		trigger = { has_character_flag = WL_desc_E }
+	}
+
+	# Boss fights...
+	desc = {
+		text = EVTDESClodge730_x #Old man/woman
+		picture = GFX_evt_dueling_knights_hf
+		trigger = { has_character_flag = WL_desc_X }
+	}
+	desc = {
+		text = EVTDESClodge730_y #Giant local tournament
+		picture = GFX_evt_dueling_knights_hf
+		trigger = { has_character_flag = WL_desc_Y }
+	}
+	desc = {
+		text = EVTDESClodge730_z #Bear/Dragon
+		picture = GFX_evt_dueling_knights_hf
+		trigger = { has_character_flag = WL_desc_Z }
+	}
+
+	option = {
+		name = {
+			text = EVTOPTA_HFP_10103_default #I... Yes, that was on purpose!
+			trigger = {
+				NOR = {
+					trait = duelist
+					trait = kind
+					is_rival = event_target:other_combatant
+					is_friend = event_target:other_combatant
+					event_target:other_combatant = {
+						duelist_skill_compared_to_prev_low_group_trigger = yes
+					}
+					duelist_skill_is_high_group_trigger = yes
+				}
+			}
+		}
+		name = {
+			text = EVTOPTA_HFP_10103_duelist #Another victorious match.
+			trigger = {
+				OR = {
+					trait = duelist
+					event_target:other_combatant = {
+						duelist_skill_compared_to_prev_low_group_trigger = yes
+					}
+					duelist_skill_is_high_group_trigger = yes
+				}
+			}
+		}
+		name = {
+			text = EVTOPTA_HFP_10103_sad #I'm sorry it had to end this way.
+			trigger = { OR = { trait = kind is_friend = event_target:other_combatant } }
+		}
+		name = {
+			text = EVTOPTA_HFP_10103_mean #Your death makes sense
+			trigger = { OR = { trait = cruel is_rival = event_target:other_combatant } }
+		}
+		custom_tooltip = { text = you_win_the_duel_tt }
+		apply_generic_duel_victory_effect = yes
+
+		if = { # Only add injury if you were unlucky enough to get it...
+			limit = { NOT = { has_character_flag = ignore_damage } }
+			apply_selected_duel_injury_effect = yes
+		}
+
+		add_blood_splatter_effect = yes
+
+		tooltip = {
+			event_target:other_combatant = {
+				show_scope_change = no
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_duel killer = ROOT } }
+			}
+		}
+	}
+	after = {
+		hidden_effect = {
+			event_target:other_combatant = { character_event = { id = lodge.731 } } #"I was decapitated" event
+		}
+		tooltip = { clean_up_after_duel_effect = yes }
+	}
+}
+
+# lodge.731 - The fall
+# The Hero lost a legendary duel and died.
+# Scope: the loser
+character_event = {
+	id = lodge.731
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+	portrait = event_target:other_combatant
+
+	immediate = {
+		set_loser_flags_and_save_opponent_effect = yes
+		hidden_effect = {
+			if = {
+				limit = { has_character_flag = is_legendary_duel } #means you were the instigator/hero
+				current_heir = { save_event_target_as = new_story_owner } #So your heir will find out what happened
+			}
+		}
+		if = {
+			limit = { multiplayer = yes }
+			if = {
+				limit = { event_target:combatant_1 = { character = ROOT } } #if you instigated this...
+				death = {
+					death_reason = death_legendary_fail_duel #you died trying...
+					killer = event_target:other_combatant
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_legendary_win_duel #you successfully killed someone on your hunt for glory!
+						killer = event_target:other_combatant
+					}
+				}
+			}
+		}
+	}
+
+	desc = {
+		text = EVTDESClodge731_a #Someone is hunting! Aha!
+		trigger = { has_character_flag = WL_desc_A }
+	}
+	desc = {
+		text = EVTDESClodge731_b #Outside the campfire, someone is tending to nature's call
+		trigger = { has_character_flag = WL_desc_B }
+	}
+	desc = {
+		text = EVTDESClodge731_c #In the streets of a village, accosted by locals
+		trigger = { has_character_flag = WL_desc_C }
+	}
+	desc = {
+		text = EVTDESClodge731_d #A moonlit night, listening to companion snoring, sneaky assassin?
+		trigger = { has_character_flag = WL_desc_D }
+	}
+	desc = {
+		text = EVTDESClodge731_e #Urchin tips you off, pointing you to finest warrior around
+		trigger = { has_character_flag = WL_desc_E }
+	}
+
+	# Boss fights.
+	desc = {
+		text = EVTDESClodge731_x #Old man/woman
+		picture = GFX_evt_cornered_duel_hf
+		trigger = { has_character_flag = WL_desc_X }
+	}
+	desc = {
+		text = EVTDESClodge731_y #Giant (local tournament)
+		picture = GFX_evt_dueling_knights_hf
+		trigger = { has_character_flag = WL_desc_Y }
+	}
+	desc = {
+		text = EVTDESClodge731_z #Bear/Dragon
+		picture = GFX_evt_dueling_knights_hf
+		trigger = { has_character_flag = WL_desc_Z }
+	}
+
+	option = {
+		name = EVTOPTA_HFP_10104 #Nooooo...!
+		custom_tooltip = { text = you_lose_the_duel_tt }
+		if = {
+			limit = { has_character_flag = WL_desc_C }
+			show_portrait = event_target:target_ruler
+		}
+		if = {
+			limit = { multiplayer = no }
+			if = {
+				limit = { event_target:combatant_1 = { character = ROOT } } #if you instigated this...
+				death = {
+					death_reason = death_legendary_fail_duel #you died trying...
+					killer = event_target:other_combatant
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_legendary_win_duel #you successfully killed someone on your hunt for glory!
+						killer = event_target:other_combatant
+					}
+				}
+			}
+		}
+	}
+	after = {
+		hidden_effect = {
+			FROM = { clean_up_after_duel_effect = yes } #test if this works, even if character is_dying
+			clean_up_after_duel_effect = yes
+		}
+	}
+}
+
+# lodge.734 - Both fall
+# Both fighters die (attacker).
+# Scope: the attacker
+character_event = {
+	id = lodge.734
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+	portrait = event_target:combatant_2
+	immediate = {
+		hidden_effect = {
+			if = {
+				limit = { has_character_flag = is_legendary_duel } #means you were the instigator/hero
+				current_heir = { save_event_target_as = new_story_owner } #So your heir will find out what happened
+			}
+		}
+		hidden_effect = {
+			if = {
+				limit = { event_target:combatant_1 = { has_character_flag = WL_desc_Z } }
+				event_target:combatant_2 = { set_graphical_culture = bear }
+			}
+		}
+
+		if = {
+			limit = { multiplayer = yes }
+			if = {
+				limit = { event_target:combatant_1 = { character = ROOT } } #if you instigated this...
+				death = {
+					death_reason = death_legendary_fail_duel #you died trying...
+					killer = event_target:combatant_2
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_legendary_win_duel #you successfully killed someone on your hunt for glory!
+						killer = event_target:combatant_1
+					}
+				}
+			}
+		}
+	}
+	desc = {
+		trigger = {
+			NOR = { has_character_flag = elegant_double_KO has_character_flag = clumsy_double_KO }
+		}
+		text = EVTDESC_HFP_10101_default
+	}
+	desc = { trigger = { has_character_flag = clumsy_double_KO } text = EVTDESC_HFP_10101_clumsy }
+	desc = { trigger = { has_character_flag = elegant_double_KO } text = EVTDESC_HFP_10101_elegant }
+
+	option = {
+		name = {
+			text = EVTOPTA_HFP_10101_default
+			trigger = {
+				NOR = {
+					has_character_flag = elegant_double_KO
+					has_character_flag = clumsy_double_KO
+				}
+			}
+		}
+		name = {
+			text = EVTOPTA_HFP_10101_clumsy
+			trigger = { has_character_flag = clumsy_double_KO }
+		}
+		name = {
+			text = EVTOPTA_HFP_10101_elegant
+			trigger = { has_character_flag = elegant_double_KO }
+		}
+		custom_tooltip = { text = no_one_wins_the_duel_tt }
+		tooltip = {
+			event_target:combatant_2 = {
+				show_scope_change = no
+				death = { death_reason = death_legendary_win_duel killer = ROOT }
+			}
+		}
+		if = {
+			limit = { multiplayer = no }
+			if = {
+				limit = { event_target:combatant_1 = { character = ROOT } } #if you instigated this...
+				death = {
+					death_reason = death_legendary_fail_duel #you died trying...
+					killer = event_target:combatant_2
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_legendary_win_duel #you successfully killed someone on your hunt for glory!
+						killer = event_target:combatant_1
+					}
+				}
+			}
+		}
+	}
+	after = {
+		hidden_effect = { clean_up_after_duel_effect = yes }
+	}
+}
+
+# lodge.735 - Both fall
+# Both fighters die (defender).
+# Scope: the defender
+character_event = {
+	id = lodge.735
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+	portrait = event_target:combatant_1
+
+	immediate = {
+		hidden_effect = {
+			if = {
+				limit = { has_character_flag = is_legendary_duel } #means you were the instigator/hero
+				current_heir = { save_event_target_as = new_story_owner } #So your heir will find out what happened
+			}
+		}
+		hidden_effect = {
+			if = {
+				limit = { event_target:combatant_1 = { has_character_flag = WL_desc_Z } }
+				event_target:combatant_2 = { set_graphical_culture = bear }
+			}
+		}
+
+		if = {
+			limit = { multiplayer = yes }
+			if = {
+				limit = { event_target:combatant_1 = { character = ROOT } } #if you instigated this...
+				death = {
+					death_reason = death_legendary_fail_duel #you died trying...
+					killer = event_target:combatant_2
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_legendary_win_duel #you successfully killed someone on your hunt for glory!
+						killer = event_target:combatant_1
+					}
+				}
+			}
+		}
+	}
+
+	desc = {
+		trigger = {
+			NOR = { has_character_flag = elegant_double_KO has_character_flag = clumsy_double_KO }
+		}
+		text = EVTDESC_HFP_10102_default
+	}
+	desc = { trigger = { has_character_flag = clumsy_double_KO } text = EVTDESC_HFP_10102_clumsy }
+	desc = { trigger = { has_character_flag = elegant_double_KO } text = EVTDESC_HFP_10102_elegant }
+
+	option = {
+		name = {
+			text = EVTOPTA_HFP_10102_default
+			trigger = {
+				NOR = {
+					has_character_flag = elegant_double_KO
+					has_character_flag = clumsy_double_KO
+				}
+			}
+		}
+		name = {
+			text = EVTOPTA_HFP_10102_clumsy
+			trigger = { has_character_flag = clumsy_double_KO }
+		}
+		name = {
+			text = EVTOPTA_HFP_10102_elegant
+			trigger = { has_character_flag = elegant_double_KO }
+		}
+		custom_tooltip = { text = no_one_wins_the_duel_tt }
+		tooltip = {
+			event_target:combatant_1 = {
+				show_scope_change = no
+				death = { death_reason = death_legendary_win_duel killer = ROOT }
+			}
+		}
+		if = {
+			limit = { multiplayer = no }
+			if = {
+				limit = { event_target:combatant_1 = { character = ROOT } } #if you instigated this...
+				death = {
+					death_reason = death_legendary_fail_duel #you died trying...
+					killer = event_target:combatant_2
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_legendary_win_duel #you successfully killed someone on your hunt for glory!
+						killer = event_target:combatant_1
+					}
+				}
+			}
+		}
+	}
+	after = {
+		hidden_effect = { clean_up_after_duel_effect = yes }
+	}
+}
+
+# lodge.732 - They ran!
+# The foe fled the duel.
+# Scope: the winner
+character_event = {
+	id = lodge.732
+	desc = EVTDESC_HFP_10107
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+
+	portrait = event_target:other_combatant
+
+	immediate = {
+		set_winner_flags_and_save_opponent_effect = yes
+	}
+
+	option = {
+		name = EVTOPTA_HFP_10107 # Look at them run!
+		custom_tooltip = { text = you_win_the_duel_tt }
+		apply_generic_duel_victory_effect = yes
+	}
+	after = {
+		clean_up_after_duel_effect = yes
+	}
+}
+
+# lodge.733 - I ran
+# The Hero fled the duel.
+# Scope: the loser
+character_event = {
+	id = lodge.733
+	desc = EVTDESC_HFP_10108 #I ran away...!
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+	immediate = {
+		set_loser_flags_and_save_opponent_effect = yes
+		clr_character_flag = add_duel_xp #Because you are chicken! No reward!
+		set_character_flag = failed_mission #Because makes no sense this clears the mission...
+	}
+
+	portrait = event_target:other_combatant
+
+	option = {
+		name = { text = EVTOPTA_HFP_10108_craven trigger = { trait = craven } }
+		name = { text = EVTOPTA_HFP_10108_shy trigger = { trait = shy } }
+		name = { text = EVTOPTA_HFP_10108_wroth trigger = { trait = wroth } }
+		name = {
+			text = EVTOPTA_HFP_10108 #I should've stayed and fought!
+			trigger = { NOR = { trait = craven trait = shy trait = wroth } }
+		}
+		custom_tooltip = { text = you_lose_the_duel_tt }
+	}
+	after = {
+		set_character_flag = skip_blood_effect
+		clean_up_after_duel_effect = yes
+	}
+}
+
+# lodge.740 - The blood of a legend
+# The Hero returns alive and founds a bloodline.
+# Scope: the Hero
+narrative_event = {
+	id = lodge.740
+	title = EVTTITLElodge740
+	desc = EVTDESClodge740
+	picture = GFX_evt_diplomatic_greeting
+	border = GFX_event_narrative_frame_war
+	is_triggered_only = yes
+
+	portrait = event_target:my_beloved
+
+	trigger = { }
+
+	immediate = {
+		hidden_effect = {
+			if = { #Back up, in case the ruler we are talking about is dead...
+				limit = { event_target:target_ruler = { NOT = { is_alive = yes } } }
+				event_target:target_title = {
+					holder_scope = { top_liege = { save_event_target_as = target_ruler } }
+				}
+			}
+			any_courtier_or_vassal = {
+				limit = { is_inaccessible_or_incapable_trigger = no age = 14 }
+				score_value = { #Prioritizes selecting some kind of loved person...
+					value = 1
+					beloved_target_selection_score = yes
+				}
+				#Effect:
+				save_event_target_as = my_beloved
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAlodge740
+
+		#Create a bloodline that fits your achievements...
+		found_a_legendary_bloodline_effect = yes
+
+		sound_effect = bloodline_added
+		set_character_flag = completed_call_to_legend
+
+		if = { limit = { ai = no } set_character_flag = achievement_zero_to_hero }
+
+		trigger_switch = {
+			on_trigger = has_character_flag
+			bloodline_quality_1 = { prestige = 100 }
+			bloodline_quality_2 = { prestige = 300 }
+			bloodline_quality_3 = { prestige = 500 }
+		}
+
+		add_character_modifier = { #For life
+			name = renowned_hero
+			duration = -1
+		}
+
+		any_society_member = {
+			limit = { same_society_as = ROOT NOT = { character = ROOT } }
+			narrative_event = { id = lodge.742 } #News event to fellow society members...
+		}
+		if = {
+			limit = {
+				NOT = {
+					any_society_member = {
+						same_society_as = ROOT
+						has_character_flag = call_to_legend_active
+						NOT = { character = ROOT }
+						prisoner = no
+						is_alive = yes
+						is_dying = no
+						NOT = { trait = incapable }
+					}
+				}
+			}
+			custom_tooltip = { text = EVTOPTClodge723_TT stop_society_progress = yes }
+		}
+		hidden_effect = {
+			event_target:target_ruler = {
+				narrative_event = { id = lodge.743 } #News event to the target ruler...
+			}
+		}
+		clean_up_after_legendary_showdown_effect = yes
+		stop_slow_AIs_effect = yes #To make sure this thing does not go on forever...
+	}
+}
+
+# lodge.741 - The blood of a legend
+# The Hero died, but their heir founds the bloodline.
+# Scope: the heir; FROM the dead Hero
+narrative_event = {
+	id = lodge.741
+	title = EVTTITLElodge740
+	desc = EVTDESClodge741
+	picture = GFX_evt_bloodlines
+	border = GFX_event_narrative_frame_war
+	is_triggered_only = yes
+
+	immediate = {
+		if = { #Back up, in case the ruler we are talking about is dead...
+			limit = { event_target:target_ruler = { NOT = { is_alive = yes } } }
+			event_target:target_title = {
+				holder_scope = { top_liege = { save_event_target_as = target_ruler } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTAlodge741
+		sound_effect = bloodline_added
+		event_target:bloodline_founder = { custom_tooltip = { text = found_bloodline_tt } }
+		hidden_effect = {
+			event_target:target_ruler = {
+				narrative_event = { id = lodge.743 } #News event to the target ruler...
+			}
+		}
+	}
+}
+
+# lodge.742 - News of a legend
+# Members of the society hear of the founder.
+# Scope: a member; FROM the founder
+narrative_event = {
+	id = lodge.742
+	title = EVTTITLElodge740
+	picture = GFX_evt_diplomatic_greeting
+	border = GFX_event_narrative_frame_war
+	is_triggered_only = yes
+
+	desc = {
+		text = EVTDESClodge742_a
+		picture = GFX_evt_diplomatic_greeting
+		trigger = { event_target:bloodline_founder = { is_alive = yes } }
+	}
+	desc = {
+		text = EVTDESClodge742_b
+		picture = GFX_evt_bloodlines
+		trigger = { event_target:bloodline_founder = { OR = { is_dying = yes is_alive = no } } }
+	}
+
+	option = {
+		name = EVTOPTAlodge742
+		add_character_modifier = { modifier = inspired_by_legends years = 10 }
+		event_target:bloodline_founder = { custom_tooltip = { text = found_bloodline_tt } }
+	}
+}
+
+# lodge.743 - News of a legend
+# The ruler of the target realm hears of the founder.
+# Scope: the target ruler
+narrative_event = {
+	id = lodge.743
+	title = EVTTITLElodge740
+	desc = EVTDESClodge743
+	picture = GFX_evt_bloodlines
+	border = GFX_event_narrative_frame_war
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge743
+		add_character_modifier = { modifier = annoyed_with_barbarians years = 10 }
+	}
+}
+
+# lodge.750 - A new eagle
+# Bloodline: a young eagle flies into the chambers.
+# Scope: an heir of the eagle bloodline
+character_event = {
+	id = lodge.750
+	desc = EVTDESClodge750
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	trigger = {
+		NOT = { has_character_modifier = pet_hunting_eagle }
+		any_owned_bloodline = { has_bloodline_flag = bloodline_pet_eagle }
+		is_inaccessible_trigger = no
+		war = no
+	}
+
+	fail_trigger_effect = { #Basically, if something temporary is affecting this, check back later...
+		if = {
+			limit = {
+				NOT = { has_character_modifier = pet_hunting_eagle }
+				any_owned_bloodline = { has_bloodline_flag = bloodline_pet_eagle }
+				OR = { is_inaccessible_trigger = yes war = yes }
+			}
+			character_event = { id = lodge.750 days = 365 random = 60 } #Check back if you have yet not received a new bird...
+		}
+	}
+
+	immediate = {
+		random_owned_bloodline = {
+			limit = {
+				has_bloodline_flag = bloodline_pet_eagle
+				founder = { NOT = { character = ROOT } }
+			}
+			founder = { save_event_target_as = bloodline_founder }
+		}
+	}
+
+	# A.1
+	option = { # A new friend?
+		name = EVTOPTAlodge750
+		custom_tooltip = { text = EVTOPTAlodge750_TT }
+		add_character_modifier = { name = pet_hunting_eagle duration = -1 }
+		hidden_effect = {
+			character_event = { id = lodge.431 days = 7300 random = 1500 } #Death.
+		}
+		trigger = {
+			NOT = { event_target:bloodline_founder = { always = yes } } #(Means you are the founder)
+		}
+	}
+	# A.2
+	option = { # My ancestor would be approve
+		name = EVTOPTBlodge750
+		custom_tooltip = { text = EVTOPTBlodge750_TT }
+		add_character_modifier = { name = pet_hunting_eagle duration = -1 }
+		hidden_effect = {
+			character_event = { id = lodge.431 days = 7300 random = 1500 } #Death.
+		}
+		trigger = {
+			event_target:bloodline_founder = { always = yes } #(Means you are NOT the founder)
+		}
+	}
+
+	#B. Dismiss
+	option = { # I'm going back to sleep
+		name = EVTOPTClodge750
+		custom_tooltip = { text = EVTOPTClodge750_TT }
+	}
+}
+
+# lodge.751 - A new dog
+# Bloodline: a war hound for the heir.
+# Scope: an heir of the dog bloodline
+character_event = {
+	id = lodge.751
+	desc = EVTDESClodge751
+	picture = GFX_evt_hunting_scene
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { has_character_modifier = pet_hunting_dog }
+		any_owned_bloodline = { has_bloodline_flag = bloodline_pet_dog }
+		is_inaccessible_trigger = no
+		war = no
+	}
+
+	fail_trigger_effect = { #Basically, if something temporary is affecting this, check back later...
+		if = {
+			limit = {
+				NOT = { has_character_modifier = pet_hunting_dog }
+				any_owned_bloodline = { has_bloodline_flag = bloodline_pet_dog }
+				OR = { is_inaccessible_trigger = yes war = yes }
+			}
+			character_event = { id = lodge.750 days = 365 random = 60 } #Check back if you have yet not received a new bird...
+		}
+	}
+
+	immediate = {
+		random_owned_bloodline = {
+			limit = {
+				has_bloodline_flag = bloodline_pet_dog
+				founder = { NOT = { character = ROOT } }
+			}
+			founder = { save_event_target_as = bloodline_founder }
+		}
+	}
+
+	# A.1
+	option = { # A new friend?
+		name = EVTOPTAlodge751
+		custom_tooltip = { text = EVTOPTAlodge751_TT }
+		add_character_modifier = { name = pet_hunting_dog duration = -1 }
+		hidden_effect = {
+			character_event = { id = lodge.752 days = 7300 random = 1500 } #Dog dies...
+		}
+		trigger = {
+			NOT = { event_target:bloodline_founder = { always = yes } } #(Means you are the founder)
+		}
+	}
+	# A.2
+	option = { # My ancestor would be approve
+		name = EVTOPTBlodge751
+		custom_tooltip = { text = EVTOPTBlodge751_TT }
+		add_character_modifier = { name = pet_hunting_dog duration = -1 }
+		hidden_effect = {
+			character_event = { id = lodge.752 days = 7300 random = 1500 } #Dog dies...
+		}
+		trigger = {
+			event_target:bloodline_founder = { always = yes } #(Means you are NOT the founder)
+		}
+	}
+	#B. Dismiss
+	option = { # I'm going back to sleep
+		name = EVTOPTClodge751
+		custom_tooltip = { text = EVTOPTClodge751_TT }
+	}
+}
+
+# lodge.752 - The hound dies
+# The war hound dies.
+# Scope: the owner
+character_event = {
+	id = lodge.752
+	desc = EVTDESClodge752
+	picture = GFX_evt_hunting_scene
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	trigger = { }
+
+	immediate = { }
+
+	option = {
+		name = EVTOPTAlodge752
+		custom_tooltip = { text = EVTOPTAlodge752_TT }
+		remove_character_modifier = pet_hunting_dog
+	}
+}
+
+# lodge.755 - Battle bards
+# Bloodline: battle hymns or drums turn a battle.
+# Scope: a bard of the battle bard bloodline; from HF_battle_events
+character_event = {
+	id = lodge.755
+	title = the_battle_at_location
+	desc = EVTDESClodge755
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	trigger = {
+		NOR = { has_character_modifier = inspired_singer has_character_modifier = inspired_drummer }
+	}
+
+	immediate = { }
+
+	option = {
+		name = EVTOPTAlodge755
+		add_character_modifier = { name = inspired_singer years = 3 }
+	}
+	option = {
+		name = EVTOPTBlodge755
+		add_character_modifier = { name = inspired_drummer years = 3 }
 	}
 }
 

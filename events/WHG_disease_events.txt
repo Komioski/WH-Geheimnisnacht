@@ -1,0 +1,3506 @@
+###############################################################################
+# Disease events: who is to blame for an epidemic, the dancing plague, and
+# the Great Plague news
+#
+# Part 1: Blame for the epidemic (namespace blame)
+# Faction: Generic
+# Serves: any ruler of a settled people whose capital the sickness has
+# emptied; not greenskins, Skaven, ogres, Lizardmen or the dead.
+#
+# Also in this file (each part keeps its own header and namespace):
+#   Part 2: The dancing plague (namespace dancing)
+#   Part 3: The Great Plague (namespace plague)
+#
+# When an epidemic has emptied a ruler's capital, the people look for someone
+# to blame. One of four chains runs, once in a ruler's life:
+#   blame.1          Starter (yearly random list blame_epidemic)
+#   blame.10-20      The cats
+#   blame.30-35      The Strigany
+#   blame.40-58      A witch hunt, led by a court witch hunter, a witch
+#                    hunter of the court or the court chaplain
+#   blame.60-68      The impious ruler (restored; vanilla's was Hindu only
+#                    and commented out)
+#
+# Was events/rip_epidemic_events.txt (RIP.13000-13508). blame.N for the
+# cats is old RIP.130NN + 9, the Strigany are RIP.13400-13405, the witch
+# hunt RIP.13198-13235 and the impious ruler RIP.13500-13508, in order.
+###############################################################################
+
+namespace = blame
+
+# blame.1 The people look for someone to blame
+# A ruler whose capital the epidemic has depopulated faces one of four blame
+# chains: the cats, the Strigany (only with Strigany in the realm), a witch
+# hunt (needs a chaplain or a witch hunter at court) or the ruler's own
+# impiety (temple faiths with no temple in the capital). Once in a life.
+# Scope: ROOT is the ruler. Fired from on_yearly_pulse, random list
+# blame_epidemic.
+character_event = {
+	id = blame.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_yearly_pulse (blame_epidemic)
+
+	only_playable = yes
+	only_independent = yes
+
+	trigger = {
+		host = { character = ROOT }
+		NOT = { has_character_flag = epidemic_blame_game }
+		blame_epidemic_ruler_trigger = yes
+		capital_scope = {
+			OR = {
+				has_province_modifier = depopulated_1
+				has_province_modifier = depopulated_2
+				has_province_modifier = depopulated_3
+			}
+		}
+	}
+
+	immediate = {
+		set_character_flag = epidemic_blame_game
+		random_list = {
+			10 = { # The cats
+				character_event = { id = blame.10 }
+			}
+			10 = { # The Strigany
+				modifier = { factor = 0 blame_strigany_present_trigger = no }
+				character_event = { id = blame.30 }
+			}
+			10 = { # A witch hunt
+				modifier = { factor = 0 blame_witch_hunt_possible_trigger = no }
+				modifier = { factor = 2 any_courtier = { whunter_chapter_member_trigger = yes } }
+				character_event = { id = blame.40 }
+			}
+			10 = { # The impious ruler
+				modifier = { factor = 0 blame_impious_ruler_possible_trigger = no }
+				character_event = { id = blame.60 }
+			}
+		}
+	}
+}
+
+###############################################################################
+# The cats (blame.10-20)
+###############################################################################
+
+# blame.10 The cats are blamed
+# Since the epidemic came the town is full of cats, and the people are sure
+# they spread it. The ruler can pay to have some examined.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.10
+	desc = EVTDESCblame10
+	picture = GFX_evt_depopulated_town
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		capital_scope = { save_event_target_as = capital }
+	}
+
+	option = { # Gather some cats
+		name = EVTOPTAblame10
+		custom_tooltip = { text = EVTOPTAblame10_TT }
+		if = { limit = { has_character_modifier = in_seclusion } scaled_wealth = -0.4 }
+		else = { scaled_wealth = -0.1 }
+		hidden_tooltip = {
+			character_event = { id = blame.11 days = 20 random = 5 }
+			character_event = { id = blame.12 days = 90 random = 30 }
+		}
+	}
+	option = { # The cats are not to blame
+		name = EVTOPTBblame10
+		hidden_tooltip = { character_event = { id = blame.12 days = 90 random = 30 } }
+	}
+}
+
+# blame.11 The cats seem healthy
+# The examiner finds the cats calm and mostly healthy. Keeping some to watch
+# may win the ruler a pet.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.11
+	desc = EVTDESCblame11
+	picture = GFX_evt_cat
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = cats_examined
+		if = {
+			limit = { any_courtier_or_vassal = { has_minor_title = title_court_physician } }
+			random_courtier_or_vassal = {
+				limit = { has_minor_title = title_court_physician }
+				save_event_target_as = cat_examiner
+			}
+		}
+		else_if = {
+			limit = { job_marshal = { always = yes } }
+			job_marshal = { save_event_target_as = cat_examiner }
+		}
+		else = { random_courtier = { save_event_target_as = cat_examiner } }
+	}
+
+	option = { # Let them go
+		name = EVTOPTAblame11
+	}
+	option = { # Keep some for observation
+		name = EVTOPTBblame11
+		scaled_wealth = -0.2
+		set_character_flag = cats_observed
+		hidden_tooltip = {
+			random_list = {
+				70 = { character_event = { id = blame.15 days = 30 random = 10 } }
+				30 = { }
+			}
+		}
+	}
+}
+
+# blame.12 A mob against the cats
+# The complaints will not end: a mob says the cats bring bad luck. The ruler
+# can make an example of one, talk the mob down, explain, kill every cat or
+# send them home.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.12
+	desc = EVTDESCblame12
+	picture = GFX_evt_peasants
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Make an example of the "source"
+		name = EVTOPTAblame12
+		tooltip_info = intrigue
+		trigger = { has_character_flag = cats_observed intrigue = 15 }
+		custom_tooltip = { text = EVTOPTAblame12_TT }
+		hidden_tooltip = {
+			random_list = {
+				20 = { character_event = { id = blame.20 days = 50 random = 20 } }
+				80 = { character_event = { id = blame.19 days = 50 random = 20 } }
+			}
+		}
+	}
+	option = { # The cats are not the cause
+		name = EVTOPTBblame12
+		tooltip_info = diplomacy
+		trigger = { diplomacy = 15 has_character_flag = cats_examined }
+		custom_tooltip = { text = EVTOPTBblame12_TT }
+		hidden_tooltip = {
+			random_list = {
+				20 = { character_event = { id = blame.20 days = 50 random = 20 } }
+				80 = { character_event = { id = blame.19 days = 50 random = 20 } }
+			}
+		}
+	}
+	option = { # The cats seem mostly healthy
+		name = EVTOPTCblame12
+		trigger = {
+			has_character_flag = cats_examined
+			NOR = { diplomacy = 15 AND = { intrigue = 15 has_character_flag = cats_observed } }
+		}
+		custom_tooltip = { text = EVTOPTCblame12_TT }
+		hidden_tooltip = {
+			random_list = {
+				50 = { character_event = { id = blame.20 days = 50 random = 20 } }
+				50 = { character_event = { id = blame.19 days = 50 random = 20 } }
+			}
+		}
+	}
+	option = { # Get rid of all cats
+		name = EVTOPTDblame12
+		if = { limit = { has_character_modifier = pet_cat } remove_character_modifier = pet_cat }
+		capital_scope = { add_province_modifier = { name = no_more_cats years = 10 } }
+		hidden_tooltip = {
+			random_list = {
+				30 = { }
+				70 = {
+					random_courtier = {
+						limit = {
+							is_adult = yes
+							NOR = { is_rival = ROOT is_friend = ROOT owes_favor_to = ROOT }
+						}
+						character_event = { id = blame.16 days = 4 }
+					}
+				}
+			}
+		}
+	}
+	option = { # This is absurd, go home
+		name = EVTOPTEblame12
+		capital_scope = { add_province_modifier = { name = epidemic_blame_1 years = 10 } }
+		hidden_tooltip = {
+			random_list = {
+				20 = { character_event = { id = blame.19 days = 50 random = 20 } }
+				80 = { character_event = { id = blame.20 days = 50 random = 20 } }
+			}
+		}
+	}
+}
+
+# blame.13 A courtier wants to keep their cats
+# A courtier who loves their cats asks for an exception to the cull.
+# Scope: ROOT is the ruler, FROM the courtier (worried_courtier).
+character_event = {
+	id = blame.13
+	desc = EVTDESCblame13
+	picture = GFX_evt_suspicious_noble
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Even your cats
+		name = EVTOPTAblame13
+		event_target:worried_courtier = {
+			opinion = { who = ROOT modifier = opinion_hate years = 5 }
+			hidden_tooltip = { character_event = { id = blame.17 } }
+		}
+	}
+	option = { # Keep it secret, but you owe me
+		name = EVTOPTBblame13
+		add_favor = event_target:worried_courtier
+		hidden_tooltip = {
+			event_target:worried_courtier = { character_event = { id = blame.18 } }
+			random_list = {
+				50 = { character_event = { id = blame.19 days = 20 random = 20 } } # The talk dies down
+				50 = { character_event = { id = blame.14 days = 20 random = 20 } } # The people find out
+			}
+		}
+	}
+}
+
+# blame.14 The people find the hidden cats
+# The hidden cats are found and the people are furious.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.14
+	desc = EVTDESCblame14
+	picture = GFX_evt_peasants
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Curse you
+		name = EVTOPTAblame14
+		capital_scope = { add_province_modifier = { name = epidemic_blame_2 years = 10 } }
+	}
+}
+
+# blame.15 A new pet
+# One of the examined cats takes a liking to the ruler.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.15
+	desc = EVTDESCblame15
+	picture = GFX_evt_cat
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_list = {
+			10 = { set_character_flag = cat_name_1 }
+			10 = { set_character_flag = cat_name_2 }
+			10 = { set_character_flag = cat_name_3 }
+		}
+	}
+
+	option = { # Keep her
+		name = { text = EVTOPTAblame15 trigger = { has_character_flag = cat_name_1 } }
+		name = { text = EVTOPTBblame15 trigger = { has_character_flag = cat_name_2 } }
+		name = { text = EVTOPTCblame15 trigger = { has_character_flag = cat_name_3 } }
+		clr_character_flag = cat_name_1
+		clr_character_flag = cat_name_2
+		clr_character_flag = cat_name_3
+		add_cat_effect = yes
+	}
+	option = { # The people would not approve
+		name = EVTOPTDblame15
+		clr_character_flag = cat_name_1
+		clr_character_flag = cat_name_2
+		clr_character_flag = cat_name_3
+	}
+}
+
+# blame.16 The liege wants the cats dead
+# A courtier who loves cats hears of the cull and may plead for them.
+# Scope: ROOT is the courtier, FROM the ruler.
+character_event = {
+	id = blame.16
+	desc = EVTDESCblame16
+	picture = GFX_evt_quarrel
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		save_event_target_as = worried_courtier
+	}
+
+	option = { # Ask for an exception
+		name = EVTOPTAblame16
+		trigger = { NOT = { owes_favor_to = FROM } }
+		ai_chance = { factor = 100 }
+		custom_tooltip = {
+			text = EVTOPTAblame16_TT
+			hidden_tooltip = { FROM = { character_event = { id = blame.13 } } }
+		}
+	}
+	option = { # I cannot argue with my liege
+		name = EVTOPTBblame16
+		ai_chance = { factor = 0 }
+		prestige = -200
+	}
+}
+
+# blame.17 No exception
+# The liege will not spare the vassal's cats.
+# Scope: ROOT is the courtier, FROM the ruler.
+character_event = {
+	id = blame.17
+	desc = EVTDESCblame17
+	picture = GFX_evt_suspicious_noble
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAblame17
+		tooltip = { opinion = { who = FROM modifier = opinion_hate years = 5 } }
+	}
+}
+
+# blame.18 An exception, for a favour
+# The liege spares the vassal's cats for a favour.
+# Scope: ROOT is the courtier, FROM the ruler.
+character_event = {
+	id = blame.18
+	desc = EVTDESCblame18
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAblame18
+		tooltip = { reverse_add_favor = FROM }
+	}
+}
+
+# blame.19 The talk of cats dies down
+# The talk of cats dies down.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.19
+	desc = EVTDESCblame19
+	picture = GFX_evt_market
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAblame19
+	}
+}
+
+# blame.20 The mob turns angry
+# The people want every cat gone and their taxes back.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.20
+	desc = EVTDESCblame20
+	picture = GFX_evt_peasants
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Meet their demands
+		name = EVTOPTAblame20
+		scaled_wealth = -1
+		if = { limit = { has_character_modifier = pet_cat } remove_character_modifier = pet_cat }
+		capital_scope = {
+			if = {
+				limit = { NOT = { has_province_modifier = no_more_cats } }
+				add_province_modifier = { name = no_more_cats years = 10 }
+			}
+			if = {
+				limit = { has_province_modifier = epidemic_blame_1 }
+				remove_province_modifier = epidemic_blame_1
+			}
+			if = {
+				limit = { has_province_modifier = epidemic_blame_2 }
+				remove_province_modifier = epidemic_blame_2
+			}
+		}
+	}
+	option = { # You have no power here
+		name = EVTOPTBblame20
+		capital_scope = {
+			add_province_modifier = { name = epidemic_blame_2 years = 10 }
+			if = {
+				limit = { has_province_modifier = epidemic_blame_1 }
+				remove_province_modifier = epidemic_blame_1
+			}
+		}
+	}
+}
+
+###############################################################################
+# The Strigany (blame.30-35)
+# The people blame the Strigany wanderers. The head of the faith may weigh
+# in. Expelling them sends the caravans and Strigany courtiers away, as the
+# expel_strigany decision does; protecting them may mean sending troops to
+# stop a purge.
+###############################################################################
+
+# blame.30 The Strigany are blamed
+# The people say the Strigany wanderers brought the sickness.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.30
+	desc = EVTDESCblame30
+	picture = GFX_evt_wandering_strigany
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Something must be done
+		name = EVTOPTAblame30
+		any_realm_province = {
+			limit = { owner = { character = ROOT } }
+			add_province_modifier = { name = epidemic_blame_1 duration = 3650 }
+		}
+		hidden_tooltip = {
+			if = {
+				limit = { rightful_religious_head_scope = { NOT = { character = ROOT } } }
+				rightful_religious_head_scope = { character_event = { id = blame.31 days = 30 } }
+			}
+		}
+		character_event = { id = blame.32 days = 60 }
+	}
+	option = { # I don't really care
+		name = EVTOPTBblame30
+		any_realm_province = {
+			limit = { owner = { character = ROOT } }
+			add_province_modifier = { name = epidemic_blame_2 duration = 3650 }
+		}
+	}
+}
+
+# blame.31 The head of the faith weighs in
+# The head of the faith decides whether the Strigany are to blame.
+# Scope: ROOT is the head of the faith, FROM the ruler.
+character_event = {
+	id = blame.31
+	desc = EVTDESCblame31
+	picture = GFX_evt_end_of_days
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Leave the Strigany be
+		name = EVTOPTAblame31
+		FROM = { letter_event = { id = blame.34 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.5 OR = { trait = zealous trait = cynical } }
+			modifier = { factor = 2 is_virtous = yes }
+		}
+	}
+	option = { # The Strigany did it
+		name = EVTOPTBblame31
+		FROM = { letter_event = { id = blame.35 } }
+		ai_chance = { factor = 50 modifier = { factor = 2 is_wicked = yes } }
+	}
+}
+
+# blame.32 The ruler decides
+# Expelling the Strigany pays, but costs prestige and makes the ruler
+# arbitrary; sparing them may lead to a purge (blame.33).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.32
+	picture = GFX_evt_suspicious_noble
+	border = GFX_event_normal_frame_religion
+
+	desc = { text = EVTDESCblame32 trigger = { has_character_flag = religion_head_says_stop } }
+	desc = { text = EVTDESCblame32b trigger = { has_character_flag = religion_head_says_go } }
+	desc = {
+		text = EVTDESCblame32c
+		trigger = {
+			NOR = {
+				has_character_flag = religion_head_says_stop
+				has_character_flag = religion_head_says_go
+			}
+		}
+	}
+
+	is_triggered_only = yes
+
+	option = { # The Strigany are not to blame
+		name = EVTOPTAblame32
+		clr_character_flag = religion_head_says_stop
+		clr_character_flag = religion_head_says_go
+		character_event = { id = blame.33 days = 30 }
+	}
+	option = { # Expel them
+		name = EVTOPTBblame32
+		clr_character_flag = religion_head_says_stop
+		clr_character_flag = religion_head_says_go
+		any_realm_province = {
+			limit = { owner = { character = ROOT } }
+			remove_province_modifier = epidemic_blame_1
+		}
+		prestige = -100
+		scaled_wealth = 2
+		if = { limit = { NOT = { trait = arbitrary } } add_trait = arbitrary }
+		add_character_modifier = { name = expelled_strigany duration = 3650 inherit = yes }
+		custom_tooltip = { text = blame_strigany_expelled_tt }
+		hidden_tooltip = {
+			expel_strigany_effect = yes
+			character_event = { id = SoA.105 } # Strigany Expelled notice
+		}
+		any_friend = { limit = { culture_group = strigany_group } remove_friend = ROOT }
+	}
+}
+
+# blame.33 A purge is coming
+# Despite the ruler's word, a mob means to purge the Strigany in one of the
+# ruler's cities.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.33
+	picture = GFX_evt_impalement
+	border = GFX_event_normal_frame_religion
+
+	desc = { text = EVTDESCblame33 trigger = { has_character_flag = pogrom_target_selected } }
+	desc = {
+		text = EVTDESCblame33b
+		trigger = { NOT = { has_character_flag = pogrom_target_selected } }
+	}
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = {
+				any_demesne_province = {
+					NOT = { has_province_flag = pogrom_target }
+					any_province_holding = { holding_type = city }
+				}
+			}
+			random_demesne_province = {
+				limit = {
+					NOT = { has_province_flag = pogrom_target }
+					any_province_holding = { holding_type = city }
+				}
+				random_province_holding = {
+					limit = { holding_type = city }
+					save_event_target_as = pogrom_city_target
+				}
+				set_province_flag = pogrom_target
+				save_event_target_as = pogrom_province_target
+			}
+			set_character_flag = pogrom_target_selected
+		}
+	}
+
+	option = { # Send troops to stop them
+		name = EVTOPTAblame33
+		if = {
+			limit = { has_character_flag = pogrom_target_selected }
+			event_target:pogrom_province_target = {
+				remove_province_modifier = epidemic_blame_1
+				add_province_modifier = { name = epidemic_blame_2 duration = 3650 }
+			}
+		}
+		clr_character_flag = pogrom_target_selected
+		clear_event_target = pogrom_city_target
+	}
+	option = { # Let them do it
+		name = EVTOPTBblame33
+		prestige = -100
+		clr_character_flag = pogrom_target_selected
+		clear_event_target = pogrom_city_target
+	}
+}
+
+# blame.34 Letter: protect the Strigany
+# The head of the faith asks the ruler to keep the Strigany safe.
+# Scope: ROOT is the ruler, FROM the head of the faith.
+letter_event = {
+	id = blame.34
+	desc = EVTDESCblame34
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = OK
+		set_character_flag = religion_head_says_stop
+	}
+}
+
+# blame.35 Letter: drive them out
+# The head of the faith tells the ruler to drive the Strigany out.
+# Scope: ROOT is the ruler, FROM the head of the faith.
+letter_event = {
+	id = blame.35
+	desc = EVTDESCblame35
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = OK
+		set_character_flag = religion_head_says_go
+	}
+}
+
+###############################################################################
+# The witch hunt (blame.40-58)
+# A court witch hunter, any witch hunter at court, or else the court
+# chaplain tells the ruler that servants of the Dark Gods brought the
+# sickness. For three hundred days the court points fingers; then the
+# accused are judged. Real Chaos cultists, mutants and unlicensed wizards
+# are the first suspects, and unmasking one is a true success.
+###############################################################################
+
+# blame.40 Who leads the witch hunt
+# Picks the investigator and has them bring the news.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.40
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = {
+				any_courtier_or_vassal = { whunter_court_hunter_title_trigger = yes prisoner = no }
+			}
+			random_courtier_or_vassal = {
+				limit = { whunter_court_hunter_title_trigger = yes prisoner = no }
+				character_event = { id = blame.41 }
+			}
+		}
+		else_if = {
+			limit = {
+				any_courtier = { whunter_chapter_member_trigger = yes prisoner = no is_adult = yes }
+			}
+			random_courtier = {
+				limit = { whunter_chapter_member_trigger = yes prisoner = no is_adult = yes }
+				character_event = { id = blame.41 }
+			}
+		}
+		else = { job_spiritual = { character_event = { id = blame.41 } } }
+	}
+}
+
+# blame.41 Relay to the ruler
+# Scope: ROOT is the investigator, FROM the ruler.
+character_event = {
+	id = blame.41
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { character_event = { id = blame.42 } }
+	}
+}
+
+# blame.42 Servants of the Dark Gods
+# The investigator says worshippers of the Dark Gods are behind the
+# epidemic. Starting the hunt angers the peasants until it ends; refusing
+# angers them more.
+# Scope: ROOT is the ruler, FROM the investigator.
+character_event = {
+	id = blame.42
+	picture = GFX_evt_witch_hunters
+	border = GFX_event_normal_frame_religion
+
+	desc = {
+		text = EVTDESCblame42
+		trigger = {
+			FROM = {
+				OR = {
+					whunter_court_hunter_title_trigger = yes
+					whunter_chapter_member_trigger = yes
+				}
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCblame42b
+		trigger = {
+			FROM = {
+				NOR = {
+					whunter_court_hunter_title_trigger = yes
+					whunter_chapter_member_trigger = yes
+				}
+			}
+		}
+	}
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { save_event_target_as = bg_witch_hunter }
+	}
+
+	option = { # Investigate
+		name = EVTOPTAblame42
+		custom_tooltip = { text = EVTOPTAblame42_TT }
+		hidden_tooltip = {
+			character_event = { id = blame.43 days = 30 }
+			character_event = { id = blame.52 days = 300 } # The judgement
+			set_character_flag = bg_witch_hunt
+			set_variable = { which = bg_imprisoned_witches value = 0 }
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				add_province_modifier = { name = peasant_unrest duration = 3650 }
+			}
+		}
+		reverse_opinion = { modifier = opinion_took_my_advice who = FROM }
+	}
+	option = { # There are no such things
+		name = EVTOPTBblame42
+		custom_tooltip = { text = EVTOPTBblame42_TT }
+		reverse_opinion = { modifier = opinion_did_not_take_my_advice who = FROM }
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				add_province_modifier = { name = peasant_crisis duration = 3650 }
+			}
+		}
+	}
+}
+
+# blame.43 Witnesses come forward
+# The ruler can set the investigator on the most likely witch, ask the
+# court to watch, or accuse someone they dislike.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.43
+	desc = EVTDESCblame43
+	picture = GFX_evt_shadowy_cabal
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_tooltip = { character_event = { id = blame.51 } }
+	}
+
+	option = { # Find the most likely witch
+		name = EVTOPTAblame43
+		trigger = { event_target:bg_witch_hunter = { is_alive = yes prisoner = no } }
+		custom_tooltip = { text = EVTOPTAblame43_TT }
+		hidden_tooltip = {
+			event_target:bg_witch_hunter = {
+				character_event = { id = blame.44 days = 100 random = 40 }
+			}
+		}
+	}
+	option = { # Warn the court
+		name = EVTOPTBblame43
+		custom_tooltip = { text = EVTOPTBblame43_TT }
+		hidden_tooltip = { character_event = { id = blame.48 days = 80 random = 40 } }
+	}
+	option = { # I already have my suspicions
+		name = EVTOPTCblame43
+		trigger = {
+			any_courtier = {
+				OR = { is_rival = ROOT NOT = { reverse_opinion = { who = ROOT value = 0 } } }
+			}
+			NOT = { trait = honest }
+		}
+		custom_tooltip = { text = EVTOPTCblame43_TT }
+		hidden_tooltip = { character_event = { id = blame.50 days = 50 random = 30 } }
+	}
+	option = { # Stop wasting my time
+		name = EVTOPTDblame43
+		custom_tooltip = { text = EVTOPTDblame43_TT }
+	}
+}
+
+# blame.44 The most likely witch
+# The accuser (the investigator or a courtier from blame.51) picks a
+# suspect: a real Chaos cultist first, then a mutant or an unlicensed
+# wizard, a rival of the ruler, a madman, someone of another faith, a wicked
+# courtier, or anyone at all.
+# Scope: ROOT is the accuser, FROM the ruler.
+character_event = {
+	id = blame.44
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		prisoner = no
+		event_target:bg_witch_hunter = { has_character_flag = bg_witch_hunt }
+	}
+
+	immediate = {
+		# The investigator gives someone else a chance to accuse too
+		if = {
+			limit = { NOT = { character = event_target:bg_witch_hunter } }
+			event_target:bg_witch_hunter = { character_event = { id = blame.51 } }
+		}
+		FROM = {
+			if = {
+				limit = {
+					any_courtier = {
+						blame_witch_suspect_base_trigger = yes
+						is_cultist_trigger = yes
+					}
+				}
+				random_courtier = {
+					limit = { blame_witch_suspect_base_trigger = yes is_cultist_trigger = yes }
+					save_event_target_as = bg_likely_witch
+					set_character_flag = bg_accused_witch
+					set_character_flag = bg_cultist
+				}
+			}
+			else_if = {
+				limit = {
+					any_courtier = {
+						blame_witch_suspect_base_trigger = yes
+						OR = { is_mutated_trigger = yes whunter_mage_suspect_trigger = yes }
+					}
+				}
+				random_courtier = {
+					limit = {
+						blame_witch_suspect_base_trigger = yes
+						OR = { is_mutated_trigger = yes whunter_mage_suspect_trigger = yes }
+					}
+					save_event_target_as = bg_likely_witch
+					set_character_flag = bg_accused_witch
+					set_character_flag = bg_tainted
+				}
+			}
+			else_if = {
+				limit = {
+					any_courtier = { blame_witch_suspect_base_trigger = yes is_rival = ROOT }
+				}
+				random_courtier = {
+					limit = { blame_witch_suspect_base_trigger = yes is_rival = ROOT }
+					save_event_target_as = bg_likely_witch
+					set_character_flag = bg_accused_witch
+					random_list = {
+						10 = { set_character_flag = bg_crazy }
+						10 = { set_character_flag = bg_sinful }
+						10 = { set_character_flag = bg_infidel }
+					}
+				}
+			}
+			else_if = {
+				limit = {
+					any_courtier = {
+						blame_witch_suspect_base_trigger = yes
+						OR = { trait = possessed is_lunatic_trigger = yes }
+					}
+				}
+				random_courtier = {
+					limit = {
+						blame_witch_suspect_base_trigger = yes
+						OR = { trait = possessed is_lunatic_trigger = yes }
+					}
+					save_event_target_as = bg_likely_witch
+					set_character_flag = bg_accused_witch
+					set_character_flag = bg_crazy
+				}
+			}
+			else_if = {
+				limit = {
+					any_courtier = {
+						blame_witch_suspect_base_trigger = yes
+						OR = { NOT = { religion = FROM } trait = mystic }
+					}
+				}
+				random_courtier = {
+					limit = {
+						blame_witch_suspect_base_trigger = yes
+						OR = { NOT = { religion = FROM } trait = mystic }
+					}
+					save_event_target_as = bg_likely_witch
+					set_character_flag = bg_accused_witch
+					set_character_flag = bg_infidel
+				}
+			}
+			else_if = {
+				limit = {
+					any_courtier = { blame_witch_suspect_base_trigger = yes is_wicked = yes }
+				}
+				random_courtier = {
+					limit = { blame_witch_suspect_base_trigger = yes is_wicked = yes }
+					save_event_target_as = bg_likely_witch
+					set_character_flag = bg_accused_witch
+					set_character_flag = bg_sinful
+				}
+			}
+			else_if = {
+				limit = { any_courtier = { blame_witch_suspect_base_trigger = yes } }
+				random_courtier = {
+					limit = { blame_witch_suspect_base_trigger = yes }
+					save_event_target_as = bg_likely_witch
+					set_character_flag = bg_accused_witch
+					random_list = {
+						10 = { set_character_flag = bg_crazy }
+						10 = { set_character_flag = bg_sinful }
+						10 = { set_character_flag = bg_infidel }
+					}
+				}
+			}
+		}
+		if = {
+			limit = { event_target:bg_likely_witch = { always = yes } }
+			FROM = { character_event = { id = blame.45 } }
+		}
+	}
+}
+
+# blame.45 The accusation
+# The accuser names the most likely witch and the ruler may imprison them.
+# Scope: ROOT is the ruler, FROM the accuser.
+character_event = {
+	id = blame.45
+	picture = GFX_evt_suspicious_noble
+	border = GFX_event_normal_frame_religion
+
+	desc = {
+		text = EVTDESCblame45_cultist
+		trigger = { event_target:bg_likely_witch = { has_character_flag = bg_cultist } }
+	}
+	desc = {
+		text = EVTDESCblame45_tainted
+		trigger = { event_target:bg_likely_witch = { has_character_flag = bg_tainted } }
+	}
+	desc = {
+		text = EVTDESCblame45_crazy_hunter
+		trigger = {
+			FROM = { character = event_target:bg_witch_hunter }
+			event_target:bg_likely_witch = {
+				has_character_flag = bg_crazy
+				NOR = { has_character_flag = bg_cultist has_character_flag = bg_tainted }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCblame45_sinful_hunter
+		trigger = {
+			FROM = { character = event_target:bg_witch_hunter }
+			event_target:bg_likely_witch = {
+				has_character_flag = bg_sinful
+				NOR = { has_character_flag = bg_cultist has_character_flag = bg_tainted }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCblame45_infidel_hunter
+		trigger = {
+			FROM = { character = event_target:bg_witch_hunter }
+			event_target:bg_likely_witch = {
+				has_character_flag = bg_infidel
+				NOR = { has_character_flag = bg_cultist has_character_flag = bg_tainted }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCblame45_crazy_courtier
+		trigger = {
+			FROM = { NOT = { character = event_target:bg_witch_hunter } }
+			event_target:bg_likely_witch = {
+				has_character_flag = bg_crazy
+				NOR = { has_character_flag = bg_cultist has_character_flag = bg_tainted }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCblame45_sinful_courtier
+		trigger = {
+			FROM = { NOT = { character = event_target:bg_witch_hunter } }
+			event_target:bg_likely_witch = {
+				has_character_flag = bg_sinful
+				NOR = { has_character_flag = bg_cultist has_character_flag = bg_tainted }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCblame45_infidel_courtier
+		trigger = {
+			FROM = { NOT = { character = event_target:bg_witch_hunter } }
+			event_target:bg_likely_witch = {
+				has_character_flag = bg_infidel
+				NOR = { has_character_flag = bg_cultist has_character_flag = bg_tainted }
+			}
+		}
+	}
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:bg_witch_hunter = { has_character_flag = bg_witch_hunt }
+		FROM = { prisoner = no }
+		event_target:bg_likely_witch = { prisoner = no }
+	}
+
+	option = { # Imprison the likely witch
+		name = EVTOPTAblame45
+		custom_tooltip = { text = EVTOPTAblame45_TT }
+		reverse_opinion = { modifier = opinion_took_my_advice who = FROM }
+		event_target:bg_likely_witch = {
+			imprison = ROOT
+			set_character_flag = bg_imprisoned_as_witch
+		}
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				add_province_modifier = { name = peasant_pleased_witch_hunt duration = 60 }
+			}
+			change_variable = { which = bg_imprisoned_witches value = 1 }
+		}
+	}
+	option = { # Preposterous
+		name = EVTOPTBblame45
+		custom_tooltip = { text = EVTOPTBblame45_TT }
+		reverse_opinion = { modifier = opinion_did_not_take_my_advice who = FROM }
+	}
+}
+
+# blame.46 Two rivals accuse each other
+# Two rivals each say the other is a witch; the ruler picks one, both or neither.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.46
+	desc = EVTDESCblame46
+	picture = GFX_evt_suspicious_noble
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:bg_rival_1 = { prisoner = no }
+		event_target:bg_rival_2 = { prisoner = no }
+	}
+
+	option = { # Imprison the first
+		name = EVTOPTAblame46
+		custom_tooltip = { text = EVTOPTAblame46_TT }
+		event_target:bg_rival_1 = { imprison = ROOT set_character_flag = bg_imprisoned_as_witch }
+		event_target:bg_rival_2 = { opinion = { modifier = opinion_took_my_advice who = ROOT } }
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				add_province_modifier = { name = peasant_pleased_witch_hunt duration = 60 }
+			}
+			change_variable = { which = bg_imprisoned_witches value = 1 }
+		}
+	}
+	option = { # Imprison the second
+		name = EVTOPTBblame46
+		custom_tooltip = { text = EVTOPTBblame46_TT }
+		event_target:bg_rival_2 = { imprison = ROOT set_character_flag = bg_imprisoned_as_witch }
+		event_target:bg_rival_1 = { opinion = { modifier = opinion_took_my_advice who = ROOT } }
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				add_province_modifier = { name = peasant_pleased_witch_hunt duration = 60 }
+			}
+			change_variable = { which = bg_imprisoned_witches value = 1 }
+		}
+	}
+	option = { # Imprison both
+		name = EVTOPTCblame46
+		custom_tooltip = { text = EVTOPTCblame46_TT }
+		event_target:bg_rival_1 = { imprison = ROOT set_character_flag = bg_imprisoned_as_witch }
+		event_target:bg_rival_2 = { imprison = ROOT set_character_flag = bg_imprisoned_as_witch }
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				add_province_modifier = { name = peasant_pleased_witch_hunt duration = 60 }
+			}
+			change_variable = { which = bg_imprisoned_witches value = 2 }
+		}
+	}
+	option = { # Get out of my sight
+		name = EVTOPTDblame46
+		custom_tooltip = { text = EVTOPTDblame46_TT }
+		event_target:bg_rival_1 = {
+			opinion = { modifier = opinion_did_not_take_my_advice who = ROOT }
+		}
+		event_target:bg_rival_2 = {
+			opinion = { modifier = opinion_did_not_take_my_advice who = ROOT }
+		}
+	}
+}
+
+# blame.47 Relay for the jealous lover
+# Scope: ROOT is the jealous lover, FROM the ruler.
+character_event = {
+	id = blame.47
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { character_event = { id = blame.49 } }
+	}
+}
+
+# blame.48 The court points fingers
+# Either two courtiers accuse each other, or a married courtier's new lover
+# accuses the courtier's spouse.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.48
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_list = {
+			50 = { # Two rivals accuse each other
+				modifier = {
+					factor = 0
+					NOT = {
+						any_courtier = {
+							count = 2
+							is_adult = yes
+							prisoner = no
+							ai = yes
+							NOT = { has_character_flag = bg_accused_witch }
+						}
+					}
+				}
+				random_courtier = {
+					limit = {
+						is_adult = yes
+						prisoner = no
+						ai = yes
+						NOT = { has_character_flag = bg_accused_witch }
+					}
+					save_event_target_as = bg_rival_1
+					set_character_flag = bg_accused_witch
+				}
+				random_courtier = {
+					limit = {
+						is_adult = yes
+						prisoner = no
+						ai = yes
+						NOT = { character = event_target:bg_rival_1 }
+						NOT = { has_character_flag = bg_accused_witch }
+					}
+					save_event_target_as = bg_rival_2
+					set_character_flag = bg_accused_witch
+					add_rival = event_target:bg_rival_1
+				}
+				character_event = { id = blame.46 }
+			}
+			50 = { # A jealous lover
+				modifier = {
+					factor = 0
+					NOT = {
+						any_courtier = {
+							has_lover = no
+							is_married = yes
+							is_adult = yes
+							any_spouse = {
+								NOT = { character = ROOT }
+								ai = yes
+								prisoner = no
+								NOT = { has_character_flag = bg_accused_witch }
+							}
+						}
+					}
+				}
+				random_courtier = {
+					limit = {
+						has_lover = no
+						is_married = yes
+						is_adult = yes
+						any_spouse = {
+							NOT = { character = ROOT }
+							ai = yes
+							prisoner = no
+							NOT = { has_character_flag = bg_accused_witch }
+						}
+					}
+					save_event_target_as = bg_lover
+					random_spouse = {
+						limit = {
+							NOT = { character = ROOT }
+							ai = yes
+							prisoner = no
+							NOT = { has_character_flag = bg_accused_witch }
+						}
+						save_event_target_as = bg_spouse
+						set_character_flag = bg_accused_witch
+					}
+				}
+				if = {
+					limit = { event_target:bg_lover = { prefers_men_trigger = yes } }
+					create_character = {
+						female = no
+						random_traits = yes
+						dynasty = random
+						culture = event_target:bg_lover
+						religion = event_target:bg_lover
+					}
+				}
+				else = {
+					create_character = {
+						female = yes
+						random_traits = yes
+						dynasty = random
+						culture = event_target:bg_lover
+						religion = event_target:bg_lover
+					}
+				}
+				new_character = {
+					character_event = { id = aiclean.31 } # Racial trait
+					remove_trait = chaste
+					remove_trait = kind
+					add_trait = lustful
+					add_trait = envious
+					save_event_target_as = bg_jealous_lover
+					add_lover = event_target:bg_lover
+					character_event = { id = blame.47 }
+				}
+			}
+		}
+	}
+}
+
+# blame.49 A jealous lover accuses a spouse
+# A jealous lover says a married courtier is a witch.
+# Scope: ROOT is the ruler, FROM the jealous lover.
+character_event = {
+	id = blame.49
+	desc = EVTDESCblame49
+	picture = GFX_evt_throne_room
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Protect the poor spouse
+		name = EVTOPTAblame49
+		custom_tooltip = { text = EVTOPTAblame49_TT }
+		event_target:bg_spouse = { imprison = ROOT set_character_flag = bg_imprisoned_as_witch }
+		reverse_opinion = { modifier = opinion_took_my_advice who = FROM }
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				add_province_modifier = { name = peasant_pleased_witch_hunt duration = 60 }
+			}
+			change_variable = { which = bg_imprisoned_witches value = 1 }
+		}
+	}
+	option = { # Keep your nose out of it
+		name = EVTOPTBblame49
+		custom_tooltip = { text = EVTOPTBblame49_TT }
+		reverse_opinion = { modifier = opinion_did_not_take_my_advice who = FROM }
+	}
+}
+
+# blame.50 Whom to accuse
+# The ruler names up to three courtiers they dislike.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.50
+	desc = EVTDESCblame50
+	picture = GFX_evt_suspicious_noble
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_courtier = {
+			limit = { blame_disliked_courtier_trigger = yes }
+			save_event_target_as = bg_dislike_1
+		}
+		random_courtier = {
+			limit = {
+				blame_disliked_courtier_trigger = yes
+				NOT = { character = event_target:bg_dislike_1 }
+			}
+			save_event_target_as = bg_dislike_2
+		}
+		random_courtier = {
+			limit = {
+				blame_disliked_courtier_trigger = yes
+				NOT = { character = event_target:bg_dislike_1 }
+				NOT = { character = event_target:bg_dislike_2 }
+			}
+			save_event_target_as = bg_dislike_3
+		}
+	}
+
+	option = {
+		name = EVTOPTAblame50
+		trigger = { event_target:bg_dislike_1 = { always = yes } }
+		custom_tooltip = { text = EVTOPTAblame50_TT }
+		event_target:bg_dislike_1 = {
+			imprison = ROOT
+			set_character_flag = bg_imprisoned_as_witch
+			set_character_flag = bg_accused_witch
+		}
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				add_province_modifier = { name = peasant_pleased_witch_hunt duration = 60 }
+			}
+			change_variable = { which = bg_imprisoned_witches value = 1 }
+		}
+	}
+	option = {
+		name = EVTOPTBblame50
+		trigger = { event_target:bg_dislike_2 = { always = yes } }
+		custom_tooltip = { text = EVTOPTBblame50_TT }
+		event_target:bg_dislike_2 = {
+			imprison = ROOT
+			set_character_flag = bg_imprisoned_as_witch
+			set_character_flag = bg_accused_witch
+		}
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				add_province_modifier = { name = peasant_pleased_witch_hunt duration = 60 }
+			}
+			change_variable = { which = bg_imprisoned_witches value = 1 }
+		}
+	}
+	option = {
+		name = EVTOPTCblame50
+		trigger = { event_target:bg_dislike_3 = { always = yes } }
+		custom_tooltip = { text = EVTOPTCblame50_TT }
+		event_target:bg_dislike_3 = {
+			imprison = ROOT
+			set_character_flag = bg_imprisoned_as_witch
+			set_character_flag = bg_accused_witch
+		}
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				add_province_modifier = { name = peasant_pleased_witch_hunt duration = 60 }
+			}
+			change_variable = { which = bg_imprisoned_witches value = 1 }
+		}
+	}
+	option = { # Accuse no one
+		name = EVTOPTDblame50
+	}
+}
+
+# blame.51 A courtier may point out someone
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.51
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_courtier = {
+			limit = { prisoner = no age = 12 NOT = { character = event_target:bg_witch_hunter } }
+			character_event = { id = blame.44 days = 50 random = 60 }
+		}
+	}
+}
+
+# blame.52 The hunt ends
+# After three hundred days the hunt is over: the accused are judged if
+# there are any, else the ruler admits no witch was found.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.52
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = bg_witch_hunt
+		if = {
+			limit = { check_variable = { which = bg_imprisoned_witches value = 1 } }
+			character_event = { id = blame.53 }
+		}
+		else = { character_event = { id = blame.56 } }
+		any_courtier = {
+			limit = { has_character_flag = bg_accused_witch }
+			clr_character_flag = bg_accused_witch
+		}
+	}
+}
+
+# blame.53 The judgement
+# The ruler burns the accused, lets them rot, or hands them to the priests.
+# Burning a real cultist pleases the faithful; Old World zealots may come to
+# serve (once in a life, 10%).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.53
+	desc = EVTDESCblame53
+	picture = GFX_evt_witch_hunter_pyre
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_list = {
+			10 = { # A relative is killed
+				modifier = {
+					factor = 2
+					check_variable = { which = bg_imprisoned_witches value = 2 }
+				}
+				modifier = {
+					factor = 2
+					check_variable = { which = bg_imprisoned_witches value = 4 }
+				}
+				modifier = {
+					factor = 2
+					check_variable = { which = bg_imprisoned_witches value = 6 }
+				}
+				modifier = { factor = 0 blame_relative_at_court_trigger = no }
+				character_event = { id = blame.54 days = 20 random = 30 }
+			}
+			60 = { character_event = { id = blame.55 days = 20 random = 30 } }
+		}
+	}
+
+	option = { # Light the pyres
+		name = EVTOPTAblame53
+		custom_tooltip = { text = EVTOPTAblame53_TT }
+		if = {
+			limit = {
+				any_courtier = {
+					has_character_flag = bg_imprisoned_as_witch
+					prisoner = yes
+					has_character_flag = bg_cultist
+				}
+			}
+			piety = 100
+			custom_tooltip = { text = EVTOPTAblame53_cultist_TT }
+			if = {
+				limit = {
+					religion_group = old_world_group
+					is_landed = yes
+					NOT = { has_character_flag = blame_pyre_sworn_raised }
+				}
+				random = {
+					chance = 10
+					set_character_flag = blame_pyre_sworn_raised
+					blame_pyre_sworn_effect = yes
+				}
+			}
+		}
+		any_courtier = {
+			limit = { has_character_flag = bg_imprisoned_as_witch prisoner = yes }
+			death = { death_reason = death_execution_burning killer = ROOT }
+		}
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				remove_province_modifier = peasant_unrest
+			}
+		}
+	}
+	option = { # Let them rot
+		name = EVTOPTBblame53
+		custom_tooltip = { text = EVTOPTBblame53_TT }
+		any_courtier = {
+			limit = { has_character_flag = bg_imprisoned_as_witch }
+			clr_character_flag = bg_imprisoned_as_witch
+			clr_character_flag = bg_cultist
+			clr_character_flag = bg_tainted
+		}
+	}
+	option = { # Let the priests deal with them
+		name = EVTOPTCblame53
+		any_courtier = {
+			limit = { has_character_flag = bg_imprisoned_as_witch prisoner = yes }
+			prisoner = no
+			opinion = { modifier = opinion_grateful who = ROOT years = 10 }
+			add_character_modifier = { name = renewed_faith duration = 120 }
+			clr_character_flag = bg_imprisoned_as_witch
+			clr_character_flag = bg_cultist
+			clr_character_flag = bg_tainted
+		}
+	}
+}
+
+# blame.54 A relative is chosen
+# The fear the hunt has stirred up claims one of the ruler's family.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.54
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { any_spouse = { at_location = ROOT } }
+			random_spouse = {
+				limit = { at_location = ROOT }
+				save_event_target_as = bg_relative_witch
+			}
+		}
+		else_if = {
+			limit = { any_child = { at_location = ROOT age = 4 } }
+			random_child = {
+				limit = { at_location = ROOT age = 4 }
+				save_event_target_as = bg_relative_witch
+			}
+		}
+		else_if = {
+			limit = { mother = { at_location = ROOT } }
+			mother = { save_event_target_as = bg_relative_witch }
+		}
+		else_if = {
+			limit = { any_sibling = { at_location = ROOT } }
+			random_sibling = {
+				limit = { at_location = ROOT }
+				save_event_target_as = bg_relative_witch
+			}
+		}
+		event_target:bg_relative_witch = { character_event = { id = blame.57 } }
+	}
+}
+
+# blame.55 The hunt has calmed the realm
+# The hunt is over and the court is calm.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.55
+	desc = EVTDESCblame55
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAblame55
+	}
+}
+
+# blame.56 No witch was found
+# A relative may still die at the hands of a frightened court.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.56
+	desc = EVTDESCblame56
+	picture = GFX_evt_throne_room
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAblame56
+		hidden_tooltip = {
+			random = {
+				chance = 30
+				modifier = { factor = 0 blame_relative_at_court_trigger = no }
+				character_event = { id = blame.54 days = 20 random = 30 }
+			}
+		}
+	}
+}
+
+# blame.57 Relay for the murdered relative
+# Scope: ROOT is the relative, FROM the ruler.
+character_event = {
+	id = blame.57
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { character_event = { id = blame.58 } }
+	}
+}
+
+# blame.58 A relative found dead
+# A relative of the ruler is murdered as a witch.
+# Scope: ROOT is the ruler, FROM the relative.
+character_event = {
+	id = blame.58
+	picture = GFX_evt_death
+	border = GFX_event_normal_frame_religion
+
+	desc = {
+		text = EVTDESCblame58
+		trigger = { check_variable = { which = bg_imprisoned_witches value = 1 } }
+	}
+	desc = {
+		text = EVTDESCblame58b
+		trigger = { NOT = { check_variable = { which = bg_imprisoned_witches value = 1 } } }
+	}
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAblame58
+		custom_tooltip = { text = EVTOPTAblame58_TT }
+		event_target:bg_relative_witch = { death = { death_reason = death_murder } }
+		if = { limit = { NOT = { trait = depressed } } add_trait = depressed }
+	}
+}
+
+###############################################################################
+# The impious ruler (blame.60-68)
+# The priests say the gods sent the sickness because the ruler is never seen
+# at the temple. The ruler can go, send a double, raise a temple, or ignore
+# them. Restored from vanilla's Hindu chain, which was commented out; it now
+# serves the temple faiths of the Old World, Araby, Cathay, the Dawi, the
+# elves and the halflings.
+###############################################################################
+
+# blame.60 The ruler is to blame
+# The priests say the sickness is the ruler's fault for never going to the temple.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.60
+	desc = EVTDESCblame60
+	picture = GFX_evt_cathedral
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		job_spymaster = { save_event_target_as = blame_spymaster }
+		any_realm_province = {
+			limit = { owner = { character = ROOT } }
+			add_province_modifier = { name = epidemic_blame_1 duration = 3650 }
+		}
+	}
+
+	option = { # They're right
+		name = EVTOPTAblame60
+		custom_tooltip = { text = EVTOPTAblame60_TT }
+		if = { limit = { trait = proud } remove_trait = proud }
+		else_if = { limit = { NOT = { trait = humble } } add_trait = humble }
+		piety = 20
+		if = {
+			limit = { has_character_modifier = in_seclusion }
+			remove_character_modifier = in_seclusion
+		}
+		hidden_tooltip = { character_event = { id = blame.61 days = 15 } }
+	}
+	option = { # Send a double
+		name = EVTOPTBblame60
+		tooltip_info = intrigue
+		trigger = {
+			intrigue = 12
+			NOT = { trait = deceitful }
+			event_target:blame_spymaster = { always = yes }
+		}
+		custom_tooltip = { text = EVTOPTBblame60_TT }
+		scaled_wealth = -0.3
+		hidden_tooltip = { character_event = { id = blame.62 days = 15 } }
+	}
+	option = { # Send a double (deceitful)
+		name = EVTOPTBblame60
+		tooltip_info = deceitful
+		trigger = { trait = deceitful event_target:blame_spymaster = { always = yes } }
+		custom_tooltip = { text = EVTOPTBblame60_TT }
+		scaled_wealth = -0.3
+		hidden_tooltip = { character_event = { id = blame.62 days = 15 } }
+	}
+	option = { # Build a temple
+		name = EVTOPTCblame60
+		trigger = {
+			capital_scope = { num_of_empty_holdings = 2 }
+			NOT = { has_character_modifier = in_seclusion }
+		}
+		custom_tooltip = { text = EVTOPTCblame60_TT }
+		scaled_wealth = -0.8
+		hidden_tooltip = { character_event = { id = blame.66 days = 15 } }
+	}
+	option = { # I do as I please
+		name = EVTOPTDblame60
+		custom_tooltip = { text = EVTOPTDblame60_TT }
+	}
+}
+
+# blame.61 Back at the temple
+# The ruler worships in the faith's own way and feels closer to their patron.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.61
+	picture = GFX_evt_priest_blessing
+	border = GFX_event_normal_frame_religion
+
+	desc = { text = EVTDESCblame61_sigmar trigger = { has_character_modifier = patron_god_sigmar } }
+	desc = { text = EVTDESCblame61_ulric trigger = { has_character_modifier = patron_god_ulric } }
+	desc = { text = EVTDESCblame61_taal trigger = { has_character_modifier = patron_god_taal } }
+	desc = { text = EVTDESCblame61_morr trigger = { has_character_modifier = patron_god_morr } }
+	desc = {
+		text = EVTDESCblame61_shallya
+		trigger = { has_character_modifier = patron_god_shallya }
+	}
+	desc = { text = EVTDESCblame61_verena trigger = { has_character_modifier = patron_god_verena } }
+	desc = {
+		text = EVTDESCblame61_myrmidia
+		trigger = { has_character_modifier = patron_god_myrmidia }
+	}
+	desc = { text = EVTDESCblame61_manann trigger = { has_character_modifier = patron_god_manann } }
+	desc = { text = EVTDESCblame61_ranald trigger = { has_character_modifier = patron_god_ranald } }
+	desc = {
+		text = EVTDESCblame61
+		trigger = {
+			NOR = {
+				has_character_modifier = patron_god_sigmar
+				has_character_modifier = patron_god_ulric
+				has_character_modifier = patron_god_taal
+				has_character_modifier = patron_god_morr
+				has_character_modifier = patron_god_shallya
+				has_character_modifier = patron_god_verena
+				has_character_modifier = patron_god_myrmidia
+				has_character_modifier = patron_god_manann
+				has_character_modifier = patron_god_ranald
+			}
+		}
+	}
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	option = {
+		name = EVTOPTAblame61
+		if = {
+			limit = { NOT = { has_character_modifier = devoted_worshiper } }
+			add_character_modifier = { name = devoted_worshiper duration = 365 }
+		}
+		hidden_tooltip = { character_event = { id = blame.63 days = 65 random = 10 } }
+	}
+}
+
+# blame.62 The double at the temple
+# The spymaster's double calms the people for now. The ruse may hold or be
+# found out, depending on the ruler's and the spymaster's intrigue.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.62
+	desc = EVTDESCblame62
+	picture = GFX_evt_stone_church
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	option = { # Keep up the charade
+		name = EVTOPTAblame62
+		custom_tooltip = { text = EVTOPTAblame62_TT }
+		if = {
+			limit = { NOT = { has_character_modifier = fake_worshiper } }
+			add_character_modifier = { name = fake_worshiper duration = 365 }
+		}
+		hidden_tooltip = {
+			random_list = {
+				50 = { # The people are fooled
+					modifier = { factor = 1.1 intrigue = 10 }
+					modifier = { factor = 1.1 intrigue = 12 }
+					modifier = { factor = 1.1 intrigue = 15 }
+					modifier = { factor = 1.1 intrigue = 17 }
+					modifier = { factor = 1.1 intrigue = 20 }
+					modifier = { factor = 1.1 event_target:blame_spymaster = { intrigue = 10 } }
+					modifier = { factor = 1.1 event_target:blame_spymaster = { intrigue = 12 } }
+					modifier = { factor = 1.1 event_target:blame_spymaster = { intrigue = 15 } }
+					modifier = { factor = 1.1 event_target:blame_spymaster = { intrigue = 17 } }
+					modifier = { factor = 1.1 event_target:blame_spymaster = { intrigue = 20 } }
+					character_event = { id = blame.65 days = 50 }
+				}
+				50 = { # The people see through it
+					modifier = { factor = 1.5 NOT = { intrigue = 10 } }
+					modifier = { factor = 1.1 event_target:blame_spymaster = { trait = deceitful } }
+					modifier = {
+						factor = 2
+						event_target:blame_spymaster = {
+							trait = deceitful
+							NOT = { opinion = { who = ROOT value = 25 } }
+						}
+					}
+					modifier = {
+						factor = 2
+						event_target:blame_spymaster = { is_dumb_trigger = yes }
+					}
+					modifier = {
+						factor = 2
+						event_target:blame_spymaster = { NOT = { intrigue = 6 } }
+					}
+					character_event = { id = blame.64 days = 70 }
+				}
+			}
+		}
+	}
+	option = { # Stop while I can
+		name = EVTOPTBblame62
+		custom_tooltip = { text = EVTOPTBblame62_TT }
+		if = {
+			limit = { NOT = { has_character_modifier = fake_worshiper_felt_guilty } }
+			add_character_modifier = { name = fake_worshiper_felt_guilty duration = 365 }
+		}
+	}
+}
+
+# blame.63 A child for the temple
+# A grateful family offers their zealous child as the ruler's servant.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.63
+	desc = EVTDESCblame63
+	picture = GFX_evt_educate_child
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+	hide_from = yes
+	hide_new = yes
+
+	trigger = {
+		is_wicked = no
+	}
+
+	immediate = {
+		random_list = {
+			50 = {
+				create_character = {
+					female = yes
+					age = 12
+					random_traits = yes
+					dynasty = NONE
+					culture = ROOT
+					religion = ROOT
+				}
+			}
+			50 = {
+				create_character = {
+					female = no
+					age = 12
+					random_traits = yes
+					dynasty = NONE
+					culture = ROOT
+					religion = ROOT
+				}
+			}
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			remove_trait = slothful
+			remove_trait = idolizer
+			remove_trait = dwarf
+			remove_trait = harelip
+			remove_trait = hunchback
+			remove_trait = imbecile
+			remove_trait = slow
+			remove_trait = stutter
+			remove_trait = cruel
+			add_trait = quick
+			add_trait = zealous
+			save_event_target_as = zealous_child
+			opinion = { modifier = opinion_loyal_servant who = ROOT years = 100 }
+		}
+	}
+
+	option = { # Take the child in
+		name = EVTOPTAblame63
+		custom_tooltip = { text = EVTOPTAblame63_TT }
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				remove_province_modifier = epidemic_blame_1
+			}
+		}
+	}
+	option = { # Send them to the temple school
+		name = EVTOPTBblame63
+		custom_tooltip = { text = EVTOPTBblame63_TT }
+		treasury = -20
+		if = { limit = { NOT = { has_nickname = nick_the_wise } } give_nickname = nick_the_wise }
+		if = { limit = { trait = cruel } remove_trait = cruel }
+		else_if = { limit = { NOT = { trait = kind } } add_trait = kind }
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				remove_province_modifier = epidemic_blame_1
+			}
+			event_target:zealous_child = { leave_court_effect = yes }
+		}
+	}
+}
+
+# blame.64 The ruse is found out
+# The people find out about the double and burn the temple.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.64
+	desc = EVTDESCblame64
+	picture = GFX_evt_end_of_days
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Filthy peasants
+		name = EVTOPTAblame64
+		custom_tooltip = { text = EVTOPTAblame64_TT }
+		add_character_modifier = { name = failed_temple_ruse duration = 3650 }
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				remove_province_modifier = epidemic_blame_1
+				add_province_modifier = { name = epidemic_blame_2 duration = 3650 }
+			}
+		}
+	}
+	option = { # Blame the spymaster
+		name = EVTOPTBblame64
+		trigger = {
+			event_target:blame_spymaster = { has_job_title = job_spymaster is_alive = yes }
+		}
+		custom_tooltip = { text = EVTOPTBblame64_TT }
+		event_target:blame_spymaster = {
+			remove_title = job_spymaster
+			opinion = { modifier = opinion_fired_from_council who = ROOT years = 5 }
+		}
+	}
+}
+
+# blame.65 The people are fooled
+# The double fools the people and the unrest ends.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.65
+	desc = EVTDESCblame65
+	picture = GFX_evt_stone_church
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # I love a good ruse
+		name = EVTOPTAblame65
+		custom_tooltip = { text = EVTOPTAblame65_TT }
+		change_intrigue = 1
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				remove_province_modifier = epidemic_blame_1
+			}
+		}
+	}
+	option = { # Thanks to my spymaster
+		name = EVTOPTBblame65
+		trigger = {
+			event_target:blame_spymaster = { has_job_title = job_spymaster is_alive = yes }
+		}
+		custom_tooltip = { text = EVTOPTAblame65_TT }
+		change_diplomacy = 1
+		event_target:blame_spymaster = {
+			opinion = { modifier = opinion_was_praised who = ROOT years = 5 }
+		}
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				remove_province_modifier = epidemic_blame_1
+			}
+		}
+	}
+}
+
+# blame.66 Vandals at the building site
+# Two starving children are caught sabotaging the new temple. Mercy angers
+# the workers; harshness hardens the ruler.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.66
+	desc = EVTDESCblame66
+	picture = GFX_evt_child_bully
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+	hide_new = yes
+	hide_from = yes
+
+	immediate = {
+		create_character = {
+			female = yes
+			age = 9
+			random_traits = yes
+			dynasty = NONE
+			culture = ROOT
+			religion = ROOT
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			remove_trait = slothful
+			remove_trait = idolizer
+			remove_trait = dwarf
+			remove_trait = harelip
+			remove_trait = hunchback
+			remove_trait = imbecile
+			remove_trait = slow
+			remove_trait = ugly
+			remove_trait = weak
+			add_trait = twin
+			add_trait = genius
+			save_event_target_as = vagrant_child_1
+		}
+		create_character = {
+			female = no
+			age = 9
+			random_traits = yes
+			dynasty = NONE
+			culture = ROOT
+			religion = ROOT
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			remove_trait = slothful
+			remove_trait = idolizer
+			remove_trait = dwarf
+			remove_trait = harelip
+			remove_trait = hunchback
+			remove_trait = imbecile
+			remove_trait = slow
+			remove_trait = ugly
+			remove_trait = weak
+			add_trait = twin
+			add_trait = strong
+			save_event_target_as = vagrant_child_2
+		}
+	}
+
+	option = { # Off with their heads
+		name = EVTOPTAblame66
+		trigger = { NOT = { religion = shallyan } }
+		custom_tooltip = { text = EVTOPTAblame66_TT }
+		event_target:vagrant_child_1 = {
+			death = { death_reason = death_execution_beheading killer = ROOT }
+		}
+		event_target:vagrant_child_2 = {
+			death = { death_reason = death_execution_beheading killer = ROOT }
+		}
+		if = { limit = { NOT = { trait = cruel } } add_trait = cruel }
+		if = { limit = { NOT = { trait = zealous } } add_trait = zealous }
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				remove_province_modifier = epidemic_blame_1
+			}
+			random_list = {
+				60 = { character_event = { id = blame.67 days = 75 } }
+				40 = { character_event = { id = blame.68 days = 30 } }
+			}
+		}
+	}
+	option = { # Shelter, in prison
+		name = EVTOPTBblame66
+		custom_tooltip = { text = EVTOPTBblame66_TT }
+		event_target:vagrant_child_1 = { imprison = ROOT }
+		event_target:vagrant_child_2 = { imprison = ROOT }
+		hidden_tooltip = {
+			random_list = {
+				50 = { character_event = { id = blame.67 days = 90 } }
+				50 = { character_event = { id = blame.68 days = 30 } }
+			}
+		}
+	}
+	option = { # They are children
+		name = EVTOPTCblame66
+		custom_tooltip = { text = EVTOPTCblame66_TT }
+		event_target:vagrant_child_1 = {
+			opinion = { modifier = opinion_relieved who = ROOT years = 5 }
+		}
+		event_target:vagrant_child_2 = {
+			opinion = { modifier = opinion_relieved who = ROOT years = 5 }
+		}
+		hidden_tooltip = {
+			set_character_flag = spared_urchins
+			if = {
+				limit = { has_character_modifier = in_seclusion }
+				set_character_flag = exposed_to_outside
+				event_target:vagrant_child_1 = {
+					add_character_modifier = { name = in_seclusion duration = -1 }
+				}
+				event_target:vagrant_child_2 = {
+					add_character_modifier = { name = in_seclusion duration = -1 }
+				}
+			}
+			random_list = {
+				40 = { character_event = { id = blame.67 days = 100 } }
+				60 = { character_event = { id = blame.68 days = 30 } }
+			}
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				remove_province_modifier = epidemic_blame_1
+				add_province_modifier = { name = epidemic_blame_2 duration = 3650 }
+			}
+		}
+	}
+}
+
+# blame.67 The temple is finished
+# The temple is built if the capital still has room; else the builders
+# took the money for another site and the treasurer gets some of it back.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.67
+	picture = GFX_evt_cathedral
+	border = GFX_event_normal_frame_religion
+
+	desc = { text = EVTDESCblame67 trigger = { capital_scope = { num_of_empty_holdings = 2 } } }
+	desc = {
+		text = EVTDESCblame67b
+		trigger = { NOT = { capital_scope = { num_of_empty_holdings = 2 } } }
+	}
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	option = { # A temple was built
+		name = EVTOPTAblame67
+		trigger = { capital_scope = { num_of_empty_holdings = 2 } }
+		custom_tooltip = { text = EVTOPTAblame67_TT }
+		prestige = 100
+		if = {
+			limit = { NOT = { has_character_modifier = devoted_worshiper } }
+			add_character_modifier = { name = devoted_worshiper duration = 365 }
+		}
+		if = { limit = { NOT = { lifestyle_traits = 1 } } add_trait = architect }
+		capital_scope = { build_holding = { type = temple } }
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				remove_province_modifier = epidemic_blame_2
+			}
+			remove_character_modifier = fake_worshiper
+			clr_character_flag = spared_urchins
+		}
+	}
+	option = { # The temple could not be built
+		name = EVTOPTBblame67
+		trigger = { NOT = { capital_scope = { num_of_empty_holdings = 2 } } }
+		custom_tooltip = { text = EVTOPTBblame67_TT }
+		treasury = 200
+		clr_character_flag = spared_urchins
+	}
+}
+
+# blame.68 The building is cursed
+# An accident at the site; the workers walk off. If the ruler spared the
+# children, one of them is hurt.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = blame.68
+	picture = GFX_evt_burning_house
+	border = GFX_event_normal_frame_religion
+
+	desc = { text = EVTDESCblame68 trigger = { has_character_flag = spared_urchins } }
+	desc = { text = EVTDESCblame68b trigger = { NOT = { has_character_flag = spared_urchins } } }
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	option = { # That fool of a child
+		name = EVTOPTAblame68
+		trigger = { has_character_flag = spared_urchins }
+		custom_tooltip = { text = EVTOPTAblame68_TT }
+		event_target:vagrant_child_1 = { add_maimed_trait_effect = yes }
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				remove_province_modifier = epidemic_blame_1
+				add_province_modifier = { name = epidemic_blame_2 duration = 3650 }
+			}
+			clr_character_flag = spared_urchins
+		}
+	}
+	option = { # What about my investment
+		name = EVTOPTBblame68
+		trigger = { NOT = { has_character_flag = spared_urchins } }
+		custom_tooltip = { text = EVTOPTAblame68_TT }
+		hidden_tooltip = {
+			any_realm_province = {
+				limit = { owner = { character = ROOT } }
+				remove_province_modifier = epidemic_blame_1
+				add_province_modifier = { name = epidemic_blame_2 duration = 3650 }
+			}
+		}
+	}
+}
+
+###############################################################################
+# Part 2: The dancing plague (namespace dancing)
+# Faction: Generic
+# Serves: anyone living where the dancing plague breaks out; followers of
+# Slaanesh hear the Dark Prince in the music.
+#
+# A town starts to dance and cannot stop. The ruler may join in: a short
+# dance wins the people's love, a long one ends in exhaustion or a broken
+# leg. The disease itself (common/disease/00_disease.txt) picks who catches
+# it and fires dancing.3.
+#   dancing.1   Starter (on_outbreak)
+#   dancing.2   The news
+#   dancing.3   The music calls (from the disease)
+#   dancing.4   The court physician says rest
+#   dancing.5   Lord or Lady of the Dance
+#   dancing.6   Caught by the dance
+#   dancing.7   The dance ends
+#   dancing.8   The dance gets worse
+#   dancing.9   A broken leg
+#
+# Was events/rip_dancing_plague_events.txt (RIP.4000-4008, in order).
+###############################################################################
+
+namespace = dancing
+
+# dancing.1 The dancing plague breaks out
+# Tells the province's owner and every liege above them.
+# Scope: ROOT is the province. Fired from on_outbreak.
+province_event = {
+	id = dancing.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_outbreak
+
+	trigger = {
+		disease = dancing_plague
+	}
+
+	immediate = {
+		save_event_target_as = dancing_plague_outbreak_location
+		owner = {
+			narrative_event = { id = dancing.2 }
+			any_liege = {
+				limit = { NOT = { character = PREV } }
+				narrative_event = { id = dancing.2 }
+			}
+		}
+	}
+}
+
+# dancing.2 The dancing plague
+# News of the dancing plague for the province's owner and lieges.
+# Scope: ROOT is the owner or a liege.
+narrative_event = {
+	id = dancing.2
+	title = EVTNAMEdancing2
+	picture = GFX_evt_dancing
+	border = GFX_event_narrative_frame_religion
+
+	desc = EVTDESCdancing2
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdancing2
+	}
+}
+
+# dancing.3 The music calls
+# The ruler hears the music from the window. Joining in sends them to the
+# street (or to the court physician first); refusing may not be enough if
+# they have already caught it. Followers of Slaanesh hear the Dark Prince
+# in it and may dance for him.
+# Scope: ROOT is the character. Fired by the dancing_plague disease, which
+# sets got_dancing_plague if they caught it.
+character_event = {
+	id = dancing.3
+	picture = GFX_evt_dancing
+	border = GFX_event_normal_frame_religion
+
+	desc = { text = EVTDESCdancing3_slaanesh trigger = { follower_of_slaanesh = yes } }
+	desc = { text = EVTDESCdancing3 trigger = { follower_of_slaanesh = no } }
+
+	is_triggered_only = yes # dancing_plague on_character_infection
+
+	option = { # Join the dance
+		name = EVTOPTAdancing3
+		custom_tooltip = { text = join_in_dance }
+		hidden_tooltip = {
+			if = {
+				limit = {
+					any_courtier_or_vassal = {
+						liege = { character = ROOT }
+						has_minor_title = title_court_physician
+					}
+				}
+				character_event = { id = dancing.4 days = 5 random = 10 }
+			}
+			else_if = {
+				limit = { has_character_flag = got_dancing_plague }
+				character_event = { id = dancing.6 days = 5 random = 10 }
+			}
+			else_if = {
+				limit = { is_landed = yes }
+				character_event = { id = dancing.5 days = 5 random = 10 }
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 OR = { trait = hedonist trait = gluttonous } }
+			modifier = { factor = 0.3 trait = temperate }
+		}
+	}
+	option = { # Dance for the Prince of Excess
+		name = EVTOPTCdancing3
+		trigger = { follower_of_slaanesh = yes }
+		custom_tooltip = { text = EVTOPTCdancing3_TT }
+		hidden_tooltip = {
+			set_character_flag = dancing_for_slaanesh
+			if = {
+				limit = { has_character_flag = got_dancing_plague }
+				character_event = { id = dancing.6 days = 5 random = 10 }
+			}
+			else_if = {
+				limit = { is_landed = yes }
+				character_event = { id = dancing.5 days = 5 random = 10 }
+			}
+		}
+		ai_chance = { factor = 3 }
+	}
+	option = { # Rest instead
+		name = EVTOPTBdancing3
+		custom_tooltip = { text = refuse_to_join_in_dance }
+		hidden_tooltip = {
+			if = { limit = { has_character_flag = got_dancing_plague } dancing_resist_effect = yes }
+		}
+		ai_chance = { factor = 1 }
+	}
+}
+
+# dancing.4 The court physician says rest
+# The physician warns the ruler they will drop from exhaustion. Listening
+# may be enough; ignoring them sends the ruler to the street.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = dancing.4
+	desc = EVTDESCdancing4
+	picture = GFX_evt_poke_king_in_chest
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_courtier_or_vassal = {
+			limit = { liege = { character = ROOT } has_minor_title = title_court_physician }
+			save_event_target_as = target_physician
+		}
+	}
+
+	option = { # As you say
+		name = EVTOPTAdancing4
+		custom_tooltip = { text = refuse_to_join_in_dance }
+		event_target:target_physician = {
+			opinion = { modifier = opinion_glad who = ROOT years = 5 }
+		}
+		hidden_tooltip = {
+			if = { limit = { has_character_flag = got_dancing_plague } dancing_resist_effect = yes }
+		}
+	}
+	option = { # I must dance
+		name = EVTOPTBdancing4
+		custom_tooltip = { text = join_in_dance }
+		event_target:target_physician = {
+			opinion = { modifier = opinion_irritated who = ROOT years = 5 }
+		}
+		hidden_tooltip = {
+			if = {
+				limit = { has_character_flag = got_dancing_plague }
+				character_event = { id = dancing.6 days = 5 random = 10 }
+			}
+			else_if = {
+				limit = { is_landed = yes }
+				character_event = { id = dancing.5 days = 5 random = 10 }
+			}
+		}
+	}
+}
+
+# dancing.5 Lord or Lady of the Dance
+# The ruler dances with the people for a few hours and is loved for it. A
+# follower of Slaanesh who danced for the Dark Prince wins his favour too.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = dancing.5
+	picture = GFX_evt_dancing
+	border = GFX_event_normal_frame_religion
+
+	desc = {
+		text = EVTDESCdancing5_slaanesh
+		trigger = { has_character_flag = dancing_for_slaanesh }
+	}
+	desc = {
+		text = EVTDESCdancing5
+		trigger = { NOT = { has_character_flag = dancing_for_slaanesh } }
+	}
+
+	hide_from = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdancing5
+		prestige = 50
+		if = { limit = { trait = stressed } remove_trait = stressed }
+		if = { limit = { trait = depressed } remove_trait = depressed }
+		if = {
+			limit = { is_female = yes }
+			add_character_modifier = { modifier = dancing_queen years = 5 }
+		}
+		else = { add_character_modifier = { modifier = dancing_king years = 5 } }
+		if = {
+			limit = { has_character_flag = dancing_for_slaanesh }
+			clr_character_flag = dancing_for_slaanesh
+			daemon_favour_slaanesh_effect = yes
+		}
+	}
+}
+
+# dancing.6 Caught by the dance
+# The character cannot stop. They may recover after a few months, get
+# worse, or dance until a leg breaks.
+# Scope: ROOT is the character.
+character_event = {
+	id = dancing.6
+	picture = GFX_evt_dancing
+	border = GFX_event_normal_frame_religion
+
+	desc = {
+		text = EVTDESCdancing6
+		trigger = {
+			NOR = { has_character_flag = forced_to_dance has_character_flag = dancing_for_slaanesh }
+		}
+	}
+	desc = {
+		text = EVTDESCdancing6b
+		trigger = {
+			has_character_flag = forced_to_dance
+			NOT = { has_character_flag = dancing_for_slaanesh }
+		}
+	}
+	desc = {
+		text = EVTDESCdancing6_slaanesh
+		trigger = { has_character_flag = dancing_for_slaanesh }
+	}
+
+	hide_from = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdancing6
+		add_trait = dancing_plague
+		if = {
+			limit = { has_character_flag = dancing_for_slaanesh }
+			clr_character_flag = dancing_for_slaanesh
+			daemon_favour_slaanesh_effect = yes
+		}
+		clr_character_flag = forced_to_dance
+		nurgle_blessing_check_effect = yes
+		hidden_tooltip = {
+			random_list = {
+				45 = { # Recover
+					modifier = { factor = 1.5 is_strong_trigger = yes }
+					modifier = { factor = 0.5 trait = infirm }
+					character_event = { id = dancing.7 days = 90 random = 20 }
+				}
+				40 = { # Worse
+					modifier = { factor = 1.5 trait = diligent }
+					modifier = { factor = 50 is_unimportant_trigger = yes }
+					character_event = { id = dancing.8 days = 10 random = 10 }
+				}
+				15 = { # A broken leg
+					modifier = { factor = 0 trait = one_legged }
+					modifier = { factor = 3 is_weak_trigger = yes }
+					character_event = { id = dancing.9 days = 30 random = 10 }
+				}
+			}
+		}
+	}
+}
+
+# dancing.7 The dance ends
+# The character stops dancing and will not catch it again.
+# Scope: ROOT is the character.
+character_event = {
+	id = dancing.7
+	desc = EVTDESCdancing7
+	picture = GFX_evt_dancing
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdancing7
+		dancing_end_effect = yes
+	}
+}
+
+# dancing.8 The dance gets worse
+# The character can no longer eat or sleep. It ends after a few months.
+# Scope: ROOT is the character.
+character_event = {
+	id = dancing.8
+	desc = EVTDESCdancing8
+	picture = GFX_evt_dancing
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdancing8
+		add_character_modifier = { modifier = cant_stop_dancing duration = -1 }
+		hidden_tooltip = { character_event = { id = dancing.7 days = 90 random = 20 } }
+	}
+}
+
+# dancing.9 A broken leg
+# The character dances until a leg breaks and loses it.
+# Scope: ROOT is the character.
+character_event = {
+	id = dancing.9
+	desc = EVTDESCdancing9
+	picture = GFX_evt_dancing
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdancing9
+		dancing_end_effect = yes
+		add_trait = one_legged
+		add_trait = severely_injured
+		hidden_tooltip = {
+			character_event = { id = RIP.11503 } # Notify one-legged
+			resolve_severely_injured_effect = yes
+		}
+	}
+}
+
+###############################################################################
+# Part 3: The Great Plague (namespace plague)
+# Faction: Generic
+# Serves: player rulers anywhere, who hear of a Great Plague (Nurgle's Rot
+# or the Creeping Buboes) as it spreads; followers of Nurgle and the Skaven
+# get their own reactions. Also the recovery of depopulated provinces.
+#
+# Restored from vanilla's Black Death news chain, which was commented out
+# because the mod has no bubonic plague. It now follows the mod's two great
+# plagues.
+#   plague.1      Starter (on_outbreak)
+#   plague.2      Word to the stricken realm
+#   plague.3      Word to rulers far away
+#   plague.4      Word to rulers nearby
+#   plague.5      Word to the lieges of the stricken realm
+#   plague.6      The plague reaches a border (disease on_province_infection)
+#   plague.7      The plague approaches
+#   plague.10     A depopulated province recovers (on_province_major_modifier)
+#   plague.20     Yearly check for ravaged regions (on_yearly_pulse)
+#   plague.21-32  A region is ravaged
+#   plague.40     The plague is over (on_decade_pulse)
+#
+# Was events/rip_outbreak_events.txt: RIP.10000-10006 are plague.1-7 (the
+# old RIP.10001 also picked the receivers, now plague.1 does), RIP.10030 is
+# plague.10, RIP.10012 is plague.20, RIP.10015-10024 are plague.21-32 (the
+# real-world regions became the mod's) and RIP.10031 is plague.40.
+###############################################################################
+
+namespace = plague
+
+# plague.1 A Great Plague breaks out
+# The first outbreak of Nurgle's Rot or the Creeping Buboes since the last
+# one ended is told to the owner, every player ruler near and far, and the
+# owner's lieges.
+# Scope: ROOT is the province. Fired from on_outbreak.
+province_event = {
+	id = plague.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_outbreak
+
+	trigger = {
+		OR = { disease = nurgles_rot disease = creeping_buboes }
+		NOT = { has_global_flag = great_plague_broadcasted }
+	}
+
+	immediate = {
+		set_global_flag = great_plague_broadcasted
+		if = {
+			limit = { disease = nurgles_rot }
+			set_global_flag = great_plague_rot
+			clr_global_flag = great_plague_buboes
+		}
+		else = { set_global_flag = great_plague_buboes clr_global_flag = great_plague_rot }
+		save_event_target_as = plague_outbreak_location
+		owner = { save_event_target_as = plague_outbreak_ruler narrative_event = { id = plague.2 } }
+		any_playable_ruler = {
+			limit = { ai = no NOT = { character = event_target:plague_outbreak_ruler } }
+			if = {
+				limit = { is_liege_or_above = event_target:plague_outbreak_ruler }
+				narrative_event = { id = plague.5 days = 2 random = 2 }
+			}
+			else_if = {
+				limit = {
+					distance = { where = event_target:plague_outbreak_location value = 1000 }
+				}
+				narrative_event = { id = plague.3 days = 6 random = 3 }
+			}
+			else = { narrative_event = { id = plague.4 days = 3 random = 3 } }
+		}
+	}
+}
+
+# plague.2 A horrible affliction
+# The owner of the first stricken province hears what the plague does.
+# Scope: ROOT is the owner of the stricken province.
+narrative_event = {
+	id = plague.2
+	title = EVTNAMEplague2
+	picture = GFX_evt_plague_doctor
+	border = GFX_event_narrative_frame_religion
+
+	desc = { text = EVTDESCplague2_rot trigger = { has_global_flag = great_plague_rot } }
+	desc = { text = EVTDESCplague2 trigger = { NOT = { has_global_flag = great_plague_rot } } }
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = great_plague_close
+	}
+
+	option = {
+		name = EVTOPTAplague2
+		trigger = { plague_news_dark_trigger = no }
+	}
+	option = { # Nurgle's followers rejoice
+		name = EVTOPTNURGLEplague
+		trigger = { follower_of_nurgle = yes }
+	}
+	option = { # The Skaven see the work of the Clans Pestilens
+		name = EVTOPTSKAVENplague
+		trigger = { religion_group = horned_rat_god_group follower_of_nurgle = no }
+	}
+}
+
+# plague.3 Word of a plague far away
+# A distant player ruler hears rumours of a Great Plague.
+# Scope: ROOT is a player ruler far from the outbreak.
+narrative_event = {
+	id = plague.3
+	title = EVTNAMEplague3
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+
+	desc = EVTDESCplague3
+
+	is_triggered_only = yes
+	only_playable = yes
+	ai = no
+
+	immediate = {
+		chronicle = { entry = CHRONICLE_DISTANT_PLAGUE picture = GFX_evt_plague_spreading }
+	}
+
+	option = { # All those poor people
+		name = EVTOPTAplague3
+		trigger = { plague_news_dark_trigger = no }
+	}
+	option = { # We must prepare
+		name = EVTOPTBplague3
+		trigger = {
+			plague_news_dark_trigger = no
+			OR = { trait = erudite trait = shrewd trait = genius trait = quick trait = scholar }
+		}
+	}
+	option = { # Let the heretics suffer
+		name = EVTOPTCplague3
+		trigger = { plague_news_dark_trigger = no OR = { trait = zealous trait = cruel } }
+	}
+	option = { # If I can help, I will
+		name = EVTOPTDplague3
+		trigger = { plague_news_dark_trigger = no OR = { trait = kind trait = charitable } }
+	}
+	option = { # Plague only takes the weak
+		name = EVTOPTEplague3
+		trigger = {
+			plague_news_dark_trigger = no
+			OR = { trait = strong trait = robust trait = brave }
+			OR = { trait = stubborn trait = proud }
+		}
+	}
+	option = { # I knew this would happen
+		name = EVTOPTFplague3
+		trigger = { plague_news_dark_trigger = no trait = paranoid }
+	}
+	option = {
+		name = EVTOPTNURGLEplague
+		trigger = { follower_of_nurgle = yes }
+	}
+	option = {
+		name = EVTOPTSKAVENplague
+		trigger = { religion_group = horned_rat_god_group follower_of_nurgle = no }
+	}
+}
+
+# plague.4 Word of a plague nearby
+# Refugees bring the tale of what the plague does.
+# Scope: ROOT is a player ruler near the outbreak.
+narrative_event = {
+	id = plague.4
+	title = EVTNAMEplague3
+	picture = GFX_evt_bring_out_your_dead
+	border = GFX_event_narrative_frame_religion
+
+	desc = { text = EVTDESCplague4_rot trigger = { has_global_flag = great_plague_rot } }
+	desc = { text = EVTDESCplague4 trigger = { NOT = { has_global_flag = great_plague_rot } } }
+
+	is_triggered_only = yes
+	only_playable = yes
+	ai = no
+
+	option = {
+		name = EVTOPTAplague4
+		trigger = { plague_news_dark_trigger = no }
+	}
+	option = {
+		name = EVTOPTNURGLEplague
+		trigger = { follower_of_nurgle = yes }
+	}
+	option = {
+		name = EVTOPTSKAVENplague
+		trigger = { religion_group = horned_rat_god_group follower_of_nurgle = no }
+	}
+}
+
+# plague.5 The plague in a vassal's lands
+# A player liege hears the plague is in a vassal's lands.
+# Scope: ROOT is a player liege of the stricken province's owner.
+narrative_event = {
+	id = plague.5
+	title = EVTNAMEplague2
+	picture = GFX_evt_bring_out_your_dead
+	border = GFX_event_narrative_frame_religion
+
+	desc = { text = EVTDESCplague2_rot trigger = { has_global_flag = great_plague_rot } }
+	desc = { text = EVTDESCplague2 trigger = { NOT = { has_global_flag = great_plague_rot } } }
+
+	is_triggered_only = yes
+	only_playable = yes
+	ai = no
+
+	immediate = {
+		set_character_flag = great_plague_close
+	}
+
+	option = {
+		name = EVTOPTAplague2
+		trigger = { plague_news_dark_trigger = no }
+	}
+	option = {
+		name = EVTOPTNURGLEplague
+		trigger = { follower_of_nurgle = yes }
+	}
+	option = {
+		name = EVTOPTSKAVENplague
+		trigger = { religion_group = horned_rat_god_group follower_of_nurgle = no }
+	}
+}
+
+# plague.6 The plague reaches a border
+# When the Great Plague infects a province next to a player's lands, the
+# player (and their player lieges) are warned once.
+# Scope: ROOT is the newly infected province. Fired from the
+# on_province_infection of nurgles_rot and creeping_buboes.
+province_event = {
+	id = plague.6
+	hide_window = yes
+
+	is_triggered_only = yes # nurgles_rot / creeping_buboes on_province_infection
+
+	has_global_flag = great_plague_broadcasted
+
+	trigger = {
+		any_neighbor_province = { plague_warning_owner_trigger = yes }
+	}
+
+	immediate = {
+		save_event_target_as = infected_province
+		any_neighbor_province = {
+			limit = { plague_warning_owner_trigger = yes }
+			save_event_target_as = bordering_province
+			owner = {
+				if = {
+					limit = { ai = no NOT = { has_character_flag = great_plague_close } }
+					narrative_event = { id = plague.7 days = 10 }
+				}
+				any_liege = {
+					limit = { ai = no NOT = { has_character_flag = great_plague_close } }
+					narrative_event = { id = plague.7 days = 15 }
+				}
+			}
+		}
+	}
+}
+
+# plague.7 The plague approaches
+# Refugees flood across the border ahead of the plague.
+# Scope: ROOT is the player ruler.
+narrative_event = {
+	id = plague.7
+	title = EVTNAMEplague7
+	picture = GFX_evt_bring_out_your_dead
+	border = GFX_event_narrative_frame_religion
+
+	desc = EVTDESCplague7
+
+	is_triggered_only = yes
+	ai = no
+
+	trigger = {
+		NOT = { has_character_flag = great_plague_close }
+	}
+
+	immediate = {
+		set_character_flag = great_plague_close
+		chronicle = { entry = CHRONICLE_BORDERING_PLAGUE picture = GFX_evt_plague_spreading }
+	}
+
+	option = {
+		name = EVTOPTAplague7
+		trigger = { plague_news_dark_trigger = no }
+	}
+	option = { # Hospitals will be needed
+		name = EVTOPTBplague7
+		trigger = {
+			plague_news_dark_trigger = no
+			OR = { trait = kind trait = charitable trait = scholar trait = mystic }
+		}
+	}
+	option = { # Heretics brought it
+		name = EVTOPTCplague7
+		trigger = { plague_news_dark_trigger = no OR = { trait = zealous trait = paranoid } }
+	}
+	option = { # Let it come
+		name = EVTOPTDplague7
+		trigger = {
+			plague_news_dark_trigger = no
+			OR = { trait = brave trait = strong trait = robust }
+		}
+	}
+	option = {
+		name = EVTOPTNURGLEplague
+		trigger = { follower_of_nurgle = yes }
+	}
+	option = {
+		name = EVTOPTSKAVENplague
+		trigger = { religion_group = horned_rat_god_group follower_of_nurgle = no }
+	}
+}
+
+# plague.10 A depopulated province recovers
+# A province with no sickness slowly fills again. Capitals, ports, trade
+# posts, good stewards, many holdings and hospitals help; war, sieges,
+# winter and deep depopulation hold it back.
+# Scope: ROOT is the province. Fired from on_province_major_modifier.
+province_event = {
+	id = plague.10
+	hide_window = yes
+
+	is_triggered_only = yes # on_province_major_modifier
+
+	trigger = {
+		OR = {
+			has_province_modifier = depopulated_1
+			has_province_modifier = depopulated_2
+			has_province_modifier = depopulated_3
+		}
+		NOT = { has_disease = yes }
+	}
+
+	immediate = {
+		random_list = {
+			30 = { # Recovers a step
+				modifier = { factor = 1.5 is_capital = yes }
+				modifier = { factor = 1.3 port = yes }
+				modifier = { factor = 1.3 has_trade_post = yes }
+				modifier = { factor = 1.3 holder_scope = { stewardship = 20 } }
+				modifier = { factor = 1.2 holder_scope = { stewardship = 15 } }
+				modifier = { factor = 1.1 holder_scope = { stewardship = 10 } }
+				modifier = { factor = 1.1 num_of_settlements = 2 }
+				modifier = { factor = 1.1 num_of_settlements = 3 }
+				modifier = { factor = 1.1 num_of_settlements = 4 }
+				modifier = { factor = 1.1 num_of_settlements = 5 }
+				modifier = { factor = 1.1 num_of_settlements = 6 }
+				modifier = { factor = 1.1 num_of_settlements = 7 }
+				modifier = { factor = 1.1 hospital_level = 1 }
+				modifier = { factor = 1.1 hospital_level = 2 }
+				modifier = { factor = 1.1 hospital_level = 3 }
+				modifier = { factor = 1.1 hospital_level = 4 }
+				modifier = { factor = 1.1 hospital_level = 5 }
+				modifier = { factor = 1.1 hospital_level = 6 }
+				decrease_depopulation_effect = yes
+			}
+			70 = { # Nothing happens
+				modifier = {
+					factor = 3
+					any_province_holding = { OR = { is_occupied = yes has_siege = yes } }
+				}
+				modifier = { factor = 1.2 is_winter = yes }
+				modifier = { factor = 1.5 has_province_modifier = depopulated_2 }
+				modifier = { factor = 2 has_province_modifier = depopulated_3 }
+			}
+		}
+	}
+}
+
+# plague.20 Has the plague ravaged a region?
+# Once half a region is depopulated during a Great Plague, every player
+# ruler hears of it, once per region per plague.
+# Scope: ROOT is a player ruler. Fired from on_yearly_pulse.
+character_event = {
+	id = plague.20
+	hide_window = yes
+
+	is_triggered_only = yes # on_yearly_pulse
+
+	ai = no
+	has_global_flag = great_plague_broadcasted
+
+	immediate = {
+		if = {
+			limit = {
+				NOT = { has_global_flag = great_plague_world_old_world_empire }
+				regional_percentage = {
+					region = world_old_world_empire
+					percentage = 0.5
+					OR = {
+						has_province_modifier = depopulated_1
+						has_province_modifier = depopulated_2
+						has_province_modifier = depopulated_3
+					}
+				}
+			}
+			set_global_flag = great_plague_world_old_world_empire
+			any_playable_ruler = {
+				limit = { ai = no }
+				narrative_event = { id = plague.21 days = 10 random = 250 }
+			}
+		}
+		if = {
+			limit = {
+				NOT = { has_global_flag = great_plague_world_old_world_bretonnia }
+				regional_percentage = {
+					region = world_old_world_bretonnia
+					percentage = 0.5
+					OR = {
+						has_province_modifier = depopulated_1
+						has_province_modifier = depopulated_2
+						has_province_modifier = depopulated_3
+					}
+				}
+			}
+			set_global_flag = great_plague_world_old_world_bretonnia
+			any_playable_ruler = {
+				limit = { ai = no }
+				narrative_event = { id = plague.22 days = 10 random = 250 }
+			}
+		}
+		if = {
+			limit = {
+				NOT = { has_global_flag = great_plague_world_old_world_kislev }
+				regional_percentage = {
+					region = world_old_world_kislev
+					percentage = 0.5
+					OR = {
+						has_province_modifier = depopulated_1
+						has_province_modifier = depopulated_2
+						has_province_modifier = depopulated_3
+					}
+				}
+			}
+			set_global_flag = great_plague_world_old_world_kislev
+			any_playable_ruler = {
+				limit = { ai = no }
+				narrative_event = { id = plague.23 days = 10 random = 250 }
+			}
+		}
+		if = {
+			limit = {
+				NOT = { has_global_flag = great_plague_world_old_world_tilea }
+				regional_percentage = {
+					region = world_old_world_tilea
+					percentage = 0.5
+					OR = {
+						has_province_modifier = depopulated_1
+						has_province_modifier = depopulated_2
+						has_province_modifier = depopulated_3
+					}
+				}
+			}
+			set_global_flag = great_plague_world_old_world_tilea
+			any_playable_ruler = {
+				limit = { ai = no }
+				narrative_event = { id = plague.24 days = 10 random = 250 }
+			}
+		}
+		if = {
+			limit = {
+				NOT = { has_global_flag = great_plague_world_old_world_estalia }
+				regional_percentage = {
+					region = world_old_world_estalia
+					percentage = 0.5
+					OR = {
+						has_province_modifier = depopulated_1
+						has_province_modifier = depopulated_2
+						has_province_modifier = depopulated_3
+					}
+				}
+			}
+			set_global_flag = great_plague_world_old_world_estalia
+			any_playable_ruler = {
+				limit = { ai = no }
+				narrative_event = { id = plague.25 days = 10 random = 250 }
+			}
+		}
+		if = {
+			limit = {
+				NOT = { has_global_flag = great_plague_world_old_world_border_princes }
+				regional_percentage = {
+					region = world_old_world_border_princes
+					percentage = 0.5
+					OR = {
+						has_province_modifier = depopulated_1
+						has_province_modifier = depopulated_2
+						has_province_modifier = depopulated_3
+					}
+				}
+			}
+			set_global_flag = great_plague_world_old_world_border_princes
+			any_playable_ruler = {
+				limit = { ai = no }
+				narrative_event = { id = plague.26 days = 10 random = 250 }
+			}
+		}
+		if = {
+			limit = {
+				NOT = { has_global_flag = great_plague_world_greater_araby }
+				regional_percentage = {
+					region = world_greater_araby
+					percentage = 0.5
+					OR = {
+						has_province_modifier = depopulated_1
+						has_province_modifier = depopulated_2
+						has_province_modifier = depopulated_3
+					}
+				}
+			}
+			set_global_flag = great_plague_world_greater_araby
+			any_playable_ruler = {
+				limit = { ai = no }
+				narrative_event = { id = plague.27 days = 10 random = 250 }
+			}
+		}
+		if = {
+			limit = {
+				NOT = { has_global_flag = great_plague_world_norsca }
+				regional_percentage = {
+					region = world_norsca
+					percentage = 0.5
+					OR = {
+						has_province_modifier = depopulated_1
+						has_province_modifier = depopulated_2
+						has_province_modifier = depopulated_3
+					}
+				}
+			}
+			set_global_flag = great_plague_world_norsca
+			any_playable_ruler = {
+				limit = { ai = no }
+				narrative_event = { id = plague.28 days = 10 random = 250 }
+			}
+		}
+		if = {
+			limit = {
+				NOT = { has_global_flag = great_plague_world_karaz_ankor }
+				regional_percentage = {
+					region = world_karaz_ankor
+					percentage = 0.5
+					OR = {
+						has_province_modifier = depopulated_1
+						has_province_modifier = depopulated_2
+						has_province_modifier = depopulated_3
+					}
+				}
+			}
+			set_global_flag = great_plague_world_karaz_ankor
+			any_playable_ruler = {
+				limit = { ai = no }
+				narrative_event = { id = plague.29 days = 10 random = 250 }
+			}
+		}
+		if = {
+			limit = {
+				NOT = { has_global_flag = great_plague_world_albion }
+				regional_percentage = {
+					region = world_albion
+					percentage = 0.5
+					OR = {
+						has_province_modifier = depopulated_1
+						has_province_modifier = depopulated_2
+						has_province_modifier = depopulated_3
+					}
+				}
+			}
+			set_global_flag = great_plague_world_albion
+			any_playable_ruler = {
+				limit = { ai = no }
+				narrative_event = { id = plague.30 days = 10 random = 250 }
+			}
+		}
+		if = {
+			limit = {
+				NOT = { has_global_flag = great_plague_world_ulthuan }
+				regional_percentage = {
+					region = world_ulthuan
+					percentage = 0.5
+					OR = {
+						has_province_modifier = depopulated_1
+						has_province_modifier = depopulated_2
+						has_province_modifier = depopulated_3
+					}
+				}
+			}
+			set_global_flag = great_plague_world_ulthuan
+			any_playable_ruler = {
+				limit = { ai = no }
+				narrative_event = { id = plague.31 days = 10 random = 250 }
+			}
+		}
+		if = {
+			limit = {
+				NOT = { has_global_flag = great_plague_world_new_world_lustria }
+				regional_percentage = {
+					region = world_new_world_lustria
+					percentage = 0.5
+					OR = {
+						has_province_modifier = depopulated_1
+						has_province_modifier = depopulated_2
+						has_province_modifier = depopulated_3
+					}
+				}
+			}
+			set_global_flag = great_plague_world_new_world_lustria
+			any_playable_ruler = {
+				limit = { ai = no }
+				narrative_event = { id = plague.32 days = 10 random = 250 }
+			}
+		}
+	}
+}
+
+# plague.21-32 A region is ravaged
+# Every player ruler hears that half of a region has been emptied by the
+# plague: the Empire, Bretonnia, Kislev, Tilea, Estalia, the Border
+# Princes, Araby, Norsca, the Dwarf holds, Albion, Ulthuan and Lustria.
+# Scope: ROOT is a player ruler.
+narrative_event = {
+	id = plague.21
+	title = EVTNAMEplague21
+	desc = EVTDESCplague21
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+	is_triggered_only = yes
+	major = yes
+	option = {
+		name = EVTOPTAplague21
+	}
+}
+narrative_event = {
+	id = plague.22
+	title = EVTNAMEplague22
+	desc = EVTDESCplague22
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+	is_triggered_only = yes
+	major = yes
+	option = {
+		name = EVTOPTAplague21
+	}
+}
+narrative_event = {
+	id = plague.23
+	title = EVTNAMEplague23
+	desc = EVTDESCplague23
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+	is_triggered_only = yes
+	major = yes
+	option = {
+		name = EVTOPTAplague21
+	}
+}
+narrative_event = {
+	id = plague.24
+	title = EVTNAMEplague24
+	desc = EVTDESCplague24
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+	is_triggered_only = yes
+	major = yes
+	option = {
+		name = EVTOPTAplague21
+	}
+}
+narrative_event = {
+	id = plague.25
+	title = EVTNAMEplague25
+	desc = EVTDESCplague25
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+	is_triggered_only = yes
+	major = yes
+	option = {
+		name = EVTOPTAplague21
+	}
+}
+narrative_event = {
+	id = plague.26
+	title = EVTNAMEplague26
+	desc = EVTDESCplague26
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+	is_triggered_only = yes
+	major = yes
+	option = {
+		name = EVTOPTAplague21
+	}
+}
+narrative_event = {
+	id = plague.27
+	title = EVTNAMEplague27
+	desc = EVTDESCplague27
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+	is_triggered_only = yes
+	major = yes
+	option = {
+		name = EVTOPTAplague21
+	}
+}
+narrative_event = {
+	id = plague.28
+	title = EVTNAMEplague28
+	desc = EVTDESCplague28
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+	is_triggered_only = yes
+	major = yes
+	option = {
+		name = EVTOPTAplague21
+	}
+}
+narrative_event = {
+	id = plague.29
+	title = EVTNAMEplague29
+	desc = EVTDESCplague29
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+	is_triggered_only = yes
+	major = yes
+	option = {
+		name = EVTOPTAplague21
+	}
+}
+narrative_event = {
+	id = plague.30
+	title = EVTNAMEplague30
+	desc = EVTDESCplague30
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+	is_triggered_only = yes
+	major = yes
+	option = {
+		name = EVTOPTAplague21
+	}
+}
+narrative_event = {
+	id = plague.31
+	title = EVTNAMEplague31
+	desc = EVTDESCplague31
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+	is_triggered_only = yes
+	major = yes
+	option = {
+		name = EVTOPTAplague21
+	}
+}
+narrative_event = {
+	id = plague.32
+	title = EVTNAMEplague32
+	desc = EVTDESCplague32
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_narrative_frame_religion
+	is_triggered_only = yes
+	major = yes
+	option = {
+		name = EVTOPTAplague21
+	}
+}
+
+# plague.40 The Great Plague is over
+# Once no province has Nurgle's Rot or the Creeping Buboes and no region
+# is still half depopulated, the plague's flags are cleared so the next
+# one is told again. Also clears the player's "plague is close" flag,
+# which vanilla never cleared.
+# Scope: ROOT is a player ruler. Fired from on_decade_pulse.
+character_event = {
+	id = plague.40
+	hide_window = yes
+
+	is_triggered_only = yes # on_decade_pulse
+
+	ai = no
+	has_global_flag = great_plague_broadcasted
+
+	trigger = {
+		NOT = { any_province = { OR = { disease = nurgles_rot disease = creeping_buboes } } }
+		NOR = {
+			regional_percentage = {
+				region = world_old_world_empire
+				percentage = 0.5
+				OR = {
+					has_province_modifier = depopulated_1
+					has_province_modifier = depopulated_2
+					has_province_modifier = depopulated_3
+				}
+			}
+			regional_percentage = {
+				region = world_old_world_bretonnia
+				percentage = 0.5
+				OR = {
+					has_province_modifier = depopulated_1
+					has_province_modifier = depopulated_2
+					has_province_modifier = depopulated_3
+				}
+			}
+			regional_percentage = {
+				region = world_old_world_kislev
+				percentage = 0.5
+				OR = {
+					has_province_modifier = depopulated_1
+					has_province_modifier = depopulated_2
+					has_province_modifier = depopulated_3
+				}
+			}
+			regional_percentage = {
+				region = world_old_world_tilea
+				percentage = 0.5
+				OR = {
+					has_province_modifier = depopulated_1
+					has_province_modifier = depopulated_2
+					has_province_modifier = depopulated_3
+				}
+			}
+			regional_percentage = {
+				region = world_old_world_estalia
+				percentage = 0.5
+				OR = {
+					has_province_modifier = depopulated_1
+					has_province_modifier = depopulated_2
+					has_province_modifier = depopulated_3
+				}
+			}
+			regional_percentage = {
+				region = world_old_world_border_princes
+				percentage = 0.5
+				OR = {
+					has_province_modifier = depopulated_1
+					has_province_modifier = depopulated_2
+					has_province_modifier = depopulated_3
+				}
+			}
+			regional_percentage = {
+				region = world_greater_araby
+				percentage = 0.5
+				OR = {
+					has_province_modifier = depopulated_1
+					has_province_modifier = depopulated_2
+					has_province_modifier = depopulated_3
+				}
+			}
+			regional_percentage = {
+				region = world_norsca
+				percentage = 0.5
+				OR = {
+					has_province_modifier = depopulated_1
+					has_province_modifier = depopulated_2
+					has_province_modifier = depopulated_3
+				}
+			}
+			regional_percentage = {
+				region = world_karaz_ankor
+				percentage = 0.5
+				OR = {
+					has_province_modifier = depopulated_1
+					has_province_modifier = depopulated_2
+					has_province_modifier = depopulated_3
+				}
+			}
+			regional_percentage = {
+				region = world_albion
+				percentage = 0.5
+				OR = {
+					has_province_modifier = depopulated_1
+					has_province_modifier = depopulated_2
+					has_province_modifier = depopulated_3
+				}
+			}
+			regional_percentage = {
+				region = world_ulthuan
+				percentage = 0.5
+				OR = {
+					has_province_modifier = depopulated_1
+					has_province_modifier = depopulated_2
+					has_province_modifier = depopulated_3
+				}
+			}
+			regional_percentage = {
+				region = world_new_world_lustria
+				percentage = 0.5
+				OR = {
+					has_province_modifier = depopulated_1
+					has_province_modifier = depopulated_2
+					has_province_modifier = depopulated_3
+				}
+			}
+		}
+	}
+
+	immediate = {
+		clr_global_flag = great_plague_broadcasted
+		clr_global_flag = great_plague_rot
+		clr_global_flag = great_plague_buboes
+		clr_global_flag = great_plague_world_old_world_empire
+		clr_global_flag = great_plague_world_old_world_bretonnia
+		clr_global_flag = great_plague_world_old_world_kislev
+		clr_global_flag = great_plague_world_old_world_tilea
+		clr_global_flag = great_plague_world_old_world_estalia
+		clr_global_flag = great_plague_world_old_world_border_princes
+		clr_global_flag = great_plague_world_greater_araby
+		clr_global_flag = great_plague_world_norsca
+		clr_global_flag = great_plague_world_karaz_ankor
+		clr_global_flag = great_plague_world_albion
+		clr_global_flag = great_plague_world_ulthuan
+		clr_global_flag = great_plague_world_new_world_lustria
+		any_playable_ruler = {
+			limit = { has_character_flag = great_plague_close }
+			clr_character_flag = great_plague_close
+		}
+	}
+}

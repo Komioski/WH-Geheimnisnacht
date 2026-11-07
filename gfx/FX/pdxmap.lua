@@ -214,6 +214,67 @@ float3 calculate_secondary( float2 uv, float3 vColor, float2 vPos )
 	return vColor * ( 1.0f - vSecondary.a ) + ( vSecondColor / nDivisor ) * vSecondary.a;
 }
 
+// --- CK3-style political map -------------------------------------------------
+// Instead of painting every province in a flat colour, map modes draw a colour
+// band along realm borders that fades out smoothly. Away from borders the
+// terrain shows through with no tint at all.
+// Tuning values (sizes are in map pixels; the map is 3840 x 2560):
+static const float BORDER_GRADIENT_WIDTH = 20.0f;	// how far the colour reaches inland before it is fully clear
+static const int   BORDER_GRADIENT_STEPS = 16;		// samples per direction; lower = faster but less smooth
+static const float EDGE_COLOR_STRENGTH   = 1.0f;	// 1 = vanilla flat colour right at the border
+
+#ifdef PDX_OPENGL
+#define BORDER_LOOP
+#else
+#define BORDER_LOOP [loop]
+#endif
+
+// How different the map colour at uv is from the centre colour (0 = same)
+float ColorDistance( float2 uv, float4 vCenter )
+{
+	float4 vDiff = abs( tex2Dlod( ProvinceColorMap, float4( uv, 0.0f, 0.0f ) ) - vCenter );
+	return dot( vDiff, float4( 1.0f, 1.0f, 1.0f, 1.0f ) );
+}
+
+// 1 right at a realm border, falling smoothly to 0 at BORDER_GRADIENT_WIDTH pixels inland.
+// Walks outwards in 8 directions and finds how far away the colour changes.
+// The colour map is linearly filtered, so the change ramps over one pixel;
+// measuring that ramp gives a distance finer than one pixel and a smooth fade.
+// Samples sit closer together near the pixel and spread out further away,
+// where the fade is gentle and needs less precision.
+float GetBorderProximity( float2 uv, float4 vCenter )
+{
+	float2 vTexel = 1.0f / vMapSize.xy;
+	float2 vDir = float2( 1.0f, 0.0f );
+	float vNearest = BORDER_GRADIENT_WIDTH;
+
+	BORDER_LOOP
+	for ( int i = 0; i < 8; ++i )
+	{
+		float vMax = 0.0f;	// biggest colour difference seen so far along this direction
+		float vSum = 0.0f;	// vMax summed over the distance walked, tells how early the change happened
+		float vPrevRadius = 0.0f;
+		BORDER_LOOP
+		for ( int k = 1; k <= BORDER_GRADIENT_STEPS; ++k )
+		{
+			float t = float( k ) / float( BORDER_GRADIENT_STEPS );
+			float vRadius = BORDER_GRADIENT_WIDTH * t * sqrt( t );
+			vMax = max( vMax, ColorDistance( uv + vDir * vRadius * vTexel, vCenter ) );
+			vSum += vMax * ( vRadius - vPrevRadius );
+			vPrevRadius = vRadius;
+		}
+		float vDist = BORDER_GRADIENT_WIDTH - vSum / max( vMax, 0.0001f );
+		vNearest = min( vNearest, vMax > 0.02f ? vDist : BORDER_GRADIENT_WIDTH );
+
+		vDir = float2( vDir.x - vDir.y, vDir.x + vDir.y ) * 0.70710678f; // turn 45 degrees
+	}
+
+	// Squared falloff: solid colour at the border that eases out to fully clear
+	float vProximity = saturate( 1.0f - vNearest / BORDER_GRADIENT_WIDTH );
+	return vProximity * vProximity;
+}
+// -----------------------------------------------------------------------------
+
 ]] )
 
 AddSamplers()
@@ -471,9 +532,25 @@ float4 main( VS_OUTPUT_TERRAIN Input ) : COLOR
 	}
 	else
 	{
+		// Terrain as it looks in the plain terrain map mode, used away from borders
+		float3 vTerrain = GetOverlay( sample.rgb, TerrainColor, 0.75f );
+
+		// Vanilla flat map-mode colour, used at the border
 		sample.rgb = GetOverlay( sample.rgb, TerrainColor, 0.5f );
 		float2 vBlend = float2( 0.35f, 0.4f );
-		vOut = ( dot(sample.rgb, GREYIFY) * vBlend.x + terrain_color.rgb * vBlend.y );
+		float3 vFlatColor = ( dot(sample.rgb, GREYIFY) * vBlend.x + terrain_color.rgb * vBlend.y );
+
+		float vProximity = GetBorderProximity( Input.uv, terrain_color );
+		vOut = lerp( vTerrain, vFlatColor, vProximity * EDGE_COLOR_STRENGTH );
+
+		// Seasonal snow over everything, colour band included, as in the terrain map mode.
+		// The detailed normal is only used for the snow, so band lighting stays as in vanilla.
+		float3 vDetailNormal = normalize( terrain_normal );
+		float3 vSnowNormal = normal.yxz * vDetailNormal.x
+			+ normal.xyz * vDetailNormal.y
+			+ normal.xzy * vDetailNormal.z;
+		float4 vFoWColor = GetFoWColor( Input.prepos, FoWTexture );
+		vOut = ApplySnow( vOut, Input.prepos, vSnowNormal, vFoWColor, FoWDiffuse );
 	}
 
 	vOut = calculate_secondary( Input.uv, vOut, Input.prepos.xz );

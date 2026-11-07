@@ -61,6 +61,10 @@
 # Support: common/scripted_effects/wh_crusade_effects.txt,
 #   common/scripted_triggers/wh_crusade_triggers.txt
 # Loc: localisation/00_WHG_crusade_events.csv
+#
+# Also in this file (each part keeps its own header and namespace):
+#   The Reconquest of the South (namespace reconquest, was WHG_reconquest_events)
+#   Holy orders (namespace holyorder, was WHG_holy_order_events)
 ###############################################################################
 
 namespace = crusade
@@ -1371,5 +1375,1878 @@ narrative_event = {
 		event_target:diverted_target = {
 			opinion = { modifier = opinion_furious who = ROOT years = 10 }
 		}
+	}
+}
+
+
+###############################################################################
+# The Reconquest of the South
+# Namespace: reconquest (was HF.49200 - HF.49482 in HF_reconquista_events)
+# Faction: Old World faiths
+#   (Estalian and Tilean lords against whoever else holds Estalia and Tilea:
+#   the Sultans of Araby first, but also greenskins, the dead, Skaven)
+#
+# When the Sultan Jaffar's armies landed in Estalia in 1448, the knights of
+# the Old World drove them back into the sea. Whenever Estalia or Tilea falls
+# again to a ruler outside the Old World faiths, a southern lord may swear to
+# take it back: he prepares for a year (decision prepare_reconquista), raising
+# troops, ships and commanders, gathering allies and sellswords, then wars on
+# the occupiers land by land (CBs reconquista_astarios ... _monte_castello,
+# one for each land of Estalia and Tilea). An adventurer may rise to do it
+# for a southern king who will not. When no foreign ruler holds land in the
+# south, the reconquest is over for good.
+#
+# Clean up                          reconquest.1 - reconquest.9
+# Allies                            reconquest.10 - reconquest.13
+# Holy blood                        reconquest.20 - reconquest.21
+# Sellswords                        reconquest.30 - reconquest.35
+# Preparations                      reconquest.40 - reconquest.49
+# News                              reconquest.50 - reconquest.52
+# The adventurer                    reconquest.60 - reconquest.63
+# On campaign                       reconquest.70 - reconquest.71
+# AI cooldown                       reconquest.80 - reconquest.82
+#
+# Saved: character flags currently_reconquering_iberia (the reconquistador),
+#   ex_reconquistador (has led one), reconquista_adventurer,
+#   promised_reconquista_ally, reconquista_sponsor; global flags
+#   active_reconquista, reconquista_finished, reconquista_ai_cooldown;
+#   modifiers reconquista_preparation_duration (one year of preparing),
+#   reconquista_preparation_left (two years to start a war).
+#   Event troops: earmarks reconquista_event_troops,
+#   reconquista_event_troops_rabble, conscripted_reconquista_ships.
+#
+# Callers:
+#   decisions/WHG_reconquest_decisions.txt (8, 11, 30, 33, 40, 50, 80).
+#   common/on_actions/00_on_actions.txt: on_yearly_pulse (60),
+#     on_death (2, 9), title gain on_actions (6), on_character_convert_religion
+#     (3, 5, 7), on_battle_won_leader, on_major_battle_won_leader,
+#     on_siege_won_leader (71).
+#   common/cb_types/00_cb_types.txt reconquista_* (1, 10).
+#   common/scripted_effects/04_scripted_effects_crusades.txt
+#     reconquista_win_effect, reconquista_lose_effect,
+#     check_if_reconquista_finished_effect (1, 20, 21, 52).
+# Support: common/scripted_effects/wh_reconquest_effects.txt,
+#   common/scripted_triggers/wh_reconquest_triggers.txt
+# Loc: localisation/00_WHG_crusade_events.csv
+###############################################################################
+
+namespace = reconquest
+
+###############################################################################
+# Clean up
+###############################################################################
+
+# reconquest.1 The reconquest ends
+# Clears every reconquest flag and disbands the levies and ships.
+# Scope: ROOT is the reconquistador (the CBs, reconquest.2, 3, 8).
+character_event = {
+	id = reconquest.1
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = currently_reconquering_iberia
+		clr_global_flag = active_reconquista
+		any_character = {
+			limit = {
+				OR = {
+					has_character_flag = reconquista_beneficiary_flag
+					has_character_flag = promised_reconquista_ally
+					has_character_flag = reconquista_adventurer
+					has_character_flag = reconquista_sponsor
+				}
+			}
+			clr_character_flag = reconquista_beneficiary_flag
+			clr_character_flag = promised_reconquista_ally
+			clr_character_flag = reconquista_adventurer
+			clr_character_flag = reconquista_sponsor
+		}
+		disband_event_forces = conscripted_reconquista_ships
+		disband_event_forces = reconquista_event_troops_rabble
+	}
+}
+
+# reconquest.2 The reconquistador dies
+# Scope: ROOT is the dead character (on_death).
+character_event = {
+	id = reconquest.2
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = currently_reconquering_iberia
+	}
+
+	immediate = {
+		disband_event_forces = reconquista_event_troops
+		disband_event_forces = reconquista_event_troops_rabble
+		character_event = { id = reconquest.1 }
+	}
+}
+
+# reconquest.3 The reconquistador leaves the faith
+# Scope: ROOT is the convert (on_character_convert_religion).
+character_event = {
+	id = reconquest.3
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = currently_reconquering_iberia
+		NOT = { religion_group = old_world_group }
+	}
+
+	immediate = {
+		disband_event_forces = reconquista_event_troops
+		character_event = { id = reconquest.1 }
+	}
+}
+
+# reconquest.4 The beneficiary dies
+# Scope: ROOT is the dead character.
+character_event = {
+	id = reconquest.4
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = reconquista_beneficiary_flag
+	}
+
+	immediate = {
+		clr_character_flag = reconquista_beneficiary_flag
+	}
+}
+
+# reconquest.5 The beneficiary leaves the faith
+# Scope: ROOT is the convert (on_character_convert_religion).
+character_event = {
+	id = reconquest.5
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = reconquista_beneficiary_flag
+		NOT = { religion_group = old_world_group }
+	}
+
+	immediate = {
+		clr_character_flag = reconquista_beneficiary_flag
+	}
+}
+
+# reconquest.6 The beneficiary is landed
+# Scope: ROOT is the new title holder (title gain on_actions).
+character_event = {
+	id = reconquest.6
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = reconquista_beneficiary_flag
+	}
+
+	immediate = {
+		clr_character_flag = reconquista_beneficiary_flag
+	}
+}
+
+# reconquest.7 A promised ally leaves the faith
+# Scope: ROOT is the convert (on_character_convert_religion).
+character_event = {
+	id = reconquest.7
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = promised_reconquista_ally
+		NOT = { religion_group = old_world_group }
+	}
+
+	immediate = {
+		clr_character_flag = promised_reconquista_ally
+	}
+}
+
+# reconquest.8 The moment passes
+# Two years after the oath and still no war: a player's reconquest lapses,
+# the AI marches on the nearest target.
+# Scope: ROOT is the reconquistador (prepare_reconquista, two years on).
+character_event = {
+	id = reconquest.8
+	desc = EVTDESCreconquest8
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_modifier = reconquista_preparation_left
+	}
+
+	immediate = {
+		if = {
+			limit = { ai = no }
+			remove_character_modifier = reconquista_preparation_left
+			disband_event_forces = reconquista_event_troops
+			character_event = { id = reconquest.1 }
+		}
+		else = {
+			set_character_flag = ai_reconquista_preparation_time_run_out
+			character_event = { id = reconquest.49 }
+		}
+	}
+
+	option = {
+		name = EVTOPTAreconquest8
+	}
+}
+
+# reconquest.9 An old reconquistador dies
+# Scope: ROOT is the dead character (on_death).
+character_event = {
+	id = reconquest.9
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = ex_reconquistador
+	}
+
+	immediate = {
+		disband_event_forces = reconquista_event_troops
+		disband_event_forces = reconquista_event_troops_rabble
+	}
+}
+
+###############################################################################
+# Allies
+###############################################################################
+
+# reconquest.10 The allies march
+# The war begins: every lord who promised to join does.
+# Scope: ROOT is the reconquistador (the CBs, on_add).
+character_event = {
+	id = reconquest.10
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		remove_character_modifier = reconquista_preparation_left
+		any_war = {
+			limit = { reconquest_cb_trigger = yes }
+			any_playable_ruler = {
+				limit = { has_character_flag = promised_reconquista_ally }
+				letter_event = { id = reconquest.13 }
+				join_attacker_wars = PREV
+			}
+		}
+	}
+}
+
+# reconquest.11 A promise is sent
+# Scope: ROOT is the ally; FROM is the reconquistador
+#   (promise_to_join_reconquista).
+character_event = {
+	id = reconquest.11
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { letter_event = { id = reconquest.12 days = 3 } }
+	}
+}
+
+# reconquest.12 An ally's promise
+# Scope: ROOT is the reconquistador; FROM is the ally (reconquest.11).
+letter_event = {
+	id = reconquest.12
+	desc = EVTDESCreconquest12
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAreconquest12
+		opinion = { name = opinion_grateful who = FROM years = 5 }
+	}
+}
+
+# reconquest.13 The call to arms
+# Scope: ROOT is the ally; FROM is the reconquistador (reconquest.10).
+letter_event = {
+	id = reconquest.13
+	desc = EVTDESCreconquest13
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = promised_reconquista_ally
+	}
+
+	immediate = {
+		clr_character_flag = promised_reconquista_ally
+	}
+
+	option = {
+		name = EVTOPTAreconquest13
+	}
+}
+
+###############################################################################
+# Holy blood
+###############################################################################
+
+# reconquest.20 The Shield of the South
+# A defender who throws back the reconquest twice founds a bloodline.
+# Scope: ROOT is the defender (reconquista_lose_effect).
+narrative_event = {
+	id = reconquest.20
+	title = EVTNAMEreconquest20
+	desc = EVTDESCreconquest20
+	picture = GFX_evt_bloodlines
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+	has_dlc = "Holy Fury"
+
+	trigger = {
+		NOT = {
+			any_owned_bloodline = {
+				has_bloodline_flag = reconquista_bloodline
+				founder = { character = ROOT }
+			}
+		}
+	}
+
+	immediate = {
+		sound_effect = bloodline_added
+	}
+
+	option = {
+		name = EVTOPTAreconquest20
+		if = { limit = { is_female = no } create_bloodline = { type = reconquista_cid_bloodline } }
+		else = { create_bloodline = { type = reconquista_cid_bloodline inheritance = matrilineal } }
+	}
+}
+
+# reconquest.21 The Reconqueror
+# A reconquistador who wins back two lands of the south founds a bloodline
+# and takes up the reconqueror's helm.
+# Scope: ROOT is the reconquistador (reconquista_win_effect).
+narrative_event = {
+	id = reconquest.21
+	title = EVTNAMEreconquest21
+	desc = EVTDESCreconquest21
+	picture = GFX_evt_bloodlines
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+	has_dlc = "Holy Fury"
+
+	trigger = {
+		NOT = {
+			any_owned_bloodline = {
+				has_bloodline_flag = reconquista_bloodline
+				founder = { character = ROOT }
+			}
+		}
+	}
+
+	immediate = {
+		sound_effect = bloodline_added
+	}
+
+	option = {
+		name = EVTOPTAreconquest21
+		if = {
+			limit = { NOT = { has_artifact = crown_wrapped_helmet } }
+			add_artifact = crown_wrapped_helmet
+		}
+		if = { limit = { is_female = no } create_bloodline = { type = reconquista_bloodline } }
+		else = { create_bloodline = { type = reconquista_bloodline inheritance = matrilineal } }
+	}
+}
+
+###############################################################################
+# Sellswords
+###############################################################################
+
+# reconquest.30 A sword for hire
+# A lord offers to fight in a reconquest war for gold: a faithful lord for
+# the occupiers, or a foreign one for the reconquest.
+# Scope: ROOT is the side at war; FROMFROM is the sellsword
+#   (reconquest_sellsword_for_defender, reconquest_sellsword_for_attacker).
+letter_event = {
+	id = reconquest.30
+	desc = EVTDESCreconquest30
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		reconquista_check_trigger = yes
+	}
+
+	option = {
+		name = EVTOPTAreconquest30
+		reconquest_pay_sellsword_effect = yes
+		custom_tooltip = {
+			text = join_reconquista_war_TT
+			any_war = {
+				limit = { reconquest_cb_trigger = yes }
+				if = {
+					limit = { any_defender = { character = ROOT } }
+					FROMFROM = { join_defender_wars = PREV }
+				}
+				else = { FROMFROM = { join_attacker_wars = PREV } }
+			}
+		}
+		FROMFROM = { letter_event = { id = reconquest.31 days = 3 } }
+	}
+
+	option = {
+		name = EVTOPTBreconquest30
+		FROMFROM = { letter_event = { id = reconquest.32 days = 3 } }
+	}
+}
+
+# reconquest.31 The offer is taken
+# Scope: ROOT is the sellsword (reconquest.30).
+letter_event = {
+	id = reconquest.31
+	desc = EVTDESCreconquest31
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAreconquest31
+	}
+}
+
+# reconquest.32 The offer is spurned
+# Scope: ROOT is the sellsword; FROM is the side at war (reconquest.30).
+letter_event = {
+	id = reconquest.32
+	desc = EVTDESCreconquest32
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAreconquest32
+		opinion = { modifier = insulted who = FROM years = 10 }
+	}
+}
+
+# reconquest.33 Gold for your sword
+# A side at war offers a lord gold to fight for it.
+# Scope: ROOT is the lord; FROMFROM is the side at war
+#   (reconquest_hire_sellsword_defender, reconquest_hire_sellsword_attacker).
+letter_event = {
+	id = reconquest.33
+	desc = EVTDESCreconquest33
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAreconquest33
+		if = {
+			limit = { real_tier = COUNT }
+			transfer_scaled_wealth = { from = FROMFROM value = 0.25 }
+		}
+		else_if = {
+			limit = { real_tier = DUKE }
+			transfer_scaled_wealth = { from = FROMFROM value = 0.5 }
+		}
+		else_if = {
+			limit = { real_tier = KING }
+			transfer_scaled_wealth = { from = FROMFROM value = 0.75 }
+		}
+		else = { transfer_scaled_wealth = { from = FROMFROM value = 1 } }
+		custom_tooltip = {
+			text = join_reconquista_war_other_TT
+			FROMFROM = {
+				any_war = {
+					limit = { reconquest_cb_trigger = yes }
+					if = {
+						limit = { any_defender = { character = PREVPREV } }
+						ROOT = { join_defender_wars = PREV }
+					}
+					else = { ROOT = { join_attacker_wars = PREV } }
+				}
+			}
+		}
+		reconquest_sellsword_greed_effect = yes
+		FROMFROM = { letter_event = { id = reconquest.34 days = 3 } }
+	}
+
+	option = {
+		name = EVTOPTBreconquest33
+		FROMFROM = { letter_event = { id = reconquest.35 days = 3 } }
+	}
+}
+
+# reconquest.34 The lord takes the gold
+# Scope: ROOT is the side at war (reconquest.33).
+letter_event = {
+	id = reconquest.34
+	desc = EVTDESCreconquest34
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAreconquest34
+	}
+}
+
+# reconquest.35 The lord refuses
+# Scope: ROOT is the side at war (reconquest.33).
+letter_event = {
+	id = reconquest.35
+	desc = EVTDESCreconquest35
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAreconquest35
+	}
+}
+
+###############################################################################
+# Preparations
+###############################################################################
+
+# reconquest.40 The year of preparation
+# Every month or so while preparing (every few days for an adventurer), one
+# of the preparation events; at the end of the year, reconquest.49.
+# Scope: ROOT is the reconquistador (prepare_reconquista, reconquest.61).
+character_event = {
+	id = reconquest.40
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_modifier = reconquista_preparation_duration
+		not_reconquista_check_trigger = yes
+		has_global_flag = active_reconquista
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = { not_reconquista_check_trigger = yes has_global_flag = active_reconquista }
+			character_event = { id = reconquest.49 }
+		}
+	}
+
+	immediate = {
+		random_list = {
+			5 = { # Raise troops
+				character_event = { id = reconquest.41 }
+			}
+			4 = { # The head of the faith
+				trigger = {
+					NOR = {
+						has_character_modifier = reconquista_pope_aid_event_cooldown
+						has_character_flag = reconquista_adventurer
+					}
+					rightful_religious_head_scope = { always = yes }
+				}
+				character_event = { id = reconquest.42 }
+			}
+			2 = { # A captain
+				trigger = {
+					NOT = { has_character_modifier = reconquista_commander_event_cooldown }
+				}
+				character_event = { id = reconquest.43 }
+			}
+			2 = { # Ships
+				trigger = { NOT = { has_character_modifier = reconquista_boat_event_cooldown } }
+				character_event = { id = reconquest.44 }
+			}
+		}
+	}
+
+	after = {
+		if = {
+			limit = { has_character_flag = reconquista_adventurer }
+			character_event = { id = reconquest.40 days = 2 random = 5 }
+		}
+		else = { character_event = { id = reconquest.40 days = 25 random = 20 } }
+	}
+}
+
+# reconquest.41 The muster
+# How much gold to spend on the levies.
+# Scope: ROOT is the reconquistador (reconquest.40).
+character_event = {
+	id = reconquest.41
+	desc = EVTDESCreconquest41
+	picture = GFX_evt_large_army
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Some gold
+		name = EVTOPTAreconquest41
+		trigger = { NOT = { has_character_flag = reconquista_adventurer } }
+		scaled_wealth = { value = -0.25 min = -25 max = -250 }
+		custom_tooltip = {
+			text = poorly_trained_troops_TT
+			spawn_unit = {
+				province = capital_scope
+				home = capital_scope
+				owner = ROOT
+				troops = { light_infantry = { 900 900 } archers = { 400 400 } }
+				earmark = reconquista_event_troops
+				attrition = 1
+				maintenance_multiplier = 0
+				reinforces = no
+			}
+		}
+	}
+
+	option = { # Much gold (free for an adventurer)
+		name = EVTOPTBreconquest41
+		if = {
+			limit = { NOT = { has_character_flag = reconquista_adventurer } }
+			scaled_wealth = { value = -0.5 min = -50 max = -500 }
+		}
+		custom_tooltip = {
+			text = trained_troops_TT
+			spawn_unit = {
+				province = capital_scope
+				home = capital_scope
+				owner = ROOT
+				troops = {
+					light_infantry = { 600 600 }
+					heavy_infantry = { 500 500 }
+					archers = { 400 400 }
+				}
+				earmark = reconquista_event_troops
+				attrition = 1
+				maintenance_multiplier = 0
+				reinforces = no
+			}
+		}
+	}
+
+	option = { # A fortune
+		name = EVTOPTCreconquest41
+		trigger = { NOT = { has_character_flag = reconquista_adventurer } }
+		scaled_wealth = { value = -1 min = -100 max = -1000 }
+		custom_tooltip = {
+			text = well_trained_troops_TT
+			spawn_unit = {
+				province = capital_scope
+				home = capital_scope
+				owner = ROOT
+				troops = {
+					heavy_infantry = { 500 500 }
+					pikemen = { 500 500 }
+					light_cavalry = { 450 450 }
+					archers = { 400 400 }
+				}
+				earmark = reconquista_event_troops
+				attrition = 1
+				maintenance_multiplier = 0
+				reinforces = no
+			}
+		}
+	}
+
+	option = { # Nothing: let the peasants come
+		name = EVTOPTDreconquest41
+		trigger = { NOT = { has_character_flag = reconquista_adventurer } }
+		prestige = -50
+		custom_tooltip = {
+			text = peasant_rabble_TT
+			spawn_unit = {
+				province = capital_scope
+				home = capital_scope
+				owner = ROOT
+				troops = { light_infantry = { 900 900 } }
+				earmark = reconquista_event_troops_rabble
+				attrition = 1
+				maintenance_multiplier = 0
+				reinforces = no
+			}
+		}
+	}
+}
+
+# reconquest.42 The temple's purse
+# The head of the faith offers gold for the war, at a price in piety.
+# Scope: ROOT is the reconquistador (reconquest.40).
+character_event = {
+	id = reconquest.42
+	desc = EVTDESCreconquest42
+	picture = GFX_evt_church_council
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAreconquest42
+		piety = -100
+		scaled_wealth = { value = 0.5 min = 50 max = 500 }
+	}
+
+	option = {
+		name = EVTOPTBreconquest42
+		piety = -300
+		scaled_wealth = { value = 1 min = 100 max = 1000 }
+	}
+
+	option = {
+		name = EVTOPTCreconquest42
+		piety = 50
+		if = { limit = { NOT = { trait = humble } } add_trait = humble }
+	}
+
+	after = {
+		add_character_modifier = {
+			name = reconquista_pope_aid_event_cooldown
+			hidden = yes
+			months = 3
+		}
+	}
+}
+
+# reconquest.43 A captain of the south
+# A seasoned captain of Estalia or Tilea offers to lead the host.
+# Scope: ROOT is the reconquistador (reconquest.40).
+character_event = {
+	id = reconquest.43
+	desc = EVTDESCreconquest43
+	picture = GFX_evt_dueling_knights_hf
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_tooltip = {
+			create_character = {
+				dynasty = random
+				culture = ROOT
+				religion = ROOT
+				health = 5
+				attributes = { martial = 4 diplomacy = 0 stewardship = 2 intrigue = 0 learning = 0 }
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Racial trait
+				save_event_target_as = new_commander
+				opinion = { modifier = opinion_loyal_servant who = ROOT }
+				add_trait = brilliant_strategist
+				random_list = {
+					6 = { } # Of the lord's own people
+					2 = { culture = norteno }
+					2 = { culture = avilian }
+					2 = { culture = galice }
+					2 = { culture = obregonese }
+					2 = { culture = comarcano }
+					2 = { culture = astur }
+					2 = { culture = montanese }
+					2 = { culture = tigarrese }
+					2 = { culture = reman }
+					2 = { culture = umbrian }
+					2 = { culture = oltremari }
+					2 = { culture = tobaran }
+					2 = { culture = lucian }
+					2 = { culture = miraglian }
+				}
+				random_list = {
+					1 = { add_trait = strong }
+					1 = { add_trait = robust }
+				}
+				random_list = {
+					1 = { add_trait = strategist }
+					1 = { add_trait = duelist }
+					1 = { add_trait = hunter }
+				}
+				random_list = {
+					1 = { add_trait = patient }
+					1 = { add_trait = diligent }
+				}
+				random_list = {
+					1 = { add_trait = proud }
+					1 = { add_trait = envious }
+				}
+				random = { chance = 40 add_trait = ambitious }
+				random = { chance = 40 add_trait = brave }
+				random = { chance = 40 add_trait = zealous }
+				add_random_commander_trait_effect = yes
+			}
+		}
+	}
+
+	option = { # Welcome to the court
+		name = EVTOPTAreconquest43
+	}
+
+	option = { # Make him a commander
+		name = EVTOPTBreconquest43
+		trigger = {
+			OR = {
+				AND = {
+					tier = COUNT
+					NOT = {
+						any_realm_character = {
+							count = 2
+							liege = { character = ROOT }
+							has_minor_title = title_commander
+						}
+					}
+				}
+				AND = {
+					tier = DUKE
+					NOT = {
+						any_realm_character = {
+							count = 4
+							liege = { character = ROOT }
+							has_minor_title = title_commander
+						}
+					}
+				}
+				AND = {
+					tier = KING
+					NOT = {
+						any_realm_character = {
+							count = 6
+							liege = { character = ROOT }
+							has_minor_title = title_commander
+						}
+					}
+				}
+				AND = {
+					tier = EMPEROR
+					NOT = {
+						any_realm_character = {
+							count = 8
+							liege = { character = ROOT }
+							has_minor_title = title_commander
+						}
+					}
+				}
+			}
+		}
+		event_target:new_commander = { give_minor_title = title_commander }
+	}
+
+	option = { # Send him away
+		name = EVTOPTCreconquest43
+		trigger = { NOT = { has_character_flag = reconquista_adventurer } }
+		hidden_tooltip = {
+			event_target:new_commander = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_missing } }
+			}
+		}
+	}
+
+	after = {
+		if = {
+			limit = { has_character_flag = reconquista_adventurer }
+			add_character_modifier = {
+				name = reconquista_commander_event_cooldown
+				hidden = yes
+				days = 15
+			}
+		}
+		else = {
+			add_character_modifier = {
+				name = reconquista_commander_event_cooldown
+				hidden = yes
+				months = 4
+			}
+		}
+	}
+}
+
+# reconquest.44 Ships for the south
+# Ship-owners and Tilean merchant princes offer their galleys.
+# Scope: ROOT is the reconquistador (reconquest.40).
+character_event = {
+	id = reconquest.44
+	desc = EVTDESCreconquest44
+	picture = GFX_evt_ship_voyage_hf
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Hire them
+		name = EVTOPTAreconquest44
+		if = {
+			limit = { NOT = { has_character_flag = reconquista_adventurer } }
+			scaled_wealth = { value = -0.3 min = -30 max = -300 }
+		}
+		spawn_fleet = {
+			province = closest
+			owner = ROOT
+			earmark = conscripted_reconquista_ships
+			troops = { galleys = { 140 140 } }
+		}
+	}
+
+	option = { # No need
+		name = EVTOPTCreconquest44
+		trigger = { NOT = { has_character_flag = reconquista_adventurer } }
+	}
+
+	after = {
+		if = {
+			limit = { has_character_flag = reconquista_adventurer }
+			add_character_modifier = {
+				name = reconquista_boat_event_cooldown
+				hidden = yes
+				months = 1
+			}
+		}
+		else = {
+			add_character_modifier = {
+				name = reconquista_boat_event_cooldown
+				hidden = yes
+				months = 11
+			}
+		}
+	}
+}
+
+# reconquest.49 Ready to march
+# The year of preparation is over. A player picks the war; an adventurer,
+# or an AI that let two years pass, marches on the nearest occupier.
+# Scope: ROOT is the reconquistador (reconquest.40, reconquest.8).
+character_event = {
+	id = reconquest.49
+	desc = EVTDESCreconquest49
+	picture = GFX_evt_mounted_knights_hf
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		not_reconquista_check_trigger = yes
+		has_global_flag = active_reconquista
+	}
+
+	option = {
+		name = EVTOPTAreconquest49
+	}
+
+	after = {
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = reconquista_adventurer
+					has_character_flag = ai_reconquista_preparation_time_run_out
+				}
+			}
+			hidden_tooltip = { reconquest_declare_war_effect = yes }
+		}
+		clr_character_flag = ai_reconquista_preparation_time_run_out
+	}
+}
+
+###############################################################################
+# News
+###############################################################################
+
+# reconquest.50 A southern lord swears the oath
+# Sent to every lord of Estalia and Tilea.
+# Scope: ROOT is any southern lord; FROM is the reconquistador
+#   (prepare_reconquista).
+narrative_event = {
+	id = reconquest.50
+	title = EVTNAMEreconquest50
+	desc = EVTDESCreconquest50
+	picture = GFX_evt_large_army
+	border = GFX_event_narrative_frame_religion
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAreconquest50
+		trigger = { religion_group = old_world_group }
+	}
+
+	option = {
+		name = EVTOPTBreconquest50
+		trigger = { NOT = { religion_group = old_world_group } }
+	}
+}
+
+# reconquest.52 The south is free
+# No ruler outside the Old World faiths holds land in Estalia or Tilea.
+# Scope: ROOT is any ruler (check_if_reconquista_finished_effect,
+#   reconquest_declare_war_effect).
+narrative_event = {
+	id = reconquest.52
+	title = EVTNAMEreconquest52
+	desc = EVTDESCreconquest52
+	picture = GFX_evt_beatification
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_global_flag = reconquista_finished
+	}
+
+	option = {
+		name = EVTOPTAreconquest52
+		trigger = { religion_group = old_world_group }
+	}
+
+	option = {
+		name = EVTOPTBreconquest52
+		trigger = { NOT = { religion_group = old_world_group } }
+	}
+}
+
+###############################################################################
+# The adventurer
+###############################################################################
+
+# reconquest.60 An adventurer of the south
+# A southern king or emperor at peace, with occupied land in the south and
+# no reconquest under way, may find an adventurer at his court who will
+# lead one for him.
+# Scope: ROOT is the ruler (on_yearly_pulse).
+character_event = {
+	id = reconquest.60
+	hide_window = yes
+	is_triggered_only = yes
+	only_rulers = yes
+	religion_group = old_world_group
+	war = no
+	has_dlc = "Holy Fury"
+
+	trigger = {
+		higher_real_tier_than = DUKE
+		has_game_rule = { name = reconquista value = on }
+		reconquest_southerner_trigger = yes
+		NOR = {
+			has_global_flag = active_reconquista
+			has_global_flag = reconquista_finished
+			has_character_modifier = reconquista_adventurer_cooldown
+		}
+		any_demesne_title = { higher_tier_than = DUKE reconquest_land_trigger = yes }
+		any_province = { reconquest_occupied_trigger = yes }
+		OR = {
+			AND = {
+				tier = KING
+				random = 25 # Each year
+			}
+			AND = { tier = EMPEROR random = 35 }
+		}
+	}
+
+	immediate = {
+		random_list = {
+			1 = {
+				create_character = {
+					culture = ROOT
+					religion = ROOT
+					age = 24
+					dynasty = random
+					random_traits = yes
+				}
+			}
+			1 = {
+				create_character = {
+					culture = ROOT
+					religion = ROOT
+					age = 24
+					female = yes
+					dynasty = random
+					random_traits = yes
+				}
+			}
+		}
+		new_character = {
+			wealth = 400
+			remove_trait = slow
+			remove_trait = imbecile
+			remove_trait = weak
+			remove_trait = feeble
+			random_list = {
+				1 = { add_trait = genius }
+				1 = { add_trait = shrewd }
+				1 = { add_trait = quick }
+				1 = { add_trait = strong }
+				1 = { add_trait = robust }
+			}
+			add_random_commander_trait_effect = yes
+			character_event = { id = reconquest.61 }
+		}
+		set_global_flag = active_reconquista
+		add_character_modifier = { name = reconquista_adventurer_cooldown hidden = yes years = 15 }
+	}
+}
+
+# reconquest.61 The adventurer raises a banner
+# Scope: ROOT is the adventurer; FROM is the ruler (reconquest.60).
+character_event = {
+	id = reconquest.61
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = reconquista_adventurer
+		FROM = { capital_scope = { save_event_target_as = host_capital } }
+		create_title = {
+			name = "RECONQUISTA_ADVENTURE_TITLE_NAME"
+			adventurer = yes
+			tier = DUKE
+			landless = yes
+			culture = ROOT
+			holder = ROOT
+		}
+		spawn_unit = {
+			owner = ROOT
+			province = event_target:host_capital
+			home = event_target:host_capital
+			troops = {
+				heavy_infantry = { 500 500 }
+				pikemen = { 500 500 }
+				light_cavalry = { 500 500 }
+				archers = { 500 500 }
+			}
+			earmark = reconquista_event_troops
+			attrition = 1
+			maintenance_multiplier = 0
+		}
+		spawn_fleet = {
+			province = closest
+			owner = ROOT
+			earmark = conscripted_reconquista_ships
+			troops = { galleys = { 40 40 } }
+		}
+		set_character_flag = ex_reconquistador
+		set_character_flag = currently_reconquering_iberia
+		add_character_modifier = { name = reconquista_preparation_duration hidden = yes months = 1 }
+		character_event = { id = reconquest.40 days = 5 random = 5 }
+		FROM = { letter_event = { id = reconquest.62 } }
+	}
+}
+
+# reconquest.62 An adventurer asks for backing
+# Scope: ROOT is the ruler; FROM is the adventurer (reconquest.61).
+character_event = {
+	id = reconquest.62
+	desc = EVTDESCreconquest62
+	picture = GFX_evt_meeting_hf
+	border = GFX_event_normal_frame_religion
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAreconquest62
+		piety = 50
+		if = { limit = { NOT = { trait = ambitious } } add_trait = ambitious }
+		set_character_flag = promised_reconquista_ally
+		set_character_flag = reconquista_sponsor
+		character_event = { id = reconquest.63 days = 10 }
+	}
+
+	option = {
+		name = EVTOPTBreconquest62
+		trigger = { ai = no }
+		piety = -50
+	}
+}
+
+# reconquest.63 What kind of patron
+# Scope: ROOT is the ruler; FROMFROM is the adventurer (reconquest.62).
+character_event = {
+	id = reconquest.63
+	desc = EVTDESCreconquest63
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = reconquista_sponsor
+	}
+
+	immediate = {
+		clr_character_flag = reconquista_sponsor
+	}
+
+	option = { # Lend my name
+		name = EVTOPTAreconquest63
+		trigger_switch = {
+			on_trigger = tier
+			baron = { prestige = -50 }
+			count = { prestige = -100 }
+			duke = { prestige = -200 }
+			king = { prestige = -300 }
+			emperor = { prestige = -500 }
+		}
+		custom_tooltip = {
+			text = reconquista_renowned_sponsor_TT
+			FROMFROM = {
+				show_scope_change = no
+				add_character_modifier = { name = renowned_sponsor years = 2 }
+			}
+		}
+	}
+
+	option = { # Lend my prayers
+		name = EVTOPTBreconquest63
+		trigger_switch = {
+			on_trigger = tier
+			baron = { piety = -25 }
+			count = { piety = -50 }
+			duke = { piety = -100 }
+			king = { piety = -200 }
+			emperor = { piety = -300 }
+		}
+		custom_tooltip = {
+			text = reconquista_pious_sponsor_TT
+			FROMFROM = {
+				show_scope_change = no
+				add_character_modifier = { name = pious_sponsor years = 2 }
+			}
+		}
+	}
+
+	option = { # Lend my gold
+		name = EVTOPTCreconquest63
+		scaled_wealth = { value = -1 min = -100 max = -1000 }
+		custom_tooltip = {
+			text = reconquista_wealthy_sponsor_TT
+			FROMFROM = {
+				show_scope_change = no
+				add_character_modifier = { name = wealthy_sponsor years = 2 }
+			}
+		}
+	}
+
+	option = { # Nothing more
+		name = EVTOPTDreconquest63
+	}
+}
+
+###############################################################################
+# On campaign
+###############################################################################
+
+# reconquest.70 On campaign
+# A player commanding for the reconquest in occupied land may meet the
+# usual adventures of a crusade.
+# Scope: ROOT is the commander (reconquest.71).
+character_event = {
+	id = reconquest.70
+	hide_window = yes
+	is_triggered_only = yes
+
+	ai = no
+
+	trigger = {
+		religion_group = old_world_group
+		prisoner = no
+		age = 16
+		in_command = yes
+		NOT = { has_character_modifier = reconquista_flavor_cooldown }
+		reconquest_any_attacker_trigger = yes
+		location = {
+			owner = {
+				OR = {
+					AND = {
+						independent = yes
+						NOT = { religion_group = old_world_group }
+						any_war = {
+							reconquest_cb_trigger = yes
+							any_defender = { character = PREVPREV }
+						}
+					}
+					top_liege = {
+						NOT = { religion_group = old_world_group }
+						any_war = {
+							reconquest_cb_trigger = yes
+							any_defender = { character = PREVPREV }
+						}
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		set_character_flag = reconquista_flavor
+		crusade_flavor_event_tombola_effect = yes
+	}
+
+	after = {
+		clr_character_flag = reconquista_flavor
+		add_character_modifier = { name = reconquista_flavor_cooldown hidden = yes days = 25 }
+	}
+}
+
+# reconquest.71 The road south
+# A quarter of battles and sieges won for the reconquest lead to
+# reconquest.70.
+# Scope: ROOT is the commander (on_battle_won_leader,
+#   on_major_battle_won_leader, on_siege_won_leader).
+character_event = {
+	id = reconquest.71
+	hide_window = yes
+	is_triggered_only = yes
+
+	ai = no
+
+	trigger = {
+		religion_group = old_world_group
+		reconquest_any_attacker_trigger = yes
+	}
+
+	immediate = {
+		random = { chance = 25 character_event = { id = reconquest.70 days = 1 random = 15 } }
+	}
+}
+
+###############################################################################
+# AI cooldown
+###############################################################################
+
+# reconquest.80 AI cooldown
+# After an AI swears the oath, no AI may do so again for 15 years.
+# Scope: ROOT is the AI reconquistador (prepare_reconquista).
+character_event = {
+	id = reconquest.80
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		set_global_flag = reconquista_ai_cooldown
+		333 = { province_event = { id = reconquest.81 } }
+	}
+}
+
+# reconquest.81 The cooldown runs
+# Scope: province 333 (reconquest.80).
+province_event = {
+	id = reconquest.81
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		province_event = { id = reconquest.82 days = 5475 }
+	}
+}
+
+# reconquest.82 The cooldown ends
+# Scope: province 333 (reconquest.81).
+province_event = {
+	id = reconquest.82
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		clr_global_flag = reconquista_ai_cooldown
+	}
+}
+
+
+###############################################################################
+# Holy orders
+# Namespace: holyorder (was HFP.44000 - HFP.44010 in HFP_holy_order_events)
+# Faction: Old World faiths
+# Serves: the Knights Mariner (Manann) and the Knights of the White Wolf
+#   (Ulric), and any holy order serving a liege
+#
+# When a holy war wins an island, the Knights Mariner ask its new lord for
+# it as a harbour against the corsairs; when it wins a northern duchy on
+# the edge of the faith, the White Wolves ask for it as a march against
+# Chaos. A generous lord is paid and thanked, and may receive a token of
+# the order (rare): an artifact, a squadron of Mariner galleys or a lance
+# of White Wolf knights. Any holy order that comes to despise its liege, or
+# whose liege is cast out or of another faith, leaves its service.
+#
+# The Knights Mariner          holyorder.1 - holyorder.3
+# The White Wolves             holyorder.5 - holyorder.7
+# Leaving an unfit liege       holyorder.10 - holyorder.11
+#
+# Saved: character flags refused_to_give_island_to_knights,
+#   refused_to_give_land_to_white_wolves; global flag
+#   white_wolves_asked_for_land; event targets potential_title,
+#   title_owner, holy_order_potential_title, liege_character,
+#   kingdom_title, order_master.
+#
+# Callers:
+#   common/scripted_effects/07_scripted_effects_holy_orders.txt
+#     (check_holy_order_donation_effect: 1, 5),
+#   common/on_actions/00_on_actions.txt: on_five_year_pulse (10).
+# Support: common/scripted_triggers/wh_holy_order_triggers.txt,
+#   common/artifacts/34_artifacts_holy_orders.txt
+# Loc: localisation/00_WHG_crusade_events.csv
+###############################################################################
+
+namespace = holyorder
+
+# holyorder.1 The Knights Mariner want an island
+# After a holy war wins an island, the Knights Mariner ask its new lord for
+# it (check_holy_order_donation_effect).
+# Scope: ROOT is the holder of d_knights_mariner; event targets
+#   potential_title and title_owner.
+character_event = {
+	id = holyorder.1
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { has_alternate_start_parameter = { key = religion_names value = random } }
+		wh_holds_mariner_island_trigger = no
+	}
+
+	immediate = {
+		event_target:title_owner = { letter_event = { id = holyorder.2 } }
+	}
+}
+
+# holyorder.2 A harbour for the Knights Mariner
+# Scope: ROOT is the lord of the island; FROM is the Knights Mariner
+#   (holyorder.1).
+letter_event = {
+	id = holyorder.2
+	desc = EVTDESCholyorder2
+	is_triggered_only = yes
+	trigger = { }
+
+	immediate = { }
+
+	option = {
+		name = EVTOPTAholyorder2
+		piety = 100
+		scaled_wealth = { value = 2 }
+		random_list = { # A rare token of the order's thanks
+			15 = {
+				modifier = { factor = 0 has_artifact = mariner_sea_compass }
+				add_artifact = mariner_sea_compass
+			}
+			10 = { # A squadron of the order's ships, to keep
+				custom_tooltip = {
+					text = holyorder_mariner_squadron_TT
+					spawn_fleet = {
+						province = closest_to_capital
+						owner = ROOT
+						troops = { galleys = { 20 20 } }
+						earmark = holyorder_mariner_squadron
+					}
+				}
+			}
+			75 = { }
+		}
+
+		d_knights_mariner = {
+			show_scope_change = no
+			holder_scope = {
+				show_scope_change = no
+				opinion = { who = ROOT modifier = opinion_grateful years = 10 }
+				opinion = {
+					modifier = in_non_aggression_pact
+					years = 10
+					who = ROOT
+					origin_description = EVTOPTAholyorder2
+				}
+			}
+		}
+
+		custom_tooltip = {
+			text = EVTOPTAholyorder2_TT
+
+			event_target:potential_title = {
+				if = {
+					limit = {
+						owner = { OR = { character = ROOT any_liege = { character = ROOT } } }
+						NOT = { tier = DUKE }
+					}
+					grant_title_no_opinion = FROM
+				}
+				else_if = {
+					limit = {
+						owner = {
+							OR = { character = ROOT any_liege = { character = ROOT } }
+							tier = DUKE
+						}
+					}
+					destroy_landed_title = THIS
+				}
+				any_direct_de_jure_vassal_title = {
+					limit = {
+						OR = {
+							owner = { character = ROOT }
+							owner = { any_liege = { character = ROOT } }
+						}
+					}
+					grant_title_no_opinion = FROM
+					any_direct_de_jure_vassal_title = {
+						limit = {
+							OR = {
+								owner = { character = ROOT }
+								owner = { any_liege = { character = ROOT } }
+							}
+						}
+						grant_title_no_opinion = FROM
+					}
+				}
+			}
+			FROM = {
+				any_demesne_title = {
+					limit = {
+						NOR = {
+							AND = { OR = { tier = BARON tier = COUNT } holding_type = CASTLE }
+							title = d_knights_mariner
+						}
+					}
+					if = {
+						limit = { tier = BARON holding_type = CITY }
+						create_random_steward = { random_traits = yes dynasty = random }
+					}
+					else_if = {
+						limit = { tier = BARON holding_type = TEMPLE }
+						create_random_priest = { random_traits = yes dynasty = random }
+					}
+					else = { create_random_soldier = { random_traits = yes dynasty = random } }
+					grant_title_no_opinion = new_character
+					new_character = {
+						# Set Racial Trait
+						character_event = { id = aiclean.31 }
+					}
+				}
+			}
+
+			event_target:potential_title = {
+				capital_scope = {
+					FROM = {
+						if = {
+							limit = {
+								has_landed_title = PREV
+								event_target:potential_title = { tier = DUKE }
+							}
+							capital = PREV
+						}
+						else = { capital = event_target:potential_title }
+					}
+				}
+			}
+			any_playable_ruler = {
+				limit = { religion = FROM }
+				narrative_event = { id = holyorder.3 }
+			}
+			ROOT = { narrative_event = { id = holyorder.3 } }
+			FROM = {
+				character_event = { id = HFP.41090 days = 1 }
+				character_event = { id = HFP.41090 days = 3 }
+			}
+		}
+
+		ai_chance = { factor = 1 }
+	}
+
+	option = {
+		name = EVTOPTBholyorder2
+		piety = -25
+
+		set_character_flag = refused_to_give_island_to_knights
+
+		ai_chance = { factor = 0 }
+	}
+}
+
+# holyorder.10 The order leaves an unfit liege
+# A holy order serving a liege it despises, or one cast out or of another
+# faith, leaves that liege's service and hands back any land that is not
+# the order's own.
+# Scope: ROOT is the order's master (five-year pulse).
+character_event = {
+	id = holyorder.10
+	hide_window = yes
+	is_triggered_only = yes
+	ai = yes
+	only_rulers = yes
+
+	trigger = {
+		holy_order = yes
+		independent = no
+	}
+
+	immediate = {
+		liege = { save_event_target_as = liege_character }
+
+		if = {
+			limit = {
+				OR = {
+					NOT = { opinion = { who = liege value = -20 } }
+					liege = { excommunicated_for = ROOT }
+					liege = { NOT = { religion = ROOT } }
+				}
+			}
+			opinion = {
+				who = event_target:liege_character
+				modifier = opinion_unfit_ruler
+				years = 30
+			}
+			liege = { letter_event = { id = holyorder.11 } }
+			any_demesne_title = {
+				limit = {
+					holy_order = no
+					OR = {
+						county = {
+							owner = {
+								OR = {
+									character = event_target:liege_character
+									event_target:liege_character = {
+										any_vassal = {
+											NOT = { character = ROOT }
+											character = PREVPREV
+										}
+									}
+								}
+							}
+						}
+						duchy = {
+							owner = {
+								OR = {
+									character = event_target:liege_character
+									event_target:liege_character = {
+										any_vassal = {
+											NOT = { character = ROOT }
+											character = PREVPREV
+										}
+									}
+								}
+							}
+						}
+						kingdom = {
+							owner = {
+								OR = {
+									character = event_target:liege_character
+									event_target:liege_character = {
+										any_vassal = {
+											NOT = { character = ROOT }
+											character = PREVPREV
+										}
+									}
+								}
+							}
+						}
+						empire = {
+							owner = {
+								OR = {
+									character = event_target:liege_character
+									event_target:liege_character = {
+										any_vassal = {
+											not = { character = ROOT }
+											character = PREVPREV
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+				event_target:liege_character = { grant_title_no_opinion = PREV }
+			}
+			set_defacto_liege = ROOT
+		}
+	}
+}
+
+# holyorder.11 The order is gone
+# Scope: ROOT is the old liege; FROM is the order's master (holyorder.10).
+letter_event = {
+	id = holyorder.11
+	desc = EVTDESCholyorder11
+	border = GFX_event_letter_frame_religion
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAholyorder11
+		piety = -50
+	}
+}
+
+# holyorder.3 The Knights Mariner of the island
+# News for the faithful.
+# Scope: ROOT is any ruler of the faith; FROM is the donor (holyorder.2).
+narrative_event = {
+	id = holyorder.3
+	desc = EVTDESCholyorder3
+	title = EVTTITLEholyorder3
+	picture = GFX_evt_magnificent_castle
+	border = GFX_event_narrative_frame_religion
+	portrait = FROMFROM
+	is_triggered_only = yes
+	trigger = { }
+
+	immediate = { }
+
+	option = {
+		name = EVTOPTAholyorder3
+	}
+}
+
+# holyorder.5 The White Wolves want land in the north
+# After a holy war wins a northern duchy, the Knights of the White Wolf ask
+# for it (check_holy_order_donation_effect). One request at a time.
+# Scope: ROOT is the holder of d_knights_of_the_white_wolf; FROM is the
+#   lord of the duchy.
+character_event = {
+	id = holyorder.5
+	hide_window = yes
+	is_triggered_only = yes
+	trigger = {
+		NOT = { has_global_flag = white_wolves_asked_for_land }
+	}
+
+	immediate = {
+		FROM = { letter_event = { id = holyorder.6 } }
+		set_global_flag = white_wolves_asked_for_land
+	}
+}
+
+# holyorder.6 Land for the White Wolves
+# Scope: ROOT is the lord of the duchy; FROM is the White Wolves
+#   (holyorder.5); event target holy_order_potential_title.
+letter_event = {
+	id = holyorder.6
+	desc = EVTDESCholyorder6
+	border = GFX_event_letter_frame_religion
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAholyorder6
+
+		piety = 100
+		scaled_wealth = { value = 2 }
+		random_list = { # A rare token of the order's thanks
+			15 = {
+				modifier = { factor = 0 has_artifact = white_wolf_pelt }
+				add_artifact = white_wolf_pelt
+			}
+			10 = { # A lance of White Wolf knights rides in the donor's service
+				custom_tooltip = {
+					text = holyorder_white_wolf_lance_TT
+					capital_scope = {
+						ROOT = {
+							spawn_unit = {
+								province = PREV
+								owner = ROOT
+								troops = { knights = { 150 150 } heavy_infantry = { 150 150 } }
+								earmark = holyorder_white_wolf_lance
+								maintenance_multiplier = 0.5
+							}
+						}
+					}
+				}
+			}
+			75 = { }
+		}
+
+		d_knights_of_the_white_wolf = {
+			show_scope_change = no
+			holder_scope = {
+				show_scope_change = no
+				opinion = { who = ROOT modifier = opinion_grateful years = 10 }
+				opinion = {
+					modifier = in_non_aggression_pact
+					years = 10
+					who = ROOT
+					origin_description = EVTOPTAholyorder6
+				}
+			}
+		}
+
+		custom_tooltip = {
+			text = EVTOPTAholyorder6_TT
+
+			event_target:holy_order_potential_title = {
+				# Destroy the Duchy title, if there is any
+				if = {
+					limit = {
+						owner = { OR = { character = ROOT any_liege = { character = ROOT } } }
+					}
+					destroy_landed_title = THIS
+				}
+				# Give the White Wolves all the land you hold in the area
+				any_direct_de_jure_vassal_title = {
+					limit = {
+						owner = { OR = { character = ROOT any_liege = { character = ROOT } } }
+					}
+					grant_title_no_opinion = FROM
+					any_direct_de_jure_vassal_title = {
+						limit = {
+							owner = { OR = { character = ROOT any_liege = { character = ROOT } } }
+						}
+						grant_title_no_opinion = FROM
+					}
+				}
+			}
+			# Upgrade tribal areas into proper feudal areas
+			FROM = { teutonic_order_upgrade_capital_effect = yes }
+			# Give out any unfit land (see cities, temples) to new vassals
+			FROM = { holy_order_distribute_titles_effect = yes }
+			# Refilled holdings and remove province penalties
+			FROM = {
+				character_event = { id = HFP.41090 days = 1 }
+				character_event = { id = HFP.41090 days = 3 }
+			}
+			# Making sure the White Wolves stay a proper Holy Order
+			FROM = { set_government_type = order_government }
+			# Sending out narrative event to all rulers of the same faith
+			if = {
+				limit = { FROM = { any_demesne_title = { tier = COUNT } } }
+				any_playable_ruler = {
+					limit = { religion = FROM }
+					narrative_event = { id = holyorder.7 }
+				}
+				ROOT = { narrative_event = { id = holyorder.7 } }
+			}
+		}
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		name = EVTOPTBholyorder6
+
+		set_character_flag = refused_to_give_land_to_white_wolves
+		ai_chance = { factor = 0 }
+	}
+	after = {
+		clr_global_flag = white_wolves_asked_for_land
+	}
+}
+
+# holyorder.7 The White Wolves in the north
+# News for the faithful.
+# Scope: ROOT is any ruler of the faith; FROM is the donor (holyorder.6).
+narrative_event = {
+	id = holyorder.7
+	desc = EVTDESCholyorder7
+	title = EVTTITLEholyorder7
+	picture = GFX_evt_magnificent_castle
+	border = GFX_event_narrative_frame_religion
+	portrait = event_target:order_master
+
+	is_triggered_only = yes
+
+	immediate = {
+		event_target:holy_order_potential_title = {
+			kingdom = { save_event_target_as = kingdom_title }
+		}
+		d_knights_of_the_white_wolf = { owner = { save_event_target_as = order_master } }
+	}
+
+	option = {
+		name = EVTOPTAholyorder7
 	}
 }

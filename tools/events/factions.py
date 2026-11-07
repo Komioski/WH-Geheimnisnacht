@@ -30,9 +30,8 @@ FACTIONS = {
     'Araby & Southlands': ['cg:arabyan_group', 'cg:southlander_group', 'rg:ormazd_gods_group'],
     'Cathay & the East': ['cg:oriental_group', 'rg:oriental_gods_group'],
     'Vampires': ['cg:vampire_group', 'cg:lahmian_group', 'cg:strigany_group', 'r:vampiric',
-                 'r:drachen', 'rg:necromantic_group'],
+                 'r:drachen', 'rg:necromantic_group', 'r:nagashi'],
     'Tomb Kings': ['cg:nehekharan_group', 'rg:nehekharan_gods_group', 'tr:creature_nehekharan'],
-    'Nagash': ['r:nagashi'],
     'Chaos': ['r:chaos', 'r:khorne', 'r:nurgle', 'r:tzeentch', 'r:slaanesh', 'cg:daemonic_group',
               'cg:kurgan_group', 'cg:hung_group', 'tr:creature_chaosspawn', 'rg:chaos_gods_group'],
     'Norsca': ['cg:norscan_group', 'r:norscan_gods', 'r:norscan_gods_reformed'],
@@ -40,6 +39,18 @@ FACTIONS = {
     'Beastmen': ['cg:beastman_group', 'tr:creature_beastman'],
     'Skaven': ['cg:skaven_group', 'rg:horned_rat_god_group', 'tr:creature_skaven'],
 }
+
+# Cross-faction categories for files and events that serve many races. A
+# `# Faction:` tag must name one of CATEGORIES (check_events flags others), so
+# the README stats table stays one row per category.
+SHARED_CATEGORIES = [
+    'Generic',                # everyone: health, culture, naval, maintenance...
+    'Family & bloodlines',    # pregnancy, bloodlines, Eldership succession
+    'Diplomacy & realms',     # sway, antagonize, realm forming
+    'Faiths & doctrines',     # reformed-faith doctrines, conversion and baptism
+    'Warrior societies',      # Chaos/Skaven/greenskin warbands, warrior lodges, war aid
+]
+CATEGORIES = list(FACTIONS) + SHARED_CATEGORIES
 
 # Paradox (vanilla) namespaces. Files using them are kept close to vanilla.
 VANILLA_NAMESPACES = set(

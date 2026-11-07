@@ -1,0 +1,1448 @@
+###############################################################################
+# Elders
+# Namespace: elder (was HFP.24001 - HFP.24025 in HFP_eldership_events;
+#   elder.N = old HFP.240NN)
+# Faction: Family & bloodlines
+# Serves: realms under Eldership succession
+#   (the Ropsmann hill-clans of Kislev, and faiths with Ancestor Worship or
+#   the reformed Atruhayid custom; Albion and the Kislevites, once the
+#   melting pot forms that culture (kislev.150), may adopt it)
+#
+# Under Eldership the old ones of the realm choose the next ruler, and they
+# never let the present one forget it. A pleased Elder moves to court, asks
+# a county for a worthy kinsman, frets about being forgotten, sings the
+# ruler's praises and passes on old wisdom (rarely a Staff of the Elders).
+# A displeased one walks out, pushes an idiot for a county or talks a rival
+# into a claim. Kill or jail an Elder without cause and all the others hold
+# it against you.
+#
+# The long life                     elder.1
+# Moving in and walking out         elder.2 - elder.5
+# A county for a worthy kinsman     elder.6 - elder.9
+# A county for a fool               elder.10 - elder.13
+# The lonely Elder                  elder.14 - elder.15
+# A claim against the ruler         elder.16 - elder.18
+# Killed or jailed Elders           elder.19, elder.24
+# Praise and wisdom                 elder.20 - elder.23
+# Eldership at game start           elder.25
+#
+# Saved: character flag flag_elder_moved_court; character modifier
+#   elder_demand_cooldown on the ruler. Event targets scoped_host,
+#   scoped_ruler, scoped_recipient_first/second/third,
+#   scoped_potential_count, scoped_suitor, scoped_claim_title.
+#
+# Callers:
+#   common/on_actions/00_on_actions.txt: on_startup (25), on_decade_pulse
+#     (1; list eldership_succession 2, 4, 6, 10, 14, 16, 20, 22), on_death
+#     (19), on_become_imprisoned_any_reason (24).
+# Support: common/scripted_triggers/wh_elder_triggers.txt,
+#   common/scripted_effects/wh_elder_effects.txt,
+#   common/artifacts/32_artifacts_eldership.txt
+# Loc: localisation/00_WHG_eldership_events.csv
+###############################################################################
+
+namespace = elder
+
+###############################################################################
+# The long life
+###############################################################################
+
+# elder.1 So much to live for
+# Being an Elder keeps the old ones going.
+# Scope: ROOT is the Elder (on_decade_pulse).
+character_event = {
+	id = elder.1
+	desc = EVTDESCelder1
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+	min_age = 40
+
+	trigger = {
+		NOT = { has_character_modifier = elder_long_life_modifier }
+		elder_able_trigger = yes
+		any_eldership_title = {
+			ROOT = {
+				OR = {
+					has_elector_stance = { stance = elder_displeased title = PREV }
+					has_elector_stance = { stance = elder_pleased title = PREV }
+					has_elector_stance = { stance = elder_ecstatic title = PREV }
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAelder1
+		add_character_modifier = { name = elder_long_life_modifier years = 100 }
+		if = { limit = { is_ruler = no } give_nickname = nick_the_elder }
+	}
+}
+
+###############################################################################
+# Moving in and walking out
+###############################################################################
+
+# elder.2 The Elder comes to court
+# A pleased Elder who lives elsewhere wants to watch the ruler up close.
+# Scope: ROOT is the Elder (on_decade_pulse list eldership_succession).
+character_event = {
+	id = elder.2
+	hide_window = yes
+	is_triggered_only = yes
+	min_age = 40
+
+	trigger = {
+		NOT = { has_character_flag = flag_elder_moved_court }
+		is_ruler = no
+		is_married = no
+		is_consort = no
+		elder_able_trigger = yes
+		any_eldership_title = {
+			elder_root_pleased_trigger = yes
+			holder_scope = {
+				NOT = { is_liege_of = ROOT }
+				NOT = { has_character_modifier = elder_demand_cooldown }
+			}
+		}
+		NOT = { # Happy where they are: their liege is a ruler they like
+			any_eldership_title = {
+				elder_root_pleased_trigger = yes
+				holder_scope = { is_liege_of = ROOT }
+			}
+		}
+	}
+
+	immediate = {
+		random_eldership_title = {
+			limit = {
+				elder_root_pleased_trigger = yes
+				holder_scope = {
+					NOT = { is_liege_of = ROOT }
+					NOT = { has_character_modifier = elder_demand_cooldown }
+				}
+			}
+			holder_scope = { save_event_target_as = scoped_host }
+		}
+		set_character_flag = flag_elder_moved_court
+		event_target:scoped_host = { character_event = { id = elder.3 } }
+	}
+}
+
+# elder.3 An Elder at the door
+# Scope: ROOT is the ruler; FROM is the Elder (elder.2).
+character_event = {
+	id = elder.3
+	desc = EVTDESCelder3
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAelder3
+		FROM = { move_character = ROOT }
+		reverse_opinion = { modifier = opinion_elder_fulfilled_demand who = FROM years = 10 }
+		elder_others_pleased_effect = yes
+		ai_chance = { factor = 85 }
+	}
+
+	option = {
+		name = EVTOPTBelder3
+		reverse_opinion = { modifier = opinion_elder_refused_demand who = FROM years = 10 }
+		elder_others_displeased_effect = yes
+		ai_chance = { factor = 15 modifier = { factor = 2 trait = proud } }
+	}
+
+	after = {
+		hidden_effect = {
+			add_character_modifier = { name = elder_demand_cooldown hidden = yes years = 5 }
+		}
+	}
+}
+
+# elder.4 The Elder walks out
+# A displeased Elder living at the ruler's court leaves for a lord they
+# like better, and tells every other Elder why.
+# Scope: ROOT is the Elder (on_decade_pulse list eldership_succession).
+character_event = {
+	id = elder.4
+	hide_window = yes
+	is_triggered_only = yes
+	min_age = 40
+
+	trigger = {
+		elder_able_trigger = yes
+		is_ruler = no
+		is_married = no
+		is_consort = no
+		any_eldership_title = {
+			elder_root_displeased_trigger = yes
+			holder_scope = {
+				is_liege_of = ROOT
+				NOT = { has_character_modifier = elder_demand_cooldown }
+				ROOT = { host = { character = PREVPREV } }
+			}
+		}
+		any_realm_character = {
+			is_ruler = yes
+			is_landed = yes
+			prisoner = no
+			NOR = { is_liege_of = ROOT is_rival = ROOT }
+		}
+	}
+
+	immediate = {
+		random_eldership_title = {
+			limit = {
+				elder_root_displeased_trigger = yes
+				holder_scope = {
+					is_liege_of = ROOT
+					NOT = { has_character_modifier = elder_demand_cooldown }
+					ROOT = { host = { character = PREVPREV } }
+				}
+			}
+			holder_scope = { character_event = { id = elder.5 } }
+		}
+		random_realm_character = {
+			limit = {
+				is_ruler = yes
+				is_landed = yes
+				prisoner = no
+				NOR = { is_liege_of = ROOT is_rival = ROOT }
+			}
+			preferred_limit = { OR = { is_friend = ROOT is_lover = ROOT } }
+			preferred_limit = { reverse_opinion = { who = ROOT value = 60 } }
+			preferred_limit = { reverse_opinion = { who = ROOT value = 40 } }
+			preferred_limit = { reverse_opinion = { who = ROOT value = 20 } }
+			ROOT = { move_character = PREV }
+		}
+	}
+}
+
+# elder.5 Good riddance?
+# Scope: ROOT is the ruler; FROM is the Elder who left (elder.4).
+character_event = {
+	id = elder.5
+	desc = EVTDESCelder5
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = { # A good word with the other Elders
+		name = EVTOPTAelder5
+		trigger = { diplomacy = 12 }
+		tooltip_info = diplomacy
+		custom_tooltip = { text = tooltip_EVTOPTAelder5 }
+		hidden_effect = {
+			any_demesne_title = {
+				limit = { has_law = succ_eldership }
+				any_elector_character = {
+					limit = { NOR = { character = FROM character = ROOT } }
+					opinion = { modifier = opinion_elders_pleased who = ROOT years = 10 }
+				}
+			}
+		}
+		ai_chance = { factor = 85 }
+	}
+
+	option = {
+		name = EVTOPTBelder5
+		tiered_prestige_negative_effect = yes
+		elder_others_displeased_effect = yes
+		ai_chance = { factor = 15 }
+	}
+
+	after = {
+		hidden_effect = {
+			add_character_modifier = { name = elder_demand_cooldown hidden = yes years = 5 }
+		}
+	}
+}
+
+###############################################################################
+# A county for a worthy kinsman
+###############################################################################
+
+# elder.6 Spotting talent
+# A pleased Elder picks out a kinsman of the ruler for a spare county: the
+# brightest, the best liked or the most able; a stubborn one names
+# themselves.
+# Scope: ROOT is the Elder (on_decade_pulse list eldership_succession).
+character_event = {
+	id = elder.6
+	desc = EVTDESCelder6
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+	portrait = event_target:scoped_ruler
+	hide_new = yes
+
+	is_triggered_only = yes
+	min_age = 30
+
+	trigger = {
+		elder_able_trigger = yes
+		any_eldership_title = {
+			elder_root_pleased_trigger = yes
+			holder_scope = { elder_county_request_trigger = yes }
+		}
+	}
+
+	immediate = {
+		hidden_effect = {
+			random_eldership_title = {
+				limit = {
+					elder_root_pleased_trigger = yes
+					holder_scope = { elder_county_request_trigger = yes }
+				}
+				holder_scope = {
+					save_event_target_as = scoped_ruler
+					random_dynasty_member = { # The brightest
+						limit = { elder_kin_candidate_trigger = yes }
+						preferred_limit = {
+							NOR = {
+								is_rival = ROOT
+								is_dumb_trigger = yes
+								is_weak_trigger = yes
+								is_evil_trigger = yes
+							}
+							OR = { is_smart_trigger = yes is_attractive_trigger = yes }
+						}
+						preferred_limit = {
+							NOR = {
+								is_rival = ROOT
+								is_dumb_trigger = yes
+								is_weak_trigger = yes
+								is_evil_trigger = yes
+							}
+						}
+						preferred_limit = { NOT = { is_rival = ROOT } }
+						save_event_target_as = scoped_recipient_first
+					}
+					random_dynasty_member = { # The best liked
+						limit = {
+							elder_kin_candidate_trigger = yes
+							NOT = { character = event_target:scoped_recipient_first }
+						}
+						preferred_limit = {
+							OR = { is_lover = ROOT is_friend = ROOT is_married = ROOT }
+						}
+						preferred_limit = { reverse_opinion = { who = ROOT value = 80 } }
+						preferred_limit = { reverse_opinion = { who = ROOT value = 60 } }
+						preferred_limit = { reverse_opinion = { who = ROOT value = 40 } }
+						preferred_limit = { reverse_opinion = { who = ROOT value = 20 } }
+						save_event_target_as = scoped_recipient_second
+					}
+					random_dynasty_member = { # The most able
+						limit = {
+							elder_kin_candidate_trigger = yes
+							NOR = {
+								character = event_target:scoped_recipient_first
+								character = event_target:scoped_recipient_second
+							}
+						}
+						preferred_limit = {
+							OR = { diplomacy = 18 intrigue = 18 stewardship = 18 learning = 18 }
+						}
+						preferred_limit = {
+							OR = { diplomacy = 16 intrigue = 16 stewardship = 16 learning = 16 }
+						}
+						preferred_limit = {
+							OR = { diplomacy = 14 intrigue = 14 stewardship = 14 learning = 14 }
+						}
+						preferred_limit = {
+							OR = { diplomacy = 12 intrigue = 12 stewardship = 12 learning = 12 }
+						}
+						preferred_limit = {
+							OR = { diplomacy = 10 intrigue = 10 stewardship = 10 learning = 10 }
+						}
+						preferred_limit = {
+							OR = { diplomacy = 8 intrigue = 8 stewardship = 8 learning = 8 }
+						}
+						save_event_target_as = scoped_recipient_third
+					}
+				}
+			}
+		}
+	}
+
+	option = { # Name themselves
+		name = EVTOPTZelder6
+		trigger = { trait = stubborn }
+		tooltip_info = stubborn
+		show_portrait = ROOT
+		custom_tooltip = { text = tooltip_EVTOPTZelder6 }
+		if = { limit = { trait = humble } remove_trait = humble }
+		hidden_effect = {
+			save_event_target_as = scoped_potential_count
+			event_target:scoped_ruler = { character_event = { id = elder.7 } }
+		}
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 1.75 trait = proud }
+			modifier = { factor = 0.25 trait = humble }
+		}
+	}
+
+	option = { # The brightest
+		name = EVTOPTAelder6
+		trigger = { event_target:scoped_recipient_first = { is_alive = yes } }
+		show_portrait = event_target:scoped_recipient_first
+		custom_tooltip = { text = tooltip_EVTOPTAelder6 }
+		hidden_effect = {
+			event_target:scoped_recipient_first = { save_event_target_as = scoped_potential_count }
+			event_target:scoped_ruler = { character_event = { id = elder.7 } }
+		}
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 1.75 trait = kind }
+			modifier = { factor = 0.5 trait = envious }
+		}
+	}
+
+	option = { # The best liked
+		name = EVTOPTBelder6
+		trigger = { event_target:scoped_recipient_second = { is_alive = yes } }
+		show_portrait = event_target:scoped_recipient_second
+		custom_tooltip = { text = tooltip_EVTOPTBelder6 }
+		hidden_effect = {
+			event_target:scoped_recipient_second = { save_event_target_as = scoped_potential_count }
+			event_target:scoped_ruler = { character_event = { id = elder.7 } }
+		}
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 1.75 trait = gregarious }
+			modifier = { factor = 0.5 trait = shy }
+		}
+	}
+
+	option = { # The most able
+		name = EVTOPTCelder6
+		trigger = { event_target:scoped_recipient_third = { is_alive = yes } }
+		show_portrait = event_target:scoped_recipient_third
+		custom_tooltip = { text = tooltip_EVTOPTCelder6 }
+		hidden_effect = {
+			event_target:scoped_recipient_third = { save_event_target_as = scoped_potential_count }
+			event_target:scoped_ruler = { character_event = { id = elder.7 } }
+		}
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 1.75 trait = diligent }
+			modifier = { factor = 0.5 trait = slothful }
+		}
+	}
+
+	option = { # Nobody
+		name = EVTOPTDelder6
+		trigger = { NOT = { trait = stubborn } }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# elder.7 The Elder's candidate
+# Scope: ROOT is the ruler; FROM is the Elder; event target
+#   scoped_potential_count (elder.6).
+character_event = {
+	id = elder.7
+	desc = {
+		trigger = { event_target:scoped_potential_count = { NOT = { character = FROM } } }
+		text = EVTDESCAelder7
+	}
+	desc = {
+		trigger = { event_target:scoped_potential_count = { character = FROM } }
+		text = EVTDESCBelder7
+	}
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+	portrait = FROM
+	hide_new = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:scoped_potential_count = { is_alive = yes prisoner = no }
+		elder_county_to_spare_trigger = yes
+	}
+
+	option = { # Grant the county
+		name = EVTOPTAelder7
+		random_demesne_title = {
+			limit = { can_be_given_away = yes tier = COUNT location = { is_capital = no } }
+			grant_title = event_target:scoped_potential_count
+		}
+		show_portrait = event_target:scoped_potential_count
+		reverse_opinion = { modifier = opinion_elder_fulfilled_demand who = FROM years = 30 }
+		elder_others_pleased_effect = yes
+		hidden_effect = { FROM = { character_event = { id = elder.8 } } }
+		ai_chance = { factor = 85 }
+	}
+
+	option = { # Refuse
+		name = EVTOPTBelder7
+		show_portrait = FROM
+		reverse_opinion = { modifier = opinion_elder_refused_demand who = FROM years = 30 }
+		elder_others_displeased_effect = yes
+		hidden_effect = { FROM = { character_event = { id = elder.9 } } }
+		ai_chance = { factor = 15 }
+	}
+
+	after = {
+		hidden_effect = {
+			add_character_modifier = { name = elder_demand_cooldown hidden = yes years = 20 }
+		}
+	}
+}
+
+# elder.8 The ruler listened
+# Scope: ROOT is the Elder; FROM is the ruler (elder.7).
+character_event = {
+	id = elder.8
+	desc = {
+		trigger = { event_target:scoped_potential_count = { NOT = { character = ROOT } } }
+		text = EVTDESCAelder8
+	}
+	desc = {
+		trigger = { event_target:scoped_potential_count = { character = ROOT } }
+		text = EVTDESCBelder8
+	}
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAelder8
+		tooltip = { opinion = { modifier = opinion_elder_fulfilled_demand who = FROM years = 30 } }
+	}
+}
+
+# elder.9 The ruler would not listen
+# Scope: ROOT is the Elder; FROM is the ruler (elder.7).
+character_event = {
+	id = elder.9
+	desc = EVTDESCelder9
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAelder9
+		tooltip = { opinion = { modifier = opinion_elder_refused_demand who = FROM years = 30 } }
+	}
+}
+
+###############################################################################
+# A county for a fool
+###############################################################################
+
+# elder.10 Someone skilled enough
+# A displeased Elder picks a county holder for the ruler: a fool, someone
+# who hates the ruler, or the least able of the house; a stubborn one names
+# themselves.
+# Scope: ROOT is the Elder (on_decade_pulse list eldership_succession).
+character_event = {
+	id = elder.10
+	desc = EVTDESCelder10
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+	portrait = event_target:scoped_ruler
+	hide_new = yes
+
+	is_triggered_only = yes
+	min_age = 30
+
+	trigger = {
+		elder_able_trigger = yes
+		any_eldership_title = {
+			elder_root_displeased_trigger = yes
+			holder_scope = { elder_county_request_trigger = yes }
+		}
+	}
+
+	immediate = {
+		hidden_effect = {
+			random_eldership_title = {
+				limit = {
+					elder_root_displeased_trigger = yes
+					holder_scope = { elder_county_request_trigger = yes }
+				}
+				holder_scope = {
+					save_event_target_as = scoped_ruler
+					random_dynasty_member = { # The fool
+						limit = { elder_kin_candidate_trigger = yes }
+						preferred_limit = {
+							NOT = { is_rival = ROOT }
+							elder_unfit_kin_trigger = yes
+						}
+						preferred_limit = { elder_unfit_kin_trigger = yes }
+						save_event_target_as = scoped_recipient_first
+					}
+					random_dynasty_member = { # The one who hates the ruler
+						limit = {
+							elder_kin_candidate_trigger = yes
+							NOT = { character = event_target:scoped_recipient_first }
+						}
+						preferred_limit = {
+							OR = {
+								is_rival = event_target:scoped_ruler
+								NOT = { opinion = { who = event_target:scoped_ruler value = -99 } }
+							}
+						}
+						preferred_limit = {
+							NOT = { opinion = { who = event_target:scoped_ruler value = -80 } }
+						}
+						preferred_limit = {
+							NOT = { opinion = { who = event_target:scoped_ruler value = -60 } }
+						}
+						preferred_limit = {
+							NOT = { opinion = { who = event_target:scoped_ruler value = -40 } }
+						}
+						preferred_limit = {
+							NOT = { opinion = { who = event_target:scoped_ruler value = -20 } }
+						}
+						preferred_limit = {
+							NOT = { opinion = { who = event_target:scoped_ruler value = 0 } }
+						}
+						save_event_target_as = scoped_recipient_second
+					}
+					random_dynasty_member = { # The least able
+						limit = {
+							elder_kin_candidate_trigger = yes
+							NOR = {
+								character = event_target:scoped_recipient_first
+								character = event_target:scoped_recipient_second
+							}
+						}
+						preferred_limit = {
+							NOR = {
+								diplomacy = 6
+								intrigue = 6
+								stewardship = 6
+								learning = 6
+								martial = 6
+								combat_rating = 10
+								trait = diligent
+							}
+						}
+						preferred_limit = {
+							NOR = {
+								diplomacy = 8
+								intrigue = 8
+								stewardship = 8
+								learning = 8
+								martial = 8
+								combat_rating = 20
+							}
+						}
+						preferred_limit = {
+							NOR = {
+								diplomacy = 10
+								intrigue = 10
+								stewardship = 10
+								learning = 10
+								martial = 10
+								combat_rating = 30
+							}
+						}
+						save_event_target_as = scoped_recipient_third
+					}
+				}
+			}
+		}
+	}
+
+	option = { # Name themselves
+		name = EVTOPTZelder10
+		trigger = { trait = stubborn }
+		tooltip_info = stubborn
+		show_portrait = ROOT
+		custom_tooltip = { text = tooltip_EVTOPTZelder6 }
+		if = { limit = { trait = humble } remove_trait = humble }
+		hidden_effect = {
+			save_event_target_as = scoped_potential_count
+			event_target:scoped_ruler = { character_event = { id = elder.11 } }
+		}
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 1.75 trait = proud }
+			modifier = { factor = 0.25 trait = humble }
+		}
+	}
+
+	option = { # The fool
+		name = EVTOPTAelder10
+		trigger = { event_target:scoped_recipient_first = { is_alive = yes } }
+		show_portrait = event_target:scoped_recipient_first
+		custom_tooltip = { text = tooltip_EVTOPTAelder6 }
+		hidden_effect = {
+			event_target:scoped_recipient_first = { save_event_target_as = scoped_potential_count }
+			event_target:scoped_ruler = { character_event = { id = elder.11 } }
+		}
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 1.75 trait = cruel }
+			modifier = { factor = 0.5 trait = kind }
+		}
+	}
+
+	option = { # The one who hates the ruler
+		name = EVTOPTBelder10
+		trigger = { event_target:scoped_recipient_second = { is_alive = yes } }
+		show_portrait = event_target:scoped_recipient_second
+		custom_tooltip = { text = tooltip_EVTOPTBelder6 }
+		hidden_effect = {
+			event_target:scoped_recipient_second = { save_event_target_as = scoped_potential_count }
+			event_target:scoped_ruler = { character_event = { id = elder.11 } }
+		}
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 1.75 trait = deceitful }
+			modifier = { factor = 0.5 trait = honest }
+		}
+	}
+
+	option = { # The least able
+		name = EVTOPTCelder10
+		trigger = { event_target:scoped_recipient_third = { is_alive = yes } }
+		show_portrait = event_target:scoped_recipient_third
+		custom_tooltip = { text = tooltip_EVTOPTCelder6 }
+		hidden_effect = {
+			event_target:scoped_recipient_third = { save_event_target_as = scoped_potential_count }
+			event_target:scoped_ruler = { character_event = { id = elder.11 } }
+		}
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 1.75 trait = slothful }
+			modifier = { factor = 0.5 trait = diligent }
+		}
+	}
+
+	option = { # Nobody
+		name = EVTOPTDelder10
+		trigger = { NOT = { trait = stubborn } }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# elder.11 The Elder's sycophant
+# Scope: ROOT is the ruler; FROM is the Elder; event target
+#   scoped_potential_count (elder.10).
+character_event = {
+	id = elder.11
+	desc = {
+		trigger = { event_target:scoped_potential_count = { NOT = { character = FROM } } }
+		text = EVTDESCAelder11
+	}
+	desc = {
+		trigger = { event_target:scoped_potential_count = { character = FROM } }
+		text = EVTDESCBelder11
+	}
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:scoped_potential_count = { is_alive = yes prisoner = no }
+		elder_county_to_spare_trigger = yes
+	}
+
+	option = { # Grant the county
+		name = EVTOPTAelder11
+		random_demesne_title = {
+			limit = { can_be_given_away = yes tier = COUNT location = { is_capital = no } }
+			grant_title = event_target:scoped_potential_count
+		}
+		show_portrait = event_target:scoped_potential_count
+		reverse_opinion = { modifier = opinion_elder_fulfilled_demand who = FROM years = 30 }
+		elder_others_pleased_effect = yes
+		hidden_effect = { FROM = { character_event = { id = elder.12 } } }
+		ai_chance = { factor = 65 }
+	}
+
+	option = { # Refuse
+		name = EVTOPTBelder11
+		show_portrait = FROM
+		reverse_opinion = { modifier = opinion_elder_refused_demand who = FROM years = 30 }
+		elder_others_displeased_effect = yes
+		hidden_effect = { FROM = { character_event = { id = elder.13 } } }
+		ai_chance = { factor = 45 modifier = { factor = 0.5 trait = trusting } }
+	}
+
+	after = {
+		hidden_effect = {
+			add_character_modifier = { name = elder_demand_cooldown hidden = yes years = 20 }
+		}
+	}
+}
+
+# elder.12 For once, the ruler listened
+# Scope: ROOT is the Elder; FROM is the ruler (elder.11).
+character_event = {
+	id = elder.12
+	desc = EVTDESCelder12
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAelder12
+		tooltip = { opinion = { modifier = opinion_elder_fulfilled_demand who = FROM years = 30 } }
+	}
+}
+
+# elder.13 A lost cause
+# Scope: ROOT is the Elder; FROM is the ruler (elder.11).
+character_event = {
+	id = elder.13
+	desc = EVTDESCelder13
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAelder13
+		tooltip = { opinion = { modifier = opinion_elder_refused_demand who = FROM years = 30 } }
+	}
+}
+
+###############################################################################
+# The lonely Elder
+###############################################################################
+
+# elder.14 Nobody listens any more
+# Scope: ROOT is the Elder (on_decade_pulse list eldership_succession).
+character_event = {
+	id = elder.14
+	hide_window = yes
+	is_triggered_only = yes
+	min_age = 40
+
+	trigger = {
+		elder_able_trigger = yes
+		is_ruler = no
+		is_married = no
+		has_lover = no
+		any_eldership_title = {
+			ROOT = { has_elector_stance = { stance = elder_pleased title = PREV } }
+			holder_scope = {
+				is_liege_of = ROOT
+				NOT = { has_character_modifier = elder_demand_cooldown }
+			}
+		}
+	}
+
+	immediate = {
+		random_eldership_title = {
+			limit = {
+				ROOT = { has_elector_stance = { stance = elder_pleased title = PREV } }
+				holder_scope = {
+					is_liege_of = ROOT
+					NOT = { has_character_modifier = elder_demand_cooldown }
+				}
+			}
+			holder_scope = { character_event = { id = elder.15 } }
+		}
+	}
+}
+
+# elder.15 The lonely Elder
+# The ruler may spend time with the Elder, find them a spouse at court,
+# send gold, or forget them.
+# Scope: ROOT is the ruler; FROM is the Elder (elder.14).
+character_event = {
+	id = elder.15
+	desc = EVTDESCelder15
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+	portrait = FROM
+	hide_new = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_courtier = {
+			limit = {
+				is_ruler = no
+				is_married = no
+				is_betrothed = no
+				is_consort = no
+				is_adult = yes
+				is_incapable = no
+				is_ill = no
+				prisoner = no
+				culture_group = FROM
+				cannot_marry_trigger = no
+				NOR = {
+					is_lover = ROOT
+					character = ROOT
+					character = FROM
+					is_heir = ROOT
+					is_close_relative = FROM
+				}
+				OR = {
+					AND = { is_female = yes FROM = { is_female = no } }
+					AND = { is_female = no FROM = { is_female = yes } }
+				}
+			}
+			preferred_limit = { NOT = { age = 35 } is_attractive_trigger = yes }
+			preferred_limit = { NOT = { age = 35 } }
+			save_event_target_as = scoped_suitor
+		}
+	}
+
+	option = { # Spend time with them
+		name = EVTOPTAelder15
+		add_character_modifier = { name = elder_care_modifier years = 5 }
+		reverse_opinion = { modifier = opinion_elder_fulfilled_demand who = FROM years = 10 }
+		elder_others_pleased_effect = yes
+		ai_chance = { factor = 35 }
+	}
+
+	option = { # Find them a spouse
+		name = EVTOPTBelder15
+		trigger = {
+			event_target:scoped_suitor = { is_alive = yes is_married = no }
+			FROM = { is_married = no }
+		}
+		show_portrait = event_target:scoped_suitor
+		event_target:scoped_suitor = { add_spouse = FROM }
+		reverse_opinion = { modifier = opinion_elder_fulfilled_demand who = FROM years = 10 }
+		elder_others_pleased_effect = yes
+		ai_chance = { factor = 35 }
+	}
+
+	option = { # Send gold
+		name = EVTOPTCelder15
+		transfer_scaled_wealth = { to = FROM value = 0.5 min = 10 max = 100 }
+		reverse_opinion = { modifier = opinion_elder_fulfilled_demand who = FROM years = 10 }
+		elder_others_pleased_effect = yes
+		ai_chance = { factor = 35 }
+	}
+
+	option = { # Forget them
+		name = EVTOPTDelder15
+		reverse_opinion = { modifier = opinion_elder_refused_demand who = FROM years = 10 }
+		elder_others_displeased_effect = yes
+		ai_chance = { factor = 45 modifier = { factor = 0.5 trait = trusting } }
+	}
+
+	after = {
+		hidden_effect = {
+			add_character_modifier = { name = elder_demand_cooldown hidden = yes years = 5 }
+		}
+	}
+}
+
+###############################################################################
+# A claim against the ruler
+###############################################################################
+
+# elder.16 The Elder plots
+# A displeased Elder talks someone in the realm into a claim on the title
+# they are displeased about. Old, learned, cunning and famous Elders are
+# likelier to.
+# Scope: ROOT is the Elder (on_decade_pulse list eldership_succession).
+character_event = {
+	id = elder.16
+	hide_window = yes
+	is_triggered_only = yes
+	min_age = 30
+
+	trigger = {
+		elder_able_trigger = yes
+		any_eldership_title = {
+			elder_root_displeased_trigger = yes
+			holder_scope = { any_realm_character = { elder_claimant_trigger = yes } }
+		}
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 0.5 ai = no }
+		modifier = { factor = 2 age = 40 }
+		modifier = { factor = 2 age = 50 }
+		modifier = { factor = 2 age = 60 }
+		modifier = { factor = 2 learning = 10 }
+		modifier = { factor = 2 learning = 14 }
+		modifier = { factor = 2 learning = 18 }
+		modifier = { factor = 2 intrigue = 10 }
+		modifier = { factor = 2 intrigue = 14 }
+		modifier = { factor = 2 intrigue = 18 }
+		modifier = { factor = 2 prestige = 250 }
+		modifier = { factor = 3 prestige = 750 }
+		modifier = { factor = 0.5 trait = content }
+		modifier = { factor = 2 trait = stubborn }
+	}
+
+	immediate = {
+		random_eldership_title = {
+			limit = {
+				elder_root_displeased_trigger = yes
+				holder_scope = { any_realm_character = { elder_claimant_trigger = yes } }
+			}
+			save_event_target_as = scoped_claim_title
+			holder_scope = {
+				save_event_target_as = scoped_ruler
+				random_realm_character = {
+					limit = { elder_claimant_trigger = yes }
+					preferred_limit = {
+						trait = ambitious
+						is_rival = event_target:scoped_ruler
+						is_landed = yes
+						higher_real_tier_than = COUNT
+						is_republic = no
+						reverse_opinion = { who = ROOT value = 20 }
+					}
+					preferred_limit = {
+						trait = ambitious
+						is_rival = event_target:scoped_ruler
+						is_landed = yes
+						higher_real_tier_than = BARON
+						is_republic = no
+					}
+					preferred_limit = { trait = ambitious is_rival = event_target:scoped_ruler }
+					preferred_limit = {
+						OR = { trait = ambitious is_rival = event_target:scoped_ruler }
+						is_landed = yes
+						is_republic = no
+					}
+					preferred_limit = {
+						OR = {
+							trait = ambitious
+							is_rival = event_target:scoped_ruler
+							is_landed = yes
+						}
+					}
+					character_event = { id = elder.17 }
+				}
+			}
+		}
+	}
+}
+
+# elder.17 The Elder's whisper
+# Scope: ROOT is the new claimant; FROM is the Elder; event targets
+#   scoped_claim_title, scoped_ruler (elder.16).
+character_event = {
+	id = elder.17
+	desc = EVTDESCelder17
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_intrigue
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAelder17
+		tiered_prestige_reward_effect = yes
+		add_claim = event_target:scoped_claim_title
+		hidden_effect = { event_target:scoped_ruler = { character_event = { id = elder.18 } } }
+	}
+}
+
+# elder.18 Talk of a better ruler
+# Scope: ROOT is the ruler; FROM is the claimant; FROMFROM is the Elder
+#   (elder.17).
+character_event = {
+	id = elder.18
+	desc = EVTDESCelder18
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_intrigue
+	portrait = FROMFROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAelder18
+		show_portrait = FROM
+		opinion = { modifier = opinion_elder_traitor who = FROMFROM years = 5 }
+	}
+}
+
+###############################################################################
+# Killed or jailed Elders
+###############################################################################
+
+# elder.19 An Elder slain
+# Executed or known to be murdered by a ruler they were an Elder of,
+# without a good reason: every other Elder of that ruler remembers.
+# Scope: ROOT is the dead Elder (on_death).
+character_event = {
+	id = elder.19
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		OR = { death_execution_trigger = yes death_murder_known_trigger = yes }
+		killer = {
+			root_has_execution_reason_opinion_trigger = no
+			ROOT = {
+				any_eldership_title = {
+					holder_scope = { character = PREVPREVPREV } # The killer holds it
+				}
+			}
+		}
+	}
+
+	immediate = {
+		killer = { elder_all_hate_murderer_effect = yes }
+	}
+}
+
+# elder.24 An Elder in chains
+# Jailed by a ruler they were an Elder of, without a good reason.
+# Scope: ROOT is the jailed Elder; FROM is the jailer
+#   (on_become_imprisoned_any_reason).
+character_event = {
+	id = elder.24
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			root_has_imprisonment_reason_opinion_trigger = no
+			ROOT = {
+				any_eldership_title = {
+					holder_scope = { character = PREVPREVPREV } # The jailer holds it
+				}
+			}
+		}
+	}
+
+	immediate = {
+		FROM = { elder_all_hate_jailer_effect = yes }
+	}
+}
+
+###############################################################################
+# Praise and wisdom
+###############################################################################
+
+# elder.20 The Elder sings the ruler's praises
+# Scope: ROOT is the Elder (on_decade_pulse list eldership_succession).
+character_event = {
+	id = elder.20
+	hide_window = yes
+	is_triggered_only = yes
+	min_age = 40
+
+	trigger = {
+		elder_able_trigger = yes
+		any_eldership_title = { elder_root_ecstatic_trigger = yes }
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 0.5 ai = no }
+		modifier = { factor = 2 age = 50 }
+		modifier = { factor = 2 age = 60 }
+		modifier = { factor = 2 learning = 10 }
+		modifier = { factor = 2 learning = 14 }
+		modifier = { factor = 2 learning = 18 }
+		modifier = { factor = 2 diplomacy = 10 }
+		modifier = { factor = 2 diplomacy = 14 }
+		modifier = { factor = 2 diplomacy = 18 }
+		modifier = { factor = 2 prestige = 250 }
+		modifier = { factor = 3 prestige = 750 }
+		modifier = { factor = 2 trait = stubborn }
+	}
+
+	immediate = {
+		random_eldership_title = {
+			limit = { elder_root_ecstatic_trigger = yes }
+			holder_scope = { character_event = { id = elder.21 } }
+		}
+	}
+}
+
+# elder.21 Praised by an Elder
+# The wiser the Elder, the more the praise is worth.
+# Scope: ROOT is the ruler; FROM is the Elder (elder.20).
+character_event = {
+	id = elder.21
+	desc = EVTDESCelder21
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAelder21
+		if = {
+			limit = { FROM = { learning = 20 } }
+			prestige = 350
+			add_character_modifier = { name = elder_praise_modifier years = 8 }
+		}
+		else_if = {
+			limit = { FROM = { learning = 18 } }
+			prestige = 300
+			add_character_modifier = { name = elder_praise_modifier years = 7 }
+		}
+		else_if = {
+			limit = { FROM = { learning = 16 } }
+			prestige = 250
+			add_character_modifier = { name = elder_praise_modifier years = 6 }
+		}
+		else_if = {
+			limit = { FROM = { learning = 14 } }
+			prestige = 200
+			add_character_modifier = { name = elder_praise_modifier years = 5 }
+		}
+		else_if = {
+			limit = { FROM = { learning = 12 } }
+			prestige = 150
+			add_character_modifier = { name = elder_praise_modifier years = 4 }
+		}
+		else_if = {
+			limit = { FROM = { learning = 10 } }
+			prestige = 100
+			add_character_modifier = { name = elder_praise_modifier years = 3 }
+		}
+		else_if = {
+			limit = { FROM = { learning = 8 } }
+			prestige = 50
+			add_character_modifier = { name = elder_praise_modifier years = 2 }
+		}
+		else = { prestige = 25 add_character_modifier = { name = elder_praise_modifier years = 1 } }
+	}
+}
+
+# elder.22 The Elder would teach
+# Scope: ROOT is the Elder (on_decade_pulse list eldership_succession).
+character_event = {
+	id = elder.22
+	hide_window = yes
+	is_triggered_only = yes
+	min_age = 40
+
+	trigger = {
+		elder_able_trigger = yes
+		is_dumb_trigger = no
+		learning = 10
+		stewardship = 10
+		any_eldership_title = { elder_root_ecstatic_trigger = yes }
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 0.5 ai = no }
+		modifier = { factor = 2 age = 50 }
+		modifier = { factor = 2 age = 60 }
+		modifier = { factor = 2 learning = 14 }
+		modifier = { factor = 2 learning = 18 }
+		modifier = { factor = 2 stewardship = 14 }
+		modifier = { factor = 2 stewardship = 18 }
+		modifier = { factor = 2 prestige = 250 }
+		modifier = { factor = 3 prestige = 750 }
+		modifier = { factor = 2 trait = stubborn }
+	}
+
+	immediate = {
+		random_eldership_title = {
+			limit = { elder_root_ecstatic_trigger = yes }
+			holder_scope = { character_event = { id = elder.23 } }
+		}
+	}
+}
+
+# elder.23 Old wisdom
+# The ruler may hear the customs of the forebears (culture tech), the
+# lessons of rulers past (stewardship) or the old tales (learning). Rarely
+# the Elder hands on their staff as well.
+# Scope: ROOT is the ruler; FROM is the Elder (elder.22).
+character_event = {
+	id = elder.23
+	desc = EVTDESCelder23
+	picture = { trigger = { elder_southern_picture_trigger = no } picture = GFX_evt_elder_council }
+	picture = {
+		trigger = { elder_southern_picture_trigger = yes }
+		picture = GFX_evt_west_african_ruler
+	}
+	border = GFX_event_normal_frame_diplomacy
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = { # Customs of the forebears
+		name = EVTOPTAelder23
+		culture_techpoints = 25
+	}
+
+	option = { # Rulers past
+		name = EVTOPTBelder23
+		random = {
+			chance = 25
+			modifier = { factor = 1.5 FROM = { stewardship = 12 } }
+			modifier = { factor = 1.5 FROM = { stewardship = 16 } }
+			modifier = { factor = 1.5 FROM = { stewardship = 20 } }
+			modifier = { factor = 1.5 FROM = { stewardship = 25 } }
+			change_stewardship = 1
+		}
+	}
+
+	option = { # The old tales
+		name = EVTOPTCelder23
+		random = {
+			chance = 40
+			modifier = { factor = 1.5 FROM = { learning = 12 } }
+			modifier = { factor = 1.5 FROM = { learning = 16 } }
+			modifier = { factor = 1.5 FROM = { learning = 20 } }
+			modifier = { factor = 1.5 FROM = { learning = 25 } }
+			change_learning = 1
+		}
+	}
+
+	after = {
+		if = {
+			limit = { NOT = { has_artifact = elder_staff } FROM = { age = 60 } }
+			random = {
+				chance = 10
+				add_artifact = elder_staff
+				custom_tooltip = { text = elder_staff_gift_TT }
+			}
+		}
+	}
+}
+
+###############################################################################
+# Eldership at game start
+###############################################################################
+
+# elder.25 The Elders gather
+# On a new game, tribal rulers of an Eldership people (the Ropsmann, Ancestor
+# Worship faiths, the reformed Atruhayid), and any ruler whose title starts
+# under Eldership, get the law and six Elders so the realm has electors.
+# Scope: ROOT is a ruler (on_startup).
+character_event = {
+	id = elder.25
+	hide_window = yes
+	is_triggered_only = yes
+	only_rulers = yes
+
+	trigger = {
+		is_save_game = no
+		is_landed = yes
+		has_dlc = "Holy Fury"
+		primary_title = {
+			rebel = no
+			is_primary_type_title = no
+			holder_scope = {
+				is_nomadic = no
+				is_merchant_republic = no
+				is_patrician = no
+				NOT = { government = confucian_bureaucracy }
+				NOT = { government = celestial_empire_government }
+				NOR = {
+					has_religion_feature = religion_matriarchal
+					has_religion_feature = religion_patriarchal
+				}
+				OR = {
+					independent = yes
+					AND = {
+						NOT = { any_liege = { holy_order = yes } }
+						NOT = { any_demesne_title = { is_vice_royalty = yes } }
+					}
+				}
+			}
+			OR = {
+				has_law = succ_eldership # Set in the title history
+				holder_scope = {
+					is_tribal = yes # Feudal realms may adopt it, only tribes start with it
+					OR = {
+						culture = ropsmann
+						has_religion_feature = religion_beatification
+						has_religion_feature = religion_feature_west_african
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		any_demesne_title = {
+			limit = { OR = { has_law = succ_eldership ROOT = { is_tribal = yes } } }
+			add_law = { law = succ_eldership cooldown = no opinion_effect = no }
+		}
+		# Elders, so the realm is not without electors at the start
+		spawn_elder_effect = yes
+		spawn_elder_effect = yes
+		spawn_elder_effect = yes
+		spawn_elder_effect = yes
+		spawn_elder_effect = yes
+		spawn_elder_effect = yes
+	}
+}

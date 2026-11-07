@@ -31,6 +31,9 @@
 # Global flags: ice_palace_melting (the court moved to the Bokha Palace and
 # the Ice Palace is left to melt, tsar.13), ice_palace_melted (it is gone,
 # until an Ice Witch raises it, tsar.15).
+#
+# Also in this file (each part keeps its own header and namespace):
+#   The Chekist (namespace chekist, was WHG_chekist_events)
 ###############################################################################
 
 namespace = tsar
@@ -57,6 +60,7 @@ character_event = {
 
 	immediate = {
 		set_global_flag = tsar_crown_started
+		coronation_regalia_effect = yes # The Frost Crown (wh_coronation_effects)
 		if = {
 			limit = { NOT = { trait = ice_witch } }
 			add_character_modifier = { name = tsar_ice_palace_upkeep duration = -1 }
@@ -95,7 +99,7 @@ character_event = {
 		}
 		if = {
 			limit = { has_global_flag = kreml_guard_founded }
-			character_event = { id = kislevnorth.20 days = 60 } # The Kreml Guard swears (WHG_kislev_north_events)
+			character_event = { id = kislevnorth.20 days = 60 } # The Kreml Guard swears (WHG_bulwark_events)
 		}
 		if = {
 			limit = { trait = ice_witch }
@@ -135,6 +139,7 @@ character_event = {
 	option = {
 		name = EVTOPTAtsar3
 		prestige = 100
+		coronation_regalia_effect = yes # The Frost Crown, if it was never made
 		if = {
 			limit = { trait = ice_witch }
 			piety = 50
@@ -164,6 +169,7 @@ character_event = {
 
 	immediate = {
 		set_character_flag = tsar_ursun_trial
+		coronation_regalia_effect = yes # The Frost Crown, if it was never made
 		character_event = { id = tsar.6 days = 1825 }
 	}
 
@@ -1209,5 +1215,439 @@ character_event = {
 		name = EVTOPTBtsar64
 		event_target:tsar_ball_witch = { opinion = { who = ROOT modifier = opinion_tsar_favoured } }
 		ai_chance = { factor = 30 }
+	}
+}
+
+
+###############################################################################
+# The Chekist
+# Namespace: chekist
+# Faction: Kislev
+#
+# The Tzar(ina)'s secret police, and Kislev's witch hunters. The Chekist is a
+# fourth witch hunter chapter (society kislev_chekist, trait chekist, court
+# title title_court_chekist): Kislevites of Kislev's gods get it instead of
+# the Order of Sigmar, through the same training, wandering hunters and hunts
+# (whunter_chapter_member_trigger, whunter_chekist_lands_trigger). A Court
+# Chekist finds plots (chekist_network) and can arrest cultists, mutants and
+# dissenters. The office has its excesses, and a Chekist who grows too strong
+# may turn on a ruler nobody fears. Komi's proposal doc, segment 4.
+#
+# The first Chekist                          chekist.1
+# Arrests                                    chekist.5
+# Excesses and betrayal                      chekist.10 - 12
+# A house for the Chekist                    chekist.20
+#
+# Fired from common/on_actions/wh_on_actions.txt: chekist.1 on_startup, the
+# five-year list chekist_excess (10, 11, 20) on the ruler; chekist.12 from
+# chekist.11. decisions/WHG_kislev_crown_decisions.txt orders arrests
+# (chekist.5).
+# Scripted triggers: common/scripted_triggers/wh_witch_hunter_triggers.txt
+# Event modifiers: common/event_modifiers/wh_kislev_crown_modifiers.txt
+# Opinion modifiers: common/opinion_modifiers/wh_kislev_crown_opinions.txt
+# Loc: localisation/00_WHG_kislev_crown_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = chekist
+
+###############################################################################
+# The first Chekist
+###############################################################################
+
+# chekist.1 The Tzar(ina)'s Chekist
+# Hidden. At the start of the game the ruler of Kislev has a Court Chekist:
+# the Master of the Chekist at the Black Gate (73600, 2010 start) or a new one.
+# Scope: ROOT holds e_kislev.
+character_event = {
+	id = chekist.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_startup
+	only_rulers = yes
+
+	trigger = {
+		has_landed_title = e_kislev
+		whunter_chekist_lands_trigger = yes
+		NOT = { has_global_flag = chekist_founded }
+		NOT = { any_courtier = { has_minor_title = title_court_chekist } }
+	}
+
+	immediate = {
+		set_global_flag = chekist_founded
+		if = { # the 2010 start: the Master of the Chekist at the Black Gate takes the seat
+			limit = { any_vassal = { has_character_flag = chekist_master_2010 } }
+			random_vassal = {
+				limit = { has_character_flag = chekist_master_2010 }
+				give_minor_title = title_court_chekist
+			}
+		}
+		else = {
+			create_character = {
+				random_traits = yes
+				dynasty = random
+				religion = kislev_gods
+				culture = ROOT
+				female = no
+				age = 45
+				attributes = { intrigue = 15 learning = 10 martial = 8 }
+				trait = creature_human
+				trait = chekist
+				trait = paranoid
+			}
+			new_character = {
+				set_character_flag = ai_flag_refuse_marriage
+				join_society = kislev_chekist
+				give_minor_title = title_court_chekist
+			}
+		}
+	}
+}
+
+###############################################################################
+# Arrests
+###############################################################################
+
+# chekist.5 The Chekist's arrest
+# The Court Chekist brings in the one the ruler ordered taken
+# (decision chekist_arrest): a cultist, a mutant, a suspect, or a vassal
+# who speaks against the crown. Taking a dissenter frightens the other
+# vassals.
+# Scope: ROOT is the ruler; event_target:chekist_quarry the one arrested.
+character_event = {
+	id = chekist.5
+	desc = {
+		trigger = { has_character_flag = chekist_took_dissenter }
+		text = EVTDESCchekist5b
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = chekist_took_dissenter } }
+		text = EVTDESCchekist5
+	}
+	picture = GFX_evt_witch_hunters
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # chekist_arrest
+
+	option = {
+		name = EVTOPTAchekist5
+		if = {
+			limit = { has_character_flag = chekist_took_dissenter }
+			any_vassal = {
+				limit = { NOT = { character = event_target:chekist_quarry } }
+				opinion = { who = ROOT modifier = opinion_chekist_fear }
+			}
+		}
+		else = {
+			piety = 25
+			# A Chaos cult broken in Kislev pushes the doom back a little (WHG_bulwark)
+			if = {
+				limit = {
+					event_target:chekist_quarry = { is_cultist_trigger = yes }
+					capital_scope = { region = world_old_world_kislev }
+				}
+				reduce_doom_progress_tiny_effect = yes
+			}
+		}
+		clr_character_flag = chekist_took_dissenter
+	}
+}
+
+###############################################################################
+# Excesses and betrayal
+###############################################################################
+
+# chekist.10 A boyar on the rack
+# The Chekist has tortured a boyar who turned out to be innocent. Punish the
+# Chekist, pay the family blood money, or say nothing (the vassals learn to
+# fear the Chekist).
+# Scope: ROOT keeps a Court Chekist; event_target:chekist_officer the Chekist,
+# event_target:chekist_victim the boyar.
+character_event = {
+	id = chekist.10
+	desc = EVTDESCchekist10
+	picture = GFX_evt_witch_hunter_pyre
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_five_year_pulse chekist_excess
+
+	only_rulers = yes
+
+	trigger = {
+		any_courtier = { has_minor_title = title_court_chekist }
+		any_vassal = { is_adult = yes culture_group = kislevite_group }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { has_minor_title = title_court_chekist }
+			save_event_target_as = chekist_officer
+		}
+		random_vassal = {
+			limit = { is_adult = yes culture_group = kislevite_group }
+			save_event_target_as = chekist_victim
+			add_trait = wounded
+		}
+	}
+
+	# Punish the Chekist
+	option = {
+		name = EVTOPTAchekist10
+		event_target:chekist_officer = {
+			opinion = { who = ROOT modifier = opinion_chekist_curbed }
+			prestige = -50
+		}
+		event_target:chekist_victim = { opinion = { who = ROOT modifier = opinion_grateful } }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = just }
+		}
+	}
+
+	# Blood money
+	option = {
+		name = EVTOPTBchekist10
+		trigger = { wealth = 50 }
+		wealth = -50
+		ai_chance = { factor = 40 }
+	}
+
+	# Say nothing
+	option = {
+		name = EVTOPTCchekist10
+		event_target:chekist_victim = { opinion = { who = ROOT modifier = opinion_chekist_tortured_kin } }
+		any_vassal = {
+			limit = { NOT = { character = event_target:chekist_victim } }
+			opinion = { who = ROOT modifier = opinion_chekist_fear }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = cruel }
+		}
+	}
+}
+
+# chekist.11 The Chekist's own web
+# The Chekist has been building a web of informers loyal only to him. Let
+# him (a better network, but he grows dangerous), curb him, or dismiss him.
+# A dangerous Chekist may turn on a ruler nobody fears (chekist.12).
+# Scope: ROOT keeps a Court Chekist; event_target:chekist_officer the Chekist.
+character_event = {
+	id = chekist.11
+	desc = EVTDESCchekist11
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_five_year_pulse chekist_excess
+
+	only_rulers = yes
+
+	trigger = {
+		any_courtier = {
+			has_minor_title = title_court_chekist
+			NOT = { has_character_flag = chekist_own_web }
+		}
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = {
+				has_minor_title = title_court_chekist
+				NOT = { has_character_flag = chekist_own_web }
+			}
+			save_event_target_as = chekist_officer
+		}
+	}
+
+	# Let him
+	option = {
+		name = EVTOPTAchekist11
+		event_target:chekist_officer = { set_character_flag = chekist_own_web }
+		add_character_modifier = { name = chekist_own_web years = 5 }
+		if = {
+			limit = {
+				NOR = {
+					trait = cruel
+					trait = wroth
+					trait = impaler
+					trait = paranoid
+				}
+			}
+			character_event = { id = chekist.12 days = 730 random = 1095 }
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = paranoid }
+		}
+	}
+
+	# Curb him
+	option = {
+		name = EVTOPTBchekist11
+		event_target:chekist_officer = { opinion = { who = ROOT modifier = opinion_chekist_curbed } }
+		ai_chance = { factor = 40 }
+	}
+
+	# Dismiss him
+	option = {
+		name = EVTOPTCchekist11
+		event_target:chekist_officer = {
+			remove_title = title_court_chekist
+			opinion = { who = ROOT modifier = opinion_chekist_curbed }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = just }
+		}
+	}
+}
+
+# chekist.12 The Chekist turns
+# The Chekist with his own web moves against a ruler who is not feared. Strike
+# first (one time in three he escapes to another court with his secrets),
+# or buy him off.
+# Scope: ROOT keeps the Chekist with his own web.
+character_event = {
+	id = chekist.12
+	desc = EVTDESCchekist12
+	picture = GFX_evt_witch_hunters
+	border = GFX_event_narrative_frame_intrigue
+
+	is_triggered_only = yes # chekist.11
+
+	trigger = {
+		is_alive = yes
+		any_courtier = {
+			has_minor_title = title_court_chekist
+			has_character_flag = chekist_own_web
+			prisoner = no
+		}
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = {
+				has_minor_title = title_court_chekist
+				has_character_flag = chekist_own_web
+			}
+			save_event_target_as = chekist_officer
+			clr_character_flag = chekist_own_web
+		}
+	}
+
+	# Strike first
+	option = {
+		name = EVTOPTAchekist12
+		random_list = {
+			67 = {
+				modifier = { factor = 1.5 intrigue = 14 }
+				event_target:chekist_officer = { imprison = ROOT }
+				prestige = 50
+			}
+			33 = {
+				event_target:chekist_officer = {
+					remove_title = title_court_chekist
+					opinion = { who = ROOT modifier = opinion_chekist_tortured_kin }
+				}
+				# He flees to a rival court, or any other court, with his secrets
+				random_independent_ruler = {
+					limit = {
+						NOT = { character = ROOT }
+						prisoner = no
+					}
+					preferred_limit = { is_rival = ROOT }
+					preferred_limit = { opinion = { who = ROOT value < 0 } }
+					event_target:chekist_officer = { move_character = PREV }
+				}
+				any_vassal = { opinion = { who = ROOT modifier = opinion_chekist_fear } }
+				prestige = -50
+			}
+		}
+		ai_chance = { factor = 60 }
+	}
+
+	# Buy him off
+	option = {
+		name = EVTOPTBchekist12
+		trigger = { wealth = 100 }
+		wealth = -100
+		ai_chance = { factor = 40 }
+	}
+}
+
+###############################################################################
+# A house for the Chekist
+###############################################################################
+
+# chekist.20 A house for the Chekist
+# Like the Order of Sigmar, the Chekist wants a castle of its own: a senior
+# Chekist at court asks for a castle barony of the ruler's lands. Grant it
+# (he becomes a vassal; Chekist standing), or refuse. Once in ten years.
+# Scope: ROOT is a Kislevite ruler with a free castle barony;
+# event_target:chekist_officer the Chekist.
+character_event = {
+	id = chekist.20
+	desc = EVTDESCchekist20
+	picture = GFX_evt_castle_construction
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # on_five_year_pulse chekist_excess
+
+	only_rulers = yes
+
+	trigger = {
+		higher_tier_than = COUNT
+		NOT = { has_character_modifier = chekist_house_cd }
+		any_courtier = {
+			society_member_of = kislev_chekist
+			society_rank >= 2
+			is_adult = yes
+			prisoner = no
+		}
+		any_demesne_title = {
+			tier = BARON
+			holding_type = castle
+			NOT = { is_capital = yes }
+		}
+	}
+
+	immediate = {
+		add_character_modifier = { name = chekist_house_cd years = 10 hidden = yes }
+		random_courtier = {
+			limit = {
+				society_member_of = kislev_chekist
+				society_rank >= 2
+				is_adult = yes
+				prisoner = no
+			}
+			preferred_limit = { has_minor_title = title_court_chekist }
+			save_event_target_as = chekist_officer
+		}
+		random_demesne_title = {
+			limit = {
+				tier = BARON
+				holding_type = castle
+				NOT = { is_capital = yes }
+			}
+			save_event_target_as = chekist_house
+		}
+	}
+
+	# Grant it
+	option = {
+		name = EVTOPTAchekist20
+		event_target:chekist_officer = {
+			grant_title = event_target:chekist_house
+			change_society_currency = 200
+			opinion = { who = ROOT modifier = opinion_chekist_house_granted }
+		}
+		ai_chance = { factor = 50 }
+	}
+
+	# Refuse
+	option = {
+		name = EVTOPTBchekist20
+		event_target:chekist_officer = { opinion = { who = ROOT modifier = opinion_chekist_house_refused } }
+		ai_chance = { factor = 50 }
 	}
 }

@@ -1,0 +1,581 @@
+###############################################################################
+# Realm events
+# Namespace: realm (was HFP.40000 - HFP.40038, HFP.24120, HFP.99999 in
+#   HFP_realm_events)
+# Faction: Diplomacy & realms
+# Serves: the Empire, the cult of Sigmar, the merchant republics, the
+#   Border Princes, the conquerors of Araby
+#
+# The vanilla realm-forming news (vanilla decisions/HFP_realm_decisions),
+# moved to the mod's own analogues:
+# - Papal States lost -> the Grand Theogonist cast out (1-2): when he loses
+#   the last of the temple's lands in a war, every Sigmarite ruler hears of
+#   it, at most once a decade;
+# - Venice, Genoa, Pisa, Amalfi -> any merchant republic that takes a crown
+#   (10);
+# - Switzerland, Antioch, Cyprus -> the Border Princes refound the Eagle
+#   and Northern Border Confederacies, Khypria and Myrmidens (20-21);
+# - the Eastern Marches -> the East March: the Elector of Ostermark becomes
+#   Warden of the eastern frontier (30-32);
+# - the Archduchy of Austria -> a favoured duke of Ostland is raised to
+#   Grand Prince by the Emperor (35-36);
+# - Outremer -> a ruler of the Old World faiths or of the Lady who takes
+#   the crown of Araby founds the Blood of the Conqueror of Araby (40-41);
+# - the papal guards -> the Knights of the Griffon raised again (60);
+# - the Slavic union -> the Union of the Old Peoples: a free Ungol or
+#   Ropsmann king who rules many lands of both peoples unites them against
+#   the Gospodar tsars, and their lands hold out against the Kislevite
+#   melting pot (70-71). Very rare, once per game.
+# The HRE stem duchies are the de jure realms of Drakwald and Solland
+# (wh_empire_decisions, ee.1-4), which the Emperor may now restore too.
+#
+# The Grand Theogonist cast out   realm.1 - realm.2
+# Merchant crowns                 realm.10
+# The Border Princes refounded    realm.20 - realm.21
+# The East March                  realm.30 - realm.32
+# The Grand Prince of Ostland     realm.35 - realm.36
+# The fall of Araby               realm.40 - realm.41
+# The Griffons return             realm.60
+# The Union of the Old Peoples    realm.70 - realm.71
+#
+# Saved: global flags east_march_proclaimed, grand_prince_ostland_raised,
+#   araby_conquered_by_old_world, old_peoples_united; title flags gt_cast_out
+#   (k_cult_of_sigmar), east_march (k_ostermark); character flags
+#   realm_refound_<eagle|northern|khypria|myrmidens>; character modifier
+#   warden_of_the_east_march; event targets grand_theogonist,
+#   griffon_grandmaster; unit earmark old_peoples_host.
+#
+# Callers:
+#   common/scripted_effects/00_scripted_effects.txt (landless_pope_effect:
+#     1), run by the CBs when a war is lost;
+#   common/on_actions/00_on_actions.txt: on_create_title (10, 40),
+#     on_new_holder, on_new_holder_inheritance, on_new_holder_usurpation
+#     (32);
+#   decisions/WHG_realm_decisions.txt (realm_refound_*: 20,
+#     realm_east_march: 30, realm_grand_prince_ostland: 35,
+#     realm_refound_griffons: 60, realm_old_peoples_union: 70).
+#
+# Already covered elsewhere: the Hansa is the Marienburg League (REP.50-61),
+# the HRE electors are the Elector Counts, the crusader orders are the
+# mod's own holy orders. Not carried over: Byzantium.
+###############################################################################
+
+namespace = realm
+
+###############################################################################
+# The Grand Theogonist cast out
+###############################################################################
+
+# realm.1 The temple's last lands are lost (hidden)
+# Scope: the Grand Theogonist, who holds no land and whose realm holds none.
+character_event = {
+	id = realm.1
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_landed_title = k_cult_of_sigmar
+		k_cult_of_sigmar = { NOT = { had_title_flag = { flag = gt_cast_out days = 3650 } } }
+	}
+
+	immediate = {
+		k_cult_of_sigmar = { clr_title_flag = gt_cast_out set_title_flag = gt_cast_out }
+		save_event_target_as = grand_theogonist
+		narrative_event = { id = realm.2 }
+		any_playable_ruler = {
+			limit = { religion = sigmarite NOT = { character = ROOT } }
+			narrative_event = { id = realm.2 }
+		}
+	}
+}
+
+# realm.2 The Grand Theogonist cast out (news)
+# Scope: a Sigmarite ruler, or the Grand Theogonist.
+narrative_event = {
+	id = realm.2
+	title = EVTTITLErealm2
+	desc = { trigger = { character = event_target:grand_theogonist } text = EVTDESCrealm2_gt }
+	desc = {
+		trigger = { NOT = { character = event_target:grand_theogonist } }
+		text = EVTDESCrealm2
+	}
+	picture = GFX_evt_cathedral
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	option = { #The Grand Theogonist
+		name = EVTOPTArealm2
+		trigger = { character = event_target:grand_theogonist }
+		piety = -100
+	}
+	option = { #A zealot
+		name = EVTOPTBrealm2
+		trigger = { NOT = { character = event_target:grand_theogonist } trait = zealous }
+		piety = 25
+	}
+	option = { #Anyone else
+		name = EVTOPTCrealm2
+		trigger = { NOT = { character = event_target:grand_theogonist } NOT = { trait = zealous } }
+	}
+}
+
+###############################################################################
+# Merchant crowns
+###############################################################################
+
+# realm.10 A merchant republic takes a crown
+# From on_create_title: a merchant republic creates a kingdom (a Tilean
+# city, Marienburg, Sartosa). Scope: the doge; FROM is the new title.
+narrative_event = {
+	id = realm.10
+	title = EVTTITLErealm10
+	desc = EVTDESCrealm10
+	picture = GFX_evt_busy_trading_dock_republic
+	border = GFX_event_narrative_frame_economy
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_merchant_republic = yes
+		FROM = { tier = KING }
+	}
+
+	option = {
+		name = EVTOPTArealm10
+		prestige = 250
+	}
+}
+
+###############################################################################
+# The Border Princes refound their realms
+###############################################################################
+
+# realm.20 A league or principality is refounded
+# From the realm_refound_* decisions (decisions/WHG_realm_decisions.txt).
+# The other rulers of the Border Princes hear of it (realm.21).
+# Scope: the founder.
+narrative_event = {
+	id = realm.20
+	title = { trigger = { has_character_flag = realm_refound_eagle } text = EVTTITLErealm20_eagle }
+	title = {
+		trigger = { has_character_flag = realm_refound_northern }
+		text = EVTTITLErealm20_northern
+	}
+	title = {
+		trigger = { has_character_flag = realm_refound_khypria }
+		text = EVTTITLErealm20_khypria
+	}
+	title = {
+		trigger = { has_character_flag = realm_refound_myrmidens }
+		text = EVTTITLErealm20_myrmidens
+	}
+	desc = { trigger = { has_character_flag = realm_refound_eagle } text = EVTDESCrealm20_eagle }
+	desc = {
+		trigger = { has_character_flag = realm_refound_northern }
+		text = EVTDESCrealm20_northern
+	}
+	desc = {
+		trigger = { has_character_flag = realm_refound_khypria }
+		text = EVTDESCrealm20_khypria
+	}
+	desc = {
+		trigger = { has_character_flag = realm_refound_myrmidens }
+		text = EVTDESCrealm20_myrmidens
+	}
+	picture = GFX_evt_council
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes
+
+	immediate = {
+		any_playable_ruler = {
+			limit = {
+				NOT = { character = ROOT }
+				any_realm_province = { region = world_old_world_border_princes }
+			}
+			narrative_event = { id = realm.21 }
+		}
+	}
+
+	option = {
+		name = EVTOPTArealm20
+		prestige = 250
+	}
+}
+
+# realm.21 News of the refounding
+# Scope: a ruler with land in the Border Princes; FROM is the founder.
+narrative_event = {
+	id = realm.21
+	title = {
+		trigger = { FROM = { has_character_flag = realm_refound_eagle } }
+		text = EVTTITLErealm20_eagle
+	}
+	title = {
+		trigger = { FROM = { has_character_flag = realm_refound_northern } }
+		text = EVTTITLErealm20_northern
+	}
+	title = {
+		trigger = { FROM = { has_character_flag = realm_refound_khypria } }
+		text = EVTTITLErealm20_khypria
+	}
+	title = {
+		trigger = { FROM = { has_character_flag = realm_refound_myrmidens } }
+		text = EVTTITLErealm20_myrmidens
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = realm_refound_eagle } }
+		text = EVTDESCrealm21_eagle
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = realm_refound_northern } }
+		text = EVTDESCrealm21_northern
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = realm_refound_khypria } }
+		text = EVTDESCrealm21_khypria
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = realm_refound_myrmidens } }
+		text = EVTDESCrealm21_myrmidens
+	}
+	picture = GFX_evt_throne_room
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArealm21
+	}
+}
+
+###############################################################################
+# The East March (Ostermark)
+###############################################################################
+
+# realm.30 The East March proclaimed
+# From realm_east_march. Scope: the Elector of Ostermark.
+narrative_event = {
+	id = realm.30
+	title = EVTTITLErealm30
+	desc = EVTDESCrealm30
+	picture = GFX_evt_empire_eastern
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		any_playable_ruler = {
+			limit = { NOT = { character = ROOT } culture_group = imperial_group }
+			narrative_event = { id = realm.31 }
+		}
+	}
+
+	option = {
+		name = EVTOPTArealm30
+	}
+}
+
+# realm.31 News of the East March
+# Scope: an Imperial ruler; FROM is the Elector of Ostermark.
+narrative_event = {
+	id = realm.31
+	title = EVTTITLErealm30
+	desc = EVTDESCrealm31
+	picture = GFX_evt_empire_eastern
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArealm31
+	}
+}
+
+# realm.32 The wardenship passes with Ostermark (hidden)
+# From on_new_holder, on_new_holder_inheritance, on_new_holder_usurpation.
+# Scope: the new holder; FROM is the title; FROMFROM the old holder.
+character_event = {
+	id = realm.32
+	hide_window = yes
+
+	is_triggered_only = yes
+	only_rulers = yes
+
+	trigger = {
+		has_global_flag = east_march_proclaimed
+		FROM = { title = k_ostermark has_title_flag = east_march }
+	}
+
+	immediate = {
+		add_character_modifier = { modifier = warden_of_the_east_march duration = -1 }
+		FROMFROM = {
+			if = {
+				limit = { NOT = { has_landed_title = k_ostermark } }
+				remove_character_modifier = warden_of_the_east_march
+			}
+		}
+	}
+}
+
+###############################################################################
+# The Grand Prince of Ostland
+###############################################################################
+
+# realm.35 Raised to Grand Prince
+# From realm_grand_prince_ostland. Scope: the new Grand Prince.
+narrative_event = {
+	id = realm.35
+	title = EVTTITLErealm35
+	desc = EVTDESCrealm35
+	picture = GFX_evt_throne_room
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes
+
+	immediate = {
+		any_playable_ruler = {
+			limit = { NOT = { character = ROOT } culture_group = imperial_group }
+			narrative_event = { id = realm.36 }
+		}
+	}
+
+	option = {
+		name = EVTOPTArealm35
+		prestige = 250
+	}
+}
+
+# realm.36 News of the Grand Prince
+# Scope: an Imperial ruler; FROM is the new Grand Prince.
+narrative_event = {
+	id = realm.36
+	title = EVTTITLErealm35
+	desc = EVTDESCrealm36
+	picture = GFX_evt_throne_room
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArealm36
+	}
+}
+
+###############################################################################
+# Araby conquered (Outremer)
+###############################################################################
+
+# realm.40 Araby falls to the Old World
+# From on_create_title: a ruler of the Old World faiths or of the Lady takes
+# the crown of Araby. They found the Blood of the Conqueror of Araby
+# (lord_of_outremer). Scope: the conqueror; FROM is e_araby.
+narrative_event = {
+	id = realm.40
+	title = EVTTITLErealm40
+	desc = EVTDESCrealm40
+	picture = GFX_evt_araby_crusade
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { title = e_araby }
+		OR = { religion_group = old_world_group religion = grail }
+		NOT = { has_global_flag = araby_conquered_by_old_world }
+	}
+
+	immediate = {
+		set_global_flag = araby_conquered_by_old_world
+		any_playable_ruler = {
+			limit = { NOT = { character = ROOT } }
+			narrative_event = { id = realm.41 }
+		}
+	}
+
+	option = {
+		name = EVTOPTArealm40
+		prestige = 1000
+		if = {
+			limit = { is_female = yes }
+			create_bloodline = { type = lord_of_outremer inheritance = matrilineal }
+		}
+		else = { create_bloodline = { type = lord_of_outremer } }
+		set_bloodline_founder_religion_flag_effect = yes
+	}
+}
+
+# realm.41 News of the fall of Araby
+# Scope: any ruler; FROM is the conqueror.
+narrative_event = {
+	id = realm.41
+	title = EVTTITLErealm40
+	desc = { trigger = { religion_group = ormazd_gods_group } text = EVTDESCrealm41_araby }
+	desc = { trigger = { NOT = { religion_group = ormazd_gods_group } } text = EVTDESCrealm41 }
+	picture = GFX_evt_araby_crusade
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArealm41
+		trigger = { NOT = { religion_group = ormazd_gods_group } }
+	}
+	option = {
+		name = EVTOPTBrealm41
+		trigger = { religion_group = ormazd_gods_group }
+	}
+}
+
+###############################################################################
+# The Knights of the Griffon raised again (the papal guards)
+###############################################################################
+
+# realm.60 The Griffons return
+# From realm_refound_griffons: the Templars of the Temple of Sigmar are
+# raised again after the order fell. Scope: the Grand Theogonist or a
+# Sigmarite Emperor.
+narrative_event = {
+	id = realm.60
+	title = EVTTITLErealm60
+	desc = EVTDESCrealm60
+	picture = GFX_evt_cathedral
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		activate_title = { title = d_knights_griffon status = yes }
+		create_character = {
+			random_traits = yes
+			dynasty = random
+			religion = sigmarite
+			culture = ROOT
+			female = no
+			age = 40
+			attributes = { martial = 14 learning = 8 }
+			trait = creature_human
+			trait = zealous
+			trait = brave
+		}
+		new_character = {
+			save_event_target_as = griffon_grandmaster
+			grant_title = d_knights_griffon
+			set_government_type = order_government
+			set_defacto_liege = ROOT
+			opinion = { modifier = opinion_grateful who = ROOT years = 20 }
+		}
+	}
+
+	option = {
+		name = EVTOPTArealm60
+	}
+}
+
+###############################################################################
+# The Union of the Old Peoples
+###############################################################################
+
+# realm.70 The old peoples unite
+# From realm_old_peoples_union (decisions/WHG_realm_decisions.txt). The
+# Tsar and the other rulers of Kislev hear of it (realm.71). The founder
+# may raise a steppe host (once per game, as the union is).
+# Scope: the founder (Ungol or Ropsmann).
+narrative_event = {
+	id = realm.70
+	title = EVTTITLErealm70
+	desc = { trigger = { culture = ropsmann } text = EVTDESCrealm70_ropsmann }
+	desc = { trigger = { NOT = { culture = ropsmann } } text = EVTDESCrealm70_ungol }
+	picture = GFX_evt_council
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes
+
+	immediate = {
+		any_playable_ruler = {
+			limit = {
+				NOT = { character = ROOT }
+				OR = {
+					has_landed_title = e_kislev
+					any_realm_province = { region = world_old_world_kislev }
+				}
+			}
+			narrative_event = { id = realm.71 }
+		}
+	}
+
+	# Raise the host of the old peoples.
+	option = {
+		name = EVTOPTArealm70
+		capital_scope = {
+			spawn_unit = {
+				province = PREV
+				owner = ROOT
+				troops = { horse_archers = { 300 300 } light_cavalry = { 150 150 } }
+				earmark = old_peoples_host
+				maintenance_multiplier = 0.5
+			}
+		}
+		ai_chance = { factor = 2 }
+	}
+
+	# Keep the old ways at home: the khans and stanitsas rally to the union.
+	option = {
+		name = EVTOPTBrealm70
+		prestige = 300
+		any_vassal = {
+			limit = { OR = { culture = ungol culture = ropsmann } }
+			opinion = { modifier = opinion_happy who = ROOT years = 10 }
+		}
+		ai_chance = { factor = 1 }
+	}
+}
+
+# realm.71 News of the union
+# Scope: the Tsar, or a ruler with land in Kislev; FROM is the founder.
+narrative_event = {
+	id = realm.71
+	title = EVTTITLErealm70
+	desc = { trigger = { has_landed_title = e_kislev } text = EVTDESCrealm71_tsar }
+	desc = {
+		trigger = {
+			NOT = { has_landed_title = e_kislev }
+			OR = { culture = ungol culture = ropsmann }
+		}
+		text = EVTDESCrealm71_kin
+	}
+	desc = {
+		trigger = {
+			NOT = { has_landed_title = e_kislev }
+			NOR = { culture = ungol culture = ropsmann }
+		}
+		text = EVTDESCrealm71
+	}
+	picture = GFX_evt_throne_room
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArealm71_tsar
+		trigger = { has_landed_title = e_kislev }
+		opinion = { modifier = opinion_angry who = FROM years = 20 }
+	}
+	option = {
+		name = EVTOPTArealm71_kin
+		trigger = {
+			NOT = { has_landed_title = e_kislev }
+			OR = { culture = ungol culture = ropsmann }
+		}
+		opinion = { modifier = opinion_happy who = FROM years = 10 }
+	}
+	option = {
+		name = EVTOPTArealm71
+		trigger = {
+			NOT = { has_landed_title = e_kislev }
+			NOR = { culture = ungol culture = ropsmann }
+		}
+	}
+}

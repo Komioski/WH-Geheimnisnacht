@@ -68,6 +68,10 @@
 # Scripted triggers: common/scripted_triggers/wh_dawi_triggers.txt
 # Scripted effects: common/scripted_effects/wh_dawi_effects.txt
 # Loc: localisation/00_WHG_dwarf_events.csv
+#
+# Also in this file (each part keeps its own header and namespace):
+#   Council of Elders events (namespace dawielder, was WHG_dawi_elder_events)
+#   Underway events (namespace underway, was WHG_underway_events)
 ###############################################################################
 
 namespace = dawi
@@ -6049,5 +6053,1215 @@ character_event = {
 			modifier = { factor = 2 trait = zealous }
 			modifier = { factor = 0.2 is_ruler = yes }
 		}
+	}
+}
+
+
+###############################################################################
+# Council of Elders events
+# Namespace: dawielder
+# Faction: Dwarfs
+#
+# The clan elders of the Dawi (dawi_elder_council): joining, AI recruits,
+# the rank powers, and the life of a council. Kings, thanes and Longbeards
+# sit together: the head of every clan speaks for it, and every Dawi of
+# great age and beard has a seat by right.
+#
+# Lore: Dawi defer to the old. At 150 a Dawi becomes an Elder of the clan
+# and sits on its Elder Council, which weighs any matter touching the clan
+# and judges breaches of Dwarf law; past 200 he is a Great Beard, past 400 a
+# Living Ancestor. The elders keep the clan's Book of Grudges and its Book
+# of Debt, settle which Full Beard takes an apprentice, give nicknames,
+# agree the date of the Day of Remembrance, fine those guilty of crimes
+# against property, and can end a blood-feud when the guilty pay
+# compensation. The king picks the judges of a tribunal, and the accused
+# swear under oath to Grungni and Valaya. A hold's Elder Loremaster keeps
+# the clan names.
+# Sources: WFRP 4E Dwarf Player's Guide (Social Structure and Stages of Life
+# p.29-32, Book of Debt and Honour Debts p.35, Dwarf law and feuds p.37,
+# nicknames and clan names p.54, holy days p.138).
+#
+# Joining and AI recruits                dawielder.1 - dawielder.6
+# Rank powers                            dawielder.10 - dawielder.21
+# Life of the council                    dawielder.30 - dawielder.35
+#
+# Callers:
+#   on_actions (wh_on_actions.txt): dawielder.1
+#     on_character_ask_to_join_society, dawielder.5 five-year pulse, the
+#     dawielder_council_life bi-yearly random list (dawielder.30 - .35).
+#   decisions/WHG_dawi_elder_decisions.txt: dawielder.10, 12, 13, 14, 15,
+#     16, 18, 20, 21.
+# Scripted triggers: common/scripted_triggers/wh_dawi_elder_triggers.txt
+# Event modifiers: common/event_modifiers/wh_dawi_elder_modifiers.txt
+# Grudge effects: common/scripted_effects/wh_dawi_effects.txt
+# Loc: localisation/00_WHG_dwarf_events.csv
+###############################################################################
+
+namespace = dawielder
+
+###############################################################################
+# Joining and AI recruits
+###############################################################################
+
+# dawielder.1 Asking to join the council
+# Scope: ROOT is the applicant, FROM is the society.
+character_event = {
+	id = dawielder.1
+	hide_window = yes
+	is_triggered_only = yes # on_character_ask_to_join_society
+
+	trigger = {
+		FROM = { leader = { society_member_of = dawi_elder_council } }
+	}
+
+	immediate = {
+		FROM = { leader = { character_event = { id = dawielder.2 } } }
+	}
+}
+
+# dawielder.2 Welcome letter ping
+# Scope: ROOT is the Elder Loremaster, FROM is the applicant.
+character_event = {
+	id = dawielder.2
+	hide_window = yes
+	is_triggered_only = yes # dawielder.1
+
+	immediate = {
+		FROM = { letter_event = { id = dawielder.3 } }
+	}
+}
+
+# dawielder.3 A seat at the long table
+# Scope: ROOT is the applicant, FROM is the Elder Loremaster.
+letter_event = {
+	id = dawielder.3
+	desc = { trigger = { is_ruler = yes } text = EVTDESCdawielder3a }
+	desc = { trigger = { is_ruler = no } text = EVTDESCdawielder3b }
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes # dawielder.2
+
+	option = {
+		name = EVTOPTAdawielder3
+		join_society = dawi_elder_council
+	}
+}
+
+# dawielder.5 AI recruits
+# Every five years the old and the clan heads of a Dawi court may take their
+# seats among the elders.
+# Scope: ROOT is a ruler.
+character_event = {
+	id = dawielder.5
+	hide_window = yes
+	is_triggered_only = yes # on_five_year_pulse
+	only_rulers = yes
+	religion_group = dwarf_gods_group
+
+	immediate = {
+		any_courtier = {
+			limit = { dawielder_ai_recruit_trigger = yes }
+			character_event = { id = dawielder.6 }
+		}
+		if = {
+			limit = { dawielder_ai_recruit_trigger = yes }
+			character_event = { id = dawielder.6 }
+		}
+	}
+}
+
+# dawielder.6 An AI recruit takes his seat (or not)
+# Scope: ROOT is the candidate.
+character_event = {
+	id = dawielder.6
+	hide_window = yes
+	is_triggered_only = yes # dawielder.5
+
+	trigger = {
+		NOT = { is_society_rank_full = { society = dawi_elder_council rank = 1 } }
+	}
+
+	immediate = {
+		random_list = {
+			85 = { }
+			15 = {
+				modifier = { factor = 3 is_ruler = yes }
+				modifier = { factor = 2 higher_tier_than = COUNT }
+				modifier = { factor = 2 trait = longbeard }
+				modifier = { factor = 1.5 trait = patient }
+				modifier = { factor = 1.5 trait = just }
+				modifier = { factor = 0.5 trait = infirm }
+				join_society = dawi_elder_council
+			}
+		}
+	}
+}
+
+###############################################################################
+# Rank powers
+# The decisions in WHG_dawi_elder_decisions.txt fire these. A power that
+# judges or advises serves the elder's lord (event_target:dawielder_lord):
+# the elder himself if he rules, or else his liege.
+###############################################################################
+
+# dawielder.10 The sagas of the clan
+# The elders teach the beardlings the deeds of the ancestors, told plain:
+# a Dawi saga needs no fine words.
+# Scope: ROOT is the elder.
+character_event = {
+	id = dawielder.10
+	desc = EVTDESCdawielder10
+	picture = GFX_evt_dwarf_seated_book
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawielder_tell_the_sagas
+
+	option = { # The founding of the hold
+		name = EVTOPTAdawielder10
+		prestige = 50
+		change_society_currency = 25
+		ai_chance = { factor = 1 modifier = { factor = 2 stewardship = 12 } }
+	}
+	option = { # The clan's oaths and its Dwarf-friends
+		name = EVTOPTBdawielder10
+		add_character_modifier = { name = dawielder_saga_teller years = 5 }
+		ai_chance = { factor = 1 modifier = { factor = 2 diplomacy = 12 } }
+	}
+	option = { # The grudges the clan still carries
+		name = EVTOPTCdawielder10
+		piety = 50
+		if = { limit = { is_ruler = yes } prestige = 25 }
+		ai_chance = { factor = 1 modifier = { factor = 2 martial = 12 } }
+	}
+}
+
+# dawielder.12 A name is given
+# A Dawi may not choose his own nickname; the elders give it, and it must be
+# true. An unflattering one sticks for life.
+# Scope: ROOT is the elder. event_target:dawielder_named is the Dawi named.
+character_event = {
+	id = dawielder.12
+	desc = EVTDESCdawielder12
+	picture = GFX_evt_dwarf_king_seated
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawielder_bestow_nickname
+
+	immediate = {
+		if = {
+			limit = { any_vassal = { dawielder_name_candidate_trigger = yes } }
+			random_vassal = {
+				limit = { dawielder_name_candidate_trigger = yes }
+				save_event_target_as = dawielder_named
+			}
+		}
+		else_if = {
+			limit = { any_courtier = { dawielder_name_candidate_trigger = yes } }
+			random_courtier = {
+				limit = { dawielder_name_candidate_trigger = yes }
+				save_event_target_as = dawielder_named
+			}
+		}
+		else = {
+			liege = {
+				random_courtier = {
+					limit = { dawielder_name_candidate_trigger = yes }
+					save_event_target_as = dawielder_named
+				}
+			}
+		}
+	}
+
+	option = { # A name of his deeds
+		name = EVTOPTAdawielder12
+		event_target:dawielder_named = {
+			random_list = {
+				20 = { give_nickname = nick_ironhelm }
+				20 = { give_nickname = nick_hammerfist }
+				20 = { give_nickname = nick_stoneanvil }
+				20 = { give_nickname = nick_irongrip }
+				20 = { give_nickname = nick_sharpedge }
+			}
+			opinion = { who = ROOT modifier = opinion_grateful years = 10 }
+		}
+		prestige = 25
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0.1 event_target:dawielder_named = { is_rival = ROOT } }
+		}
+	}
+	option = { # A name of his wisdom
+		name = EVTOPTBdawielder12
+		event_target:dawielder_named = {
+			if = { limit = { trait = longbeard } give_nickname = nick_greybeard }
+			else = {
+				random_list = {
+					50 = { give_nickname = nick_strongwill }
+					50 = { give_nickname = nick_oath_holder }
+				}
+			}
+			opinion = { who = ROOT modifier = opinion_grateful years = 10 }
+		}
+		piety = 25
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0.1 event_target:dawielder_named = { is_rival = ROOT } }
+		}
+	}
+	option = { # Wazzock. It is the truth.
+		name = EVTOPTCdawielder12
+		event_target:dawielder_named = {
+			give_nickname = nick_wazzock
+			prestige = -50
+			opinion = { who = ROOT modifier = opinion_dislikes_nickname years = 20 }
+		}
+		prestige = 10
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 20 event_target:dawielder_named = { is_rival = ROOT } }
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 0.2 trait = kind }
+		}
+	}
+}
+
+# dawielder.13 The Day of Remembrance
+# Each kingdom and clan keeps the Day of Remembrance on a date of its own,
+# and the elders agree which.
+# Scope: ROOT is the elder.
+character_event = {
+	id = dawielder.13
+	desc = EVTDESCdawielder13
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # dawielder_day_of_remembrance
+
+	immediate = {
+		if = { limit = { is_ruler = yes } save_event_target_as = dawielder_lord }
+		else = { liege = { save_event_target_as = dawielder_lord } }
+	}
+
+	option = { # The day the first stone of the hold was cut
+		name = EVTOPTAdawielder13
+		change_society_currency = 50
+		piety = 50
+		ai_chance = { factor = 1 modifier = { factor = 2 stewardship = 12 } }
+	}
+	option = { # The day of the clan's greatest victory
+		name = EVTOPTBdawielder13
+		prestige = 75
+		piety = 25
+		ai_chance = { factor = 1 modifier = { factor = 2 martial = 12 } }
+	}
+	option = { # The day the hold lost the most, kept in mourning
+		name = EVTOPTCdawielder13
+		piety = 100
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = zealous } }
+	}
+
+	after = {
+		event_target:dawielder_lord = {
+			add_character_modifier = { name = dawielder_remembrance_kept years = 5 }
+		}
+		if = {
+			limit = { NOT = { character = event_target:dawielder_lord } }
+			event_target:dawielder_lord = {
+				opinion = { who = ROOT modifier = opinion_grateful years = 5 }
+			}
+		}
+	}
+}
+
+# dawielder.14 The Book of Debt
+# The elders keep the clan's ledger of debts, and an ancestor's unpaid debt
+# falls on his descendants until it is paid in full. Paying it also lifts
+# the shame of a father who died with grudges open (dawi.34) one step.
+# Scope: ROOT is the elder. event_target:dawielder_lord owns the debts.
+character_event = {
+	id = dawielder.14
+	desc = EVTDESCdawielder14
+	picture = GFX_evt_dwarf_grudge_book
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # dawielder_book_of_debt
+
+	immediate = {
+		if = { limit = { is_ruler = yes } save_event_target_as = dawielder_lord }
+		else = { liege = { save_event_target_as = dawielder_lord } }
+	}
+
+	option = { # Call in what is owed to the clan
+		name = EVTOPTAdawielder14
+		event_target:dawielder_lord = {
+			wealth = 75
+			random_vassal = {
+				limit = { trait = creature_dwarf }
+				opinion = { who = PREV modifier = opinion_dislike years = 5 }
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = greedy }
+			modifier = { factor = 2 event_target:dawielder_lord = { NOT = { wealth = 50 } } }
+		}
+	}
+	option = { # Pay what the clan owes, to the last penny
+		name = EVTOPTBdawielder14
+		trigger = { event_target:dawielder_lord = { wealth = 75 } }
+		event_target:dawielder_lord = {
+			wealth = -75
+			prestige = 100
+			add_character_modifier = { name = dawielder_ledger_clean years = 10 }
+			if = {
+				limit = { has_character_modifier = dawi_far_from_ancestors_3 }
+				remove_character_modifier = dawi_far_from_ancestors_3
+				add_character_modifier = { name = dawi_far_from_ancestors_2 duration = -1 }
+			}
+			else_if = {
+				limit = { has_character_modifier = dawi_far_from_ancestors_2 }
+				remove_character_modifier = dawi_far_from_ancestors_2
+				add_character_modifier = { name = dawi_far_from_ancestors_1 duration = -1 }
+			}
+			else_if = {
+				limit = { has_character_modifier = dawi_far_from_ancestors_1 }
+				remove_character_modifier = dawi_far_from_ancestors_1
+			}
+		}
+		ai_chance = {
+			factor = 2
+			modifier = {
+				factor = 3
+				event_target:dawielder_lord = { dawielder_far_from_ancestors_trigger = yes }
+			}
+			modifier = { factor = 1.5 trait = just }
+		}
+	}
+	option = { # Check the tallies and leave the ledger as it stands
+		name = EVTOPTCdawielder14
+		change_society_currency = 50
+		ai_chance = { factor = 1 }
+	}
+}
+
+# dawielder.15 The tribunal
+# A Dawi of another clan is accused of theft. Witnesses speak under oath to
+# Grungni and Valaya, and the judges are quick.
+# Scope: ROOT is the elder. event_target:dawielder_lord is the lord whose
+# court it is.
+character_event = {
+	id = dawielder.15
+	desc = EVTDESCdawielder15
+	picture = GFX_evt_dwarf_king_seated
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawielder_sit_in_judgement
+
+	immediate = {
+		if = { limit = { is_ruler = yes } save_event_target_as = dawielder_lord }
+		else = { liege = { save_event_target_as = dawielder_lord } }
+	}
+
+	option = { # Fine him, and the fine to the wronged clan's lord
+		name = EVTOPTAdawielder15
+		event_target:dawielder_lord = { wealth = 50 }
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = greedy } }
+	}
+	option = { # Sentence him to a year's work on the halls
+		name = EVTOPTBdawielder15
+		event_target:dawielder_lord = {
+			add_character_modifier = { name = dawielder_tribunal_labour years = 5 }
+		}
+		ai_chance = { factor = 1 modifier = { factor = 2 stewardship = 12 } }
+	}
+	option = { # He confessed before the verdict. Grant him leniency.
+		name = EVTOPTCdawielder15
+		event_target:dawielder_lord = {
+			add_character_modifier = { name = dawielder_tribunal_oath years = 5 }
+		}
+		piety = 25
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = just }
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+
+	after = {
+		if = {
+			limit = { NOT = { character = event_target:dawielder_lord } }
+			event_target:dawielder_lord = {
+				opinion = { who = ROOT modifier = opinion_grateful years = 5 }
+			}
+		}
+	}
+}
+
+# dawielder.16 A feud between clans
+# Two Dawi lords are at feud. When a Dawi of high standing steps in, the
+# guilty side pays the injured one and the grudge is struck out. Only
+# ordinary grudges; a Blood Grudge is not the council's to end.
+# Scope: ROOT is the elder. event_target:dawielder_feud_holder holds the
+# grudge, event_target:grudge_offender owes it (the name
+# dawi_settle_grudge_effect expects).
+character_event = {
+	id = dawielder.16
+	desc = EVTDESCdawielder16
+	picture = GFX_evt_dwarf_grudge_book
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawielder_end_a_feud
+
+	immediate = {
+		random_playable_ruler = {
+			limit = { dawielder_feud_holder_trigger = yes }
+			save_event_target_as = dawielder_feud_holder
+			random_playable_ruler = {
+				limit = { dawielder_feud_offender_trigger = yes }
+				save_event_target_as = grudge_offender
+			}
+		}
+	}
+
+	option = { # Weigh the wrong and set the price
+		name = EVTOPTAdawielder16
+		custom_tooltip = { text = dawielder_feud_price_tt }
+		hidden_effect = {
+			event_target:grudge_offender = {
+				if = {
+					limit = { wealth = 100 }
+					wealth = -100
+					event_target:dawielder_feud_holder = { wealth = 100 }
+				}
+				else = { prestige = -100 }
+			}
+		}
+		event_target:dawielder_feud_holder = {
+			dawi_settle_grudge_effect = yes
+			opinion = { who = ROOT modifier = opinion_grateful years = 10 }
+		}
+		prestige = 75
+		hidden_effect = {
+			event_target:dawielder_feud_holder = { character_event = { id = dawielder.17 } }
+			event_target:grudge_offender = { character_event = { id = dawielder.17 } }
+		}
+		ai_chance = { factor = 3 }
+	}
+	option = { # Sit them down over a barrel and let them drink it out
+		name = EVTOPTBdawielder16
+		random_list = {
+			50 = {
+				custom_tooltip = { text = dawielder_feud_drunk_tt }
+				event_target:dawielder_feud_holder = { dawi_settle_grudge_effect = yes }
+				prestige = 50
+				hidden_effect = {
+					event_target:dawielder_feud_holder = { character_event = { id = dawielder.19 } }
+					event_target:grudge_offender = { character_event = { id = dawielder.19 } }
+				}
+			}
+			50 = { custom_tooltip = { text = dawielder_feud_brawl_tt } prestige = 10 }
+		}
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = gregarious } }
+	}
+	option = { # It is for their clans to end
+		name = EVTOPTCdawielder16
+		change_society_currency = 100
+		ai_chance = { factor = 0.5 }
+	}
+}
+
+# dawielder.17 The elders have set the price of the feud (players only)
+# Scope: ROOT is the grudge holder or the offender, FROM is the elder.
+character_event = {
+	id = dawielder.17
+	desc = EVTDESCdawielder17
+	picture = GFX_evt_dwarf_grudge_book
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawielder.16
+	ai = no
+
+	option = {
+		name = EVTOPTAdawielder17
+	}
+}
+
+# dawielder.19 The feud was drunk out (players only)
+# Scope: ROOT is the grudge holder or the offender, FROM is the elder.
+character_event = {
+	id = dawielder.19
+	desc = EVTDESCdawielder19
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawielder.16
+	ai = no
+
+	option = {
+		name = EVTOPTAdawielder19
+	}
+}
+
+# dawielder.18 The Longbeards march
+# Older Dawi lead the younger in war as in peace. The old warriors take the
+# front rank of the throng.
+# Scope: ROOT is the elder, a ruler at war.
+character_event = {
+	id = dawielder.18
+	desc = EVTDESCdawielder18
+	picture = GFX_evt_dwarf_heroes
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # dawielder_lead_the_longbeards
+
+	option = {
+		name = EVTOPTAdawielder18
+		add_character_modifier = { name = dawielder_longbeards_march years = 2 }
+	}
+}
+
+# dawielder.20 The annals of the clan are finished
+# Three years' work setting down the clan's births, names, oaths and deeds,
+# once in a lifetime. The annals are rarely given out of the elder's hands,
+# and only if he holds none.
+# Scope: ROOT is the Elder Loremaster.
+character_event = {
+	id = dawielder.20
+	desc = EVTDESCdawielder20
+	picture = GFX_evt_dwarf_seated_book
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawielder_write_the_annals
+
+	option = {
+		name = EVTOPTAdawielder20
+		remove_character_modifier = dawielder_writing_annals
+		prestige = 150
+		piety = 100
+		if = {
+			limit = { NOT = { has_artifact = dawielder_clan_annals } }
+			random = {
+				chance = 25
+				add_artifact = dawielder_clan_annals
+				custom_tooltip = { text = dawielder_annals_kept_tt }
+			}
+		}
+	}
+}
+
+# dawielder.21 The Elder Council of the hold
+# Every elder of every clan in the realm comes to the long table. What they
+# agree binds the hold for years.
+# Scope: ROOT is the Elder Loremaster, a ruler.
+character_event = {
+	id = dawielder.21
+	desc = EVTDESCdawielder21
+	picture = GFX_evt_dwarf_king_seated
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # dawielder_call_the_council
+
+	option = { # Peace between the clans
+		name = EVTOPTAdawielder21
+		add_character_modifier = { name = dawielder_council_peace years = 10 }
+		any_vassal = {
+			limit = { trait = creature_dwarf }
+			opinion = { who = ROOT modifier = opinion_grateful years = 10 }
+		}
+		ai_chance = { factor = 1 modifier = { factor = 2 diplomacy = 12 } }
+	}
+	option = { # The clans arm for the grudges still unpaid
+		name = EVTOPTBdawielder21
+		add_character_modifier = { name = dawielder_council_war years = 10 }
+		ai_chance = { factor = 1 modifier = { factor = 2 martial = 12 } }
+	}
+	option = { # The old law, read out and sworn to again
+		name = EVTOPTCdawielder21
+		add_character_modifier = { name = dawielder_council_law years = 10 }
+		ai_chance = { factor = 1 modifier = { factor = 2 stewardship = 12 } }
+	}
+}
+
+###############################################################################
+# Life of the council
+# Bi-yearly random list dawielder_council_life, for elders
+# (dawielder_pulse_trigger).
+###############################################################################
+
+# dawielder.30 Two Full Beards want one apprentice
+# When two masters want the same beardling, the elders decide.
+# Scope: ROOT is the elder.
+character_event = {
+	id = dawielder.30
+	desc = EVTDESCdawielder30
+	picture = GFX_evt_dwarf_thinking
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # on_bi_yearly_pulse, dawielder_council_life
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		dawielder_pulse_trigger = yes
+	}
+
+	option = { # To the elder master, by right of beard
+		name = EVTOPTAdawielder30
+		prestige = 25
+		change_society_currency = 25
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = stubborn } }
+	}
+	option = { # To the better smith, whatever his beard
+		name = EVTOPTBdawielder30
+		change_society_currency = 50
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = diligent } }
+	}
+}
+
+# dawielder.31 A shamed Dawi gives up his name
+# A Dawi of the clan has shamed it past mending, and comes before the
+# elders to give up his standing and his goods and take the Slayer's road.
+# Scope: ROOT is the elder.
+character_event = {
+	id = dawielder.31
+	desc = EVTDESCdawielder31
+	picture = GFX_evt_dwarf_slayer
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # on_bi_yearly_pulse, dawielder_council_life
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		dawielder_pulse_trigger = yes
+	}
+
+	option = { # Strike his name from the clan's roll
+		name = EVTOPTAdawielder31
+		prestige = 25
+		change_society_currency = 25
+	}
+	option = { # Send him to Grimnir's priests with the clan's blessing
+		name = EVTOPTBdawielder31
+		piety = 50
+	}
+}
+
+# dawielder.32 The Day of Naming
+# A newborn of the clan is brought before the elders and taken to the
+# temples of Grungni and Valaya, its name written in the hold's annals.
+# Scope: ROOT is the elder.
+character_event = {
+	id = dawielder.32
+	desc = EVTDESCdawielder32
+	picture = GFX_evt_dwarf_patron_gods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_bi_yearly_pulse, dawielder_council_life
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		dawielder_pulse_trigger = yes
+	}
+
+	option = {
+		name = EVTOPTAdawielder32
+		piety = 25
+		change_society_currency = 25
+	}
+}
+
+# dawielder.33 The bequests of the dying
+# An old Dawi who feels his end coming names before his heirs what goes into
+# the tomb with him. The elders witness it.
+# Scope: ROOT is the elder.
+character_event = {
+	id = dawielder.33
+	desc = EVTDESCdawielder33
+	picture = GFX_evt_dwarf_temple
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_bi_yearly_pulse, dawielder_council_life
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		dawielder_pulse_trigger = yes
+	}
+
+	option = { # His word is law. The axe goes into the tomb.
+		name = EVTOPTAdawielder33
+		piety = 50
+		ai_chance = { factor = 2 }
+	}
+	option = { # Persuade him to leave it to the clan
+		name = EVTOPTBdawielder33
+		prestige = 25
+		change_society_currency = 25
+		ai_chance = { factor = 1 modifier = { factor = 2 diplomacy = 12 } }
+	}
+}
+
+# dawielder.34 Gnollen-grom
+# A beardling forgets the respect due to a Longbeard's beard.
+# Scope: ROOT is the elder.
+character_event = {
+	id = dawielder.34
+	desc = EVTDESCdawielder34
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # on_bi_yearly_pulse, dawielder_council_life
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		dawielder_pulse_trigger = yes
+	}
+
+	option = { # Wazzock! A month scrubbing the brewhouse vats.
+		name = EVTOPTAdawielder34
+		prestige = 25
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = wroth } }
+	}
+	option = { # Tell him the saga of the Longbeard who saved his clan
+		name = EVTOPTBdawielder34
+		change_society_currency = 50
+		ai_chance = { factor = 1 modifier = { factor = 2 trait = patient } }
+	}
+}
+
+# dawielder.35 An honour debt
+# An outsider did the clan a great service. The Dawi hate to owe anyone who
+# is not a Dwarf-friend, and the elders want the debt paid at once.
+# Scope: ROOT is the elder.
+character_event = {
+	id = dawielder.35
+	desc = EVTDESCdawielder35
+	picture = GFX_evt_dwarf_grudge_book
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_bi_yearly_pulse, dawielder_council_life
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		dawielder_pulse_trigger = yes
+		wealth = 50
+	}
+
+	option = { # Pay it now, in gold
+		name = EVTOPTAdawielder35
+		wealth = -50
+		prestige = 50
+		ai_chance = { factor = 2 }
+	}
+	option = { # Name him a Dwarf-friend instead
+		name = EVTOPTBdawielder35
+		piety = 25
+		change_society_currency = -25
+		ai_chance = { factor = 1 }
+	}
+}
+
+
+###############################################################################
+# Underway events
+# Namespace: underway (was ungdrin)
+# Faction: Dwarfs
+#
+# The Ungdrin Ankor, the Great Underway, was dug in the Golden Age to join
+# every hold of the Karaz Ankor beneath the mountains. Earthquakes shattered
+# it, burying whole stretches under rubble, and the Skaven and the Night
+# Goblins took much of what was left. A hold that clears and shores up its
+# stretch again opens it with a wonder upgrade (upgrade_underway_<hold>):
+# its counties get the ungdrin_ankor movement modifier. A Train Station
+# (upgrade_trains) lays rails for mining carriages through the hold's open
+# stretch (ungdrin_trains). The stretch closes when the upgrade is destroyed
+# or the wonder falls to non-Dawi, and opens again when the Dawi retake it.
+# Holds on an open stretch also live with what comes up the tunnels.
+# Lore: WFRP 4E Dwarf Player's Guide (the Underway built p.10, Ironbreakers
+# p.70, the Underway shattered and Mining Carriages p.107).
+#
+# Opening and closing the Underway          underway.1 - underway.6
+# Life on the Underway                      underway.20 - underway.24
+#
+# Callers:
+#   on_actions (00_on_actions.txt): underway.1 on_wonder_upgrade_finish,
+#     underway.4 on_wonder_upgrade_destroyed, underway.6
+#     on_wonder_owner_change.
+#   on_actions (wh_on_actions.txt): the underway_tunnels bi-yearly random
+#     list (underway.20 - underway.24).
+# Scripted triggers: common/scripted_triggers/wh_underway_triggers.txt
+# Scripted effects: common/scripted_effects/wh_underway_effects.txt
+# Loc: localisation/00_WHG_dwarf_events.csv
+###############################################################################
+
+namespace = underway
+
+###############################################################################
+# Opening and closing the Underway
+# The segment of each upgrade, and which counties are lowland, are listed in
+# wh_underway_effects.txt.
+###############################################################################
+
+# underway.1 An upgrade is finished
+# An Underway upgrade opens its stretch (with rails, if the wonder has a
+# Train Station); a Train Station lays rails through the open stretches.
+# Scope: ROOT is the owner, FROM the upgrade, FROMFROM the wonder.
+character_event = {
+	id = underway.1
+	hide_window = yes
+	is_triggered_only = yes # on_wonder_upgrade_finish
+
+	trigger = {
+		FROM = { OR = { has_wonder_upgrade = upgrade_trains underway_segment_trigger = yes } }
+	}
+
+	immediate = {
+		if = {
+			limit = { FROM = { underway_segment_trigger = yes } }
+			FROM = { underway_open_segment_effect = yes }
+			if = {
+				limit = { FROMFROM = { has_wonder_upgrade = upgrade_trains } }
+				FROM = { underway_carriages_on_effect = yes }
+			}
+			character_event = { id = underway.2 }
+		}
+		else = {
+			FROMFROM = { underway_carriages_on_effect = yes }
+			if = {
+				limit = { FROMFROM = { underway_segment_trigger = yes } }
+				character_event = { id = underway.3 }
+			}
+		}
+	}
+}
+
+# underway.2 The road beneath the mountains
+# Scope: ROOT is the owner.
+character_event = {
+	id = underway.2
+	desc = EVTDESCunderway2
+	picture = GFX_evt_dwarf_fortress
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # underway.1
+
+	option = { # Let the caravans run
+		name = EVTOPTAunderway2
+		prestige = 100
+	}
+}
+
+# underway.3 The carriages run
+# Scope: ROOT is the owner.
+character_event = {
+	id = underway.3
+	desc = EVTDESCunderway3
+	picture = GFX_evt_dwarf_fortress
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # underway.1
+
+	option = { # Mind the rails
+		name = EVTOPTAunderway3
+		prestige = 50
+	}
+}
+
+# underway.4 An upgrade is destroyed
+# A lost Underway upgrade closes its stretch; a lost Train Station takes up
+# the rails.
+# Scope: ROOT is the owner, FROM the upgrade, FROMFROM the wonder.
+character_event = {
+	id = underway.4
+	hide_window = yes
+	is_triggered_only = yes # on_wonder_upgrade_destroyed
+
+	trigger = {
+		FROM = { OR = { has_wonder_upgrade = upgrade_trains underway_segment_trigger = yes } }
+	}
+
+	immediate = {
+		if = {
+			limit = { FROM = { underway_segment_trigger = yes } }
+			FROM = { underway_close_segment_effect = yes }
+			character_event = { id = underway.5 }
+		}
+		else = { FROMFROM = { underway_carriages_off_effect = yes } }
+	}
+}
+
+# underway.5 The tunnels fall in
+# Scope: ROOT is the owner.
+character_event = {
+	id = underway.5
+	desc = EVTDESCunderway5
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # underway.4
+
+	option = { # Write it down
+		name = EVTOPTAunderway5
+	}
+}
+
+# underway.6 A hold changes hands
+# The Underway runs only for the Dawi: it closes when a wonder with an
+# Underway upgrade falls to anyone else, and opens again for a Dawi owner.
+# Scope: ROOT is the new owner, FROM the wonder.
+character_event = {
+	id = underway.6
+	hide_window = yes
+	is_triggered_only = yes # on_wonder_owner_change
+
+	trigger = {
+		FROM = { underway_segment_trigger = yes }
+	}
+
+	immediate = {
+		if = {
+			limit = { culture_group = dwarf_group }
+			FROM = { underway_open_segment_effect = yes }
+			if = {
+				limit = { FROM = { has_wonder_upgrade = upgrade_trains } }
+				FROM = { underway_carriages_on_effect = yes }
+			}
+		}
+		else = { FROM = { underway_close_segment_effect = yes } }
+	}
+}
+
+###############################################################################
+# Life on the Underway
+# Bi-yearly random list underway_tunnels, for Dawi rulers whose capital lies
+# on an open stretch (underway_hold_trigger). The Ironbreakers guard the
+# deep ways; a hold that cannot hold a tunnel may seal it for a few years
+# (underway_sealed). An Ironbreaker's lost gromril armour can turn up once
+# in a lifetime (underway_found_gromril).
+###############################################################################
+
+# underway.20 Night Goblins in the deeps
+# Scope: ROOT is a Dawi ruler on the Underway.
+character_event = {
+	id = underway.20
+	desc = EVTDESCunderway20
+	picture = GFX_evt_dwarf_fighter
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_bi_yearly_pulse, underway_tunnels
+	only_rulers = yes
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		underway_hold_trigger = yes
+		capital_scope = { NOT = { has_province_modifier = underway_sealed } }
+	}
+
+	immediate = {
+		capital_scope = { save_event_target_as = underway_hold }
+	}
+
+	option = { # Send the Ironbreakers
+		name = EVTOPTAunderway20
+		random_list = {
+			70 = {
+				modifier = { factor = 1.5 any_courtier = { trait = ironbreaker } }
+				modifier = { factor = 1.3 martial = 15 }
+				prestige = 100
+				if = {
+					limit = {
+						NOT = { has_character_flag = underway_found_gromril }
+						NOT = { any_artifact = { has_artifact_flag = armor } }
+					}
+					random = {
+						chance = 10
+						set_character_flag = underway_found_gromril
+						add_artifact = dawi_artifact_gromril_armour
+						custom_tooltip = { text = underway_found_gromril_tt }
+					}
+				}
+			}
+			30 = { prestige = 25 wealth = -50 custom_tooltip = { text = underway_heavy_losses_tt } }
+		}
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.3 trait = craven }
+		}
+	}
+	option = { # Seal the tunnel
+		name = EVTOPTBunderway20
+		prestige = -25
+		event_target:underway_hold = {
+			add_province_modifier = { name = underway_sealed duration = 1825 }
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 trait = craven }
+			modifier = { factor = 2 war = yes }
+		}
+	}
+}
+
+# underway.21 Scratching beneath the floor
+# The Skaven are digging up into the Underway.
+# Scope: ROOT is a Dawi ruler on the Underway.
+character_event = {
+	id = underway.21
+	desc = EVTDESCunderway21
+	picture = GFX_evt_dwarf_angry_look
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_bi_yearly_pulse, underway_tunnels
+	only_rulers = yes
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		underway_hold_trigger = yes
+		capital_scope = { NOT = { has_province_modifier = underway_sealed } }
+	}
+
+	immediate = {
+		capital_scope = { save_event_target_as = underway_hold }
+	}
+
+	option = { # Dig down and meet them
+		name = EVTOPTAunderway21
+		wealth = -25
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 any_courtier = { trait = ironbreaker } }
+				modifier = { factor = 1.5 society_member_of = engineers_guild }
+				prestige = 150
+				custom_tooltip = { text = underway_skaven_driven_off_tt }
+			}
+			40 = {
+				prestige = -25
+				event_target:underway_hold = {
+					add_province_modifier = { name = underway_sealed duration = 1825 }
+				}
+				custom_tooltip = { text = underway_skaven_held_tt }
+			}
+		}
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 2 trait = wroth }
+			modifier = { factor = 0.3 NOT = { wealth = 25 } }
+		}
+	}
+	option = { # Bring the tunnel down on them
+		name = EVTOPTBunderway21
+		event_target:underway_hold = {
+			add_province_modifier = { name = underway_sealed duration = 1825 }
+		}
+		ai_chance = { factor = 40 }
+	}
+}
+
+# underway.22 A caravan from another hold
+# Scope: ROOT is a Dawi ruler on the Underway.
+character_event = {
+	id = underway.22
+	desc = EVTDESCunderway22
+	picture = GFX_evt_dwarf_city
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_bi_yearly_pulse, underway_tunnels
+	only_rulers = yes
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		underway_hold_trigger = yes
+		capital_scope = { NOT = { has_province_modifier = underway_sealed } }
+	}
+
+	immediate = {
+		capital_scope = { save_event_target_as = underway_hold }
+	}
+
+	option = { # Take the toll
+		name = EVTOPTAunderway22
+		if = {
+			limit = { capital_scope = { has_province_modifier = ungdrin_trains } }
+			scaled_wealth = { value = 0.4 min = 50 max = 250 }
+		}
+		else = { scaled_wealth = { value = 0.25 min = 25 max = 150 } }
+		ai_chance = { factor = 60 modifier = { factor = 2 trait = greedy } }
+	}
+	option = { # Let it pass free, for the sake of the old roads
+		name = EVTOPTBunderway22
+		prestige = 50
+		piety = 25
+		ai_chance = { factor = 40 modifier = { factor = 2 trait = charitable } }
+	}
+}
+
+# underway.23 The old waystone
+# A patrol finds a Golden Age waystone in a cleared stretch.
+# Scope: ROOT is a Dawi ruler on the Underway.
+character_event = {
+	id = underway.23
+	desc = EVTDESCunderway23
+	picture = GFX_evt_dwarf_patron_gods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_bi_yearly_pulse, underway_tunnels
+	only_rulers = yes
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		underway_hold_trigger = yes
+		NOT = { has_character_flag = underway_waystone }
+	}
+
+	immediate = {
+		set_character_flag = underway_waystone
+	}
+
+	option = { # Set it up in the temple of the ancestors
+		name = EVTOPTAunderway23
+		piety = 100
+	}
+	option = { # Copy the runes for the loremasters
+		name = EVTOPTBunderway23
+		prestige = 50
+		change_learning = 1
+	}
+}
+
+# underway.24 Off the rails
+# A mining carriage jumps the rails in the dark.
+# Scope: ROOT is a Dawi ruler on the Underway, with rails at the capital.
+character_event = {
+	id = underway.24
+	desc = EVTDESCunderway24
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_bi_yearly_pulse, underway_tunnels
+	only_rulers = yes
+	religion_group = dwarf_gods_group
+
+	trigger = {
+		underway_hold_trigger = yes
+		capital_scope = { has_province_modifier = ungdrin_trains }
+	}
+
+	option = { # Pay the engineers to put it right
+		name = EVTOPTAunderway24
+		wealth = -50
+		ai_chance = { factor = 70 modifier = { factor = 0 NOT = { wealth = 50 } } }
+	}
+	option = { # Make the driver haul it back himself
+		name = EVTOPTBunderway24
+		prestige = -10
+		capital_scope = { add_province_modifier = { name = underway_derailed duration = 365 } }
+		ai_chance = { factor = 30 }
+	}
+	option = { # I will see to it myself
+		name = EVTOPTCunderway24
+		trigger = { society_member_of = engineers_guild }
+		prestige = 25
+		wealth = -15
+		ai_chance = { factor = 100 }
 	}
 }

@@ -37,6 +37,10 @@
 #   history/characters/95000_asur.txt (61).
 # Support: common/scripted_triggers/wh_asur_triggers.txt
 # Loc: localisation/00_WHG_asur_events.csv
+#
+# Also in this file (each part keeps its own header and namespace):
+#   Asur debates, symposia and favours (namespace asurdebate, was WHG_asur_debate_events)
+#   WHG Phoenix Guard events (namespace phoenix) (namespace phoenix, was WHG_phoenix_guard_events)
 ###############################################################################
 
 namespace = asur
@@ -3116,7 +3120,7 @@ character_event = {
 	id = asur.87
 	desc = EVTDESCasur87
 	picture = GFX_evt_elf_city
-	border = GFX_event_normal_frame_magic
+	border = GFX_event_normal_frame_religion
 
 	is_triggered_only = yes # asur.85, asur.87
 
@@ -3488,5 +3492,1248 @@ character_event = {
 		end_inaccessibility_effect = yes #removes in hiding or in_seclusion
 		set_character_flag = do_not_disturb
 		character_event = { id = TOG.1215 days = 730 }
+	}
+}
+
+
+###############################################################################
+# Asur debates, symposia and favours
+# Namespace: asurdebate (was asurdebate in S_high_elves_debate_events.txt)
+# Faction: High Elves
+#
+# The great quarrel of Ulthuan: should the Asur shut their gates on the
+# lesser races, or ride out to fight beside them? Isolationist and
+# interventionist princes argue it out in public debates, buy each other's
+# support at private symposia, and call in old favours.
+#
+# Public debates                          asurdebate.1 - asurdebate.8
+# Private symposia                        asurdebate.10 - asurdebate.18
+# Public shaming at a symposium           asurdebate.20 - asurdebate.22
+# Buying support among isolationists      asurdebate.30 - asurdebate.32
+#
+# Callers (decisions/wh_asur_decisions.txt):
+#   asur_debate_decision (1), asur_force_stance_favour (8),
+#   asur_meeting_decision (10), asur_buy_favour (30).
+# All four are targeted decisions: the event's ROOT and FROM are the target
+# and FROMFROM is the character who took the decision.
+# Support: common/scripted_effects/wh_asur_debate_effects.txt,
+#   common/scripted_triggers/wh_asur_debate_triggers.txt
+# Loc: localisation/00_WHG_asur_events.csv
+###############################################################################
+
+namespace = asurdebate
+
+###############################################################################
+# Public debates
+# A prince challenges a rival of the other stance to a debate before the
+# nobles of Ulthuan. The loser must admit the winner was right and change
+# stance, or refuse and be scorned for it. If neither yields, they become
+# rivals.
+###############################################################################
+
+# asurdebate.1 Challenged to a debate
+# Scope: ROOT is the challenged prince, FROMFROM the challenger
+# (asur_debate_decision).
+character_event = {
+	id = asurdebate.1
+	desc = EVTDESCasurdebate1
+	picture = GFX_evt_elf_pondering
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # asur_debate_decision
+
+	immediate = {
+		if = {
+			limit = { NOT = { has_character_modifier = recent_debate_timer } }
+			add_character_modifier = { name = recent_debate_timer duration = 365 hidden = yes }
+		}
+	}
+
+	option = { # Accept
+		name = EVTOPTAasurdebate1
+		if = { limit = { trait = shy } random = { chance = 20 remove_trait = shy } }
+		if = {
+			limit = {
+				FROMFROM = { has_opinion_modifier = { who = ROOT modifier = grievously_offended } }
+			}
+			FROMFROM = { remove_opinion = { who = ROOT modifier = grievously_offended } }
+		}
+		save_event_target_as = debate_opponent
+		FROMFROM = {
+			save_event_target_as = debate_challenger
+			character_event = { id = asurdebate.2 days = 3 }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = gregarious }
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 1.5 trait = patient }
+			modifier = { factor = 1.5 age = 800 }
+			modifier = { factor = 0.75 trait = craven }
+			modifier = { factor = 0.75 religion = cult_of_pleasure }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBasurdebate1
+		remove_character_modifier = recent_debate_timer
+		FROMFROM = {
+			remove_character_modifier = recent_debate_timer
+			opinion = { modifier = opinion_fled_debate who = ROOT years = 100 }
+			character_event = { id = asurdebate.3 days = 3 }
+		}
+		ai_chance = { factor = 1 }
+	}
+}
+
+# asurdebate.2 The debate
+# The nobles gather to hear both sides. The better speaker usually wins; two
+# evenly matched or two wrathful princes usually end in a stalemate.
+# Scope: ROOT is the challenger, FROM the challenged prince (asurdebate.1).
+character_event = {
+	id = asurdebate.2
+	desc = EVTDESCasurdebate2
+	picture = GFX_evt_elf_pondering
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # asurdebate.1
+
+	option = {
+		name = EVTOPTAasurdebate2
+		opinion = { modifier = opinion_fought_debate who = FROM years = 150 }
+		FROM = { opinion = { modifier = opinion_fought_debate who = ROOT years = 150 } }
+		remove_character_modifier = recent_debate_victory
+		FROM = { remove_character_modifier = recent_debate_victory }
+		hidden_effect = {
+			random_list = {
+				75 = { # Stalemate
+					modifier = {
+						factor = 0.2
+						OR = {
+							attribute_diff = { character = FROM attribute = diplomacy value = 4 }
+							FROM = {
+								attribute_diff = {
+									character = ROOT
+									attribute = diplomacy
+									value = 4
+								}
+							}
+						}
+					}
+					modifier = { factor = 5 trait = wroth FROM = { trait = wroth } }
+					if = {
+						limit = {
+							NOT = { num_of_rivals = 2 }
+							FROM = { NOT = { num_of_rivals = 2 } }
+							NOT = { is_rival = FROM }
+						}
+						add_rival = FROM
+					}
+					long_character_event = { id = asurdebate.6 }
+					FROM = { long_character_event = { id = asurdebate.6 } }
+				}
+				200 = { # The challenger wins
+					modifier = {
+						factor = 0.5
+						FROM = {
+							attribute_diff = { character = ROOT attribute = diplomacy value = 2 }
+						}
+					}
+					modifier = {
+						factor = 0.5
+						FROM = {
+							attribute_diff = { character = ROOT attribute = diplomacy value = 4 }
+						}
+					}
+					modifier = {
+						factor = 0.5
+						FROM = {
+							attribute_diff = { character = ROOT attribute = diplomacy value = 6 }
+						}
+					}
+					modifier = {
+						factor = 0.5
+						FROM = {
+							attribute_diff = { character = ROOT attribute = diplomacy value = 8 }
+						}
+					}
+					add_character_modifier = { name = recent_debate_victory months = 12 }
+					long_character_event = { id = asurdebate.4 }
+				}
+				200 = { # The challenged prince wins
+					modifier = {
+						factor = 0.5
+						attribute_diff = { character = FROM attribute = diplomacy value = 2 }
+					}
+					modifier = {
+						factor = 0.5
+						attribute_diff = { character = FROM attribute = diplomacy value = 4 }
+					}
+					modifier = {
+						factor = 0.5
+						attribute_diff = { character = FROM attribute = diplomacy value = 6 }
+					}
+					modifier = {
+						factor = 0.5
+						attribute_diff = { character = FROM attribute = diplomacy value = 8 }
+					}
+					FROM = {
+						add_character_modifier = { name = recent_debate_victory months = 12 }
+						long_character_event = { id = asurdebate.4 }
+					}
+				}
+			}
+		}
+	}
+}
+
+# asurdebate.3 The challenge refused
+# Scope: ROOT is the challenger, FROM the challenged prince (asurdebate.1).
+character_event = {
+	id = asurdebate.3
+	desc = EVTDESCasurdebate3
+	picture = GFX_evt_elf_pondering
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # asurdebate.1
+
+	option = {
+		name = EVTOPTAasurdebate3
+	}
+}
+
+# asurdebate.4 Victory in the debate
+# Scope: ROOT is the winner (asurdebate.2). The debaters are the event
+# targets debate_challenger and debate_opponent.
+long_character_event = {
+	id = asurdebate.4
+	title = debate_title
+	desc = { text = EVTDESCasurdebate4 trigger = { trait = isolationist_elf } }
+	desc = { text = EVTDESCasurdebate4b trigger = { NOT = { trait = isolationist_elf } } }
+	picture = GFX_evt_elf_pondering
+	border = GFX_event_long_frame_war
+
+	is_triggered_only = yes # asurdebate.2
+
+	option = {
+		name = EVTOPTAasurdebate4
+		prestige = 50
+		piety = 50
+		hidden_effect = {
+			if = {
+				limit = { character = event_target:debate_challenger }
+				event_target:debate_opponent = { long_character_event = { id = asurdebate.5 } }
+			}
+			else = {
+				event_target:debate_challenger = { long_character_event = { id = asurdebate.5 } }
+			}
+		}
+	}
+}
+
+# asurdebate.5 Defeat in the debate
+# The loser admits it and changes stance, or refuses to accept the verdict
+# and is scorned for it (the winner hears of it, asurdebate.7).
+# Scope: ROOT is the loser, FROM the winner (asurdebate.4).
+long_character_event = {
+	id = asurdebate.5
+	title = debate_title
+	desc = { text = EVTDESCasurdebate5 trigger = { trait = interventionist_elf } }
+	desc = { text = EVTDESCasurdebate5b trigger = { NOT = { trait = interventionist_elf } } }
+	picture = GFX_evt_elf_pondering
+	border = GFX_event_long_frame_war
+
+	is_triggered_only = yes # asurdebate.4
+
+	option = { # Concede
+		name = EVTOPTAasurdebate5
+		prestige = -200
+		asurdebate_change_stance_effect = yes
+		ai_chance = {
+			factor = 65
+			modifier = { factor = 0.75 trait = wroth }
+			modifier = { factor = 0.75 trait = slow }
+			modifier = { factor = 0.5 trait = imbecile }
+			modifier = { factor = 0.75 trait = envious }
+			modifier = { factor = 0.75 trait = proud }
+			modifier = { factor = 0.75 trait = haughty }
+			modifier = { factor = 0.75 trait = arbitrary }
+		}
+	}
+	option = { # Refuse the verdict
+		name = EVTOPTBasurdebate5
+		prestige = -500
+		add_character_modifier = { name = refused_debate_result duration = 800 }
+		FROM = { character_event = { id = asurdebate.7 days = 1 } }
+		ai_chance = {
+			factor = 35
+			modifier = { factor = 0.75 trait = patient }
+			modifier = { factor = 0.75 trait = quick }
+			modifier = { factor = 0.5 trait = genius }
+			modifier = { factor = 0.75 trait = honest }
+			modifier = { factor = 0.75 trait = humble }
+			modifier = { factor = 0.75 trait = just }
+		}
+	}
+}
+
+# asurdebate.6 Stalemate
+# Neither yields, and the two become rivals (asurdebate.2).
+# Scope: ROOT is either debater (asurdebate.2).
+long_character_event = {
+	id = asurdebate.6
+	title = debate_title
+	desc = { text = EVTDESCasurdebate6 trigger = { trait = isolationist_elf } }
+	desc = { text = EVTDESCasurdebate6b trigger = { NOT = { trait = isolationist_elf } } }
+	picture = GFX_evt_elf_pondering
+	border = GFX_event_long_frame_war
+
+	is_triggered_only = yes # asurdebate.2
+
+	option = {
+		name = EVTOPTAasurdebate6
+	}
+}
+
+# asurdebate.7 The loser will not yield
+# Scope: ROOT is the winner, FROM the loser (asurdebate.5).
+character_event = {
+	id = asurdebate.7
+	desc = EVTDESCasurdebate7
+	picture = GFX_evt_elf_pondering
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # asurdebate.5
+
+	option = {
+		name = EVTOPTAasurdebate7
+	}
+}
+
+# asurdebate.8 An old debt called in
+# A prince the character owes a favour offers to forget it if the character
+# takes up the prince's stance.
+# Scope: ROOT is the debtor, FROMFROM the creditor
+# (asur_force_stance_favour, which already cleared the favour).
+character_event = {
+	id = asurdebate.8
+	desc = EVTDESCasurdebate8
+	picture = GFX_evt_elf_pondering
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # asur_force_stance_favour
+
+	option = { # Agree
+		name = EVTOPTAasurdebate8
+		if = {
+			limit = { FROMFROM = { trait = interventionist_elf } }
+			remove_trait = isolationist_elf
+			add_trait = interventionist_elf
+		}
+		else_if = {
+			limit = { FROMFROM = { trait = isolationist_elf } }
+			remove_trait = interventionist_elf
+			add_trait = isolationist_elf
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBasurdebate8
+		trigger = { ai = no }
+		prestige = -400
+		opinion = { modifier = opinion_insulted who = FROMFROM years = 150 }
+		FROMFROM = { opinion = { modifier = opinion_insulted who = ROOT years = 150 } }
+	}
+}
+
+###############################################################################
+# Private symposia
+# An isolationist prince invites a peer to a symposium at his villa and,
+# between the music and the wine, asks for something: gold, a favour, the
+# release of an old debt, the guest's divorce or the guest's hand. The guest
+# may grant it freely, name a price (gold, a favour or marriage), or refuse.
+# Or the host may have invited the guest only to shame them in front of
+# everyone (asurdebate.20).
+# The host and guest are the event targets asurmeet_host and
+# asurmeet_guest; what was asked is a flag on the host, the price a flag on
+# the guest.
+###############################################################################
+
+# asurdebate.10 An invitation to a symposium
+# Scope: ROOT is the guest, FROMFROM the host (asur_meeting_decision).
+letter_event = {
+	id = asurdebate.10
+	desc = EVTDESCasurdebate10
+
+	is_triggered_only = yes # asur_meeting_decision
+
+	option = { # Attend
+		name = EVTOPTAasurdebate10
+		if = {
+			limit = {
+				FROMFROM = { has_opinion_modifier = { who = ROOT modifier = grievously_offended } }
+			}
+			FROMFROM = { remove_opinion = { who = ROOT modifier = grievously_offended } }
+		}
+		FROMFROM = { long_character_event = { id = asurdebate.12 days = 5 random = 5 } }
+		ai_chance = { factor = 98 }
+	}
+	option = { # Decline
+		name = EVTOPTBasurdebate10
+		FROMFROM = {
+			opinion = { modifier = opinion_fled_debate who = ROOT years = 100 }
+			letter_event = { id = asurdebate.11 days = 4 random = 4 }
+		}
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 0.25 NOT = { prestige = 250 } }
+			modifier = { factor = 1.25 trait = shy }
+			modifier = { factor = 1.5 trait = paranoid }
+			modifier = { factor = 1.5 higher_tier_than = FROMFROM }
+			modifier = { factor = 2 is_rival = FROMFROM }
+			modifier = { factor = 0 is_friend = FROMFROM }
+			modifier = { factor = 0 is_lover = FROMFROM }
+			modifier = { factor = 2 NOT = { opinion = { who = FROMFROM value = -50 } } }
+			modifier = { factor = 1.5 NOT = { opinion = { who = FROMFROM value = -20 } } }
+		}
+	}
+}
+
+# asurdebate.11 The invitation declined
+# Scope: ROOT is the host, FROM the guest (asurdebate.10).
+letter_event = {
+	id = asurdebate.11
+	desc = EVTDESCasurdebate11
+
+	is_triggered_only = yes # asurdebate.10
+
+	option = {
+		name = EVTOPTAasurdebate11
+	}
+}
+
+# asurdebate.12 The symposium
+# The host takes the guest aside and asks for something, or springs the
+# trap of a public shaming.
+# Scope: ROOT is the host, FROM the guest (asurdebate.10).
+long_character_event = {
+	id = asurdebate.12
+	desc = EVTDESCasurdebate12
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_long_frame_religion
+
+	is_triggered_only = yes # asurdebate.10
+
+	immediate = {
+		save_event_target_as = asurmeet_host
+		FROM = { save_event_target_as = asurmeet_guest }
+		asurmeet_clear_flags_effect = yes
+		FROM = { asurmeet_clear_flags_effect = yes }
+	}
+
+	option = { # A great sum
+		name = EVTOPTAasurdebate12
+		trigger = { FROM = { wealth = 500 } }
+		set_character_flag = asurmeet_ask_gold_500
+		FROM = { long_character_event = { id = asurdebate.13 } }
+		ai_chance = {
+			factor = 15
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 2 FROM = { wealth = 1500 } }
+			modifier = { factor = 2 NOT = { wealth = 0 } }
+		}
+	}
+	option = { # A considerable sum
+		name = EVTOPTBasurdebate12
+		trigger = { FROM = { wealth = 250 } }
+		set_character_flag = asurmeet_ask_gold_250
+		FROM = { long_character_event = { id = asurdebate.13 } }
+		ai_chance = {
+			factor = 15
+			modifier = { factor = 1.5 trait = greedy }
+			modifier = { factor = 2 NOT = { wealth = 0 } }
+		}
+	}
+	option = { # A small token
+		name = EVTOPTCasurdebate12
+		trigger = { FROM = { wealth = 100 } }
+		set_character_flag = asurmeet_ask_gold_100
+		FROM = { long_character_event = { id = asurdebate.13 } }
+		ai_chance = { factor = 10 modifier = { factor = 0.5 trait = proud } }
+	}
+	option = { # A favour
+		name = EVTOPTDasurdebate12
+		trigger = { NOT = { owes_favor_to = FROM } FROM = { NOT = { owes_favor_to = ROOT } } }
+		set_character_flag = asurmeet_ask_favor
+		FROM = { long_character_event = { id = asurdebate.13 } }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 1.5 trait = ambitious }
+			modifier = { factor = 1.75 trait = paranoid }
+			modifier = { factor = 1.75 FROM = { trait = interventionist_elf } }
+		}
+	}
+	option = { # Forget my debt
+		name = EVTOPTEasurdebate12
+		trigger = { owes_favor_to = FROM }
+		set_character_flag = asurmeet_ask_clear
+		FROM = { long_character_event = { id = asurdebate.13 } }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 1.5 trait = greedy }
+			modifier = { factor = 1.5 trait = proud }
+		}
+	}
+	option = { # Leave your spouse
+		name = EVTOPTFasurdebate12
+		trigger = { FROM = { is_married = yes NOT = { any_spouse = { character = ROOT } } } }
+		set_character_flag = asurmeet_ask_divorce
+		FROM = { long_character_event = { id = asurdebate.13 } }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 is_lover = FROM }
+			modifier = { factor = 2 FROM = { any_spouse = { is_rival = ROOT } } }
+			modifier = { factor = 1.5 trait = deceitful }
+			modifier = { factor = 1.5 trait = cruel }
+		}
+	}
+	option = { # Marry me
+		name = EVTOPTGasurdebate12
+		trigger = { FROM = { asurmeet_can_wed_trigger = yes } }
+		set_character_flag = asurmeet_ask_marriage
+		FROM = { long_character_event = { id = asurdebate.13 } }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 3 is_lover = FROM }
+			modifier = { factor = 1.5 FROM = { higher_tier_than = ROOT } }
+			modifier = { factor = 1.5 trait = ambitious }
+			modifier = { factor = 1.5 NOT = { num_of_children = 1 } }
+			modifier = {
+				factor = 1.5
+				FROM = { OR = { trait = fair trait = pretty trait = beautiful } }
+			}
+			modifier = { factor = 0.5 FROM = { NOT = { religion = ROOT } } }
+			modifier = { factor = 0.5 trait = celibate }
+		}
+	}
+	option = { # Shame them before everyone
+		name = EVTOPTHasurdebate12
+		trigger = { OR = { ai = no is_rival = FROM } }
+		if = { limit = { religion = FROM } piety = -50 }
+		if = {
+			limit = {
+				OR = {
+					AND = { trait = isolationist_elf FROM = { trait = isolationist_elf } }
+					AND = { trait = interventionist_elf FROM = { trait = interventionist_elf } }
+				}
+			}
+			prestige = -50
+		}
+		FROM = { long_character_event = { id = asurdebate.20 } }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 0 is_lover = FROM }
+			modifier = { factor = 0 is_friend = FROM }
+			modifier = { factor = 3 is_rival = FROM }
+			modifier = { factor = 1.5 trait = deceitful }
+			modifier = { factor = 1.5 trait = cruel }
+			modifier = { factor = 0.5 trait = kind }
+			modifier = { factor = 2 NOT = { opinion = { who = FROM value = -50 } } }
+		}
+	}
+}
+
+# asurdebate.13 The host's request
+# The guest grants it freely, names a price, or refuses.
+# Scope: ROOT is the guest, FROM the host (asurdebate.12).
+long_character_event = {
+	id = asurdebate.13
+	desc = { text = EVTDESCasurdebate13 trigger = { FROM = { asurmeet_asked_gold_trigger = yes } } }
+	desc = {
+		text = EVTDESCasurdebate13b
+		trigger = { FROM = { has_character_flag = asurmeet_ask_favor } }
+	}
+	desc = {
+		text = EVTDESCasurdebate13c
+		trigger = { FROM = { has_character_flag = asurmeet_ask_clear } }
+	}
+	desc = {
+		text = EVTDESCasurdebate13d
+		trigger = { FROM = { has_character_flag = asurmeet_ask_divorce } }
+	}
+	desc = {
+		text = EVTDESCasurdebate13e
+		trigger = { FROM = { has_character_flag = asurmeet_ask_marriage } }
+	}
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_long_frame_religion
+
+	is_triggered_only = yes # asurdebate.12
+
+	option = { # Grant it freely
+		name = EVTOPTAasurdebate13
+		asurmeet_grant_ask_effect = yes
+		if = { limit = { FROM = { has_character_flag = asurmeet_ask_gold_500 } } prestige = 500 }
+		else_if = {
+			limit = { FROM = { has_character_flag = asurmeet_ask_gold_250 } }
+			prestige = 250
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = asurmeet_ask_gold_100 } }
+			prestige = 100
+		}
+		else_if = { limit = { FROM = { has_character_flag = asurmeet_ask_favor } } prestige = 100 }
+		else_if = { limit = { FROM = { has_character_flag = asurmeet_ask_clear } } prestige = 50 }
+		if = {
+			limit = { NOT = { trait = charitable } FROM = { asurmeet_asked_gold_trigger = yes } }
+			random = { chance = 25 add_trait = charitable }
+		}
+		FROM = { long_character_event = { id = asurdebate.15 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 1.5 trait = charitable }
+			modifier = { factor = 1.5 trait = kind }
+			modifier = { factor = 0.5 trait = ambitious }
+			modifier = { factor = 0.25 trait = greedy }
+			modifier = { factor = 3 is_lover = FROM }
+			modifier = { factor = 2 is_friend = FROM }
+			modifier = { factor = 0.1 is_rival = FROM }
+			modifier = { factor = 1.5 FROM = { higher_tier_than = ROOT } }
+			modifier = { factor = 1.5 liege = { character = FROM } }
+			modifier = { factor = 2 opinion = { who = FROM value = 50 } }
+			modifier = { factor = 0.5 NOT = { opinion = { who = FROM value = 0 } } }
+			modifier = { factor = 0.5 FROM = { has_character_flag = asurmeet_ask_divorce } }
+		}
+	}
+	option = { # For gold
+		name = EVTOPTBasurdebate13
+		trigger = { FROM = { asurmeet_asked_gold_trigger = no wealth = 200 } }
+		set_character_flag = asurmeet_counter_gold
+		FROM = { long_character_event = { id = asurdebate.14 } }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 2 NOT = { wealth = 50 } }
+			modifier = { factor = 1.5 FROM = { wealth = 1000 } }
+		}
+	}
+	option = { # For a favour
+		name = EVTOPTCasurdebate13
+		trigger = {
+			FROM = {
+				NOT = { has_character_flag = asurmeet_ask_favor }
+				NOT = { has_character_flag = asurmeet_ask_clear }
+				NOT = { owes_favor_to = ROOT }
+			}
+		}
+		set_character_flag = asurmeet_counter_favor
+		FROM = { long_character_event = { id = asurdebate.14 } }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 1.75 lower_tier_than = FROM }
+			modifier = { factor = 1.75 owes_favor_to = FROM }
+			modifier = { factor = 1.5 FROM = { higher_tier_than = DUKE } }
+			modifier = { factor = 1.5 trait = ambitious }
+		}
+	}
+	option = { # For my hand
+		name = EVTOPTDasurdebate13
+		trigger = {
+			FROM = {
+				NOT = { has_character_flag = asurmeet_ask_marriage }
+				NOT = { has_character_flag = asurmeet_ask_divorce }
+			}
+			asurmeet_can_wed_trigger = yes
+		}
+		set_character_flag = asurmeet_counter_marriage
+		FROM = { long_character_event = { id = asurdebate.14 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 is_lover = FROM }
+			modifier = { factor = 2 lower_tier_than = FROM }
+			modifier = { factor = 1.5 NOT = { num_of_children = 1 } }
+			modifier = {
+				factor = 1.5
+				FROM = { OR = { trait = fair trait = pretty trait = beautiful } }
+			}
+			modifier = {
+				factor = 0.5
+				FROM = { OR = { trait = ugly trait = unsightly trait = kinslayer } }
+			}
+			modifier = { factor = 0.5 FROM = { NOT = { religion = ROOT } } }
+			modifier = { factor = 0.5 is_rival = FROM }
+			modifier = { factor = 0.5 trait = celibate }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTEasurdebate13
+		if = {
+			limit = {
+				FROM = {
+					OR = {
+						has_character_flag = asurmeet_ask_divorce
+						has_character_flag = asurmeet_ask_marriage
+					}
+				}
+			}
+			prestige = -50
+		}
+		else = { prestige = -250 }
+		FROM = { character_event = { id = asurdebate.17 } }
+		ai_chance = {
+			factor = 20
+			modifier = {
+				factor = 2
+				FROM = { asurmeet_asked_gold_trigger = yes }
+				FROM = { wealth = 500 }
+			}
+			modifier = { factor = 3 FROM = { has_character_flag = asurmeet_ask_divorce } }
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 1.5 trait = paranoid }
+			modifier = { factor = 2 is_rival = FROM }
+			modifier = { factor = 0.5 is_friend = FROM }
+			modifier = { factor = 0.5 is_lover = FROM }
+			modifier = { factor = 2 NOT = { opinion = { who = FROM value = -25 } } }
+		}
+	}
+}
+
+# asurdebate.14 The guest's price
+# Scope: ROOT is the host, FROM the guest (asurdebate.13).
+long_character_event = {
+	id = asurdebate.14
+	desc = {
+		text = EVTDESCasurdebate14
+		trigger = { FROM = { has_character_flag = asurmeet_counter_gold } }
+	}
+	desc = {
+		text = EVTDESCasurdebate14b
+		trigger = { FROM = { has_character_flag = asurmeet_counter_favor owes_favor_to = ROOT } }
+	}
+	desc = {
+		text = EVTDESCasurdebate14c
+		trigger = {
+			FROM = { has_character_flag = asurmeet_counter_favor NOT = { owes_favor_to = ROOT } }
+		}
+	}
+	desc = {
+		text = EVTDESCasurdebate14d
+		trigger = { FROM = { has_character_flag = asurmeet_counter_marriage } }
+	}
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_long_frame_religion
+
+	is_triggered_only = yes # asurdebate.13
+
+	option = { # Agreed
+		name = EVTOPTAasurdebate14
+		asurmeet_grant_ask_effect = yes
+		asurmeet_grant_counter_effect = yes
+		set_character_flag = asurmeet_deal_done
+		FROM = { character_event = { id = asurdebate.16 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 NOT = { wealth = 0 } }
+			modifier = { factor = 1.5 is_lover = FROM }
+			modifier = {
+				factor = 0.5
+				FROM = { has_character_flag = asurmeet_counter_gold }
+				NOT = { wealth = 400 }
+			}
+		}
+	}
+	option = { # Too high a price
+		name = EVTOPTBasurdebate14
+		FROM = { character_event = { id = asurdebate.16 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 1.5 trait = paranoid }
+			modifier = {
+				factor = 2
+				FROM = { has_character_flag = asurmeet_counter_marriage }
+				is_married = yes
+			}
+		}
+	}
+}
+
+# asurdebate.15 Granted freely
+# Scope: ROOT is the host, FROM the guest (asurdebate.13).
+long_character_event = {
+	id = asurdebate.15
+	desc = { text = EVTDESCasurdebate15 trigger = { asurmeet_asked_gold_trigger = yes } }
+	desc = {
+		text = EVTDESCasurdebate15b
+		trigger = {
+			OR = { has_character_flag = asurmeet_ask_favor has_character_flag = asurmeet_ask_clear }
+		}
+	}
+	desc = { text = EVTDESCasurdebate15c trigger = { has_character_flag = asurmeet_ask_divorce } }
+	desc = { text = EVTDESCasurdebate15d trigger = { has_character_flag = asurmeet_ask_marriage } }
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_long_frame_religion
+
+	is_triggered_only = yes # asurdebate.13
+
+	option = {
+		name = EVTOPTAasurdebate15
+		opinion = { modifier = opinion_grateful who = FROM years = 50 }
+		asurmeet_clear_flags_effect = yes
+	}
+}
+
+# asurdebate.16 The bargain struck, or not
+# Scope: ROOT is the guest, FROM the host (asurdebate.14).
+character_event = {
+	id = asurdebate.16
+	desc = {
+		text = EVTDESCasurdebate16
+		trigger = { FROM = { has_character_flag = asurmeet_deal_done } }
+	}
+	desc = {
+		text = EVTDESCasurdebate16b
+		trigger = { FROM = { NOT = { has_character_flag = asurmeet_deal_done } } }
+	}
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # asurdebate.14
+
+	option = {
+		name = EVTOPTAasurdebate16
+		trigger = { FROM = { has_character_flag = asurmeet_deal_done } }
+		asurmeet_clear_flags_effect = yes
+		FROM = { asurmeet_clear_flags_effect = yes }
+	}
+	option = {
+		name = EVTOPTBasurdebate16
+		trigger = { FROM = { NOT = { has_character_flag = asurmeet_deal_done } } }
+		asurmeet_clear_flags_effect = yes
+		FROM = { asurmeet_clear_flags_effect = yes }
+	}
+}
+
+# asurdebate.17 Refused outright
+# Scope: ROOT is the host, FROM the guest (asurdebate.13).
+character_event = {
+	id = asurdebate.17
+	desc = EVTDESCasurdebate17
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # asurdebate.13
+
+	option = {
+		name = EVTOPTAasurdebate17
+		opinion = { modifier = opinion_insulted who = FROM years = 10 }
+		asurmeet_clear_flags_effect = yes
+	}
+}
+
+# asurdebate.18 Cast aside
+# The guest has divorced their spouse to please the host.
+# Scope: ROOT is the divorced spouse (asurmeet_grant_ask_effect).
+character_event = {
+	id = asurdebate.18
+	desc = EVTDESCasurdebate18
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # asurmeet_grant_ask_effect
+
+	option = {
+		name = EVTOPTAasurdebate18
+		prestige = -50
+		opinion = { modifier = opinion_betrayed who = event_target:asurmeet_guest years = 100 }
+		opinion = { modifier = opinion_betrayed who = event_target:asurmeet_host years = 100 }
+	}
+}
+
+###############################################################################
+# Public shaming
+# The host has invited the guest only to humiliate them in front of the
+# other guests. A war of words follows: the better speaker and schemer wins,
+# the eminent are hard to shame, and vices make easy targets.
+###############################################################################
+
+# asurdebate.20 A trap
+# Scope: ROOT is the guest, FROM the host (asurdebate.12).
+long_character_event = {
+	id = asurdebate.20
+	desc = EVTDESCasurdebate20
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_long_frame_religion
+
+	is_triggered_only = yes # asurdebate.12
+
+	option = {
+		name = EVTOPTAasurdebate20
+		hidden_effect = {
+			random_list = {
+				45 = { # The host shames the guest
+					modifier = {
+						factor = 0.6
+						attribute_diff = { character = FROM attribute = diplomacy value = 3 }
+					}
+					modifier = {
+						factor = 0.6
+						attribute_diff = { character = FROM attribute = diplomacy value = 6 }
+					}
+					modifier = {
+						factor = 0.8
+						attribute_diff = { character = FROM attribute = intrigue value = 3 }
+					}
+					modifier = {
+						factor = 0.8
+						attribute_diff = { character = FROM attribute = intrigue value = 6 }
+					}
+					modifier = { factor = 0.6 asurdebate_eminent_trigger = yes }
+					modifier = { factor = 0.6 higher_tier_than = FROM }
+					modifier = { factor = 1.5 asurdebate_shameful_trigger = yes }
+					modifier = { factor = 0.6 FROM = { asurdebate_shameful_trigger = yes } }
+					modifier = { factor = 1.5 FROM = { asurdebate_virtuous_trigger = yes } }
+					FROM = { save_event_target_as = asurshame_winner }
+					save_event_target_as = asurshame_loser
+				}
+				55 = { # The guest turns the tables
+					modifier = {
+						factor = 0.6
+						FROM = {
+							attribute_diff = { character = ROOT attribute = diplomacy value = 3 }
+						}
+					}
+					modifier = {
+						factor = 0.6
+						FROM = {
+							attribute_diff = { character = ROOT attribute = diplomacy value = 6 }
+						}
+					}
+					modifier = {
+						factor = 0.8
+						FROM = {
+							attribute_diff = { character = ROOT attribute = intrigue value = 3 }
+						}
+					}
+					modifier = {
+						factor = 0.8
+						FROM = {
+							attribute_diff = { character = ROOT attribute = intrigue value = 6 }
+						}
+					}
+					modifier = { factor = 0.6 FROM = { asurdebate_eminent_trigger = yes } }
+					modifier = { factor = 0.6 FROM = { higher_tier_than = ROOT } }
+					modifier = { factor = 1.5 FROM = { asurdebate_shameful_trigger = yes } }
+					modifier = { factor = 0.6 asurdebate_shameful_trigger = yes }
+					modifier = { factor = 1.5 asurdebate_virtuous_trigger = yes }
+					save_event_target_as = asurshame_winner
+					FROM = { save_event_target_as = asurshame_loser }
+				}
+			}
+			event_target:asurshame_winner = {
+				add_character_modifier = { name = recent_debate_victory months = 12 }
+				long_character_event = { id = asurdebate.21 }
+			}
+		}
+	}
+}
+
+# asurdebate.21 The war of words won
+# Scope: ROOT is the winner (asurdebate.20). The loser is the event target
+# asurshame_loser.
+long_character_event = {
+	id = asurdebate.21
+	desc = { text = EVTDESCasurdebate21 trigger = { character = event_target:asurmeet_host } }
+	desc = {
+		text = EVTDESCasurdebate21b
+		trigger = { NOT = { character = event_target:asurmeet_host } }
+	}
+	picture = GFX_evt_elf_pondering
+	border = GFX_event_long_frame_war
+
+	is_triggered_only = yes # asurdebate.20
+
+	option = {
+		name = EVTOPTAasurdebate21
+		prestige = 150
+		event_target:asurshame_loser = { long_character_event = { id = asurdebate.22 } }
+	}
+}
+
+# asurdebate.22 Shamed before everyone
+# Scope: ROOT is the loser, FROM the winner (asurdebate.21).
+long_character_event = {
+	id = asurdebate.22
+	desc = { text = EVTDESCasurdebate22 trigger = { character = event_target:asurmeet_host } }
+	desc = {
+		text = EVTDESCasurdebate22b
+		trigger = { NOT = { character = event_target:asurmeet_host } }
+	}
+	picture = GFX_evt_elf_pondering
+	border = GFX_event_long_frame_war
+
+	is_triggered_only = yes # asurdebate.21
+
+	option = {
+		name = EVTOPTAasurdebate22
+		asurdebate_tier_prestige_loss_effect = yes
+		if = {
+			limit = {
+				NOT = { num_of_rivals = 2 }
+				FROM = { NOT = { num_of_rivals = 2 } }
+				NOT = { is_rival = FROM }
+			}
+			add_rival = FROM
+		}
+	}
+}
+
+###############################################################################
+# Buying support
+# An isolationist spends days praising a fellow prince of the same stance
+# until it would be rude to refuse them a favour.
+###############################################################################
+
+# asurdebate.30 Courted for support
+# Scope: ROOT is the courted prince, FROMFROM the suitor (asur_buy_favour).
+long_character_event = {
+	id = asurdebate.30
+	desc = EVTDESCasurdebate30
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_long_frame_religion
+
+	is_triggered_only = yes # asur_buy_favour
+
+	option = { # Pledge support
+		name = EVTOPTAasurdebate30
+		asurdebate_tier_prestige_gain_effect = yes
+		FROMFROM = { opinion = { modifier = opinion_grateful who = ROOT years = 100 } }
+		if = { limit = { FROMFROM = { owes_favor_to = ROOT } } remove_favor = FROMFROM }
+		else = { FROMFROM = { add_favor = ROOT } }
+		FROMFROM = { character_event = { id = asurdebate.31 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.25 trait = gregarious }
+			modifier = { factor = 1.25 trait = patient }
+			modifier = { factor = 0.85 trait = shy }
+			modifier = { factor = 0.85 trait = wroth }
+			modifier = { factor = 1.5 trait = slow }
+			modifier = { factor = 2 trait = imbecile }
+			modifier = { factor = 0.75 prestige = 1500 }
+			modifier = { factor = 1.75 is_lover = FROMFROM }
+			modifier = { factor = 1.75 is_friend = FROMFROM }
+			modifier = { factor = 0.25 is_rival = FROMFROM }
+			modifier = { factor = 0.75 NOT = { religion = FROMFROM } }
+			modifier = { factor = 0.5 NOT = { opinion = { who = FROMFROM value = -25 } } }
+			modifier = { factor = 1.5 opinion = { who = FROMFROM value = 50 } }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBasurdebate30
+		asurdebate_tier_prestige_loss_effect = yes
+		FROMFROM = {
+			opinion = { modifier = opinion_insulted who = ROOT years = 100 }
+			character_event = { id = asurdebate.32 }
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.5 NOT = { prestige = 100 } }
+			modifier = { factor = 2 is_rival = FROMFROM }
+			modifier = { factor = 1.5 trait = proud }
+		}
+	}
+}
+
+# asurdebate.31 Support pledged
+# Scope: ROOT is the suitor, FROM the courted prince (asurdebate.30).
+character_event = {
+	id = asurdebate.31
+	desc = EVTDESCasurdebate31
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # asurdebate.30
+
+	option = {
+		name = EVTOPTAasurdebate31
+		clr_character_flag = recently_asked_isofavor
+	}
+}
+
+# asurdebate.32 Support refused
+# Scope: ROOT is the suitor, FROM the courted prince (asurdebate.30).
+character_event = {
+	id = asurdebate.32
+	desc = EVTDESCasurdebate32
+	picture = GFX_evt_asur_arguing
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # asurdebate.30
+
+	option = {
+		name = EVTOPTAasurdebate32
+		clr_character_flag = recently_asked_isofavor
+	}
+}
+
+
+###############################################################################
+# WHG Phoenix Guard events (namespace phoenix)
+#
+# The Phoenix Guard are the silent temple guard of Asuryan. They keep the
+# Shrine of Asuryan on the Isle of Flame and are a holy order the Asur can
+# hire (d_phoenix_guard, common/landed_titles/wh_holy_orders.txt). If the
+# isle ever falls to a ruler outside the elven faiths, the Guard send a
+# written demand to leave it. Refuse, and they rise to take it back.
+#
+# Replaces DoW_Elven_events.txt (HELF), which needed the Phoenix Guard to
+# be a mercenary band and so never fired.
+#
+# Callers:
+#   common/on_actions/wh_on_actions.txt: on_new_holder,
+#     on_new_holder_inheritance, on_new_holder_usurpation (1).
+###############################################################################
+
+namespace = phoenix
+
+# phoenix.1 The Shrine falls to an outsider (hidden)
+# The title flag stops a second demand while one is pending.
+# Scope: ROOT is the new holder, FROM the title (on_new_holder and kin).
+character_event = {
+	id = phoenix.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_new_holder, on_new_holder_inheritance, on_new_holder_usurpation
+
+	trigger = {
+		FROM = { title = c_isle_of_flame NOT = { has_title_flag = phoenix_demand_sent } }
+		NOT = { religion_group = cadai_group }
+	}
+
+	immediate = {
+		FROM = { set_title_flag = phoenix_demand_sent }
+		letter_event = { id = phoenix.2 days = 30 random = 30 }
+	}
+}
+
+# phoenix.2 The silent demand
+# A Phoenix Guard brings a written demand: leave the Isle of Flame. Yield,
+# and the isle goes to the Phoenix King (or a warden of the shrine). Refuse,
+# and the Guard rise in a religious revolt for the isle.
+# Scope: the holder of the Isle of Flame (phoenix.1).
+letter_event = {
+	id = phoenix.2
+	desc = EVTDESCphoenix2
+
+	is_triggered_only = yes # phoenix.1
+
+	trigger = {
+		has_landed_title = c_isle_of_flame
+		NOT = { religion_group = cadai_group }
+	}
+
+	immediate = {
+		c_isle_of_flame = { clr_title_flag = phoenix_demand_sent }
+	}
+
+	option = { # Leave the isle
+		name = EVTOPTAphoenix2
+		prestige = -100
+		if = {
+			limit = {
+				e_ulthuan = { has_holder = yes holder_scope = { religion_group = cadai_group } }
+			}
+			e_ulthuan = {
+				holder_scope = {
+					c_isle_of_flame = { grant_title_no_opinion = PREV }
+					if = {
+						limit = { ROOT = { has_landed_title = d_isle_of_flame } }
+						d_isle_of_flame = { grant_title_no_opinion = PREV }
+					}
+				}
+			}
+		}
+		else = {
+			create_character = {
+				random_traits = yes
+				dynasty = random
+				religion = cadai
+				culture = chracian
+				female = no
+				age = 140
+				trait = creature_elf
+				trait = zealous
+				attributes = { martial = 10 learning = 8 }
+			}
+			new_character = {
+				c_isle_of_flame = { grant_title_no_opinion = PREV }
+				if = {
+					limit = { ROOT = { has_landed_title = d_isle_of_flame } }
+					d_isle_of_flame = { grant_title_no_opinion = PREV }
+				}
+				set_defacto_liege = THIS
+			}
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = craven }
+			modifier = { factor = 0.25 trait = brave }
+			modifier = { factor = 0.25 higher_tier_than = DUKE }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBphoenix2
+		create_character = {
+			random_traits = yes
+			dynasty = random
+			religion = cadai
+			culture = chracian
+			female = no
+			age = 300
+			trait = creature_elf
+			trait = zealous
+			trait = brave
+			trait = skilled_tactician
+			attributes = { martial = 14 }
+		}
+		new_character = {
+			set_character_flag = religious_revolter
+			create_title = {
+				tier = DUKE
+				landless = yes
+				temporary = yes
+				rebel = yes
+				culture = chracian
+				name = "PHOENIX_GUARD_RISING"
+				holder = THIS
+			}
+			wealth = 200
+			c_isle_of_flame = {
+				location = {
+					PREVPREV = {
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							leader = THIS
+							troops = {
+								pikemen = { 1500 1500 }
+								heavy_infantry = { 1500 1500 }
+								archers = { 500 500 }
+							}
+							attrition = 0.5
+						}
+					}
+				}
+			}
+			ROOT = {
+				top_liege = {
+					reverse_war = {
+						target = PREVPREV
+						casus_belli = religious_revolt
+						thirdparty_title = c_isle_of_flame
+						tier = DUKE
+					}
+				}
+			}
+		}
+		ai_chance = { factor = 80 }
 	}
 }

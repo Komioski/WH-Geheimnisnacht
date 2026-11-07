@@ -41,6 +41,7 @@
 # Scars and tattoos            lodge.65 - lodge.66
 # The clans muster (Dawi)      lodge.70 - lodge.76 (was HF.25007 - HF.25013)
 # Call to war, knightly oath   lodge.80 - lodge.81 (was WULRIC.30 - WULRIC.31)
+# The young recruit            lodge.100 - lodge.135 (was HF.25400 - HF.25435)
 #
 # Saved: character flags awaiting_initiation_trial, society_join_block,
 #   they_accepted@, they_declined@, mock_duel, show_once_flag,
@@ -48,7 +49,10 @@
 #   choosing_military_aspect, choosing_warrior_training, opt_A/B/C,
 #   no_harm, someone_is_hurt, hurt_self, may_join_society,
 #   lodge_got_wolf_pelt, lodge_got_household (once per life),
-#   chose_knighthood_to_pledge_to; character modifiers
+#   chose_knighthood_to_pledge_to, flag_child_is_a_warrior,
+#   flag_prospective_child_warrior_is_lazy/scholar/lady/coward,
+#   flag_child_abandoned_warband, lodge_got_mentor_blade (once per life);
+#   character modifiers
 #   warband_failed_joining_cd (ten-year ban after a failed trial),
 #   lodge_growth_cooldown, lost_rank_up_duel_cooldown,
 #   lodge_slavic_stand_together_cooldown, knights_call_of_the_war_boost and
@@ -57,7 +61,8 @@
 #   martial_society_to_join, new_recruit, lodge_hero_spoils,
 #   champion_character, duel_target, combatant_1, combatant_2,
 #   recruiting_parent, mentor_target, kinslayer_target,
-#   scoped_slavic_savior (the thane of the muster).
+#   scoped_slavic_savior (the thane of the muster), child_hero_mentor,
+#   fleeing_target.
 #
 # Callers: common/on_actions/00_on_actions.txt (on_character_ask_to_join_
 #   society 1, on_five_year_pulse 50, on_society_bi_yearly_pulse 54,
@@ -67,11 +72,12 @@
 #   decisions/warrior_lodge_decisions.txt (warrior_lodge_slavic_stand_
 #   together 70, knights_call_of_the_war 80, pledge_to_knighthood 81);
 #   on_startup (65); events/HF_warrior_lodge_mission_events.txt (66);
+#   lodge.12 (100, the young recruit);
 #   common/scripted_effects/01_scripted_effects_duels.txt (9, 61);
 #   events/hfp_duel_events.txt (13).
 # Support: common/scripted_triggers/wh_warband_triggers.txt (voices, lodge
 #   recruits), common/scripted_effects/wh_warband_effects.txt
-#   (lodge_household_spawn_effect), common/event_modifiers/
+#   (lodge_household_spawn_effect, lodge_child_*), common/event_modifiers/
 #   wh_warband_modifiers.txt (lodge_growth_cooldown).
 #
 # Fixed from vanilla: a captive leader made two champions answer the same
@@ -92,7 +98,12 @@
 # the knightly oath, the Knights of the Fiery Heart checked a region on
 # the knight instead of the capital, the Knights of the Bull looked for a
 # culture called stubborn, and a knight with no order open got an empty
-# event (now: wait and ask again).
+# event (now: wait and ask again). The young recruit: the brawn-for-looks
+# pick tested an impossible build, the tooltip and the effect of losing
+# your looks did not match, a child who gave in or endured was dropped
+# from the training for good, and an already miserable child who was
+# told no could be left with no choice but death; a child too fine for
+# the barracks is no longer only a girl.
 #
 # Also in this file (each part keeps its own header and namespace):
 #   Warbands (namespace warband, was WHG_warband_events)
@@ -1488,7 +1499,7 @@ character_event = {
 		FROM = {
 			clr_character_flag = passed_initiation
 			clr_character_flag = is_being_recruited_to_warband_by_parent
-			hidden_tooltip = { character_event = { id = HF.25400 } } # The young recruit's flavour (lodge child events)
+			hidden_tooltip = { character_event = { id = lodge.100 } } # The young recruit
 		}
 		clr_character_flag = show_only_once@FROM
 	}
@@ -4163,6 +4174,1242 @@ character_event = {
 
 	after = {
 		clr_character_flag = choosing_warrior_training
+	}
+}
+
+###############################################################################
+# The young recruit
+###############################################################################
+
+# lodge.100 The young recruit (hidden)
+# From lodge.12 (a child pushed into the society by a parent passed the
+# trial) and after each event of this section, until the child is 20.
+# A child who never wanted to fight complains first (lodge.125). Otherwise
+# the parent hears that the training crowds out the child's studies, court
+# manners, wits or looks, or a Hero of the society offers to teach the
+# child courage, fitness or swordplay. About one event a year.
+# Scope: the child; event_target:recruiting_parent, martial_society_to_join.
+character_event = {
+	id = lodge.100
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		lodge_young_recruit_trigger = yes
+		event_target:recruiting_parent = { same_society_as = ROOT NOT = { trait = incapable } }
+	}
+
+	immediate = {
+		# First time only: did the child want to fight at all?
+		if = {
+			limit = {
+				NOR = {
+					has_education_martial_trigger = yes
+					has_lifestyle_martial_trigger = yes
+					trait = brave
+					trait = rowdy
+					has_focus = focus_ch_struggle
+					has_focus = focus_ed_martial
+					has_focus = focus_war
+					has_focus = focus_hunting
+					has_character_flag = flag_child_is_a_warrior
+				}
+			}
+			random_list = {
+				20 = { # Never wanted this
+					modifier = { factor = 0.75 trait = wroth }
+					modifier = { factor = 0.75 trait = haughty }
+					modifier = { factor = 1.5 trait = slothful }
+					modifier = { factor = 1.5 trait = indolent }
+					modifier = { factor = 1.5 trait = fussy }
+					modifier = { factor = 1.75 trait = timid }
+					modifier = { factor = 1.5 trait = shy }
+					modifier = { factor = 2 trait = craven }
+					modifier = { factor = 1.5 trait = feeble }
+					modifier = { factor = 1.25 trait = sturdy }
+					modifier = { factor = 0.5 trait = robust }
+					modifier = { factor = 1.5 trait = weak }
+					modifier = { factor = 0.5 trait = strong }
+					modifier = { factor = 1.5 NOT = { martial = 6 } }
+					modifier = { factor = 1.75 NOT = { martial = 3 } }
+					modifier = {
+						factor = 2
+						is_female = yes
+						NOR = {
+							has_religion_feature = religion_matriarchal
+							has_religion_feature = religion_equal
+						}
+					}
+					modifier = {
+						factor = 2
+						is_female = no
+						has_religion_feature = religion_matriarchal
+					}
+					character_event = { id = lodge.125 days = 150 random = 150 }
+				}
+				80 = {
+					set_character_flag = flag_child_is_a_warrior
+					lodge_child_training_pick_effect = yes
+				}
+			}
+		}
+		else = {
+			set_character_flag = flag_child_is_a_warrior
+			lodge_child_training_pick_effect = yes
+		}
+	}
+}
+
+# lodge.101 The books gather dust
+# Scope: the parent; FROM is the child.
+character_event = {
+	id = lodge.101
+	title = EVTTITLElodge100_training
+	desc = EVTDESClodge101
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { lodge_young_recruit_trigger = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge101
+		tooltip = { FROM = { change_martial = 1 change_learning = -2 } }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.102 } } }
+		ai_chance = { factor = 100 }
+	}
+	option = {
+		name = EVTOPTBlodge101
+		tooltip = { FROM = { lodge_child_stress_effect = yes } }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.103 } } }
+		ai_chance = { factor = 10 }
+	}
+}
+
+# lodge.102 No more books
+# Scope: the child; FROM is the parent.
+character_event = {
+	id = lodge.102
+	title = EVTTITLElodge100_my_training
+	desc = EVTDESClodge102
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge102
+		change_martial = 1
+		change_learning = -2
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+	}
+}
+
+# lodge.103 Books and blades both
+# Scope: the child; FROM is the parent.
+character_event = {
+	id = lodge.103
+	title = EVTTITLElodge100_my_training
+	desc = EVTDESClodge103
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge103
+		lodge_child_stress_effect = yes
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+	}
+}
+
+# lodge.104 The ledgers go unread
+# Scope: the parent; FROM is the child.
+character_event = {
+	id = lodge.104
+	title = EVTTITLElodge100_training
+	desc = EVTDESClodge104
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { lodge_young_recruit_trigger = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge104
+		tooltip = { FROM = { change_martial = 1 change_stewardship = -1 } }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.105 } } }
+		ai_chance = { factor = 100 }
+	}
+	option = {
+		name = EVTOPTBlodge104
+		tooltip = { FROM = { lodge_child_stress_effect = yes } }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.106 } } }
+		ai_chance = { factor = 10 }
+	}
+}
+
+# lodge.105 No more ledgers
+# Scope: the child; FROM is the parent.
+character_event = {
+	id = lodge.105
+	title = EVTTITLElodge100_my_training
+	desc = EVTDESClodge105
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge105
+		change_martial = 1
+		change_stewardship = -1
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+	}
+}
+
+# lodge.106 Ledgers and blades both
+# Scope: the child; FROM is the parent.
+character_event = {
+	id = lodge.106
+	title = EVTTITLElodge100_my_training
+	desc = EVTDESClodge106
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge106
+		lodge_child_stress_effect = yes
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+	}
+}
+
+# lodge.107 Manners of the barracks
+# Scope: the parent; FROM is the child.
+character_event = {
+	id = lodge.107
+	title = EVTTITLElodge100_training
+	desc = EVTDESClodge107
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { lodge_young_recruit_trigger = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge107
+		tooltip = { FROM = { change_martial = 1 change_diplomacy = -1 } }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.108 } } }
+		ai_chance = { factor = 100 }
+	}
+	option = {
+		name = EVTOPTBlodge107
+		tooltip = { FROM = { lodge_child_stress_effect = yes } }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.109 } } }
+		ai_chance = { factor = 10 }
+	}
+}
+
+# lodge.108 Who needs the court?
+# Scope: the child; FROM is the parent.
+character_event = {
+	id = lodge.108
+	title = EVTTITLElodge100_my_training
+	desc = EVTDESClodge108
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge108
+		change_martial = 1
+		change_diplomacy = -1
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+	}
+}
+
+# lodge.109 Back to court
+# Scope: the child; FROM is the parent.
+character_event = {
+	id = lodge.109
+	title = EVTTITLElodge100_my_training
+	desc = EVTDESClodge109
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge109
+		lodge_child_stress_effect = yes
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+	}
+}
+
+# lodge.110 All brawn
+# A clever parent can steer the child to a fighter's cunning instead.
+# Scope: the parent; FROM is the child.
+character_event = {
+	id = lodge.110
+	title = EVTTITLElodge100_training
+	desc = EVTDESClodge110
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { lodge_young_recruit_trigger = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge110
+		trigger = { is_smart_trigger = yes }
+		tooltip_info_custom = available_due_to_smart
+		tooltip = { FROM = { change_martial = 1 change_intrigue = 1 } }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.111 } } }
+		ai_chance = { factor = 100 }
+	}
+	option = {
+		name = EVTOPTBlodge110
+		tooltip = { FROM = { lodge_child_brawn_for_wits_effect = yes } }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.112 } } }
+		ai_chance = { factor = 100 }
+	}
+}
+
+# lodge.111 A strong body and a strong mind
+# Scope: the child; FROM is the parent.
+character_event = {
+	id = lodge.111
+	title = EVTTITLElodge100_my_training
+	desc = EVTDESClodge111
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge111
+		change_martial = 1
+		change_intrigue = 1
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+	}
+}
+
+# lodge.112 Strong and slow
+# Scope: the child; FROM is the parent.
+character_event = {
+	id = lodge.112
+	title = EVTTITLElodge100_my_training
+	desc = EVTDESClodge112
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge112
+		lodge_child_brawn_for_wits_effect = yes
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+	}
+}
+
+# lodge.113 Mud and bruises
+# A groomed or proud parent can object. Scope: the parent; FROM is the
+# child.
+character_event = {
+	id = lodge.113
+	title = EVTTITLElodge100_training
+	desc = { trigger = { FROM = { is_female = no } } text = EVTDESClodge113_son }
+	desc = { trigger = { FROM = { is_female = yes } } text = EVTDESClodge113_daughter }
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { lodge_young_recruit_trigger = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge113
+		trigger = { OR = { trait = groomed trait = proud } }
+		tooltip_info_custom = available_due_to_groomed_or_proud
+		tooltip = { FROM = { lodge_child_stress_effect = yes } }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.114 } } }
+		ai_chance = { factor = 100 }
+	}
+	option = {
+		name = EVTOPTBlodge113
+		tooltip = { FROM = { lodge_child_brawn_for_looks_effect = yes } }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.115 } } }
+		ai_chance = { factor = 100 }
+	}
+}
+
+# lodge.114 Wash your face
+# Scope: the child; FROM is the parent.
+character_event = {
+	id = lodge.114
+	title = EVTTITLElodge100_my_training
+	desc = EVTDESClodge114
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge114
+		lodge_child_stress_effect = yes
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+	}
+}
+
+# lodge.115 Sweat and blood
+# Scope: the child; FROM is the parent.
+character_event = {
+	id = lodge.115
+	title = EVTTITLElodge100_my_training
+	desc = EVTDESClodge115
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge115
+		lodge_child_brawn_for_looks_effect = yes
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+	}
+}
+
+# lodge.116 A lesson in courage
+# A Hero of the society wants to send the child into the wild alone.
+# Scope: the parent; FROM is the child; event_target:child_hero_mentor.
+character_event = {
+	id = lodge.116
+	title = EVTTITLElodge116
+	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESClodge116_chaos }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESClodge116_skaven }
+	desc = { trigger = { warband_voice_greenskin_trigger = yes } text = EVTDESClodge116_greenskin }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge116_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge116_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge116_dawi }
+	desc = { trigger = { lodge_voice_other_trigger = yes } text = EVTDESClodge116_any }
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = event_target:child_hero_mentor
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { lodge_young_recruit_trigger = yes }
+		event_target:child_hero_mentor = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge116
+		tooltip = { FROM = { lodge_child_courage_trial_effect = yes } }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.117 } } }
+		ai_chance = { factor = 100 }
+	}
+	option = {
+		name = EVTOPTBlodge116
+		detract_society_currency_minor_effect = yes
+		hidden_tooltip = { FROM = { character_event = { id = lodge.100 } } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = kind }
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 0 trait = cruel }
+		}
+	}
+}
+
+# lodge.117 Alone in the wild
+# The child comes back brave, or hurt but less afraid, or not at all.
+# Scope: the child; FROM is the parent; event_target:child_hero_mentor.
+character_event = {
+	id = lodge.117
+	title = EVTTITLElodge117
+	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESClodge117_chaos }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESClodge117_skaven }
+	desc = { trigger = { warband_voice_greenskin_trigger = yes } text = EVTDESClodge117_greenskin }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge117_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge117_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge117_dawi }
+	desc = { trigger = { lodge_voice_other_trigger = yes } text = EVTDESClodge117_any }
+	picture = GFX_evt_mysterious_forest
+	border = GFX_event_normal_frame_war
+	portrait = event_target:child_hero_mentor
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge117
+		lodge_child_courage_trial_effect = yes
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+	}
+}
+
+# lodge.118 Too soft for the fight
+# A Hero wants to train a stout or a sickly child into shape.
+# Scope: the parent; FROM is the child; event_target:child_hero_mentor.
+character_event = {
+	id = lodge.118
+	title = EVTTITLElodge118
+	desc = { trigger = { FROM = { trait = sturdy } } text = EVTDESClodge118_stout }
+	desc = { trigger = { FROM = { trait = feeble } } text = EVTDESClodge118_feeble }
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = event_target:child_hero_mentor
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { lodge_young_recruit_trigger = yes OR = { trait = sturdy trait = feeble } }
+		event_target:child_hero_mentor = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge118
+		custom_tooltip = { text = EVTOPTAlodge118_TT }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.119 } } }
+		ai_chance = { factor = 100 }
+	}
+	option = {
+		name = EVTOPTBlodge118
+		detract_society_currency_minor_effect = yes
+		hidden_tooltip = { FROM = { character_event = { id = lodge.100 } } }
+		ai_chance = { factor = 10 }
+	}
+}
+
+# lodge.119 Training with a Hero
+# Scope: the child; FROM is the parent; event_target:child_hero_mentor.
+character_event = {
+	id = lodge.119
+	title = EVTTITLElodge119
+	desc = { trigger = { trait = sturdy } text = EVTDESClodge119_stout }
+	desc = { trigger = { trait = feeble } text = EVTDESClodge119_feeble }
+	picture = GFX_evt_guardian
+	border = GFX_event_normal_frame_war
+	portrait = event_target:child_hero_mentor
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge119
+		if = {
+			limit = { NOT = { trait = stressed } }
+			random = { chance = 15 add_trait = stressed }
+		}
+		if = {
+			limit = { trait = sturdy }
+			remove_trait = sturdy
+			hidden_tooltip = { FROM = { character_event = { id = lodge.120 days = 50 } } }
+		}
+		else_if = {
+			limit = { trait = feeble }
+			remove_trait = feeble
+			hidden_tooltip = { FROM = { character_event = { id = lodge.121 days = 50 } } }
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 has_focus = focus_ch_struggle }
+			modifier = { factor = 1.75 has_focus = focus_ed_martial }
+			modifier = { factor = 1.75 trait = diligent }
+		}
+	}
+	option = {
+		name = EVTOPTBlodge119
+		hidden_tooltip = { FROM = { character_event = { id = lodge.122 days = 50 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = slothful }
+			modifier = { factor = 1.5 trait = indolent }
+			modifier = { factor = 1.5 trait = fussy }
+			modifier = { factor = 1.75 trait = sturdy trait = gluttonous }
+			modifier = { factor = 1.75 trait = feeble trait = temperate }
+			modifier = { factor = 1.25 trait = craven }
+		}
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+	}
+}
+
+# lodge.120 Fit at last (was stout)
+# Scope: the parent; FROM is the child; event_target:child_hero_mentor.
+character_event = {
+	id = lodge.120
+	title = EVTTITLElodge118
+	desc = EVTDESClodge120
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = event_target:child_hero_mentor
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge120
+		if = { limit = { same_society_as = FROM } add_society_currency_trivial_effect = yes }
+	}
+}
+
+# lodge.121 Fit at last (was feeble)
+# Scope: the parent; FROM is the child; event_target:child_hero_mentor.
+character_event = {
+	id = lodge.121
+	title = EVTTITLElodge118
+	desc = EVTDESClodge121
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = event_target:child_hero_mentor
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge120
+		if = { limit = { same_society_as = FROM } add_society_currency_trivial_effect = yes }
+	}
+}
+
+# lodge.122 Still soft
+# Scope: the parent; FROM is the child; event_target:child_hero_mentor.
+character_event = {
+	id = lodge.122
+	title = EVTTITLElodge118
+	desc = { trigger = { FROM = { trait = sturdy } } text = EVTDESClodge122_stout }
+	desc = { trigger = { FROM = { NOT = { trait = sturdy } } } text = EVTDESClodge122_feeble }
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = event_target:child_hero_mentor
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge122
+		if = { limit = { same_society_as = FROM } detract_society_currency_tiny_effect = yes }
+	}
+}
+
+# lodge.123 A Hero's lessons
+# A Hero offers to teach the child to duel. Scope: the parent; FROM is
+# the child; event_target:child_hero_mentor.
+character_event = {
+	id = lodge.123
+	title = EVTTITLElodge100_training
+	desc = EVTDESClodge123
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = event_target:child_hero_mentor
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { lodge_young_recruit_trigger = yes }
+		event_target:child_hero_mentor = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge123
+		tooltip = {
+			FROM = {
+				if = {
+					limit = { NOT = { trait = wounded } }
+					random = { chance = 25 add_trait = wounded }
+				}
+				add_one_duel_experience_modifier = yes
+			}
+		}
+		hidden_tooltip = { FROM = { character_event = { id = lodge.124 } } }
+		ai_chance = { factor = 100 }
+	}
+	option = {
+		name = EVTOPTBlodge123
+		detract_society_currency_minor_effect = yes
+		hidden_tooltip = { FROM = { character_event = { id = lodge.100 } } }
+		ai_chance = { factor = 10 }
+	}
+}
+
+# lodge.124 Bruises and new moves
+# Rarely, once in a life, the Hero gives the child a good blade.
+# Scope: the child; FROM is the parent; event_target:child_hero_mentor.
+character_event = {
+	id = lodge.124
+	title = EVTTITLElodge100_my_training
+	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESClodge124_chaos }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESClodge124_skaven }
+	desc = { trigger = { warband_voice_greenskin_trigger = yes } text = EVTDESClodge124_greenskin }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge124_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge124_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge124_dawi }
+	desc = { trigger = { lodge_voice_other_trigger = yes } text = EVTDESClodge124_any }
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_war
+	portrait = event_target:child_hero_mentor
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge124
+		if = { limit = { NOT = { trait = wounded } } random = { chance = 25 add_trait = wounded } }
+		add_one_duel_experience_modifier = yes
+		if = {
+			limit = {
+				NOT = { has_character_flag = lodge_got_mentor_blade }
+				NOT = { has_artifact = sword_of_striking }
+				event_target:child_hero_mentor = { is_alive = yes }
+			}
+			random = {
+				chance = 10
+				set_character_flag = lodge_got_mentor_blade
+				custom_tooltip = { text = EVTOPTAlodge124_blade_TT }
+				add_artifact = sword_of_striking
+			}
+		}
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+	}
+}
+
+# lodge.125 Not a fighter
+# The child never wanted this: too lazy, too bookish, too fine for the
+# barracks, or too afraid. Scope: the child; event_target:recruiting_parent.
+character_event = {
+	id = lodge.125
+	title = EVTTITLElodge125
+	desc = {
+		trigger = { has_character_flag = flag_prospective_child_warrior_is_lazy }
+		text = EVTDESClodge125_lazy
+	}
+	desc = {
+		trigger = { has_character_flag = flag_prospective_child_warrior_is_scholar }
+		text = EVTDESClodge125_scholar
+	}
+	desc = {
+		trigger = { has_character_flag = flag_prospective_child_warrior_is_lady }
+		text = EVTDESClodge125_lady
+	}
+	desc = {
+		trigger = { has_character_flag = flag_prospective_child_warrior_is_coward }
+		text = EVTDESClodge125_coward
+	}
+	picture = GFX_evt_child_reading
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:recruiting_parent = { is_alive = yes }
+	}
+
+	immediate = {
+		random_list = {
+			20 = {
+				trigger = { NOR = { trait = diligent trait = conscientious } }
+				modifier = { factor = 2 trait = slothful }
+				modifier = { factor = 2 trait = indolent }
+				set_character_flag = flag_prospective_child_warrior_is_lazy
+			}
+			20 = {
+				modifier = { factor = 2 has_focus = focus_ed_learning }
+				modifier = { factor = 2 trait = diligent }
+				modifier = { factor = 2 trait = conscientious }
+				set_character_flag = flag_prospective_child_warrior_is_scholar
+			}
+			20 = {
+				modifier = { factor = 2 trait = groomed }
+				modifier = { factor = 2 trait = proud }
+				modifier = { factor = 2 trait = fussy }
+				modifier = { factor = 0.5 trait = uncouth }
+				set_character_flag = flag_prospective_child_warrior_is_lady
+			}
+			20 = {
+				modifier = { factor = 2.5 trait = timid }
+				modifier = { factor = 3 trait = craven }
+				set_character_flag = flag_prospective_child_warrior_is_coward
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAlodge125
+		hidden_tooltip = {
+			event_target:recruiting_parent = { character_event = { id = lodge.126 } }
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = {
+		name = EVTOPTBlodge125
+		if = {
+			limit = { NOT = { trait = stressed } }
+			random = { chance = 25 add_trait = stressed }
+		}
+		lodge_child_clear_flags_effect = yes
+		set_character_flag = flag_child_is_a_warrior
+		hidden_tooltip = { character_event = { id = lodge.100 } }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# lodge.126 My child wants out
+# Scope: the parent; FROM is the child.
+character_event = {
+	id = lodge.126
+	title = EVTTITLElodge125
+	desc = {
+		trigger = { FROM = { has_character_flag = flag_prospective_child_warrior_is_lazy } }
+		text = EVTDESClodge126_lazy
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = flag_prospective_child_warrior_is_scholar } }
+		text = EVTDESClodge126_scholar
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = flag_prospective_child_warrior_is_lady } }
+		text = EVTDESClodge126_lady
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = flag_prospective_child_warrior_is_coward } }
+		text = EVTDESClodge126_coward
+	}
+	picture = GFX_evt_child_reading
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = { # You will obey
+		name = EVTOPTAlodge126
+		custom_tooltip = { text = EVTOPTAlodge126_TT }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.127 } } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = stubborn }
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 0.25 trait = kind }
+		}
+	}
+	option = { # Let the child go
+		name = EVTOPTBlodge126
+		trigger = { NOT = { trait = stubborn } }
+		FROM = {
+			leave_society = yes
+			set_character_flag = flag_child_abandoned_warband
+			lodge_child_clear_flags_effect = yes
+		}
+		tiered_prestige_negative_effect = yes
+		detract_society_currency_minor_effect = yes
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 0.25 trait = cruel }
+		}
+	}
+}
+
+# lodge.127 The answer is no
+# The child gives in (and is miserable), runs away with the treasury or,
+# at 16 or older, takes their own life. Scope: the child; FROM is the
+# parent.
+character_event = {
+	id = lodge.127
+	title = EVTTITLElodge125
+	desc = EVTDESClodge127
+	picture = GFX_evt_child_reading
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_independent_ruler = {
+			limit = {
+				is_within_diplo_range = FROM
+				NOR = {
+					character = ROOT
+					character = FROM
+					same_society_as = FROM
+					same_society_as = ROOT
+				}
+			}
+			preferred_limit = { is_rival = FROM }
+			preferred_limit = { religion = ROOT culture = ROOT }
+			preferred_limit = { religion = ROOT }
+			save_event_target_as = fleeing_target
+		}
+	}
+
+	option = { # Give in
+		name = EVTOPTAlodge127
+		trigger = { NOT = { trait = depressed } }
+		add_trait = depressed
+		lodge_child_clear_flags_effect = yes
+		set_character_flag = flag_child_is_a_warrior
+		hidden_tooltip = {
+			FROM = { character_event = { id = lodge.128 days = 25 } }
+			character_event = { id = lodge.100 }
+		}
+		ai_chance = { factor = 40 }
+	}
+	option = { # Run away
+		name = EVTOPTBlodge127
+		trigger = {
+			is_ruler = no
+			host = { character = FROM }
+			event_target:fleeing_target = { is_alive = yes }
+		}
+		tooltip = {
+			FROM = {
+				show_scope_change = no
+				transfer_scaled_wealth = { to = ROOT value = 0.5 min = 100 max = 250 }
+			}
+		}
+		hidden_tooltip = {
+			FROM = { character_event = { id = lodge.129 } }
+			move_character = event_target:fleeing_target
+			set_character_flag = no_court_invites
+			leave_society = yes
+			set_character_flag = flag_child_abandoned_warband
+			character_event = { id = lodge.131 days = 450 random = 250 }
+		}
+		ai_chance = { factor = 50 }
+	}
+	option = { # Take my own life
+		name = EVTOPTClodge127
+		trigger = { age = 16 }
+		hidden_tooltip = { FROM = { character_event = { id = lodge.130 } } }
+		death = { death_reason = death_suicide }
+		ai_chance = { factor = 10 }
+	}
+	option = { # Already miserable: endure anyway
+		name = EVTOPTDlodge127
+		trigger = { trait = depressed }
+		lodge_child_stress_effect = yes
+		lodge_child_clear_flags_effect = yes
+		set_character_flag = flag_child_is_a_warrior
+		hidden_tooltip = {
+			FROM = { character_event = { id = lodge.128 days = 25 } }
+			character_event = { id = lodge.100 }
+		}
+		ai_chance = { factor = 40 }
+	}
+}
+
+# lodge.128 A gloomy child
+# Scope: the parent; FROM is the child.
+character_event = {
+	id = lodge.128
+	title = EVTTITLElodge125
+	desc = EVTDESClodge128
+	picture = GFX_evt_child_reading
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = { trigger = { trait = kind } text = EVTOPTAlodge128_kind }
+		name = { trigger = { NOT = { trait = kind } } text = EVTOPTAlodge128 }
+		if = { limit = { trait = kind NOT = { trait = stressed } } add_trait = stressed }
+	}
+}
+
+# lodge.129 The child has fled
+# Scope: the parent; FROM is the child.
+character_event = {
+	id = lodge.129
+	title = EVTTITLElodge125
+	desc = EVTDESClodge129
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = { trigger = { is_evil_trigger = yes } text = EVTOPTAlodge129_evil }
+		name = { trigger = { is_evil_trigger = no trait = kind } text = EVTOPTAlodge129_kind }
+		name = { trigger = { is_evil_trigger = no NOT = { trait = kind } } text = EVTOPTAlodge129 }
+		transfer_scaled_wealth = { to = FROM value = 0.5 min = 100 max = 250 }
+		if = { limit = { trait = kind NOT = { trait = stressed } } add_trait = stressed }
+		if = {
+			limit = { is_evil_trigger = yes NOR = { is_rival = FROM num_of_rivals = 3 } }
+			add_rival = FROM
+		}
+	}
+}
+
+# lodge.130 The child is dead
+# Scope: the parent; FROM is the child.
+character_event = {
+	id = lodge.130
+	title = EVTTITLElodge125
+	desc = EVTDESClodge130
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = { trigger = { is_evil_trigger = yes } text = EVTOPTAlodge130_evil }
+		name = { trigger = { is_evil_trigger = no trait = kind } text = EVTOPTAlodge130_kind }
+		name = { trigger = { is_evil_trigger = no NOT = { trait = kind } } text = EVTOPTAlodge130 }
+		if = { limit = { trait = kind NOT = { trait = depressed } } add_trait = depressed }
+	}
+}
+
+# lodge.131 Whatever happened to the runaway? (hidden)
+# Years later the runaway has become what they were afraid of becoming,
+# and word reaches the parent (lodge.132 - lodge.135).
+# Scope: the runaway; FROMFROM is the parent.
+character_event = {
+	id = lodge.131
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_ruler = no
+		NOR = { top_liege = { character = FROMFROM } trait = incapable }
+	}
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = flag_prospective_child_warrior_is_lazy }
+			change_martial = -3
+			add_trait = sturdy
+			add_trait = slothful
+			add_trait = gluttonous
+			add_trait = drunkard
+			if = {
+				limit = { has_nickname = no }
+				random_list = {
+					25 = { give_nickname = nick_the_merry }
+					25 = { give_nickname = nick_the_drunkard }
+					25 = { give_nickname = nick_the_fat }
+					50 = { }
+				}
+			}
+			FROMFROM = { character_event = { id = lodge.132 } }
+		}
+		else_if = {
+			limit = { has_character_flag = flag_prospective_child_warrior_is_scholar }
+			change_martial = -3
+			add_trait = feeble
+			add_trait = erudite
+			add_trait = craven
+			add_trait = uncouth
+			if = {
+				limit = { has_nickname = no }
+				random_list = {
+					25 = { give_nickname = nick_the_frail }
+					25 = { give_nickname = nick_the_recluse }
+					25 = { give_nickname = nick_the_wise }
+					50 = { }
+				}
+			}
+			FROMFROM = { character_event = { id = lodge.133 } }
+		}
+		else_if = {
+			limit = { has_character_flag = flag_prospective_child_warrior_is_lady }
+			change_martial = -3
+			add_trait = dull
+			add_trait = proud
+			add_trait = content
+			add_trait = groomed
+			if = {
+				limit = { has_nickname = no }
+				random_list = {
+					25 = { give_nickname = nick_the_frail }
+					25 = { give_nickname = nick_the_fair }
+					25 = { give_nickname = nick_the_gracious }
+					50 = { }
+				}
+			}
+			FROMFROM = { character_event = { id = lodge.134 } }
+		}
+		else_if = {
+			limit = { has_character_flag = flag_prospective_child_warrior_is_coward }
+			change_martial = -3
+			add_trait = paranoid
+			add_trait = craven
+			add_trait = uncouth
+			add_trait = shy
+			if = {
+				limit = { has_nickname = no }
+				random_list = {
+					25 = { give_nickname = nick_the_shadow }
+					25 = { give_nickname = nick_the_whisperer }
+					25 = { give_nickname = nick_the_twitchy }
+					50 = { }
+				}
+			}
+			FROMFROM = { character_event = { id = lodge.135 } }
+		}
+		lodge_child_clear_flags_effect = yes
+	}
+}
+
+# lodge.132 - lodge.135 News of the runaway
+# Scope: the parent; FROM is the runaway.
+character_event = {
+	id = lodge.132
+	title = EVTTITLElodge125
+	desc = EVTDESClodge132
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge132
+	}
+}
+
+character_event = {
+	id = lodge.133
+	title = EVTTITLElodge125
+	desc = EVTDESClodge133
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge132
+	}
+}
+
+character_event = {
+	id = lodge.134
+	title = EVTTITLElodge125
+	desc = EVTDESClodge134
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge132
+	}
+}
+
+character_event = {
+	id = lodge.135
+	title = EVTTITLElodge125
+	desc = EVTDESClodge135
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+	portrait = FROM
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge132
 	}
 }
 

@@ -1,0 +1,210 @@
+###############################################################################
+# Holy order decisions
+# Was decisions/holy_order_decisions.txt (vanilla Sons of Abraham), once
+# written out per order for eight orders. Now targeted decisions on the
+# Grand Master of any holy order of the ruler's faith: borrow 300 gold from
+# the order, give it 300 gold, or expel it from the realm.
+# Events: events/WHG_crusade_events.txt (holyorder.61, 63, 65; the debt is
+# pressed in holyorder.31 - 35).
+# Support: common/scripted_triggers/wh_holy_order_triggers.txt,
+#   common/scripted_effects/wh_holy_order_effects.txt
+###############################################################################
+
+targeted_decisions = {
+
+	# Borrow 300 gold from the order. One loan at a time; the order may later
+	# ask for a son or a castle site in payment (holyorder.31).
+	holy_order_borrow = {
+		filter = all
+		ai_target_filter = independent_rulers
+		ai_check_interval = 120
+
+		from_potential = {
+			is_playable = yes
+			is_nomadic = no
+			is_heretic = no
+			holy_order = no
+			is_witch_hunter_trigger = no
+			NOT = { has_character_modifier = borrowed_from_holy_order }
+			OR = {
+				ai = no
+				AND = {
+					higher_tier_than = COUNT
+					independent = yes
+				}
+			}
+		}
+
+		potential = {
+			holy_order = yes
+			religion = FROM
+			NOT = { liege = { character = FROM } }
+			holy_order_expelled_by_from_trigger = no
+		}
+
+		allow = {
+			wealth = 300
+			opinion = { who = FROM value = 25 }
+			FROM = {
+				piety = 100
+				NOT = { excommunicated_for = ROOT }
+			}
+		}
+
+		effect = {
+			save_event_target_as = holy_order_master
+			wealth = -300
+			primary_title = {
+				FROM = {
+					save_persistent_event_target = { name = holy_order_creditor scope = PREV }
+				}
+			}
+			FROM = {
+				add_character_modifier = {
+					name = borrowed_from_holy_order
+					duration = -1
+				}
+				wealth = 300
+				piety = -100
+				letter_event = { id = holyorder.61 }
+			}
+		}
+
+		revoke_allowed = {
+			always = no
+		}
+
+		ai_will_do = {
+			factor = 0.5
+			modifier = { factor = 0 FROM = { wealth = 0 } }
+		}
+	}
+
+	# Give the order 300 gold.
+	holy_order_donate = {
+		filter = all
+		ai_target_filter = independent_rulers
+		ai_check_interval = 80
+
+		from_potential = {
+			is_playable = yes
+			is_heretic = no
+			holy_order = no
+			is_witch_hunter_trigger = no
+		}
+
+		potential = {
+			holy_order = yes
+			religion = FROM
+			NOT = { liege = { character = FROM } }
+			holy_order_expelled_by_from_trigger = no
+		}
+
+		allow = {
+			FROM = { wealth = 300 }
+		}
+
+		effect = {
+			save_event_target_as = holy_order_master
+			wealth = 300
+			opinion = { who = FROM modifier = opinion_generous_donation }
+			FROM = {
+				if = {
+					limit = { NOT = { has_character_modifier = donated_to_holy_order } }
+					add_character_modifier = {
+						name = donated_to_holy_order
+						duration = -1
+					}
+				}
+				wealth = -300
+				piety = 100
+				letter_event = { id = holyorder.63 }
+			}
+		}
+
+		revoke_allowed = {
+			always = no
+		}
+
+		ai_will_do = {
+			factor = 0.05
+			modifier = {
+				factor = 0
+				FROM = {
+					OR = {
+						NOT = { wealth = 1000 }
+						AND = {
+							NOT = { has_pious_trait_trigger = yes }
+							NOT = { has_ambition = obj_become_paragon_of_virtue }
+						}
+					}
+				}
+			}
+		}
+	}
+
+	# Expel the order: it loses its baronies in the realm, leaves the ruler's
+	# service, and may be fought in a holy war (01_cb_types).
+	holy_order_expel = {
+		filter = all
+		ai = no
+
+		from_potential = {
+			is_playable = yes
+			is_heretic = no
+			independent = yes
+			higher_tier_than = DUKE
+			is_witch_hunter_trigger = no
+		}
+
+		potential = {
+			holy_order = yes
+			religion = FROM
+			holy_order_expelled_by_from_trigger = no
+			OR = {
+				is_vassal_or_below = FROM
+				any_demesne_title = {
+					tier = BARON
+					location = { owner = { OR = { character = FROM is_liege_or_above = FROM } } }
+				}
+			}
+		}
+
+		allow = {
+			FROM = { piety = 1000 }
+		}
+
+		effect = {
+			save_event_target_as = holy_order_master
+			FROM = {
+				piety = -1000
+				religion_authority = {
+					modifier = holy_order_expelled
+					years = 20
+				}
+				holy_order_expel_effect = yes
+			}
+			any_demesne_title = {
+				limit = {
+					tier = BARON
+					location = { owner = { OR = { character = FROM is_liege_or_above = FROM } } }
+				}
+				usurp_title = FROM
+			}
+			if = {
+				limit = { is_vassal_or_below = FROM }
+				set_defacto_liege = THIS
+			}
+			opinion = { who = FROM modifier = opinion_expelled_from_realm }
+			FROM = { letter_event = { id = holyorder.65 } }
+		}
+
+		revoke_allowed = {
+			always = no
+		}
+
+		ai_will_do = {
+			factor = 0
+		}
+	}
+}

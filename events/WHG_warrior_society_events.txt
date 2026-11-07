@@ -2,7 +2,9 @@
 # Warrior society events: warrior lodges, warbands and war aid
 #
 # Part 1: Warrior lodges
-# Namespace: lodge (was HF.10003 - HF.10071 in hf_warrior_lodge_events)
+# Namespace: lodge (was HF.10003 - HF.10071 in hf_warrior_lodge_events;
+#   lodge.65 - lodge.81 were HF.25007 - HF.25070 and WULRIC.30 - WULRIC.31
+#   in HF_warrior_lodge_powers_events)
 # Faction: Warrior societies
 # Serves: the warrior lodges (Warriors of Ulric, the Knightly Orders, the
 #   Warriors Guild of the Dawi); the joining trial, the rank-up duel and the
@@ -20,7 +22,12 @@
 # cell) and the call to arms. Hidden upkeep fills the lodges with AI members,
 # ranks them up and refounds a lodge that died out. A member at rank 3 can
 # fight a Hero for a seat at the table; a Hero's household may follow the
-# winner.
+# winner. Veterans and Heroes of Ulric and the Norscans wear the lodge's
+# tattoos. In a war, the Warriors Guild can call on a thane's throng of
+# warriors, thunderers and hammerers, who may become a friend or a lover.
+# The call to war speeds the levies of any lodge or Chaos warband; a
+# knight of the Knightly Orders swears to one order of the Old World,
+# picked by region and faith.
 #
 # The joining trial            lodge.1 - lodge.9
 # A child joins the lodge      lodge.10 - lodge.15
@@ -31,25 +38,35 @@
 # The call to arms             lodge.45
 # Upkeep                       lodge.50 - lodge.54
 # The seat at the table        lodge.60 - lodge.64
+# Scars and tattoos            lodge.65 - lodge.66
+# The clans muster (Dawi)      lodge.70 - lodge.76 (was HF.25007 - HF.25013)
+# Call to war, knightly oath   lodge.80 - lodge.81 (was WULRIC.30 - WULRIC.31)
 #
 # Saved: character flags awaiting_initiation_trial, society_join_block,
 #   they_accepted@, they_declined@, mock_duel, show_once_flag,
 #   accepted_trial, refused_trial, parent_was_supportive, parent_was_mean,
 #   choosing_military_aspect, choosing_warrior_training, opt_A/B/C,
 #   no_harm, someone_is_hurt, hurt_self, may_join_society,
-#   lodge_got_wolf_pelt, lodge_got_household (once per life); character
-#   modifiers warband_failed_joining_cd (ten-year ban after a failed trial),
-#   lodge_growth_cooldown, lost_rank_up_duel_cooldown; earmark
-#   lodge_household; event targets martial_society_to_join, new_recruit,
-#   lodge_hero_spoils,
+#   lodge_got_wolf_pelt, lodge_got_household (once per life),
+#   chose_knighthood_to_pledge_to; character modifiers
+#   warband_failed_joining_cd (ten-year ban after a failed trial),
+#   lodge_growth_cooldown, lost_rank_up_duel_cooldown,
+#   lodge_slavic_stand_together_cooldown, knights_call_of_the_war_boost and
+#   the knightly order modifiers (reiksguard_knight, knight_of_*); earmarks
+#   lodge_household, lodge_stand_together; event targets
+#   martial_society_to_join, new_recruit, lodge_hero_spoils,
 #   champion_character, duel_target, combatant_1, combatant_2,
-#   recruiting_parent, mentor_target, kinslayer_target.
+#   recruiting_parent, mentor_target, kinslayer_target,
+#   scoped_slavic_savior (the thane of the muster).
 #
 # Callers: common/on_actions/00_on_actions.txt (on_character_ask_to_join_
 #   society 1, on_five_year_pulse 50, on_society_bi_yearly_pulse 54,
 #   on_society_destroyed 53); decisions/warrior_lodge_decisions.txt (20,
 #   21, 30, 35, 40, 43, 45); decisions/hf_warrior_lodge_decisions.txt (10);
 #   decisions/mnm_society_decisions.txt (60);
+#   decisions/warrior_lodge_decisions.txt (warrior_lodge_slavic_stand_
+#   together 70, knights_call_of_the_war 80, pledge_to_knighthood 81);
+#   on_startup (65); events/HF_warrior_lodge_mission_events.txt (66);
 #   common/scripted_effects/01_scripted_effects_duels.txt (9, 61);
 #   events/hfp_duel_events.txt (13).
 # Support: common/scripted_triggers/wh_warband_triggers.txt (voices, lodge
@@ -68,7 +85,14 @@
 # Knights or Ulric at fixed odds, now their temper decides; Kislev's
 # warriors could never reach the Circle of the Bear; the growth notice used
 # a cooldown modifier that did not exist; the seclusion clean-up HFP.19000
-# moved to WHG_maintenance_events (aiclean.53).
+# moved to WHG_maintenance_events (aiclean.53). The scars of a scarred
+# character never showed, as the start-up event was not called, and the
+# lodge tattoos went only to vanilla lodges the mod does not have. The
+# muster could find no thane and still take the price (now refunded). In
+# the knightly oath, the Knights of the Fiery Heart checked a region on
+# the knight instead of the capital, the Knights of the Bull looked for a
+# culture called stubborn, and a knight with no order open got an empty
+# event (now: wait and ask again).
 #
 # Also in this file (each part keeps its own header and namespace):
 #   Warbands (namespace warband, was WHG_warband_events)
@@ -1533,7 +1557,10 @@ character_event = {
 				warband_voice_any_chaos_trigger = yes
 				warband_voice_skaven_trigger = yes
 				warband_voice_greenskin_trigger = yes
-				AND = { trait = cruel OR = { trait = wroth is_lunatic_trigger = yes trait = possessed } }
+				AND = {
+					trait = cruel
+					OR = { trait = wroth is_lunatic_trigger = yes trait = possessed }
+				}
 			}
 		}
 		custom_tooltip = { text = EVTOPTClodge13_TT }
@@ -3499,25 +3526,670 @@ character_event = {
 	}
 }
 
+###############################################################################
+# Scars and tattoos
+###############################################################################
+
+# lodge.65 Battle scars and lodge tattoos at the start (hidden)
+# On a new game (not a save): a scarred character gets the scars shown on
+# the portrait, and a landless veteran or Hero of the Warriors of Ulric or
+# the Norscan war-bands gets the lodge's tattoos. Scope: every character.
+character_event = {
+	id = lodge.65
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_save_game = no
+		OR = {
+			trait = scarred
+			trait = scarred_mid
+			trait = scarred_high
+			lodge_tattoo_candidate_trigger = yes
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { OR = { trait = scarred trait = scarred_mid trait = scarred_high } }
+			add_scarred_start_effect = yes
+		}
+		if = { limit = { lodge_tattoo_candidate_trigger = yes } lodge_tattoo_effect = yes }
+	}
+}
+
+# lodge.66 Lodge tattoos (hidden)
+# Sometimes sent when a veteran finishes a lodge mission: the Warriors of
+# Ulric ink the wolf on their veterans and Heroes, the Norscans their own
+# marks. Scope: the member.
+character_event = {
+	id = lodge.66
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		lodge_tattoo_candidate_trigger = yes
+	}
+
+	immediate = {
+		lodge_tattoo_effect = yes
+	}
+}
+
+###############################################################################
+# The clans muster (the Warriors Guild of the Dawi, rank 2)
+###############################################################################
+
+# lodge.70 The clans muster (hidden)
+# From warrior_lodge_slavic_stand_together: picks a landless brother of
+# the guild, brave and of the caller's clan if possible, to bring a
+# throng to the war. Scope: the caller.
+character_event = {
+	id = lodge.70
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_society_member = {
+			limit = {
+				is_ruler = no
+				religion = ROOT
+				is_unimportant_trigger = yes
+				NOR = {
+					host = { character = ROOT }
+					any_spouse = { is_ruler = yes }
+					prisoner = yes
+					any_close_relative = { ai = no }
+					host = { ai = no }
+					is_heir = ROOT
+					trait = incapable
+					is_inaccessible_trigger = yes
+					in_command = yes
+					has_minor_title = title_commander
+					has_character_flag = no_court_invites
+				}
+			}
+			preferred_limit = { trait = brave trait = stubborn dynasty = ROOT }
+			preferred_limit = { trait = brave trait = stubborn }
+			preferred_limit = { trait = brave dynasty = ROOT }
+			preferred_limit = { trait = brave }
+			preferred_limit = { martial = 12 }
+			save_event_target_as = scoped_slavic_savior
+		}
+		if = {
+			limit = { event_target:scoped_slavic_savior = { always = yes } }
+			character_event = { id = lodge.71 }
+		}
+		else = {
+			change_society_currency = 500
+			remove_character_modifier = lodge_slavic_stand_together_cooldown
+		}
+	}
+}
+
+# lodge.71 The throng arrives
+# A thane of the guild brings a throng of warriors, thunderers and
+# hammerers to the capital and takes a commander's post for the war. They
+# may grow fond of each other: love (lodge.72) or friendship (lodge.76).
+# Scope: the caller; event_target:scoped_slavic_savior.
+character_event = {
+	id = lodge.71
+	desc = EVTDESClodge71
+	picture = GFX_evt_dwarf_fighter
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_list = {
+			33 = { sound_effect = stand_together_01 }
+			33 = { sound_effect = stand_together_02 }
+			33 = { sound_effect = stand_together_03 }
+		}
+	}
+
+	option = {
+		name = EVTOPTAlodge71
+		event_target:scoped_slavic_savior = { move_character = ROOT }
+		hidden_tooltip = {
+			random_realm_character = {
+				limit = { has_minor_title = title_commander }
+				preferred_limit = { NOT = { martial = 10 } }
+				preferred_limit = { NOT = { martial = 15 } }
+				remove_title = title_commander
+			}
+			event_target:scoped_slavic_savior = { give_minor_title = title_commander }
+		}
+		capital_scope = {
+			show_scope_change = no
+			ROOT = {
+				show_scope_change = no
+				spawn_unit = {
+					province = PREV
+					home = PREV
+					owner = THIS
+					leader = event_target:scoped_slavic_savior
+					match_character = THIS
+					match_mult = 0.15
+					troops = {
+						heavy_infantry = { 125 125 }
+						light_infantry = { 50 50 }
+						pikemen = { 125 125 }
+					}
+					reinforces = yes
+					reinforce_rate_multiplier = 0.1
+					merge = yes
+					attrition = 1.0
+					earmark = lodge_stand_together
+					disband_on_peace = yes
+					can_toggle_looting = no
+				}
+				spawn_unit = {
+					province = PREV
+					home = PREV
+					owner = THIS
+					match_character = THIS
+					match_mult = 0.15
+					troops = {
+						heavy_infantry = { 125 125 }
+						light_infantry = { 50 50 }
+						archers = { 125 125 }
+					}
+					reinforces = yes
+					reinforce_rate_multiplier = 0.1
+					merge = yes
+					attrition = 1.0
+					earmark = lodge_stand_together
+					disband_on_peace = yes
+					can_toggle_looting = no
+				}
+				spawn_unit = {
+					province = PREV
+					home = PREV
+					owner = THIS
+					match_character = THIS
+					match_mult = 0.15
+					troops = {
+						heavy_infantry = { 125 125 }
+						light_infantry = { 50 50 }
+						gunpowder = { 125 125 }
+					}
+					reinforces = yes
+					reinforce_rate_multiplier = 0.1
+					merge = yes
+					attrition = 1.0
+					earmark = lodge_stand_together
+					disband_on_peace = yes
+					can_toggle_looting = no
+				}
+			}
+		}
+		hidden_tooltip = {
+			random_list = {
+				25 = { #Love
+					trigger = {
+						NOT = { num_of_lovers = 3 }
+						event_target:scoped_slavic_savior = { NOT = { num_of_lovers = 3 } }
+						opinion = { who = event_target:scoped_slavic_savior value = -20 }
+						NOT = { is_close_relative = event_target:scoped_slavic_savior }
+						OR = {
+							AND = {
+								prefers_men_trigger = yes
+								event_target:scoped_slavic_savior = { is_female = no }
+							}
+							AND = {
+								prefers_men_trigger = no
+								event_target:scoped_slavic_savior = { is_female = yes }
+							}
+						}
+					}
+					modifier = { factor = 1.5 trait = gregarious }
+					modifier = {
+						factor = 1.5
+						event_target:scoped_slavic_savior = { trait = gregarious }
+					}
+					modifier = { factor = 0.5 trait = shy }
+					modifier = { factor = 0.5 event_target:scoped_slavic_savior = { trait = shy } }
+					modifier = {
+						factor = 1.25
+						event_target:scoped_slavic_savior = { martial = 15 }
+					}
+					modifier = {
+						factor = 1.25
+						event_target:scoped_slavic_savior = { martial = 20 }
+					}
+					modifier = { factor = 0.25 trait = envious }
+					modifier = { factor = 0.25 trait = cruel }
+					modifier = { factor = 0.25 trait = paranoid }
+					modifier = {
+						factor = 0.75
+						event_target:scoped_slavic_savior = { has_ugly_trait_trigger = yes }
+					}
+					modifier = {
+						factor = 0.75
+						event_target:scoped_slavic_savior = { trait = inbred }
+					}
+					modifier = { factor = 0.5 event_target:scoped_slavic_savior = { age = 150 } }
+					modifier = {
+						factor = 1.5
+						event_target:scoped_slavic_savior = { has_fair_trait_trigger = yes }
+					}
+					modifier = {
+						factor = 1.5
+						event_target:scoped_slavic_savior = { trait = strong }
+					}
+					character_event = { id = lodge.72 days = 30 random = 15 }
+				}
+				25 = { #Friendship
+					trigger = {
+						NOT = { num_of_friends = 3 }
+						event_target:scoped_slavic_savior = { NOT = { num_of_friends = 3 } }
+						opinion = { who = event_target:scoped_slavic_savior value = -20 }
+					}
+					modifier = { factor = 1.5 trait = gregarious }
+					modifier = {
+						factor = 1.5
+						event_target:scoped_slavic_savior = { trait = gregarious }
+					}
+					modifier = { factor = 0.5 trait = shy }
+					modifier = { factor = 0.5 event_target:scoped_slavic_savior = { trait = shy } }
+					modifier = {
+						factor = 1.25
+						event_target:scoped_slavic_savior = { martial = 15 }
+					}
+					modifier = {
+						factor = 1.25
+						event_target:scoped_slavic_savior = { martial = 20 }
+					}
+					modifier = {
+						factor = 1.5
+						trait = drunkard
+						event_target:scoped_slavic_savior = { trait = drunkard }
+					}
+					modifier = { factor = 0.25 trait = envious }
+					modifier = { factor = 0.25 trait = paranoid }
+					character_event = { id = lodge.76 days = 30 random = 15 }
+				}
+				50 = { }
+			}
+		}
+	}
+}
+
+# lodge.72 Fond of the thane
+# Scope: the caller; event_target:scoped_slavic_savior.
+character_event = {
+	id = lodge.72
+	desc = EVTDESClodge72
+	picture = GFX_evt_dwarf_fighter
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:scoped_slavic_savior = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge72
+		tooltip = { add_lover = event_target:scoped_slavic_savior }
+		hidden_tooltip = {
+			event_target:scoped_slavic_savior = { character_event = { id = lodge.73 } }
+		}
+	}
+	option = {
+		name = EVTOPTBlodge72
+	}
+}
+
+# lodge.73 The thane's answer
+# The thane returns the feeling (lodge.74) or does not (lodge.75).
+# Scope: the thane; FROM is the caller.
+character_event = {
+	id = lodge.73
+	desc = EVTDESClodge73
+	picture = GFX_evt_camaraderie
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge73
+		trigger = {
+			OR = {
+				AND = { prefers_men_trigger = yes FROM = { is_female = no } }
+				AND = { prefers_men_trigger = no FROM = { is_female = yes } }
+			}
+		}
+		add_lover = FROM
+		hidden_tooltip = { FROM = { add_lover = ROOT character_event = { id = lodge.74 } } }
+	}
+	option = {
+		name = EVTOPTBlodge73
+		trigger = {
+			NOR = {
+				AND = { prefers_men_trigger = yes FROM = { is_female = no } }
+				AND = { prefers_men_trigger = no FROM = { is_female = yes } }
+			}
+		}
+		hidden_tooltip = { FROM = { character_event = { id = lodge.75 } } }
+	}
+}
+
+# lodge.74 The thane loves me too
+# Scope: the caller; FROM is the thane.
+character_event = {
+	id = lodge.74
+	desc = EVTDESClodge74
+	picture = GFX_evt_camaraderie
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge74
+	}
+}
+
+# lodge.75 The thane does not
+# Scope: the caller; FROM is the thane.
+character_event = {
+	id = lodge.75
+	desc = EVTDESClodge75
+	picture = GFX_evt_quarrel
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAlodge75
+		if = {
+			limit = { NOT = { trait = depressed } }
+			random = { chance = 5 add_trait = depressed }
+		}
+	}
+}
+
+# lodge.76 A sworn friend
+# Scope: the caller; event_target:scoped_slavic_savior.
+character_event = {
+	id = lodge.76
+	desc = EVTDESClodge76
+	picture = GFX_evt_camaraderie
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:scoped_slavic_savior = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAlodge76
+		add_friend = event_target:scoped_slavic_savior
+	}
+	option = {
+		name = EVTOPTBlodge76
+	}
+}
+
+###############################################################################
+# The call to war and the knightly oath
+###############################################################################
+
+# lodge.80 The call to war
+# From knights_call_of_the_war (rank 3, the warrior lodges and the Chaos
+# warbands): the realm's levies answer faster for two years.
+# Scope: the caller.
+character_event = {
+	id = lodge.80
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESClodge80_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESClodge80_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESClodge80_dawi }
+	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESClodge80_chaos }
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
+	picture = { trigger = { warband_voice_knight_trigger = yes } picture = GFX_evt_imperial_knight }
+	picture = { trigger = { warband_voice_dawi_trigger = yes } picture = GFX_evt_dwarf_fighter }
+	picture = {
+		trigger = { warband_voice_any_chaos_trigger = yes }
+		picture = GFX_evt_chaos_warband
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTAlodge80_ulric }
+		name = { trigger = { warband_voice_knight_trigger = yes } text = EVTOPTAlodge80_knight }
+		name = { trigger = { warband_voice_dawi_trigger = yes } text = EVTOPTAlodge80_dawi }
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTAlodge80_chaos }
+		add_character_modifier = { modifier = knights_call_of_the_war_boost duration = 720 }
+	}
+}
+
+# lodge.81 The knightly oath
+# From pledge_to_knighthood (the Knightly Orders, rank 2): swear to one of
+# the orders of the Old World. Which orders are open depends on the
+# region of the capital and the knight's faith. A knight who finds none
+# may wait and ask again. Scope: the knight.
+character_event = {
+	id = lodge.81
+	title = THE_KNIGHTLY_BROTHERHOOD
+	desc = EVTDESClodge81
+	picture = {
+		trigger = {
+			NOR = {
+				culture_group = estalian_group
+				culture_group = tilean_group
+				culture_group = kislevite_group
+			}
+		}
+		picture = GFX_evt_imperial_knight
+	}
+	picture = {
+		trigger = { OR = { culture_group = estalian_group culture_group = tilean_group } }
+		picture = GFX_evt_knighs_black_rose
+	}
+	picture = { trigger = { culture_group = kislevite_group } picture = GFX_evt_battle_kislev_gods }
+
+	is_triggered_only = yes
+
+	option = { #The Reiksguard
+		name = EVTOPTlodge81_reiksguard
+		trigger = { capital_scope = { region = world_old_world_empire_south } }
+		add_character_modifier = { name = reiksguard_knight duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 1.1 OR = { trait = ambitious trait = proud } }
+		}
+	}
+	option = { #The Knights Panther
+		name = EVTOPTlodge81_panther
+		trigger = {
+			capital_scope = {
+				region = world_old_world_empire
+				NOT = { region = world_old_world_empire_south }
+			}
+		}
+		add_character_modifier = { name = knight_of_panther duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = { factor = 1 modifier = { factor = 1.75 OR = { trait = cruel trait = wroth } } }
+	}
+	option = { #The Knights of the Fiery Heart
+		name = EVTOPTlodge81_fiery_heart
+		trigger = { capital_scope = { region = world_old_world_empire } }
+		add_character_modifier = { name = knight_of_fiery_heart duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 1.1 OR = { trait = zealous trait = shrewd } }
+		}
+	}
+	option = { #The Knights of the Blazing Sun
+		name = EVTOPTlodge81_blazing_sun
+		trigger = {
+			capital_scope = { region = world_old_world_empire NOT = { culture = ostlander } }
+		}
+		add_character_modifier = { name = knight_of_blazing_sun duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 1.2 OR = { trait = proud trait = zealous } }
+		}
+	}
+	option = { #The Knights of the Bull
+		name = EVTOPTlodge81_bull
+		trigger = { capital_scope = { region = world_old_world_empire culture = ostlander } }
+		add_character_modifier = { name = knight_of_bull duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 1.2 trait = proud }
+			modifier = { factor = 1.5 culture = ostlander }
+			modifier = { factor = 1.5 trait = stubborn }
+		}
+	}
+	option = { #The Knights of the Raven
+		name = EVTOPTlodge81_raven
+		trigger = {
+			capital_scope = {
+				OR = { region = world_old_world_tilea region = world_old_world_border_princes }
+			}
+		}
+		add_character_modifier = { name = knight_of_raven duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = { factor = 1 modifier = { factor = 1.5 religion = morrian } }
+	}
+	option = { #The Knights Encarmine
+		name = EVTOPTlodge81_encarmine
+		trigger = {
+			capital_scope = {
+				OR = {
+					region = world_old_world_tilea
+					region = world_old_world_border_princes
+					region = world_old_world_estalia
+				}
+			}
+		}
+		add_character_modifier = { name = knight_of_encarmine duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 1.5 trait = cruel }
+			modifier = { factor = 1.2 trait = greedy }
+		}
+	}
+	option = { #The Knights of Fury
+		name = EVTOPTlodge81_fury
+		trigger = { capital_scope = { region = world_old_world_estalia } }
+		add_character_modifier = { name = knight_of_fury duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = { factor = 1 modifier = { factor = 1.2 trait = wroth } }
+	}
+	option = { #The Knights of the Eagle
+		name = EVTOPTlodge81_eagle
+		trigger = { capital_scope = { region = world_old_world_estalia } }
+		add_character_modifier = { name = knight_of_eagle duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 1.2 trait = ambitious }
+		}
+	}
+	option = { #The Knights of the Black Rose (Morr)
+		name = EVTOPTlodge81_black_rose
+		trigger = { religion = morrian }
+		add_character_modifier = { name = knight_of_black_rose duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = { factor = 1 modifier = { factor = 1.5 trait = zealous } }
+	}
+	option = { #The Order of the Righteous Spear (Myrmidia)
+		name = EVTOPTlodge81_righeous_spear
+		trigger = { religion = myrmidian }
+		add_character_modifier = { name = knight_of_righeous_spear duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = { factor = 1 modifier = { factor = 1.5 trait = zealous } }
+	}
+	option = { #The Hammer of Sigmar (Sigmar)
+		name = EVTOPTlodge81_hammer_of_sigmar
+		trigger = { religion = sigmarite }
+		add_character_modifier = { name = knight_of_hammer_of_sigmar duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = { factor = 1 }
+	}
+	option = { #Taal's Fury (Taal)
+		name = EVTOPTlodge81_taals_fury
+		trigger = { religion = taalite }
+		add_character_modifier = { name = knight_of_taals_fury duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = { factor = 1 modifier = { factor = 1.5 trait = zealous } }
+	}
+	option = { #The Knights of the Mariner (Manann)
+		name = EVTOPTlodge81_mariner
+		trigger = { religion = manannite }
+		add_character_modifier = { name = knight_of_mariner duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = { factor = 1 }
+	}
+	option = { #The White Wolves (Ulric)
+		name = EVTOPTlodge81_white_wolf
+		trigger = { religion = ulrican }
+		add_character_modifier = { name = knight_of_white_wolf duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = { factor = 1 modifier = { factor = 1.5 trait = zealous } }
+	}
+	option = { #The Gryphon Legion (Kislev)
+		name = EVTOPTlodge81_gryhpon_legion
+		trigger = {
+			OR = {
+				religion = northern_gods_reformed
+				religion = kislev_gods
+				religion = northern_gods
+			}
+		}
+		add_character_modifier = { name = knight_of_gryhpon_legion duration = -1 }
+		set_character_flag = chose_knighthood_to_pledge_to
+		ai_chance = { factor = 1 modifier = { factor = 1.5 trait = zealous } }
+	}
+	option = { #Not yet
+		name = EVTOPTZlodge81
+		ai_chance = { factor = 0 }
+	}
+
+	after = {
+		clr_character_flag = choosing_warrior_training
+	}
+}
 
 ###############################################################################
 # Warbands
-# Namespace: warband (was WB.25000 - WB.25037 in HF_warband_powers_events
-#   and WB.1 - WB.10090 in hf_warband_events)
+# Namespace: warband (was WB.25000 - WB.25037 in HF_warband_powers_events,
+#   WB.1 - WB.10090 in hf_warband_events, and HF.25000, HF.25021 - HF.25024
+#   and HF.25030 - HF.25037 in HF_warrior_lodge_powers_events)
 # Faction: Warrior societies
 # Serves: the Chaos warbands (Undivided, Khorne, Nurgle, Tzeentch,
-#   Slaanesh), the Skaven Warlords and the warbands of Gork and Mork
+#   Slaanesh), the Skaven Warlords and the warbands of Gork and Mork; the
+#   Call to Glory and the war sacrifice also serve the Warriors of Ulric,
+#   and Summon Commander every warrior lodge and the Knights of Bretonnia
 #
 # The warband powers, each in the voice of its god, the Skaven clans or
 # the greenskins.
-# The Call to Glory (rank 4, not Gork and Mork, who have the Waaagh!): a
-# champion at war calls on the warband, and fresh warriors join while the
+# The Call to Glory (rank 4, not Gork and Mork, who have the Waaagh!; also
+# the Warriors of Ulric): a champion at war calls on the warband, and
+# fresh warriors join while the
 # champion leads an army on land. The flow dries up after 20 bands unless
 # the champion inspires or pays for more; rowdy bands demand plunder; the
 # champion's own people flock to the capital. Rarely, once in a life, the
-# Chosen (Blightkings, Stormvermin) come and stay for good.
+# Chosen (Blightkings, Stormvermin, the White Wolves) come and stay for
+# good. At peace the call lapses.
 # Summon Commander (rank 2): a champion joins the court and may take a
-# commander's post.
+# commander's post; a warrior of a lodge or a Knight of the Realm speaks
+# in the voice of that society.
 # Summon Warriors (rank 3): a great host comes to the capital for one war;
 # the power waits until peace.
 #
@@ -3529,8 +4201,11 @@ character_event = {
 # Gifts: an Imp claimed by a Dark God (rank 2), Khorne's berserkers.
 # Upkeep: AI recruits join every five years (Gork or Mork by temper),
 # and a fallen warband rises again under a member of its faith.
+# The war sacrifice (rank 3): an offering for victory in the way of each
+# power; kin, slaves, a champion's blood, plague or plunder for the Dark
+# Gods and the Horned Rat, a blood oath or burned spoils for Ulric.
 #
-# The Call to Glory            warband.1 - warband.7
+# The Call to Glory            warband.1 - warband.9
 # Summon Commander             warband.10
 # Summon Warriors              warband.15 - warband.17
 # Greenskin and Skaven paths   warband.20 - warband.21 (was WB.1 - WB.2)
@@ -3538,17 +4213,24 @@ character_event = {
 # Champion of the Gods         warband.40 (was WB.10040)
 # Imps and berserkers          warband.45 - warband.50 (was WB.10070 - WB.10080)
 # Upkeep                       warband.60 - warband.63 (was WB.10050 - WB.10053)
+# The war sacrifice            warband.70 - warband.71 (was HF.25021 - HF.25024)
 #
 # Saved: character modifiers call_to_glory, warband_summon_warriors_cooldown;
 #   variable call_to_glory_variable; character flag warband_got_chosen;
 #   earmarks call_to_glory_disciplined, call_to_glory_rowdy, warband_chosen,
-#   warband_summoned_warriors; event target invited_warband_soldier.
+#   warband_summoned_warriors; event targets invited_warband_soldier,
+#   scoped_war_sacrifice, sacrificed_courtier, sacrificed_commander_khorne;
+#   character flag flag_picking_war_sacrifice and modifiers
+#   lodge_war_sacrifice_2 - 4, lodge_war_sacrifice_cooldown.
 #
 # Callers:
 #   decisions/hf_warrior_lodge_decisions.txt (warband_call_to_glory: 1,
-#     warband_summon_warriors: 15),
+#     warband_summon_warriors: 15, warband_war_sacrifice: 70),
+#   decisions/warrior_lodge_decisions.txt (warrior_lodge_call_to_glory: 1,
+#     warrior_lodge_summon_commander: 10),
 #   decisions/employment_decisions.txt (warband_summon_commander: 10),
-#   common/on_actions/00_on_actions.txt: on_war_ended_* (16).
+#   common/on_actions/00_on_actions.txt: on_war_ended_* (8, 16),
+#     on_character_leave_society (9).
 #   decisions/hf_warrior_lodge_decisions.txt (warband_specialization: 20,
 #     warband_choose_chaos_aspect: 30/31, warband_champion_training: 40,
 #     warband_summon_familiar: 45, warband_khorne_berserker: 50),
@@ -3556,12 +4238,21 @@ character_event = {
 #   events/mnm_misc_events.txt (Skaven promotion to rank 2: 21),
 #   common/on_actions/00_on_actions_warbands.txt: on_five_year_pulse (60),
 #     on_society_destroyed (63).
-#   Call to Glory cleanup at peace: HF.25035/HF.25036, shared with the
-#   warrior lodges.
 # Support: common/scripted_triggers/wh_warband_triggers.txt,
 #   common/scripted_effects/wh_warband_effects.txt
 #
-# Removed: a dead copy of the scarred-trait setup (WB.25020; HF.25020
+# Fixed: the Warriors of Ulric had their own copy of the Call to Glory
+# (HF.25030 - HF.25037), now merged; the clean-up at a war's end looked
+# only at the defender, so an attacker's call never lapsed there, and a
+# warband champion below rank 4 kept it. In the war sacrifice the
+# aftermath had text only for vanilla pagans, so every warband saw an
+# empty event; Khorne's duel was never to the death (the flag sat on the
+# wrong duellist); Tzeentch's pick of the heir could match no one;
+# Nurgle's plague spread the Lustrian Fever and smallpox, now the
+# Creeping Buboes and the poxes, and its prosperity loss was garbled.
+# Ulric's warriors had to kill kin or servants; Ulric takes no lives.
+#
+# Removed: a dead copy of the scarred-trait setup (WB.25020; lodge.65
 # does it), dead copies of the lodge rank-up duel letters (WB.10060 -
 # WB.10063; the shared HF.10060 - HF.10063 are used) and an uncalled
 # Malice grant (WB.10090).
@@ -3584,11 +4275,13 @@ character_event = {
 	desc = { trigger = { warband_voice_tzeentch_trigger = yes } text = EVTDESCwarband1_tzeentch }
 	desc = { trigger = { warband_voice_slaanesh_trigger = yes } text = EVTDESCwarband1_slaanesh }
 	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband1_skaven }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESCwarband1_ulric }
 	picture = {
 		trigger = { warband_voice_any_chaos_trigger = yes }
 		picture = GFX_evt_chaos_warband
 	}
 	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
 	border = GFX_event_normal_frame_war
 
 	is_triggered_only = yes
@@ -3606,6 +4299,7 @@ character_event = {
 			text = EVTOPTAwarband1_slaanesh
 		}
 		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband1_skaven }
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTAwarband1_ulric }
 		custom_tooltip = { text = TT_EVTOPTAHF25030 }
 		hidden_tooltip = { character_event = { id = warband.2 days = 25 random = 5 } }
 	}
@@ -3683,11 +4377,13 @@ character_event = {
 	desc = { trigger = { warband_voice_tzeentch_trigger = yes } text = EVTDESCwarband3_tzeentch }
 	desc = { trigger = { warband_voice_slaanesh_trigger = yes } text = EVTDESCwarband3_slaanesh }
 	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband3_skaven }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESCwarband3_ulric }
 	picture = {
 		trigger = { warband_voice_any_chaos_trigger = yes }
 		picture = GFX_evt_chaos_warband
 	}
 	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
 	border = GFX_event_normal_frame_war
 
 	is_triggered_only = yes
@@ -3716,6 +4412,7 @@ character_event = {
 			text = EVTOPTAwarband3_slaanesh
 		}
 		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband3_skaven }
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTAwarband3_ulric }
 		warband_glory_spawn_effect = yes
 		hidden_tooltip = {
 			change_variable = { which = "call_to_glory_variable" value = 1 }
@@ -3731,11 +4428,13 @@ character_event = {
 	id = warband.4
 	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESCwarband4_chaos }
 	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband4_skaven }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESCwarband4_ulric }
 	picture = {
 		trigger = { warband_voice_any_chaos_trigger = yes }
 		picture = GFX_evt_chaos_warband
 	}
 	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
 	border = GFX_event_normal_frame_war
 
 	is_triggered_only = yes
@@ -3751,6 +4450,7 @@ character_event = {
 	option = { #Inspire them
 		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTAwarband4_chaos }
 		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband4_skaven }
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTAwarband4_ulric }
 		trigger = { combat_rating = 50 }
 		tooltip_info = combat_rating
 		custom_tooltip = { text = tooltip_call_to_glory_resume_reinforcements }
@@ -3763,6 +4463,7 @@ character_event = {
 	option = { #Pay them
 		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTBwarband4_chaos }
 		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTBwarband4_skaven }
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTBwarband4_ulric }
 		trigger = { wealth = 150 }
 		scaled_wealth = { value = -1.0 min = -150 max = -250 }
 		custom_tooltip = { text = tooltip_call_to_glory_resume_reinforcements }
@@ -3779,6 +4480,7 @@ character_event = {
 	option = { #No more
 		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTCwarband4_chaos }
 		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTCwarband4_skaven }
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTCwarband4_ulric }
 		custom_tooltip = { text = tooltip_call_to_glory_end_reinforcements }
 		hidden_tooltip = { set_variable = { which = "call_to_glory_variable" value = 0 } }
 		ai_chance = { factor = 20 }
@@ -3791,11 +4493,13 @@ character_event = {
 	id = warband.5
 	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESCwarband5_chaos }
 	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband5_skaven }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESCwarband5_ulric }
 	picture = {
 		trigger = { warband_voice_any_chaos_trigger = yes }
 		picture = GFX_evt_chaos_warband
 	}
 	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
 	border = GFX_event_normal_frame_war
 
 	is_triggered_only = yes
@@ -3811,6 +4515,7 @@ character_event = {
 	option = { #Talk them round
 		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTAwarband5_chaos }
 		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband5_skaven }
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTAwarband5_ulric }
 		trigger = { diplomacy = 20 }
 		tooltip_info = diplomacy
 		ai_chance = { factor = 100 }
@@ -3818,6 +4523,7 @@ character_event = {
 	option = { #Pay them
 		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTBwarband5_chaos }
 		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTBwarband5_skaven }
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTBwarband5_ulric }
 		trigger = { wealth = 50 }
 		scaled_wealth = { value = -0.8 min = -50 max = -150 }
 		ai_chance = {
@@ -3829,6 +4535,7 @@ character_event = {
 	option = { #Let them go
 		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTCwarband5_chaos }
 		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTCwarband5_skaven }
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTCwarband5_ulric }
 		custom_tooltip = { text = tooltip_rowdy_troops_leave }
 		hidden_tooltip = {
 			disband_event_forces = call_to_glory_rowdy
@@ -3849,11 +4556,13 @@ character_event = {
 	id = warband.6
 	desc = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTDESCwarband6_chaos }
 	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband6_skaven }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESCwarband6_ulric }
 	picture = {
 		trigger = { warband_voice_any_chaos_trigger = yes }
 		picture = GFX_evt_chaos_warband
 	}
 	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
 	border = GFX_event_normal_frame_war
 
 	is_triggered_only = yes
@@ -3869,6 +4578,7 @@ character_event = {
 	option = { #Train them
 		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTAwarband6_chaos }
 		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband6_skaven }
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTAwarband6_ulric }
 		if = { limit = { is_nomadic = yes } manpower = 200 }
 		else = {
 			any_demesne_province = {
@@ -3884,12 +4594,14 @@ character_event = {
 	option = { #Send them home
 		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTBwarband6_chaos }
 		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTBwarband6_skaven }
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTBwarband6_ulric }
 		prestige = 150
 		ai_chance = { factor = 50 }
 	}
 	option = { #Arm them
 		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTCwarband6_chaos }
 		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTCwarband6_skaven }
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTCwarband6_ulric }
 		capital_scope = {
 			ROOT = {
 				hidden_tooltip = {
@@ -3944,11 +4656,13 @@ character_event = {
 	desc = { trigger = { warband_voice_tzeentch_trigger = yes } text = EVTDESCwarband7_tzeentch }
 	desc = { trigger = { warband_voice_slaanesh_trigger = yes } text = EVTDESCwarband7_slaanesh }
 	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband7_skaven }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESCwarband7_ulric }
 	picture = {
 		trigger = { warband_voice_any_chaos_trigger = yes }
 		picture = GFX_evt_chaos_champions
 	}
 	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
 	border = GFX_event_normal_frame_war
 
 	is_triggered_only = yes
@@ -3962,10 +4676,61 @@ character_event = {
 	option = {
 		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTAwarband7_chaos }
 		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband7_skaven }
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTAwarband7_ulric }
 		set_character_flag = warband_got_chosen
 		custom_tooltip = { text = warband7_chosen_TT }
 		hidden_tooltip = { warband_chosen_spawn_effect = yes }
 		hidden_tooltip = { character_event = { id = warband.2 days = 35 random = 5 } }
+	}
+}
+
+# warband.8 A war ends (hidden)
+# On a war's end (on_war_ended_*): a day later, warband.9 checks whether
+# either side's Call to Glory still holds (another war may go on).
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = warband.8
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		OR = {
+			has_character_modifier = call_to_glory
+			FROM = { has_character_modifier = call_to_glory }
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { has_character_modifier = call_to_glory }
+			character_event = { id = warband.9 days = 1 }
+		}
+		if = {
+			limit = { FROM = { has_character_modifier = call_to_glory } }
+			FROM = { character_event = { id = warband.9 days = 1 } }
+		}
+	}
+}
+
+# warband.9 The Call to Glory ends (hidden)
+# At peace, out of the society or below rank 4, the call lapses: the
+# warriors go home and the capital's training ends. Also sent directly
+# by on_character_leave_society. Scope: the caller.
+character_event = {
+	id = warband.9
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_modifier = call_to_glory
+		warband_glory_lapsed_trigger = yes
+	}
+
+	immediate = {
+		warband_glory_end_effect = yes
+		any_demesne_province = { remove_province_modifier = capital_call_to_glory }
 	}
 }
 
@@ -3974,9 +4739,11 @@ character_event = {
 ###############################################################################
 
 # warband.10 A champion comes to court
-# From warband_summon_commander (employment decisions): a warrior of the
-# warband joins the court and may take a commander's post, pushing out a
-# weak one. Scope: the ruler; event_target:invited_warband_soldier.
+# From warband_summon_commander (employment decisions) and
+# warrior_lodge_summon_commander (warrior lodges, the Knights of Bretonnia,
+# Gork, Mork and the Skaven): a warrior of the society joins the court and
+# may take a commander's post, pushing out a weak one. Scope: the ruler;
+# event_target:invited_warband_soldier.
 character_event = {
 	id = warband.10
 	desc = { trigger = { warband_voice_chaos_trigger = yes } text = EVTDESCwarband10_chaos }
@@ -3986,12 +4753,23 @@ character_event = {
 	desc = { trigger = { warband_voice_slaanesh_trigger = yes } text = EVTDESCwarband10_slaanesh }
 	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband10_skaven }
 	desc = { trigger = { warband_voice_greenskin_trigger = yes } text = EVTDESCwarband10_greenskin }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESCwarband10_ulric }
+	desc = { trigger = { warband_voice_knight_trigger = yes } text = EVTDESCwarband10_knight }
+	desc = { trigger = { warband_voice_dawi_trigger = yes } text = EVTDESCwarband10_dawi }
+	desc = { trigger = { warband_voice_bretonnia_trigger = yes } text = EVTDESCwarband10_bretonnia }
 	picture = {
 		trigger = { warband_voice_any_chaos_trigger = yes }
 		picture = GFX_evt_chaos_champions
 	}
 	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
 	picture = { trigger = { warband_voice_greenskin_trigger = yes } picture = GFX_evt_orc_boss }
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
+	picture = { trigger = { warband_voice_knight_trigger = yes } picture = GFX_evt_imperial_knight }
+	picture = { trigger = { warband_voice_dawi_trigger = yes } picture = GFX_evt_dwarf_fighter }
+	picture = {
+		trigger = { warband_voice_bretonnia_trigger = yes }
+		picture = GFX_evt_bretonnian_knight
+	}
 	border = GFX_event_normal_frame_war
 
 	is_triggered_only = yes
@@ -4007,6 +4785,7 @@ character_event = {
 			trigger = { warband_voice_greenskin_trigger = yes }
 			text = EVTOPTAwarband10_greenskin
 		}
+		name = { trigger = { warband_voice_lodge_trigger = yes } text = EVTOPTAwarband10_lodge }
 		trigger = {
 			warband_commander_no_vassal_trigger = yes
 			warband_commander_slots_full_trigger = yes
@@ -4036,6 +4815,7 @@ character_event = {
 			trigger = { warband_voice_greenskin_trigger = yes }
 			text = EVTOPTBwarband10_greenskin
 		}
+		name = { trigger = { warband_voice_lodge_trigger = yes } text = EVTOPTBwarband10_lodge }
 		trigger = {
 			warband_commander_no_vassal_trigger = yes
 			warband_commander_slots_full_trigger = no
@@ -4054,6 +4834,7 @@ character_event = {
 			trigger = { warband_voice_greenskin_trigger = yes }
 			text = EVTOPTCwarband10_greenskin
 		}
+		name = { trigger = { warband_voice_lodge_trigger = yes } text = EVTOPTCwarband10_lodge }
 		event_target:invited_warband_soldier = {
 			show_scope_change = no
 			opinion = { modifier = opinion_loyal_servant who = ROOT years = 100 }
@@ -5441,6 +6222,324 @@ character_event = {
 	}
 }
 
+###############################################################################
+# The war sacrifice (rank 3)
+###############################################################################
+
+# warband.70 The war sacrifice
+# From warband_war_sacrifice (the warbands but Gork and Mork, and the
+# Warriors of Ulric): an offering for victory, in the way of each power.
+# Undivided, Slaanesh and the Skaven offer kin, a servant or slave, or
+# plunder; Khorne wants a champion's blood in a duel to the death, or
+# skulls and plunder; Tzeentch takes kin and pays out as fate decides;
+# Nurgle shares his gifts with kin, the champion or a whole province.
+# Ulric takes no lives: an oath sworn in blood before the flame, or the
+# spoils burned in it. The stronger the offering, the stronger the war
+# blessing (lodge_war_sacrifice_2 - 4, five years); ten years must pass
+# before the next. Scope: the champion.
+character_event = {
+	id = warband.70
+	desc = { trigger = { warband_voice_chaos_trigger = yes } text = EVTDESCwarband70_chaos }
+	desc = { trigger = { warband_voice_khorne_trigger = yes } text = EVTDESCwarband70_khorne }
+	desc = { trigger = { warband_voice_nurgle_trigger = yes } text = EVTDESCwarband70_nurgle }
+	desc = { trigger = { warband_voice_tzeentch_trigger = yes } text = EVTDESCwarband70_tzeentch }
+	desc = { trigger = { warband_voice_slaanesh_trigger = yes } text = EVTDESCwarband70_slaanesh }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband70_skaven }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESCwarband70_ulric }
+	picture = { trigger = { warband_voice_chaos_trigger = yes } picture = GFX_evt_chaos_champions }
+	picture = { trigger = { warband_voice_khorne_trigger = yes } picture = GFX_evt_khorne_champion }
+	picture = { trigger = { warband_voice_nurgle_trigger = yes } picture = GFX_evt_nurgle_horde }
+	picture = { trigger = { warband_voice_tzeentch_trigger = yes } picture = GFX_evt_tzeentch_army }
+	picture = {
+		trigger = { warband_voice_slaanesh_trigger = yes }
+		picture = GFX_evt_slaanesh_warband
+	}
+	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
+	border = GFX_event_normal_frame_war
+	hide_new = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_effect = {
+			random_dynasty_member = {
+				limit = {
+					is_alive = yes
+					is_ruler = no
+					is_adult = yes
+					host = { character = ROOT }
+					NOT = { is_heir = ROOT }
+					NOT = { trait = has_nurgles_rot }
+				}
+				save_event_target_as = scoped_war_sacrifice
+			}
+			random_courtier = {
+				limit = { NOT = { dynasty = ROOT } is_ruler = no is_adult = yes }
+				preferred_limit = { is_unimportant_trigger = yes }
+				save_event_target_as = sacrificed_courtier
+			}
+			if = {
+				limit = { warband_voice_khorne_trigger = yes }
+				random_courtier = {
+					limit = {
+						NOT = { dynasty = ROOT }
+						is_ruler = no
+						is_adult = yes
+						prisoner = no
+						NOT = { trait = incapable }
+						combat_rating >= 50
+					}
+					preferred_limit = { combat_rating >= 100 }
+					save_event_target_as = sacrificed_commander_khorne
+				}
+			}
+		}
+	}
+
+	option = { #Kin (Undivided, Slaanesh, Skaven)
+		name = { trigger = { warband_voice_chaos_trigger = yes } text = EVTOPTAwarband70_chaos }
+		name = {
+			trigger = { warband_voice_slaanesh_trigger = yes }
+			text = EVTOPTAwarband70_slaanesh
+		}
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband70_skaven }
+		trigger = {
+			OR = {
+				warband_voice_chaos_trigger = yes
+				warband_voice_slaanesh_trigger = yes
+				warband_voice_skaven_trigger = yes
+			}
+			event_target:scoped_war_sacrifice = { is_alive = yes }
+		}
+		add_character_modifier = { modifier = lodge_war_sacrifice_4 years = 5 }
+		warband_sacrifice_kin_effect = yes
+		hidden_tooltip = { character_event = { id = warband.71 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 0.25 trait = kind }
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+	option = { #A servant or slave (Undivided, Slaanesh, Skaven)
+		name = { trigger = { warband_voice_chaos_trigger = yes } text = EVTOPTBwarband70_chaos }
+		name = {
+			trigger = { warband_voice_slaanesh_trigger = yes }
+			text = EVTOPTBwarband70_slaanesh
+		}
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTBwarband70_skaven }
+		trigger = {
+			OR = {
+				warband_voice_chaos_trigger = yes
+				warband_voice_slaanesh_trigger = yes
+				warband_voice_skaven_trigger = yes
+			}
+			event_target:sacrificed_courtier = { is_alive = yes }
+		}
+		add_character_modifier = { modifier = lodge_war_sacrifice_3 years = 5 }
+		event_target:sacrificed_courtier = {
+			show_scope_change = no
+			death = { death_reason = death_execution_aztec_sacrifice killer = ROOT }
+		}
+		warband_sacrifice_butcher_opinion_effect = yes
+		hidden_tooltip = { character_event = { id = warband.71 } }
+		ai_chance = { factor = 40 }
+	}
+	option = { #A duel to the death (Khorne)
+		name = EVTOPTKwarband70_khorne
+		trigger = {
+			warband_voice_khorne_trigger = yes
+			event_target:sacrificed_commander_khorne = { is_alive = yes }
+		}
+		add_character_modifier = { modifier = lodge_war_sacrifice_3 years = 5 }
+		custom_tooltip = { text = warband70_duel_TT }
+		hidden_tooltip = {
+			save_event_target_as = combatant_1
+			set_character_flag = deadly_duel@event_target:sacrificed_commander_khorne
+			event_target:sacrificed_commander_khorne = {
+				save_event_target_as = combatant_2
+				apply_degree_of_dishonorable_duel_effect = yes
+				character_event = { id = HFP.10095 }
+			}
+			character_event = { id = warband.71 days = 3 }
+		}
+		ai_chance = { factor = 30 modifier = { factor = 0 NOT = { combat_rating = 50 } } }
+	}
+	option = { #Kin, and fate decides (Tzeentch)
+		name = EVTOPTTwarband70_tzeentch
+		trigger = {
+			warband_voice_tzeentch_trigger = yes
+			event_target:scoped_war_sacrifice = { is_alive = yes }
+		}
+		custom_tooltip = { text = warband70_tzeentch_TT }
+		hidden_tooltip = {
+			random_list = {
+				33 = { add_character_modifier = { modifier = lodge_war_sacrifice_4 years = 5 } }
+				33 = { add_character_modifier = { modifier = lodge_war_sacrifice_3 years = 5 } }
+				33 = { add_character_modifier = { modifier = lodge_war_sacrifice_2 years = 10 } }
+			}
+		}
+		warband_sacrifice_kin_effect = yes
+		hidden_tooltip = { character_event = { id = warband.71 } }
+		ai_chance = { factor = 40 }
+	}
+	option = { #Share the Grandfather's gifts with kin (Nurgle)
+		name = EVTOPTAwarband70_nurgle
+		trigger = {
+			warband_voice_nurgle_trigger = yes
+			event_target:scoped_war_sacrifice = { is_alive = yes }
+		}
+		add_character_modifier = { modifier = lodge_war_sacrifice_2 years = 5 }
+		event_target:scoped_war_sacrifice = {
+			show_scope_change = no
+			add_trait = has_nurgles_rot
+			nurgle_blessing_check_effect = yes
+		}
+		if = { limit = { NOT = { religion = nurgle } } tiered_piety_negative_effect = yes }
+		hidden_tooltip = { character_event = { id = warband.71 } }
+		ai_chance = { factor = 20 modifier = { factor = 2 trait = cruel } }
+	}
+	option = { #Take the gifts myself (Nurgle)
+		name = EVTOPTBwarband70_nurgle
+		trigger = { warband_voice_nurgle_trigger = yes NOT = { trait = has_nurgles_rot } }
+		add_character_modifier = { modifier = lodge_war_sacrifice_3 years = 5 }
+		add_trait = has_nurgles_rot
+		nurgle_blessing_check_effect = yes
+		add_offmap_currency = { offmap = nurgle_warp value = 100 }
+		if = { limit = { NOT = { religion = nurgle } } tiered_piety_negative_effect = yes }
+		hidden_tooltip = { character_event = { id = warband.71 } }
+		ai_chance = {
+			factor = 10
+			modifier = {
+				factor = 0
+				NOR = { trait = champion_nurgle trait = prince_nurgle trait = chosen_nurgle }
+			}
+		}
+	}
+	option = { #Plague a province (Nurgle)
+		name = EVTOPTCwarband70_nurgle
+		trigger = {
+			warband_voice_nurgle_trigger = yes
+			any_demesne_province = { warband_sacrifice_plague_target_trigger = yes }
+		}
+		add_character_modifier = { modifier = lodge_war_sacrifice_4 years = 5 }
+		if = {
+			limit = { capital_scope = { warband_sacrifice_plague_target_trigger = yes } }
+			capital_scope = { warband_sacrifice_plague_effect = yes }
+		}
+		else = {
+			random_demesne_province = {
+				limit = { warband_sacrifice_plague_target_trigger = yes }
+				warband_sacrifice_plague_effect = yes
+			}
+		}
+		if = { limit = { NOT = { religion = nurgle } } tiered_piety_negative_effect = yes }
+		hidden_tooltip = { character_event = { id = warband.71 } }
+		ai_chance = { factor = 10 }
+	}
+	option = { #Plunder, cattle and skulls (Undivided, Khorne, Slaanesh, Skaven)
+		name = { trigger = { warband_voice_chaos_trigger = yes } text = EVTOPTCwarband70_chaos }
+		name = { trigger = { warband_voice_khorne_trigger = yes } text = EVTOPTCwarband70_khorne }
+		name = {
+			trigger = { warband_voice_slaanesh_trigger = yes }
+			text = EVTOPTCwarband70_slaanesh
+		}
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTCwarband70_skaven }
+		trigger = {
+			OR = {
+				warband_voice_chaos_trigger = yes
+				warband_voice_khorne_trigger = yes
+				warband_voice_slaanesh_trigger = yes
+				warband_voice_skaven_trigger = yes
+			}
+		}
+		add_character_modifier = { modifier = lodge_war_sacrifice_2 years = 5 }
+		warband_sacrifice_plunder_effect = yes
+		hidden_tooltip = { character_event = { id = warband.71 } }
+		ai_chance = { factor = 30 }
+	}
+	option = { #A blood oath at the flame (Ulric)
+		name = EVTOPTAwarband70_ulric
+		trigger = { warband_voice_ulric_trigger = yes }
+		add_character_modifier = { modifier = lodge_war_sacrifice_3 years = 5 }
+		random = { chance = 25 add_trait_wounded_effect = yes }
+		hidden_tooltip = { character_event = { id = warband.71 } }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0 trait = craven }
+		}
+	}
+	option = { #Burn the spoils in the flame (Ulric)
+		name = EVTOPTBwarband70_ulric
+		trigger = { warband_voice_ulric_trigger = yes }
+		add_character_modifier = { modifier = lodge_war_sacrifice_2 years = 5 }
+		warband_sacrifice_plunder_effect = yes
+		hidden_tooltip = { character_event = { id = warband.71 } }
+		ai_chance = { factor = 30 }
+	}
+	option = { #Never mind
+		name = EVTOPTZwarband70
+		trigger = { ai = no }
+		change_society_currency = 600
+		clr_character_flag = flag_picking_war_sacrifice
+	}
+
+	after = {
+		if = {
+			limit = { has_character_flag = flag_picking_war_sacrifice }
+			clr_character_flag = flag_picking_war_sacrifice
+			add_character_modifier = {
+				modifier = lodge_war_sacrifice_cooldown
+				years = 10
+				hidden = yes
+			}
+		}
+	}
+}
+
+# warband.71 The war host sees the offering
+# The warriors roar; a Warrior of Ulric or a Norscan veteran may take the
+# lodge's tattoos. Scope: the champion.
+character_event = {
+	id = warband.71
+	desc = { trigger = { warband_voice_chaos_trigger = yes } text = EVTDESCwarband71_chaos }
+	desc = { trigger = { warband_voice_khorne_trigger = yes } text = EVTDESCwarband71_khorne }
+	desc = { trigger = { warband_voice_nurgle_trigger = yes } text = EVTDESCwarband71_nurgle }
+	desc = { trigger = { warband_voice_tzeentch_trigger = yes } text = EVTDESCwarband71_tzeentch }
+	desc = { trigger = { warband_voice_slaanesh_trigger = yes } text = EVTDESCwarband71_slaanesh }
+	desc = { trigger = { warband_voice_skaven_trigger = yes } text = EVTDESCwarband71_skaven }
+	desc = { trigger = { warband_voice_ulric_trigger = yes } text = EVTDESCwarband71_ulric }
+	picture = {
+		trigger = { warband_voice_any_chaos_trigger = yes }
+		picture = GFX_evt_chaos_warband
+	}
+	picture = { trigger = { warband_voice_skaven_trigger = yes } picture = GFX_evt_skaven_warlord }
+	picture = { trigger = { warband_voice_ulric_trigger = yes } picture = GFX_evt_ulric_warriors }
+	border = GFX_event_normal_frame_religion
+	hide_new = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_list = {
+			33 = { sound_effect = sacrifice_family_01 }
+			33 = { sound_effect = sacrifice_family_02 }
+			33 = { sound_effect = sacrifice_family_03 }
+		}
+		add_blood_splatter_effect = yes
+		if = {
+			limit = { warband_voice_ulric_trigger = yes lodge_has_tattoo_trigger = no }
+			lodge_tattoo_effect = yes
+		}
+	}
+
+	option = {
+		name = { trigger = { warband_voice_any_chaos_trigger = yes } text = EVTOPTAwarband71_chaos }
+		name = { trigger = { warband_voice_skaven_trigger = yes } text = EVTOPTAwarband71_skaven }
+		name = { trigger = { warband_voice_ulric_trigger = yes } text = EVTOPTAwarband71_ulric }
+	}
+}
 
 ###############################################################################
 # War aid

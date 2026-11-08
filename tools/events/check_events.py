@@ -13,6 +13,8 @@ WARN   missing localisation (mod events only), non-cp1252-safe encoding,
        MTTH or pulse event without a cheap pre-trigger, weight_multiplier on an
        event that is never in a random_events list (the weights do nothing),
        on_action listing an event that does not exist
+       localisation rows in 00_WHG_*.csv that are not KEY;text rows (a raw line
+       break inside a text) or have text after the first column (a stray `;`)
 STYLE  space-indented lines, `break = yes` (use else_if), commented-out code,
        event numbers of 1000+ or namespaces longer than 12 characters (mod files),
        a `# Faction:` tag that is not one of factions.CATEGORIES
@@ -105,6 +107,31 @@ def check(idx, only=None):
     return out
 
 
+LOC_ROW = re.compile(r'^[A-Za-z0-9_.\-\'&]+;')
+
+
+def check_loc():
+    """WARN for broken rows in the mod's own WHG localisation files."""
+    out = []
+    folder = os.path.join(ROOT, 'localisation')
+    for name in sorted(os.listdir(folder)):
+        if not (name.startswith('00_WHG_') and name.endswith('.csv')):
+            continue
+        path = 'localisation/' + name
+        with open(os.path.join(folder, name), 'rb') as fh:
+            rows = fh.read().decode('cp1252', 'replace').replace('\r\n', '\n').split('\n')
+        for n, row in enumerate(rows, 1):
+            if not row.strip() or row.startswith('#'):
+                continue
+            if not LOC_ROW.match(row):
+                out.append(('WARN', path, n, 'not a KEY;text row; a raw line break inside a text? use \\n'))
+                continue
+            extra = [c for c in row.split(';')[2:] if c.strip() and not c.strip().startswith('x')]
+            if extra:
+                out.append(('WARN', path, n, 'text after the first column; a stray `;` in the text?'))
+    return out
+
+
 def style(path):
     out = []
     full = os.path.join(ROOT, path)
@@ -125,6 +152,7 @@ def main(argv):
     targets = [a.replace(os.sep, '/') for a in argv[1:]]
     idx = Index(ROOT)
     findings = check(idx, set(targets) if targets else None)
+    findings += [f for f in check_loc() if not targets or f[1] in targets]
     if targets:
         for level, path, line, msg in sorted(findings, key=lambda f: (f[1], f[2])):
             print('%-5s %s:%d  %s' % (level, path, line, msg))

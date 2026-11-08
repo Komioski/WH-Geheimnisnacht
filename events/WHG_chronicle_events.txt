@@ -1,0 +1,1614 @@
+###############################################################################
+# The dynasty chronicle
+# Namespace: chronicle (was CM.10000 - CM.10529 in chronicle_events.txt)
+# Faction: Generic
+#
+# Hidden events that write the player's dynasty chronicle: inheritance,
+# births and deaths, wars, holy wars, titles, marriages, prison, conversions,
+# battles, great cities taken and lost, peace. When a year passes with
+# nothing written, a filler entry tells of monsters, omens and strange
+# happenings in the realm, Morrslieb and Geheimnisnacht among them.
+#
+# Warhammer rules: the great cities are Altdorf, Middenheim, Nuln,
+# Marienburg, Kislev, Praag, Couronne, Karaz-a-Karak, Zharr-Naggrund,
+# Lothern, Naggarond, Khemri and Hexoatl (chronicle_great_city_trigger,
+# wh_chronicle_triggers.txt); the hooks on on_siege_won_leader and
+# on_siege_over_winner are restored.
+# The vanilla Aztec entries are gone.
+#
+# Start and hand-over        chronicle.1 - chronicle.2
+# Life, war and holy war     chronicle.10 - chronicle.18
+# Titles, marriage, prison,
+#   faith, battles, peace    chronicle.20 - chronicle.40
+# Filler entries             chronicle.50 - chronicle.86
+#
+# Fired from: the chronicle on_actions in 00_on_actions.txt (each event names
+#   its own).
+###############################################################################
+
+namespace = chronicle
+
+# chronicle.1 The chronicle begins
+# Writes the opening entry when a new game starts.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.1
+
+	is_triggered_only = yes # on_chronicle_start
+
+	hide_window = yes
+
+	immediate = {
+		chronicle = { entry = CHRONICLE_START picture = GFX_evt_monk }
+	}
+}
+
+# chronicle.2 The chronicle changes hands
+# Writes how the chronicle passed to the new player character: by inheritance (same or new culture and faith), to a landless heir, or to a ruler of a realm won in holy war.
+# Scope: ROOT is the new holder, FROM the old one.
+character_event = {
+	id = chronicle.2
+
+	is_triggered_only = yes # on_chronicle_owner_change
+
+	hide_window = yes
+
+	immediate = {
+		if = {
+			limit = {
+				FROM = { is_dying = no }
+				ROOT = {
+					NOR = {
+						trait = crusader_king
+						trait = crusader_queen
+						has_character_flag = beneficiary_check_potential_player_character
+					}
+				}
+			}
+			chronicle = {
+				entry = CHRONICLE_PLAYER_INHERITANCE_LANDLESS
+				portrait = [Root.GetID]
+				picture = GFX_evt_emissary
+			}
+		}
+		else_if = {
+			limit = {
+				FROM = { is_dying = no }
+				ROOT = { OR = { trait = crusader_king trait = crusader_queen } }
+			}
+			chronicle = {
+				entry = CHRONICLE_BECAME_RULER_OF_CRUSADER_KINGDOM
+				portrait = [Root.GetID]
+				picture = GFX_evt_crusaders
+			}
+		}
+		else_if = {
+			limit = { has_character_flag = beneficiary_check_potential_player_character }
+			chronicle = {
+				entry = CHRONICLE_BECAME_LORD_OF_CRUSADER_KINGDOM
+				portrait = [Root.GetID]
+				picture = GFX_evt_crusaders
+			}
+		}
+		if = {
+			limit = { FROM = { is_dying = yes culture = ROOT religion = ROOT } }
+			chronicle = {
+				entry = CHRONICLE_PLAYER_INHERITANCE_NORMAL
+				portrait = [Root.GetID]
+				picture = GFX_evt_coronation
+			}
+		}
+		if = {
+			limit = { FROM = { is_dying = yes culture = ROOT NOT = { religion = ROOT } } }
+			chronicle = {
+				entry = CHRONICLE_PLAYER_INHERITANCE_NEW_RELIGION
+				portrait = [Root.GetID]
+				picture = GFX_evt_coronation
+			}
+		}
+		if = {
+			limit = { FROM = { is_dying = yes NOT = { culture = ROOT } religion = ROOT } }
+			chronicle = {
+				entry = CHRONICLE_PLAYER_INHERITANCE_NEW_CULTURE
+				portrait = [Root.GetID]
+				picture = GFX_evt_coronation
+			}
+		}
+		if = {
+			limit = { FROM = { is_dying = yes NOT = { culture = ROOT } NOT = { religion = ROOT } } }
+			chronicle = {
+				entry = CHRONICLE_PLAYER_INHERITANCE_NEW_CULTURE_AND_RELIGION
+				portrait = [Root.GetID]
+				picture = GFX_evt_coronation
+			}
+		}
+	}
+}
+
+# chronicle.10 A death
+# Writes the death of a liege, spouse, parent, heir or faith head into the chronicles of the players it touches.
+# Scope: ROOT is the dead character.
+character_event = {
+	id = chronicle.10
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+
+	trigger = {
+		any_player = {
+			OR = {
+				liege = { character = ROOT }
+				any_spouse = { character = ROOT }
+				is_child_of = ROOT
+				current_heir = { character = ROOT }
+				AND = { religion = ROOT ROOT = { controls_religion = yes } }
+			}
+		}
+	}
+
+	immediate = {
+		any_vassal = {
+			limit = {
+				ai = no
+				NOT = { OR = { father = { character = ROOT } mother = { character = ROOT } } }
+				NOT = { is_primary_heir = ROOT } # Any vassal except primary heir which is handled in chronicle owner transfer event chronicle.2
+			}
+			chronicle = { entry = CHRONICLE_DEATH_OF_LIEGE portrait = [Root.GetID] }
+		}
+		any_spouse = {
+			limit = {
+				ai = no
+				NOT = { is_primary_heir = ROOT } # Not used for primary heir which is handled in chronicle owner transfer event chronicle.2
+			}
+			chronicle = { entry = CHRONICLE_DEATH_OF_SPOUSE portrait = [Root.GetID] }
+		}
+		any_child = {
+			limit = {
+				ai = no
+				ROOT = {
+					NOT = { is_primary_heir = PREV } # Sent to any child except primary heir which is handled in chronicle owner transfer event chronicle.2
+				}
+			}
+			chronicle = { entry = CHRONICLE_DEATH_OF_PARENT portrait = [Root.GetID] }
+		}
+		any_player = {
+			limit = {
+				current_heir = { character = ROOT }
+				NOT = { is_primary_heir = ROOT } # Not used for primary heir which is handled in chronicle owner transfer event chronicle.2
+			}
+			chronicle = { entry = CHRONICLE_DEATH_OF_HEIR portrait = [Root.GetID] }
+		}
+		any_player = {
+			limit = {
+				religion_head = { character = ROOT }
+				NOT = { is_primary_heir = ROOT } # Not used for primary heir which is handled in chronicle owner transfer event chronicle.2
+				NOT = {
+					OR = {
+						father = { character = ROOT }
+						mother = { character = ROOT }
+						spouse = { character = ROOT }
+					}
+				}
+			}
+			chronicle = { entry = CHRONICLE_DEATH_OF_RELIGION_HEAD portrait = [Root.GetID] }
+		}
+	}
+}
+
+# chronicle.11 A birth
+# A player had a child; waits two days for the name (chronicle.12).
+# Scope: ROOT is the child.
+character_event = {
+	id = chronicle.11
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_birth
+
+	trigger = {
+		OR = { father = { ai = no } mother = { ai = no } }
+	}
+
+	immediate = {
+		character_event = { id = chronicle.12 days = 2 } # Delay to allow for naming of child.
+	}
+}
+
+# chronicle.12 A birth, named
+# Writes the firstborn child, or first son, into the parents' chronicles.
+# Scope: ROOT is the child, FROM the child.
+character_event = {
+	id = chronicle.12
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.11
+
+	trigger = {
+		OR = { father = { ai = no } mother = { ai = no } }
+	}
+
+	immediate = {
+		father = {
+			if = {
+				limit = {
+					ai = no
+					OR = {
+						NOT = { num_of_children = 2 }
+						AND = {
+							FROM = { is_female = no }
+							NOT = { any_child = { NOT = { character = FROM } is_female = no } }
+						}
+					}
+				}
+				chronicle = { entry = CHRONICLE_BIRTH_FATHER portrait = [Root.GetID] }
+			}
+		}
+		mother = {
+			if = {
+				limit = {
+					ai = no
+					OR = {
+						NOT = { num_of_children = 2 }
+						AND = {
+							FROM = { is_female = no }
+							NOT = { any_child = { NOT = { character = FROM } is_female = no } }
+						}
+					}
+				}
+				chronicle = { entry = CHRONICLE_BIRTH_MOTHER portrait = [Root.GetID] }
+			}
+		}
+	}
+}
+
+# chronicle.13 War declared
+# Writes a war into the attacker's and defender's chronicles.
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = chronicle.13
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_started
+
+	trigger = {
+		OR = { ai = no FROM = { ai = no } }
+	}
+
+	immediate = {
+		FROM = {
+			if = {
+				limit = { ai = no }
+				chronicle = { entry = CHRONICLE_WAR_DECLARED_ATTACKER portrait = [Prev.GetID] }
+			}
+		}
+		if = {
+			limit = { ai = no }
+			chronicle = { entry = CHRONICLE_WAR_DECLARED_DEFENDER portrait = [From.GetID] }
+		}
+	}
+}
+
+# chronicle.14 Joined an ally's war
+# Scope: ROOT is the player, FROM the ally.
+character_event = {
+	id = chronicle.14
+
+	hide_window = yes
+
+	is_triggered_only = yes # ASK_TO_JOIN_WAR_INTERACTION_ACCEPT_EVENT
+
+	ai = no
+
+	immediate = {
+		chronicle = { entry = CHRONICLE_JOINED_ALLY_IN_WAR portrait = [From.GetID] }
+	}
+}
+
+# chronicle.15 Answered a call to arms
+# Scope: ROOT is the caller, FROM the player who answered.
+character_event = {
+	id = chronicle.15
+
+	hide_window = yes
+
+	is_triggered_only = yes # CALL_ALLY_INTERACTION_ACCEPT_EVENT
+
+	trigger = {
+		FROM = { ai = no }
+	}
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_JOINED_ALLY_IN_WAR_2 portrait = [Prev.GetID] } }
+	}
+}
+
+# chronicle.16 Holy war declared
+# Writes a new holy war (Errantry, Black Crusade and the others) for players of the declaring and the targeted faith.
+# Scope: ROOT is the faith head, FROM the target title, new_character the target.
+character_event = {
+	id = chronicle.16
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_crusade_creation
+
+	immediate = {
+		any_player = {
+			limit = { religion = ROOT }
+			chronicle = { entry = CHRONICLE_FRIENDLY_CRUSADE_STARTED portrait = [Root.GetID] }
+		}
+		any_player = {
+			limit = { new_character = { religion = PREV } }
+			chronicle = { entry = CHRONICLE_UNFRIENDLY_CRUSADE_STARTED portrait = [Root.GetID] }
+		}
+		ROOT = {
+			if = {
+				limit = { ai = no }
+				chronicle = { entry = CHRONICLE_FRIENDLY_CRUSADE_STARTED portrait = [Root.GetID] }
+			}
+		}
+	}
+}
+
+# chronicle.17 Holy war won
+# Scope: ROOT is the target title, FROM the taker, new_character the enemy.
+character_event = {
+	id = chronicle.17
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_crusade_success
+
+	immediate = {
+		if = {
+			limit = { FROM = { religion_head = { is_alive = yes } } }
+			any_player = {
+				limit = {
+					OR = { religion = FROM new_character = { religion = PREV } }
+					OR = { NOT = { character = FROM } FROM = { uses_new_crusade = yes } }
+				}
+				chronicle = { entry = CHRONICLE_CRUSADE_WON portrait = [From.RelHead.GetID] }
+			}
+			FROM = {
+				if = {
+					limit = { ai = no uses_new_crusade = no }
+					chronicle = {
+						entry = CHRONICLE_CRUSADE_WON_AND_I_GOT_THE_TITLE
+						portrait = [From.GetID]
+					}
+				}
+			}
+		}
+		if = {
+			limit = {
+				NOT = {
+					FROM = {
+						religion_head = { is_alive = yes } # Crusade ended inconclusively as the religious head no longer exist
+					}
+				}
+			}
+			any_player = {
+				limit = { OR = { religion = FROM new_character = { religion = PREV } } }
+				chronicle = { entry = CHRONICLE_CRUSADE_LOST_NO_HEAD }
+			}
+		}
+	}
+}
+
+# chronicle.18 Holy war lost
+# Scope: ROOT is the target title, FROM the faith head, new_character the enemy.
+character_event = {
+	id = chronicle.18
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_crusade_failure
+
+	immediate = {
+		any_player = {
+			limit = { OR = { religion = FROM new_character = { religion = PREV } } }
+			chronicle = { entry = CHRONICLE_CRUSADE_LOST portrait = [New.GetID] }
+		}
+	}
+}
+
+# chronicle.20 Title created
+# Scope: ROOT is the creator, FROM the title.
+character_event = {
+	id = chronicle.20
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_create_title
+
+	trigger = {
+		ROOT = {
+			ai = no
+			any_demesne_title = { NOT = { title = FROM } FROM = { higher_tier_than = PREV } }
+		}
+	}
+
+	immediate = {
+		chronicle = { entry = CHRONICLE_CREATED_TITLE portrait = [Root.GetID] }
+	}
+}
+
+# chronicle.21 Title usurped
+# Scope: ROOT is the usurper, FROM the title, FROMFROM the old holder.
+character_event = {
+	id = chronicle.21
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_new_holder_usurpation
+
+	trigger = {
+		ai = no
+		ROOT = { any_demesne_title = { NOT = { title = FROM } FROM = { higher_tier_than = PREV } } }
+	}
+
+	immediate = {
+		chronicle = { entry = CHRONICLE_USURPED_TITLE portrait = [Root.GetID] }
+	}
+}
+
+# chronicle.22 Marriage
+# Scope: ROOT is the employer, FROM the player, new_character the spouse.
+character_event = {
+	id = chronicle.22
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_marriage
+
+	trigger = {
+		FROM = { ai = no }
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				new_character = {
+					mother_even_if_dead = { always = yes }
+					OR = {
+						father_even_if_dead = {
+							PREV = { mother_even_if_dead = { higher_tier_than = PREVPREV } }
+						}
+						NOT = { father_even_if_dead = { always = yes } }
+					}
+				}
+			}
+			FROM = {
+				chronicle = { entry = CHRONICLE_MARRIED_MOTHER_IMPORTANT portrait = [New.GetID] }
+			}
+		}
+		if = {
+			limit = {
+				new_character = {
+					father_even_if_dead = { always = yes }
+					OR = {
+						father_even_if_dead = {
+							PREV = {
+								mother_even_if_dead = { NOT = { higher_tier_than = PREVPREV } }
+							}
+						}
+						NOT = { mother_even_if_dead = { always = yes } }
+					}
+				}
+			}
+			FROM = {
+				chronicle = { entry = CHRONICLE_MARRIED_FATHER_IMPORTANT portrait = [New.GetID] }
+			}
+		}
+		if = {
+			limit = {
+				new_character = {
+					NOT = { father_even_if_dead = { always = yes } }
+					NOT = { mother_even_if_dead = { always = yes } }
+				}
+			}
+			FROM = { chronicle = { entry = CHRONICLE_MARRIED_NO_PARENT portrait = [New.GetID] } }
+		}
+	}
+}
+
+# chronicle.23 Imprisoned
+# Writes the imprisonment of a player or their liege, spouse, parent, heir or faith head.
+# Scope: ROOT is the prisoner, FROM the jailer.
+character_event = {
+	id = chronicle.23
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_became_imprisoned
+
+	trigger = {
+		any_player = {
+			OR = {
+				character = ROOT
+				liege = { character = ROOT }
+				any_spouse = { character = ROOT }
+				is_child_of = ROOT
+				current_heir = { character = ROOT }
+				AND = { religion = ROOT ROOT = { controls_religion = yes } }
+			}
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { ai = no }
+			chronicle = { entry = CHRONICLE_PLAYER_IMPRISONED portrait = [Root.GetID] }
+		}
+		any_vassal = {
+			limit = { ai = no }
+			chronicle = { entry = CHRONICLE_LIEGE_IMPRISONED portrait = [Root.GetID] }
+		}
+		any_spouse = {
+			limit = { ai = no }
+			chronicle = { entry = CHRONICLE_SPOUSE_IMPRISONED portrait = [Root.GetID] }
+		}
+		any_child = {
+			limit = { ai = no }
+			chronicle = { entry = CHRONICLE_PARENT_IMPRISONED portrait = [Root.GetID] }
+		}
+		any_player = {
+			limit = { current_heir = { character = ROOT } }
+			chronicle = { entry = CHRONICLE_HEIR_IMPRISONED portrait = [Root.GetID] }
+		}
+		any_player = {
+			limit = { religion_head = { character = ROOT } }
+			chronicle = { entry = CHRONICLE_RELIGION_HEAD_IMPRISONED portrait = [Root.GetID] }
+		}
+	}
+}
+
+# chronicle.24 Released
+# Scope: ROOT is the prisoner, FROM the jailer.
+character_event = {
+	id = chronicle.24
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_released_from_prison
+
+	trigger = {
+		any_player = {
+			OR = {
+				character = ROOT
+				liege = { character = ROOT }
+				any_spouse = { character = ROOT }
+				is_child_of = ROOT
+				current_heir = { character = ROOT }
+				AND = { religion = ROOT ROOT = { controls_religion = yes } }
+			}
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { ai = no }
+			chronicle = { entry = CHRONICLE_PLAYER_RELEASED portrait = [Root.GetID] }
+		}
+		any_vassal = {
+			limit = { ai = no }
+			chronicle = { entry = CHRONICLE_LIEGE_RELEASED portrait = [Root.GetID] }
+		}
+		any_spouse = {
+			limit = { ai = no }
+			chronicle = { entry = CHRONICLE_SPOUSE_RELEASED portrait = [Root.GetID] }
+		}
+		any_child = {
+			limit = { ai = no }
+			chronicle = { entry = CHRONICLE_PARENT_RELEASED portrait = [Root.GetID] }
+		}
+		any_player = {
+			limit = { current_heir = { character = ROOT } }
+			chronicle = { entry = CHRONICLE_HEIR_RELEASED portrait = [Root.GetID] }
+		}
+		any_player = {
+			limit = { religion_head = { character = ROOT } }
+			chronicle = { entry = CHRONICLE_RELIGION_HEAD_RELEASED portrait = [Root.GetID] }
+		}
+	}
+}
+
+# chronicle.25 Converted faith
+# Scope: ROOT is the convert, FROM holds the old faith.
+character_event = {
+	id = chronicle.25
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_character_convert_religion
+
+	trigger = {
+		OR = { ai = no any_vassal = { ai = no } liege = { ai = no } }
+	}
+
+	immediate = {
+		if = {
+			limit = { ai = no }
+			chronicle = { entry = CHRONICLE_PLAYER_CONVERTED_RELIGION portrait = [Root.GetID] }
+		}
+		if = {
+			limit = { any_vassal = { ai = no } }
+			any_vassal = {
+				limit = { ai = no }
+				chronicle = { entry = CHRONICLE_LIEGE_CONVERTED_RELIGION portrait = [Root.GetID] }
+			}
+		}
+		if = {
+			limit = {
+				liege = { ai = no }
+				independent = no
+				OR = {
+					AND = {
+						liege = { primary_title = { tier = KING } }
+						primary_title = { higher_tier_than = COUNT }
+					}
+					AND = {
+						liege = { primary_title = { tier = EMPEROR } }
+						primary_title = { higher_tier_than = DUKE }
+					}
+				}
+			}
+			liege = {
+				chronicle = {
+					entry = CHRONICLE_MAJOR_VASSAL_CONVERTED_RELIGION
+					portrait = [Root.GetID]
+				}
+			}
+		}
+	}
+}
+
+# chronicle.26 Converted culture
+# Scope: ROOT is the character, FROM holds the old culture.
+character_event = {
+	id = chronicle.26
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_character_convert_culture
+
+	ai = no
+
+	immediate = {
+		chronicle = { entry = CHRONICLE_PLAYER_CONVERTED_CULTURE portrait = [Root.GetID] }
+	}
+}
+
+# chronicle.27 New nickname
+# Scope: ROOT is the character.
+character_event = {
+	id = chronicle.27
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_acquire_nickname
+
+	ai = no
+
+	immediate = {
+		chronicle = { entry = CHRONICLE_PLAYER_ACQUIRED_NICKNAME portrait = [Root.GetID] }
+	}
+}
+
+# chronicle.28 Won a battle in person
+# Scope: ROOT is the commander, FROM the enemy commander.
+character_event = {
+	id = chronicle.28
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_major_battle_won
+
+	ai = no
+
+	immediate = {
+		chronicle = { entry = CHRONICLE_WON_BATTLE_FOUGHT portrait = [Root.GetID] }
+	}
+}
+
+# chronicle.29 Lost a battle in person
+# Scope: ROOT is the commander, FROM the enemy commander.
+character_event = {
+	id = chronicle.29
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_major_battle_lost
+
+	ai = no
+
+	immediate = {
+		chronicle = { entry = CHRONICLE_LOST_BATTLE_FOUGHT portrait = [Root.GetID] }
+	}
+}
+
+# chronicle.30 The army won a battle
+# Scope: ROOT is the commander, FROM the enemy commander.
+character_event = {
+	id = chronicle.30
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_major_battle_won_leader
+
+	immediate = {
+		if = {
+			limit = { top_liege = { ai = no NOT = { at_location = ROOT } war_with = FROM } }
+			top_liege = {
+				chronicle = {
+					entry = CHRONICLE_WON_BATTLE_BUT_DIDNT_FIGHT
+					portrait = [Root.GetID] # The commander
+				}
+			}
+		}
+	}
+}
+
+# chronicle.31 The army lost a battle
+# Scope: ROOT is the commander, FROM the enemy commander.
+character_event = {
+	id = chronicle.31
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_major_battle_lost_leader
+
+	ai = yes
+
+	immediate = {
+		if = {
+			limit = { top_liege = { ai = no NOT = { at_location = ROOT } war_with = FROM } }
+			top_liege = {
+				chronicle = {
+					entry = CHRONICLE_LOST_BATTLE_BUT_DIDNT_FIGHT
+					portrait = [Root.GetID] # The commander
+				}
+			}
+		}
+	}
+}
+
+# chronicle.32 Took a settlement in person
+# A player who leads a siege to victory writes it down.
+# Scope: ROOT is the commander, FROM the holding's province.
+character_event = {
+	id = chronicle.32
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_siege_won_leader
+
+	ai = no
+
+	immediate = {
+		chronicle = { entry = CHRONICLE_CAPTURED_MAJOR_SETTLEMENT_MYSELF picture = GFX_evt_siege }
+	}
+}
+
+# chronicle.33 The army took a great city
+# The player's commander took a great city while the player was elsewhere.
+# Scope: ROOT is the commander, FROM the province.
+character_event = {
+	id = chronicle.33
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_siege_won_leader
+
+	ai = yes
+
+	trigger = {
+		FROM = { chronicle_great_city_trigger = yes }
+	}
+
+	immediate = {
+		if = {
+			limit = { top_liege = { ai = no NOT = { at_location = ROOT } } }
+			top_liege = {
+				chronicle = {
+					entry = CHRONICLE_MY_FORCES_CAPTURED_MAJOR_SETTLEMENT
+					portrait = [Root.GetID] # The commander
+				}
+			}
+		}
+	}
+}
+
+# chronicle.34 The enemy took a great city
+# The player lost a great city to the enemy.
+# Scope: ROOT is the commander, FROM the province.
+character_event = {
+	id = chronicle.34
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_siege_over_winner
+
+	ai = yes
+
+	trigger = {
+		FROM = { chronicle_great_city_trigger = yes }
+	}
+
+	immediate = {
+		if = {
+			limit = { FROM = { owner = { top_liege = { ai = no } } } }
+			FROM = {
+				owner = {
+					top_liege = {
+						chronicle = {
+							entry = CHRONICLE_ENEMY_FORCES_CAPTURED_MAJOR_SETTLEMENT
+							portrait = [Root.GetID] # The owner of the enemy forces
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# chronicle.35 Marriage of the heir
+# Scope: ROOT is the employer, FROM the heir, new_character the spouse.
+character_event = {
+	id = chronicle.35
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_marriage
+
+	trigger = {
+		any_player = { FROM = { is_primary_heir = PREV } }
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				new_character = {
+					mother_even_if_dead = { always = yes }
+					OR = {
+						father_even_if_dead = {
+							PREV = { mother_even_if_dead = { higher_tier_than = PREVPREV } }
+						}
+						NOT = { father_even_if_dead = { always = yes } }
+					}
+				}
+			}
+			any_player = {
+				limit = { FROM = { is_primary_heir = PREV } }
+				chronicle = { entry = CHRONICLE_MARRIED_MOTHER_IMPORTANT portrait = [New.GetID] }
+			}
+		}
+		if = {
+			limit = {
+				new_character = {
+					father_even_if_dead = { always = yes }
+					OR = {
+						father_even_if_dead = {
+							PREV = {
+								mother_even_if_dead = { NOT = { higher_tier_than = PREVPREV } }
+							}
+						}
+						NOT = { mother_even_if_dead = { always = yes } }
+					}
+				}
+			}
+			any_player = {
+				limit = { FROM = { is_primary_heir = PREV } }
+				chronicle = { entry = CHRONICLE_MARRIED_FATHER_IMPORTANT portrait = [New.GetID] }
+			}
+		}
+		if = {
+			limit = {
+				new_character = {
+					NOT = { father_even_if_dead = { always = yes } }
+					NOT = { mother_even_if_dead = { always = yes } }
+				}
+			}
+			any_player = {
+				limit = { FROM = { is_primary_heir = PREV } }
+				chronicle = { entry = CHRONICLE_MARRIED_NO_PARENT portrait = [New.GetID] }
+			}
+		}
+	}
+}
+
+# chronicle.36 Divorce
+# Scope: ROOT is the character, FROM the spouse.
+character_event = {
+	id = chronicle.36
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_divorce
+
+	trigger = {
+		OR = { ai = no FROM = { ai = no } }
+	}
+
+	immediate = {
+		if = { # With a religious head
+			limit = { new_character = { always = yes } }
+			if = {
+				limit = { ai = no }
+				chronicle = { entry = CHRONICLE_DIVORCED portrait = [From.GetID] }
+			}
+			FROM = {
+				if = {
+					limit = { ai = no }
+					chronicle = { entry = CHRONICLE_DIVORCED portrait = [From.GetID] }
+				}
+			}
+		}
+		else = { # Without a religious head
+			if = {
+				limit = { ai = no }
+				chronicle = { entry = CHRONICLE_DIVORCED_NO_HEAD portrait = [From.GetID] }
+			}
+			FROM = {
+				if = {
+					limit = { ai = no }
+					chronicle = { entry = CHRONICLE_DIVORCED_NO_HEAD portrait = [From.GetID] }
+				}
+			}
+		}
+	}
+}
+
+# chronicle.37 Peace: the attacker won
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = chronicle.37
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_ended_victory
+
+	trigger = {
+		OR = { ai = no FROM = { ai = no } }
+	}
+
+	immediate = {
+		FROM = {
+			if = {
+				limit = { ai = no }
+				chronicle = { entry = CHRONICLE_WAR_WON portrait = [Prev.GetID] }
+			}
+		}
+		if = {
+			limit = { ai = no }
+			chronicle = { entry = CHRONICLE_WAR_WON portrait = [From.GetID] }
+		}
+	}
+}
+
+# chronicle.38 Inherited a major title
+# Scope: ROOT is the heir, FROM the title, FROMFROM the old holder.
+character_event = {
+	id = chronicle.38
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_new_holder_inheritance
+
+	trigger = {
+		ai = no
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { higher_tier_than = FROM } }
+			chronicle = { entry = CHRONICLE_INHERIT_MAJOR_TITLE picture = GFX_evt_throne_room }
+		}
+	}
+}
+
+# chronicle.39 Peace: white peace
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = chronicle.39
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_ended_whitepeace
+
+	trigger = {
+		OR = { ai = no FROM = { ai = no } }
+	}
+
+	immediate = {
+		FROM = {
+			if = {
+				limit = { ai = no }
+				chronicle = { entry = CHRONICLE_WAR_WHITEPEACE portrait = [Prev.GetID] }
+			}
+		}
+		if = {
+			limit = { ai = no }
+			chronicle = { entry = CHRONICLE_WAR_WHITEPEACE portrait = [From.GetID] }
+		}
+	}
+}
+
+# chronicle.40 Peace: the defender won
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = chronicle.40
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_ended_defeat
+
+	trigger = {
+		OR = { ai = no FROM = { ai = no } }
+	}
+
+	immediate = {
+		FROM = {
+			if = {
+				limit = { ai = no }
+				chronicle = { entry = CHRONICLE_WAR_LOST portrait = [Prev.GetID] }
+			}
+		}
+		if = {
+			limit = { ai = no }
+			chronicle = { entry = CHRONICLE_WAR_LOST portrait = [From.GetID] }
+		}
+	}
+}
+
+# chronicle.50 Filler: A dragon sighted
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.50
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.51 } }
+	}
+}
+
+# chronicle.51 Filler entry
+# Writes the entry for chronicle.50 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.51
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.50
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0001 type = MONSTER_SIGHTED } }
+	}
+}
+
+# chronicle.52 Filler: A giant
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.52
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.53 } }
+	}
+}
+
+# chronicle.53 Filler entry
+# Writes the entry for chronicle.52 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.53
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.52
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0002 type = MONSTER_SIGHTED } }
+	}
+}
+
+# chronicle.54 Filler: Sea serpents
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.54
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.55 } }
+	}
+}
+
+# chronicle.55 Filler entry
+# Writes the entry for chronicle.54 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.55
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.54
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0003 type = MONSTER_SIGHTED } }
+	}
+}
+
+# chronicle.56 Filler: Shapes on Morrslieb
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.56
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	immediate = {
+		chronicle = { entry = CHRONICLE_FILL0004 type = MONSTER_SIGHTED }
+	}
+}
+
+# chronicle.57 Filler: A giantess
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.57
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.58 } }
+	}
+}
+
+# chronicle.58 Filler entry
+# Writes the entry for chronicle.57 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.58
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.57
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0005 type = MONSTER_SIGHTED } }
+	}
+}
+
+# chronicle.59 Filler: Raining blood
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.59
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.60 } }
+	}
+}
+
+# chronicle.60 Filler entry
+# Writes the entry for chronicle.59 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.60
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.59
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0006 type = FREAK_NATURAL_EVENT } }
+	}
+}
+
+# chronicle.61 Filler: Dead rabbits
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.61
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.62 } }
+	}
+}
+
+# chronicle.62 Filler entry
+# Writes the entry for chronicle.61 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.62
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.61
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0007 type = FREAK_NATURAL_EVENT } }
+	}
+}
+
+# chronicle.63 Filler: Earthquake
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.63
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.64 } }
+	}
+}
+
+# chronicle.64 Filler entry
+# Writes the entry for chronicle.63 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.64
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.63
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0008 type = NATURAL_DISASTER } }
+	}
+}
+
+# chronicle.65 Filler: Flood
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.65
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.66 } }
+	}
+}
+
+# chronicle.66 Filler entry
+# Writes the entry for chronicle.65 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.66
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.65
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0009 type = NATURAL_DISASTER } }
+	}
+}
+
+# chronicle.67 Filler: Two suns
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.67
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.68 } }
+	}
+}
+
+# chronicle.68 Filler entry
+# Writes the entry for chronicle.67 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.68
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.67
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0010 type = FREAK_NATURAL_EVENT } }
+	}
+}
+
+# chronicle.69 Filler: A three-headed goat
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.69
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.70 } }
+	}
+}
+
+# chronicle.70 Filler entry
+# Writes the entry for chronicle.69 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.70
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.69
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0011 type = MONSTER_SIGHTED } }
+	}
+}
+
+# chronicle.71 Filler: Crows
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.71
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.72 } }
+	}
+}
+
+# chronicle.72 Filler entry
+# Writes the entry for chronicle.71 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.72
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.71
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0012 type = FREAK_NATURAL_EVENT } }
+	}
+}
+
+# chronicle.73 Filler: Many children
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.73
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.74 } }
+	}
+}
+
+# chronicle.74 Filler entry
+# Writes the entry for chronicle.73 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.74
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.73
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0013 type = POPULATION_EVENT } }
+	}
+}
+
+# chronicle.75 Filler: A beloved ruler
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.75
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_demesne_province = { province_event = { id = chronicle.76 } }
+	}
+}
+
+# chronicle.76 Filler entry
+# Writes the entry for chronicle.75 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.76
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.75
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0014 type = POPULATION_EVENT } }
+	}
+}
+
+# chronicle.77 Filler: A falling star
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.77
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.78 } }
+	}
+}
+
+# chronicle.78 Filler entry
+# Writes the entry for chronicle.77 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.78
+
+	hide_window = yes
+
+	is_triggered_only = yes # chronicle.77
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL0015 type = FREAK_NATURAL_EVENT } }
+	}
+}
+
+# chronicle.79 Filler: A bountiful harvest
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.79
+
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	hide_window = yes
+
+	immediate = {
+		chronicle = { entry = CHRONICLE_FILL0016 type = POPULATION_EVENT }
+	}
+}
+
+# chronicle.80 Filler: Geheimnisnacht
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.80
+	hide_window = yes
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	immediate = {
+		chronicle = { entry = CHRONICLE_FILL_GEHEIMNISNACHT type = FREAK_NATURAL_EVENT }
+	}
+}
+
+# chronicle.81 Filler: Beastmen from the woods
+# Writes a filler entry when the year's chronicle is empty. Not for beastmen.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.81
+	hide_window = yes
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	trigger = {
+		NOT = { trait = creature_beastman }
+	}
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.82 } }
+	}
+}
+
+# chronicle.82 Filler entry
+# Writes the entry for chronicle.81 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.82
+	hide_window = yes
+	is_triggered_only = yes # chronicle.81
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL_BEASTMEN type = MONSTER_SIGHTED } }
+	}
+}
+
+# chronicle.83 Filler: The twin-tailed comet
+# Writes a filler entry when the year's chronicle is empty.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.83
+	hide_window = yes
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.84 } }
+	}
+}
+
+# chronicle.84 Filler entry
+# Writes the entry for chronicle.83 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.84
+	hide_window = yes
+	is_triggered_only = yes # chronicle.83
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL_COMET type = FREAK_NATURAL_EVENT } }
+	}
+}
+
+# chronicle.85 Filler: A rat as big as a man
+# Writes a filler entry when the year's chronicle is empty. Not for Skaven.
+# Scope: ROOT is the player.
+character_event = {
+	id = chronicle.85
+	hide_window = yes
+	is_triggered_only = yes # on_create_chronicle_if_empty
+
+	trigger = {
+		NOT = { trait = creature_skaven }
+	}
+
+	immediate = {
+		random_realm_province = { province_event = { id = chronicle.86 } }
+	}
+}
+
+# chronicle.86 Filler entry
+# Writes the entry for chronicle.85 in a province of the realm.
+# Scope: ROOT is the province, FROM the player.
+province_event = {
+	id = chronicle.86
+	hide_window = yes
+	is_triggered_only = yes # chronicle.85
+
+	immediate = {
+		FROM = { chronicle = { entry = CHRONICLE_FILL_RATMAN type = MONSTER_SIGHTED } }
+	}
+}

@@ -466,47 +466,49 @@ set_dueling_weapon_effect = {
 	}
 }
 
-#### DUELING OUTCOME EVALUATION ### DO NOT TOUCH.
-# ROOT is challenger. From is target of duel.
+#### DUELING OUTCOME EVALUATION
+# ROOT is challenger (combatant_1), event_target:combatant_2 the defender.
+# The score compares the two combat ratings as a ratio, not a difference,
+# so 20 v 10 plays like 200 v 100 and the bands work at any rating:
+#   duel_result_score = 50 + 110 * (A - D) / (A + D)
+# Even fighters score 50. Twice as good scores about 87, three times 105,
+# eight times about 135 (crushing). The floor is -60 and the ceiling 160.
+# Ratings below 1 count as 1. evaluate_extra_duel_result_score_effect then
+# adds the attacker's bonuses (+2 to +12).
 evaluate_duel_result_score_effect = {
-	### Disclaimer: Assumes combatant_1 is ROOT. combatant_2 is referred to as its event_target-name.
-
-	# Flow:
-		# 1. saves combatant_1's combat_rating as a variable
-		# 2. adds that to the result score.
-		# 3. saves combatant_2's combat_rating as a variable
-		# 4. withdraws that from the score
-		# 5. Checks combat_rating diff
-		# 6. Saves as variable
-		# 7. Adds this to the score (might be plus or minus)
-		# 8. Set appropriate flags for special outcomes (double death, decapitation)
-
-
-	#Reset duel result score to its default of 50.
-	set_variable = {
-		which = duel_result_score
-		value = 50
-	}
-	#Attacker
 	export_to_variable = {
 		which = combat_rating_combatant_1
 		value = combat_rating
 		who = event_target:combatant_1
 	}
-	change_variable = { # Add attacker's combat rating to the score...
-		which = duel_result_score #50
-		which = combat_rating_combatant_1 # 50 + X
-	}
-	#Defender
 	export_to_variable = {
 		which = combat_rating_combatant_2
 		value = combat_rating
 		who = event_target:combatant_2
 	}
-	subtract_variable = { # Withdraw defender's combat rating from the score...
-		which = duel_result_score #(50 + X)
-		which = combat_rating_combatant_2 # (50 + X) - Y
+	if = {
+		limit = { NOT = { check_variable = { which = combat_rating_combatant_1 value = 1 } } }
+		set_variable = { which = combat_rating_combatant_1 value = 1 }
 	}
+	if = {
+		limit = { NOT = { check_variable = { which = combat_rating_combatant_2 value = 1 } } }
+		set_variable = { which = combat_rating_combatant_2 value = 1 }
+	}
+	# A - D
+	set_variable = { which = duel_rating_gap which = combat_rating_combatant_1 }
+	subtract_variable = { which = duel_rating_gap which = combat_rating_combatant_2 }
+	# A + D
+	set_variable = { which = duel_rating_sum which = combat_rating_combatant_1 }
+	change_variable = { which = duel_rating_sum which = combat_rating_combatant_2 }
+	# 110 * (A - D) / (A + D)
+	multiply_variable = { which = duel_rating_gap value = 110 }
+	divide_variable = { which = duel_rating_gap which = duel_rating_sum }
+
+	set_variable = { which = duel_result_score value = 50 }
+	change_variable = { which = duel_result_score which = duel_rating_gap }
+
+	set_variable = { which = duel_rating_gap value = 0 }
+	set_variable = { which = duel_rating_sum value = 0 }
 }
 
 evaluate_extra_duel_result_score_effect = { # [SPECIAL CIRCUMSTANCES - OPTIONAL]
@@ -1021,15 +1023,20 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 	###############################
 	#duel_result_score/duelist_skill legend...
 
-	# -0 	: the worst	: low 		: (result_score: attacker is way WORSE than defender)
-	# 0-15	: terrible 	: low
-	# 15-30	: bad 		: low
-	# 30-45	: ok 		: medium
-	# 45-60	: decent 	: medium 	: the closer result_score is to here, the more evenly matched
-	# 60-75	: good 		: medium
-	# 75-90	: great 	: high
-	# 90-105: fantastic	: high
-	# +105	: the best 	: high 		: (result_score: attacker is way BETTER than defender)
+	# duel_result_score bands (see evaluate_duel_result_score_effect). The
+	# rating ratio is the attacker's rating over the defender's.
+	# below -35 : crushed   : the attacker is 8x worse or more and cannot win
+	# -35 to 0  : the worst : low    : about 2.7x worse
+	# 0-15      : terrible  : low
+	# 15-30     : bad       : low
+	# 30-43     : ok        : low
+	# 43-57     : decent    : medium : evenly matched
+	# 57-70     : good      : high
+	# 70-85     : great     : high
+	# 85-100    : fantastic : high
+	# 100-135   : the best  : high   : about 2.7x better
+	# 135+      : crushing  : the defender is 8x worse or more and cannot win
+	# Only poison gets past a crushing gap; legendary duels have their own rules.
 	################################
 
 	###  Flags used:
@@ -1064,26 +1071,8 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 					has_character_flag = no_double_death
 					has_character_flag = greenskin_bash_head_duel
 				}
-				AND = {
-					event_target:combatant_2 = {
-						NOT = { combat_rating >= 150 }
-					}
-					event_target:combatant_1 = {
-						NOT = { combat_rating >= 150 }
-					}
-				}
-				NOR = {
-					combat_rating_diff = { #Stronger people don't tend to die this idiotically
-						character = event_target:combatant_2
-						value >= 50
-					}
-					event_target:combatant_2 = {
-						combat_rating_diff = { #Stronger people don't tend to die this idiotically
-							character = event_target:combatant_1
-							value >= 50
-						}
-					}
-				}
+				check_variable = { which = duel_result_score value = 30 } #Only a close fight ends with both dead
+				NOT = { check_variable = { which = duel_result_score value = 70 } }
 				OR = {
 					has_character_flag = is_battlefield_duel
 					is_member_of_any_warband_trigger = yes
@@ -1172,15 +1161,15 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 			}
 			additive_modifier = {
 				is_bad_duelist_trigger = yes #Skill: bad
-				value = 15
+				value = 5
 			}
 			additive_modifier = {
 				is_terrible_duelist_trigger = yes #Skill: terrible
-				value = 25
+				value = 10
 			}
 			additive_modifier = {
 				is_the_worst_duelist_trigger = yes #Skill: the worst
-				value = 35
+				value = 15
 			}
 			additive_modifier = {
 				has_character_flag = defender_using_poison@event_target:combatant_1 #Defender used poison
@@ -1209,23 +1198,13 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 				value = 30
 			}
 			additive_modifier = {
-				event_target:combatant_2 = { #Relative skill of theirs: way better
-					OR={
-					is_great_dueler_compared_to_prev_trigger = yes
-					is_the_best_dueler_compared_to_prev_trigger = yes
-					is_fantastic_dueler_compared_to_prev_trigger = yes
-					}
-				}
+				duel_result_score_terrible_trigger = yes #Score: badly outmatched
 				value = 10
 			}
-			modifier = {
-				event_target:combatant_2 = { #Relative skill of theirs: way worse
-					OR={
-					duel_result_score_the_worst_trigger = yes
-					duel_result_score_terrible_trigger = yes
-					}
-				}
-				value = 0
+			modifier = { #A crushing gap: only poison kills the stronger fighter
+				factor = 0
+				duel_result_score_crushing_trigger = yes
+				NOR = { has_character_flag = defender_using_poison@event_target:combatant_1 has_character_flag = poison_can_fail_against@event_target:combatant_1 }
 			}
 
 			if = { #this fight is taking place on the battlefield!
@@ -1282,15 +1261,15 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 			}
 			additive_modifier = {
 				event_target:combatant_2 = { is_bad_duelist_trigger = yes } #Their Skill: bad
-				value = 20
+				value = 5
 			}
 			additive_modifier = {
 				event_target:combatant_2 = { is_terrible_duelist_trigger = yes } #Their Skill: terrible
-				value = 40
+				value = 10
 			}
 			additive_modifier = {
 				event_target:combatant_2 = { is_the_worst_duelist_trigger = yes } #Their Skill: the worst
-				value = 50
+				value = 15
 			}
 			additive_modifier = {
 				has_character_flag = attacker_using_poison@event_target:combatant_2 #Attacker used poison
@@ -1308,29 +1287,13 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 				value = -25
 			}
 			additive_modifier = {
-				event_target:combatant_2 = { #Relative skill of theirs: way worse
-					OR={
-					is_the_worst_dueler_compared_to_prev_trigger = yes
-					is_terrible_dueler_compared_to_prev_trigger = yes
-					is_the_worst_dueler_compared_to_prev_trigger = yes
-					}
-				}
-				value = 20
+				duel_result_score_fantastic_trigger = yes #Score: they were badly outmatched
+				value = 10
 			}
-			additive_modifier = {
-				event_target:combatant_2 = { #Relative skill of theirs: way worse
-					duel_result_score_great_trigger = yes
-				}
-				value = -20
-			}
-			modifier = {
-				event_target:combatant_2 = { #Relative skill of theirs: way worse
-					OR={
-					duel_result_score_fantastic_trigger = yes
-					duel_result_score_the_best_trigger = yes
-					}
-				}
-				value = 0
+			modifier = { #A crushing gap: only poison kills the stronger fighter
+				factor = 0
+				duel_result_score_crushed_trigger = yes
+				NOR = { has_character_flag = attacker_using_poison@event_target:combatant_2 has_character_flag = poison_can_fail_against@event_target:combatant_2 }
 			}
 			additive_modifier = {
 				event_target:dueling_weapon_1 = { #Attacker is using a *gun*
@@ -1368,50 +1331,52 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 					has_character_flag = claim_duel@event_target:combatant_2
 				}
 			}
+			modifier = { #A crushing gap: the attacker cannot wound a far better fighter
+				factor = 0
+				duel_result_score_crushed_trigger = yes
+			}
+			# Who lands the blow follows the score: 40 a side when even, rising for
+			# the stronger fighter and falling for the weaker one.
 			additive_modifier = {
-				duel_result_score_good_trigger = yes #Score: you did well
-				value = 40
+				duel_result_score_the_worst_trigger = yes
+				value = -4
 			}
 			additive_modifier = {
-				duel_result_score_great_trigger = yes  #Score: you did great
-				value = 60
+				duel_result_score_terrible_trigger = yes
+				value = 2
 			}
 			additive_modifier = {
-				duel_result_score_fantastic_trigger = yes  #Score: you did fantastic
-				value = 80
+				duel_result_score_bad_trigger = yes
+				value = 8
 			}
 			additive_modifier = {
-				duel_result_score_the_best_trigger = yes  #Score: you did the best
-				value = 100
+				duel_result_score_ok_trigger = yes
+				value = 15
 			}
 			additive_modifier = {
-				duel_result_score_high_group_trigger = yes  #Score group: over all good (extra bonus)
-				value = 60
+				duel_result_score_decent_trigger = yes
+				value = 30
 			}
 			additive_modifier = {
-				duelist_skill_is_high_group_trigger = yes #Skill group: high
-				value = 20
+				duel_result_score_good_trigger = yes
+				value = 50
+			}
+			additive_modifier = {
+				duel_result_score_great_trigger = yes
+				value = 70
+			}
+			additive_modifier = {
+				duel_result_score_fantastic_trigger = yes
+				value = 90
+			}
+			additive_modifier = {
+				duel_result_score_the_best_trigger = yes
+				value = 110
 			}
 			additive_modifier = {
 				has_character_flag = mock_duel
 				any_owned_bloodline = { has_bloodline_flag = bloodline_legendary_warrior }
 				value = 20
-			}
-			additive_modifier = {
-				duel_result_score_bad_trigger = yes  #Score: you did poorly
-				value = -10
-			}
-			additive_modifier = {
-				duel_result_score_terrible_trigger = yes  #Score: you did terribly
-				value = -10
-			}
-			additive_modifier = {
-				duel_result_score_the_worst_trigger = yes  #Score: you did the worst
-				value = -10
-			}
-			additive_modifier = {
-				duel_result_score_low_group_trigger = yes  #Score group: outmatched (extra malus)
-				value = -10
 			}
 
 			event_target:combatant_2 = {
@@ -1513,42 +1478,47 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 					has_character_flag = claim_duel@event_target:combatant_2
 				}
 			}
-			additive_modifier = {
-				duel_result_score_ok_trigger = yes #Score: you did "ok"
-				value = 40
+			modifier = { #A crushing gap: the defender cannot wound a far better fighter
+				factor = 0
+				duel_result_score_crushing_trigger = yes
 			}
-
+			# Who lands the blow follows the score: 40 a side when even, rising for
+			# the stronger fighter and falling for the weaker one.
 			additive_modifier = {
-				duel_result_score_bad_trigger = yes  #Score: you did poorly
-				value = 60
-			}
-			additive_modifier = {
-				duel_result_score_terrible_trigger = yes  #Score: you did terribly
-				value = 80
+				duel_result_score_the_worst_trigger = yes
+				value = 110
 			}
 			additive_modifier = {
-				duel_result_score_the_worst_trigger = yes  #Score: you did the worst
-				value = 100
+				duel_result_score_terrible_trigger = yes
+				value = 90
 			}
 			additive_modifier = {
-				duel_result_score_low_group_trigger = yes  #Score group: outmatched (extra malus)
-				value = 60
+				duel_result_score_bad_trigger = yes
+				value = 70
 			}
 			additive_modifier = {
-				event_target:combatant_2 = { duelist_skill_is_high_group_trigger = yes } #Their Skill group: high
-				value = 20
+				duel_result_score_ok_trigger = yes
+				value = 50
 			}
 			additive_modifier = {
-				duel_result_score_good_trigger = yes  #Score: you did well
-				value = -10
+				duel_result_score_decent_trigger = yes
+				value = 30
 			}
 			additive_modifier = {
-				duel_result_score_great_trigger = yes  #Score: you did well
-				value = -10
+				duel_result_score_good_trigger = yes
+				value = 15
 			}
 			additive_modifier = {
-				duel_result_score_fantastic_trigger = yes  #Score: you did well
-				value = -10
+				duel_result_score_great_trigger = yes
+				value = 8
+			}
+			additive_modifier = {
+				duel_result_score_fantastic_trigger = yes
+				value = 2
+			}
+			additive_modifier = {
+				duel_result_score_the_best_trigger = yes
+				value = -4
 			}
 
 			random_list = { #determine if you'll end up with a serious (losing a limb) injury, a sever one (severely injured trait) or only a mild one
@@ -1647,6 +1617,10 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 					any_owned_bloodline = { has_bloodline_flag = bloodline_legendary_warrior }
 				}
 			}
+			modifier = { #A crushing gap: no one flees a far weaker fighter
+				factor = 0
+				duel_result_score_crushed_trigger = yes
+			}
 
 			additive_modifier = {
 				is_the_best_duelist_trigger = yes #Skill: the best
@@ -1716,6 +1690,10 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 					has_character_flag = greenskin_bash_head_duel
 				}
 			}
+			modifier = { #A crushing gap: no one flees a far weaker fighter
+				factor = 0
+				duel_result_score_crushing_trigger = yes
+			}
 			additive_modifier = {
 				is_the_worst_duelist_trigger = yes #Skill: the worst
 				value = 20
@@ -1775,6 +1753,10 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 					has_character_flag = is_legendary_duel
 					has_character_flag = claim_duel@event_target:combatant_2
 				}
+			}
+			modifier = { #A crushing gap: a far weaker fighter cannot come out ahead
+				factor = 0
+				duel_result_score_crushed_trigger = yes
 			}
 			additive_modifier = {
 				duel_result_score_high_group_trigger = yes #Score group: low (outmatched)
@@ -1897,6 +1879,10 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 					has_character_flag = claim_duel@event_target:combatant_2
 				}
 			}
+			modifier = { #A crushing gap: a far weaker fighter cannot come out ahead
+				factor = 0
+				duel_result_score_crushing_trigger = yes
+			}
 			additive_modifier = {
 				duel_result_score_low_group_trigger = yes #Score group: low (outmatched)
 				value = 5
@@ -1997,6 +1983,10 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 					event_target:combatant_1 = { has_character_flag = flag_duel_no_draws } #Special triggered event duels.
 					event_target:combatant_2 = { has_character_flag = flag_duel_no_draws }
 				}
+			}
+			modifier = { #A crushing gap: a far weaker fighter cannot beat him
+				factor = 0
+				duel_result_score_crushed_trigger = yes
 			}
 			additive_modifier = {
 				duel_result_score_high_group_trigger = yes #Score: they were outmatched
@@ -2248,16 +2238,12 @@ send_duel_result_event_effect = { # Runs via the attacker/combatant_1
 					event_target:combatant_2 = { has_character_flag = flag_duel_no_draws }
 				}
 			}
-			modifier = {
-				event_target:combatant_2 = { #Must be Equal
-					OR={
-						is_terrible_dueler_compared_to_prev_trigger = yes
-						is_the_worst_dueler_compared_to_prev_trigger = yes
-						is_fantastic_dueler_compared_to_prev_trigger = yes
-						is_the_best_dueler_compared_to_prev_trigger = yes
-					}
+			modifier = { #Only a close fight ends with both dead
+				factor = 0
+				OR = {
+					NOT = { check_variable = { which = duel_result_score value = 30 } }
+					check_variable = { which = duel_result_score value = 70 }
 				}
-				value = 0
 			}
 			additive_modifier = {
 				duel_result_score_decent_trigger = yes #Score: fairly evenly matched

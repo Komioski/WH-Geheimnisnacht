@@ -1,0 +1,5846 @@
+###############################################################################
+# Battle events
+# Namespace: battle (was HFP.10997 - HFP.11051, HFP.30200 and HFP.400 - 402
+#   in HF_battle_events.txt)
+# Faction: Generic
+# Serves: every army commander of every race; Khornates, Nurglings, warbands,
+#   warrior lodges and berserkers get their own outcomes
+#
+# The Holy Fury battle tombola. While a commander fights, battle.1 rolls one
+# outcome for him: death, a wound or a trophy, a duel with the enemy
+# commander, a rescue, new commander traits, a nickname, a skull, a rival or
+# a friend. The scars may come back later as the Wounds Within (battle.26).
+#
+# The tombola                      battle.1
+# Death on the field               battle.10 - battle.14
+# Wounds and scars                 battle.20 - battle.26
+# Duels and rescues                battle.30 - battle.39
+# Lessons of war                   battle.40 - battle.48
+# The marshal's cruelty            battle.50 - battle.51
+# Glory and trophies               battle.60 - battle.73
+# Duelist and strategist           battle.80 - battle.82
+# Housekeeping                     battle.90 - battle.91
+#
+# Callers: battle.1 from on_combat_pulse, battle.90 from on_startup and
+#   battle.91 from on_death (00_on_actions); battle.26, 31, 32, 33, 35 and 36
+#   from the duel effects (01_scripted_effects_duels.txt, wh_scripted_effects);
+#   battle.80 - 82 from the duel and battle experience effects.
+# Saved: event targets home_commander, enemy_commander, enemy_liege,
+#   battlefield_location, home_capital_province, combatant_1, combatant_2,
+#   commander_to_the_rescue, my_fellow_commander; flags battle_event_in_progess
+#   (the tombola lock, now cleared after 30 days at the latest), has_PTSD,
+#   denied_duelist_trait,
+#   denied_strategist_trait, commanders_have_died_for_me.
+###############################################################################
+
+namespace = battle
+
+###############################################################################
+# The tombola
+###############################################################################
+
+# battle.1 The tombola
+# Hidden. Rolls one battle outcome for a commander in the thick of the
+# fight and locks him out of new ones until it is done. The lock now clears
+# itself after 30 days, so a failed follow-up no longer locks a commander out
+# for life. Lodge and warband members get the trophy outcomes, and a strong
+# general may be offered the Strategist trait (battle.81).
+# Scope: ROOT is a commander in combat, FROM the enemy commander, FROMFROM the
+#   enemy liege. Fired from on_combat_pulse.
+character_event = {
+	id = battle.1
+	is_triggered_only = yes
+	hide_window = yes
+
+	trigger = {
+		is_alive = yes
+		OR = { #A stale flag from a follow-up that never fired no longer blocks
+			NOT = { has_character_flag = battle_event_in_progess }
+			had_character_flag = { flag = battle_event_in_progess days = 30 }
+		}
+		OR = { #you can't be fighting null-character
+			FROM = { always = yes }
+			FROMFROM = { always = yes }
+		}
+	}
+	fail_trigger_effect = {
+		change_variable = { which = global_combat_pulse_failed_to_find_leader value = 1 }
+	}
+
+	immediate = {
+		random_list = { #The AI only gets one pulse in four
+			75 = { modifier = { factor = 0 ai = no } }
+			25 = {
+				allow_new_battle_events_effect = yes #refresh the flag's date
+				disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+
+				# To keep scopes straight...
+				save_event_target_as = home_commander
+				if = { #work around: in rare edge cases, the flank leader will belong to a flank which has fled, while the commander already *died* and code fails to update this.
+					limit = { FROM = { is_alive = yes is_dying = no } }
+					FROM = { save_event_target_as = enemy_commander } #note: might not always exist
+				}
+				FROMFROM = { save_event_target_as = enemy_liege } #note: might be the same character as enemy_commander
+				location = { save_event_target_as = battlefield_location }
+				capital_scope = { save_event_target_as = home_capital_province }
+				if = { #In case the enemy-liege is not found (hacky work-around):
+					limit = { NOT = { event_target:enemy_liege = { always = yes } } }
+					FROM = { save_event_target_as = enemy_liege } #note: FROM is saved twice, as different targets, for sake of loc.
+					log = "BATTLE EVENT: Retargeting: [enemy_liege.GetTitledFirstName] is the 'enemy liege' AND commander."
+					log = "BATTLE EVENT: Retargeting: [Root.GetBestName] is ROOT."
+				}
+				if = { #In case the enemy-liege is STILL not found: an attempt to combat the "null-character" fights...
+					limit = { NOT = { event_target:enemy_liege = { always = yes } } }
+					location = {
+						ROOT = {
+							random_current_enemy = {
+								preferred_limit = {
+									any_unit = { location = { province = PREVPREVPREVPREV } }
+								}
+								save_event_target_as = enemy_liege #for sake of loc.
+							}
+						}
+					}
+					log = "BATTLE EVENT: Retargeting: [enemy_liege.GetTitledFirstName] is the new RANDOMLY PICKED ALMOST 'enemy liege'. [Root.GetTitledFirstName] is ROOT."
+				}
+
+				#Special handling for loc:
+				#REQUIRED event targets for setting up duel evaluation! NOTE: not strictly duels here, but used for loc. [Don't copy this to anywhere else].
+				save_event_target_as = combatant_1 #the person receiving the first event...
+				event_target:enemy_commander = { save_event_target_as = combatant_2 } #the target of the battle...
+
+				random_list = {
+					##### Warrior Lodge exclusive ######
+					10 = { #PendingFlavorAdditions for Different Races
+						trigger = {
+							OR = {
+								is_member_of_any_warband_trigger = yes
+								is_member_of_any_warrior_lodge_trigger = yes
+							}
+							NOT = { any_artifact = { has_artifact_flag = battlefield_loot } }
+						}
+						good_soldier_outcome_score = yes
+
+						character_event = { id = battle.60 } # Find a weapon on the battlefield
+					}
+					10 = {
+						trigger = {
+							OR = {
+								is_member_of_any_warband_trigger = yes
+								is_member_of_any_warrior_lodge_trigger = yes
+							}
+							has_nickname = no
+						}
+						good_soldier_outcome_score = yes
+						character_event = { id = battle.61 } # Pick a nickname!
+					}
+
+					5 = {
+						trigger = {
+							OR = {
+								is_member_of_any_warband_trigger = yes
+								is_member_of_any_warrior_lodge_trigger = yes
+								religion = khorne
+							}
+							event_target:enemy_commander = { always = yes } #There has to be an opponent...
+							NOT = { event_target:enemy_commander = { is_invincible_trigger = yes } }
+							NOT = { has_character_modifier = battle_events_1_cooldown }
+						}
+						modifier = { factor = 1.5 religion = khorne }
+						good_soldier_outcome_score = yes
+
+						add_character_modifier = {
+							name = battle_events_1_cooldown
+							duration = 365
+							hidden = yes
+						}
+						character_event = { id = battle.62 } # You decapitate your enemy, and take their skull as a trophy.
+					}
+					10 = {
+						trigger = {
+							OR = {
+								is_member_of_any_warband_trigger = yes
+								is_member_of_any_warrior_lodge_trigger = yes
+							}
+							NOT = { trait = robust }
+						}
+						good_soldier_outcome_score = yes
+						character_event = { id = battle.68 } # You become Brawny.
+					}
+					10 = {
+						trigger = {
+							OR = {
+								is_member_of_any_warband_trigger = yes
+								is_member_of_any_warrior_lodge_trigger = yes
+							}
+							any_unit_leader = {
+								always = yes
+								NOT = { character = ROOT }
+								root_potentially_interested_in_rivaling_this_trigger = no
+							}
+							NOT = { has_character_modifier = battle_events_2_cooldown }
+						}
+						bad_soldier_outcome_score = yes
+
+						add_character_modifier = {
+							name = battle_events_2_cooldown
+							duration = 365
+							hidden = yes
+						}
+						character_event = { id = battle.70 } # You are impressed by fellow commander
+					}
+					10 = {
+						trigger = {
+							OR = {
+								is_member_of_any_warband_trigger = yes
+								is_member_of_any_warrior_lodge_trigger = yes
+							}
+							event_target:home_capital_province = { #If something cool happened at your capital once and you haven't already addressed it...
+								OR = {
+									AND = {
+										persistent_event_target:local_dead_commander_target = {
+											always = yes
+										}
+										ROOT = { NOT = { has_character_modifier = glory_days } }
+									}
+									AND = {
+										persistent_event_target:local_inspiring_commander_target = {
+											always = yes
+										}
+										ROOT = {
+											NOT = { has_character_modifier = proud_role_model }
+										}
+									}
+									AND = {
+										persistent_event_target:local_fearsome_commander_target = {
+											always = yes
+										}
+										ROOT = {
+											NOT = { has_character_modifier = center_of_attention }
+										}
+									}
+								}
+							}
+							NOT = { has_character_modifier = battle_events_3_cooldown }
+						}
+
+						add_character_modifier = {
+							name = battle_events_3_cooldown
+							duration = 365
+							hidden = yes
+						}
+						character_event = { id = battle.72 } # You reminisce about previous battles (hooked from previous events)
+					}
+					3 = {
+						trigger = {
+							OR = {
+								is_member_of_any_warband_trigger = yes
+								is_member_of_any_warrior_lodge_trigger = yes
+							}
+							OR = { has_nickname = no trait = depressed trait = stressed }
+						}
+						good_soldier_outcome_score = yes
+						character_event = { id = battle.73 } # An event where you gain a nickname/lose stressed/depressed
+					}
+
+					#### INJURIES...
+					10 = {
+						trigger = {
+							NOT = { trait = berserker }
+							NOT = { is_indomitable_trigger = yes } #The "Indomitable" power blocks "very bad stuff"
+							NOT = { is_invincible_trigger = yes } #The "Indomitable" power blocks "very bad stuff"
+							combat_rating <= 100
+						}
+						bad_soldier_outcome_score = yes
+						warrior_lodge_risk_reduction_score = yes
+
+						random_list = { #Three times in four the blow is turned aside
+							75 = { allow_new_battle_events_effect = yes }
+							25 = { character_event = { id = battle.10 } }
+						} # Killed (remake of 242)
+					}
+					15 = {
+						trigger = {
+							NOT = { trait = wounded }
+							NOT = { trait = berserker }
+							is_alive = yes
+						}
+						bad_soldier_outcome_score = yes
+						modifier = {
+							factor = 2.5
+							any_artifact = { artifact = carstein_ring is_artifact_equipped = yes }
+						}
+						warrior_lodge_risk_reduction_score = yes
+						character_event = { id = battle.20 } # Become Wounded/Bruised (choose injury or gain Craven/lose Brave + lose prestige)
+					}
+					15 = {
+						trigger = {
+							NOT = { trait = maimed }
+							NAND = {
+								trait = one_eyed
+								trait = one_handed
+								trait = one_legged
+								trait = disfigured
+							}
+							NOT = { trait = berserker }
+							is_alive = yes
+						}
+						bad_soldier_outcome_score = yes
+						modifier = {
+							factor = 1.5
+							any_artifact = { artifact = carstein_ring is_artifact_equipped = yes }
+						}
+						warrior_lodge_risk_reduction_score = yes
+						character_event = { id = battle.21 } # Maimed (randomly selected maiming, if has RIP. Otherwise, Maimed.)
+					}
+					10 = {
+						trigger = {
+							NOT = { trait = incapable }
+							immortal = no
+							is_alive = yes
+							NOT = { is_indomitable_trigger = yes } #The "Indomitable" power blocks "very bad stuff"
+						}
+						bad_soldier_outcome_score = yes
+						warrior_lodge_risk_reduction_score = yes
+						random_list = { #Three times in four the blow is turned aside
+							75 = { allow_new_battle_events_effect = yes }
+							25 = { character_event = { id = battle.23 } }
+						} # Serious head-injury (remake of 245). Chance to become Disfigured (if has RIP) or Incapable.
+					}
+					15 = {
+						trigger = {
+							event_target:enemy_commander = {
+								is_alive = yes
+								NOT = { has_character_flag = about_to_challenge_enemy_commander } #So this isn't about to fire the other way around
+							}
+							NOT = { has_character_modifier = battle_events_4_cooldown }
+							NAND = {
+								NOT = { has_pet_animal_trigger = yes } #the event is purely negative without the pet to sacrifice
+								is_indomitable_trigger = yes
+							}
+						}
+						bad_soldier_outcome_score = yes
+						warrior_lodge_risk_reduction_score = yes
+
+						additive_modifier = { #For the more varied versions...
+							has_pet_animal_trigger = yes
+							value = 5
+						}
+
+						add_character_modifier = {
+							name = battle_events_4_cooldown
+							duration = 365
+							hidden = yes
+						}
+						set_character_flag = about_to_challenge_enemy_commander
+
+						character_event = { id = battle.24 } # Your pet to the rescue (otherwise something else)!
+					}
+
+					####  GENERAL IMPROVEMENTS (traits/tech/skill)...
+					25 = {
+						trigger = {
+							event_target:enemy_commander = { is_alive = yes ai = yes } #There has to be an opponent (who is AI)...
+							NOT = { has_character_modifier = battle_events_9_cooldown }
+							ai = no
+						}
+						modifier = {
+							factor = 0.5
+							any_artifact = { artifact = carstein_ring is_artifact_equipped = yes }
+						}
+						good_soldier_outcome_score = yes
+						bad_soldier_outcome_enemy_commander_score = yes
+
+						add_character_modifier = {
+							name = battle_events_9_cooldown
+							duration = 365
+							hidden = yes
+						}
+
+						character_event = { id = battle.30 } # You spot an enemy (likely to be way worse than you): easy pickings!
+					}
+
+					25 = {
+						trigger = {
+							is_alive = yes
+							OR = {
+								trait = misguided_warrior
+								trait = tough_soldier
+								trait = skilled_tactician
+							}
+							NOT = { has_character_modifier = battle_events_5_cooldown }
+						}
+						good_soldier_outcome_score = yes
+
+						add_character_modifier = {
+							name = battle_events_5_cooldown
+							duration = 365
+							hidden = yes
+						}
+						character_event = { id = battle.40 } # Improves martial education (remake of 246)
+					}
+					20 = {
+						trigger = {
+							is_alive = yes
+							NOT = { martial = 10 }
+							NOT = { has_character_modifier = battle_events_6_cooldown }
+						}
+						good_soldier_outcome_score = yes
+
+						add_character_modifier = {
+							name = battle_events_6_cooldown
+							duration = 365
+							hidden = yes
+						}
+						character_event = { id = battle.41 } # Flat improvement to martial skill or province modifier
+					}
+					20 = {
+						trigger = {
+							is_alive = yes
+							is_landed = yes
+							OR = {
+								trait = brilliant_strategist
+								trait = skilled_tactician
+								trait = barbarian_3
+								trait = barbarian_4
+							}
+							event_target:home_capital_province = {
+								NOT = { has_province_modifier = war_knowledge }
+							}
+						}
+						good_soldier_outcome_score = yes
+						character_event = { id = battle.43 } # Knowledge boost in capital from battle or tech points
+					}
+					30 = {
+						trigger = {
+							can_have_more_leadership_traits = yes
+							is_alive = yes
+							NOT = { has_character_modifier = battle_events_7_cooldown } #all commander traits-giving events are set to need a year in between firing...
+						}
+						good_soldier_outcome_score = yes
+
+						add_character_modifier = {
+							name = battle_events_7_cooldown
+							duration = 365
+							hidden = yes
+						}
+						character_event = { id = battle.44 } # Gain Combat Trait 1
+					}
+					20 = {
+						trigger = {
+							is_alive = yes
+							can_have_more_leadership_traits = yes
+							NOT = { has_character_modifier = battle_events_7_cooldown } #all commander traits-giving events are set to need a year in between firing...
+						}
+						good_soldier_outcome_score = yes
+
+						add_character_modifier = {
+							name = battle_events_7_cooldown
+							duration = 365
+							hidden = yes
+						}
+						character_event = { id = battle.45 } # # Gain Combat Trait 2
+					}
+					20 = {
+						trigger = {
+							is_alive = yes
+							can_have_more_leadership_traits = yes
+							NOT = { has_character_modifier = battle_events_7_cooldown } #all commander traits-giving events are set to need a year in between firing...
+						}
+						good_soldier_outcome_score = yes
+
+						add_character_modifier = {
+							name = battle_events_7_cooldown
+							duration = 365
+							hidden = yes
+						}
+						character_event = { id = battle.46 } # # Gain Combat Trait 3
+					}
+					20 = {
+						trigger = {
+							is_alive = yes
+							can_have_more_leadership_traits = yes
+							NOT = { has_character_modifier = battle_events_7_cooldown } #all commander traits-giving events are set to need a year in between firing...
+						}
+						good_soldier_outcome_score = yes
+
+						add_character_modifier = {
+							name = battle_events_7_cooldown
+							duration = 365
+							hidden = yes
+						}
+						character_event = { id = battle.47 } # # Gain Combat Trait 4
+					}
+					10 = {
+						trigger = {
+							is_alive = yes
+							OR = { #Either you have a child, or you have a friend...
+								any_child_even_if_dead = {
+									age = 10
+									NOT = { age = 40 }
+									NOT = { at_location = ROOT }
+								}
+								any_friend = { age = 10 NOT = { at_location = ROOT } }
+							}
+							NOT = { trait = patient }
+							NOT = { trait = wroth }
+							NOT = { trait = blinded } #Because you *see* something. Uh, yeah.
+							NOT = { has_character_modifier = battle_events_8_cooldown } #all commander traits-giving events are set to need a year in between firing...
+						}
+						good_soldier_outcome_score = yes
+
+						add_character_modifier = {
+							name = battle_events_8_cooldown
+							duration = 3650
+							hidden = yes
+						}
+						character_event = { id = battle.48 } # See someone you recognize (?). Gain Wroth/Patient
+					}
+
+					#### GAIN TRAITS/MISC...
+
+					10 = {
+						trigger = {
+							any_owned_bloodline = { has_bloodline_flag = bloodline_battle_bards }
+							NOR = {
+								has_character_modifier = inspired_singer
+								has_character_modifier = inspired_drummer
+							}
+						}
+						good_soldier_outcome_score = yes
+						character_event = { id = lodge.755 } # BATTLE BARDS: Bonus event for any *battle bard bloodline*
+					}
+
+					10 = {
+						trigger = { is_alive = yes has_job_title = job_marshal trait = cruel }
+						character_event = { id = battle.50 } # Marshal: Unnecessary violence (fires for marshal, then liege might gain Cruel)
+					}
+					25 = {
+						trigger = {
+							primary_title = {
+								NOT = { has_title_flag = ze_dyn_merc }
+								mercenary = yes
+							}
+							has_character_flag = is_mercenary_leader
+							OR = {
+								NOT = { has_character_flag = fought_great_commander }
+								had_character_flag = { flag = fought_great_commander days = 180 }
+							}
+
+							FROM = {
+								OR = {
+									martial = 15
+									has_nickname = yes
+									higher_tier_than = DUKE
+									prestige = 2500
+								}
+							}
+						}
+						character_event = { id = HL.10300 } # Fighting a great commander (AI only, then notifies liege)
+					}
+
+					# LOSE TRAITS
+					25 = {
+						trigger = {
+							primary_title = {
+								NOT = { has_title_flag = ze_dyn_merc }
+								mercenary = yes
+							}
+							has_character_flag = is_mercenary_leader
+							trait = craven
+						}
+						character_event = { id = HL.10200 } # Lose Craven (Old Horse Lords event)
+					}
+
+					#MISC: Old events
+					50 = {
+						trigger = {
+							OR = {
+								culture_group = norscan_group
+								culture = dwarf_norse
+								OR = {
+									religion = ulrican
+									AND = { religion = kislev_gods is_female = no }
+									religion = norscan_gods
+								}
+							}
+							is_alive = yes
+							NOT = { trait = berserker }
+							OR = { NOT = { age = 50 } immortal = yes }
+							OR = { trait = wroth trait = aggressive_leader }
+						}
+						character_event = { id = TOG.3000 } # Becomes Berserker
+					}
+					50 = {
+						trigger = {
+							trait = berserker
+							NOT = { trait = maimed }
+							NOT = { trait = one_legged }
+							is_alive = yes
+						}
+						bad_soldier_outcome_score = yes
+						warrior_lodge_risk_reduction_score = yes
+						character_event = { id = TOG.3001 } # Berserker Maimed
+					}
+					50 = {
+						trigger = {
+							trait = berserker
+							NOT = { trait = wounded }
+							NOT = { is_maimed_trigger = yes }
+							is_alive = yes
+						}
+						bad_soldier_outcome_score = yes
+						warrior_lodge_risk_reduction_score = yes
+						character_event = { id = TOG.3002 } # Berserker Wounded
+					}
+					50 = {
+						trigger = { trait = berserker is_invincible_trigger = no }
+						bad_soldier_outcome_score = yes
+						warrior_lodge_risk_reduction_score = yes
+						character_event = { id = TOG.3003 } # Berserker Killed - Updated with new notification events
+					}
+					50 = {
+						trigger = { trait = berserker }
+						good_soldier_outcome_score = yes
+						character_event = { id = TOG.3004 } # Berserker Kills Many
+					}
+
+					15 = {
+						trigger = {
+							OR = {
+								religion = norscan_gods
+								religion = norse_ancestor_gods
+								liege = {
+									OR = {
+										is_member_of_any_warband_trigger = yes
+										is_member_of_any_warrior_lodge_trigger = yes
+									}
+								}
+							}
+							trait = shieldmaiden
+
+							liege = {
+								at_location = ROOT
+								age = 16
+								prisoner = no
+								NOT = { has_character_modifier = lucky_to_be_alive }
+							}
+							NOT = {
+								trait = incapable
+								prisoner = no
+								has_character_modifier = favored_shieldmaiden
+								has_character_modifier = bad_shieldmaiden
+								has_character_modifier = clumsy_shieldmaiden
+								has_character_modifier = inattentive_soldier
+							}
+						}
+						character_event = { id = 79009 } # Shieldmaiden can save liege on battlefield (choice for Shieldmaiden who is ROOT)
+					}
+					15 = {
+						trigger = {
+							OR = {
+								religion = norscan_gods
+								religion = norse_ancestor_gods
+								OR = {
+									is_member_of_any_warband_trigger = yes
+									is_member_of_any_warrior_lodge_trigger = yes
+								}
+							}
+							age = 16
+							NOT = { trait = incapable }
+
+							any_courtier_or_vassal = {
+								trait = shieldmaiden
+								NOT = { trait = incapable }
+								prisoner = no
+								has_minor_title = title_commander
+							}
+						}
+						character_event = { id = 79001 } # Shieldmaiden saves liege, but she is injured (small chain, fired for liege who is ROOT)
+					}
+
+					# SCRYING VISIONS (2)
+					50 = {
+						trigger = {
+							is_alive = yes
+							can_have_more_leadership_traits = yes
+							OR = {
+								NOT = { trait = experimenter }
+								NOT = { trait = unyielding_leader }
+								NOT = { trait = inspiring_leader }
+							}
+							has_battle_omen_modifier_trigger = yes
+						}
+						good_soldier_outcome_score = yes
+						modifier = { factor = 2.5 has_character_modifier = good_battle_omen }
+						modifier = { factor = 0.9 has_character_modifier = bad_battle_omen }
+						character_event = { id = MNM.1202 } # Scrying vision inspires greatness
+					}
+					50 = {
+						trigger = { is_alive = yes has_battle_omen_modifier_trigger = yes }
+						bad_soldier_outcome_score = yes
+						modifier = { factor = 2.5 has_character_modifier = bad_battle_omen }
+						modifier = { factor = 0.9 has_character_modifier = good_battle_omen }
+						character_event = { id = MNM.1203 } # Scrying vision injury
+					}
+
+					1 = {
+						trigger = { is_alive = yes NOT = { is_indomitable_trigger = yes } }
+						character_event = { id = battle.25 } # A river beast drags you under
+					}
+
+					5 = {
+						trigger = {
+							is_alive = yes
+							martial = 12
+							NOR = {
+								has_character_flag = denied_strategist_trait
+								lifestyle_traits = 1
+							}
+						}
+						good_soldier_outcome_score = yes
+						character_event = { id = battle.81 } # Become a Strategist
+					}
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# Death on the field
+###############################################################################
+
+# battle.10 Killed in battle
+# The commander falls. The enemy commander takes the kill if he can have
+# struck the blow, and an invincible character only seems to die. The liege,
+# the slayer and the slayer's liege hear of it (battle.11 - 14).
+# Scope: ROOT is the falling commander. Fired from battle.1.
+character_event = {
+	id = battle.10
+	title = the_battle_at_location
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	sound = lose_battle
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = berserker }
+	}
+
+	desc = { text = EVTDESCbattle10_a trigger = { has_character_flag = desc_A } }
+	desc = { text = EVTDESCbattle10_b trigger = { has_character_flag = desc_B } }
+	desc = { text = EVTDESCbattle10_c trigger = { has_character_flag = desc_C } }
+
+	immediate = {
+		hidden_effect = {
+			disallow_new_battle_events_effect = yes #to keep the tombola from spamming you... (if MP)
+			#Find someone to think of in dying moment...
+			save_beloved_character_effect = yes
+
+			random_rival = {
+				save_event_target_as = random_rival_target #For loc and extra fun
+			}
+			randomize_ABC_desc_flag_effect = yes #picks a desc-text flag...
+
+			#Sets up weapons for localization...
+			set_dueling_weapon_effect = yes
+			event_target:enemy_commander = { set_dueling_weapon_effect = yes }
+
+			if = { #In case there was an artifact available for fighting with (it might be lost to the enemy)...
+				limit = { event_target:dueling_weapon_1 = { always = yes } }
+				set_character_flag = dropped_weapon
+			}
+			### Saved in tombola:
+			# event_target:home_commander
+			# event_target:enemy_commander (originally FROM)
+			# event_target:enemy_liege (originally FROMFROM)
+			# event_target:battlefield_location (location of battle)
+
+			### Saved in *this* event:
+			# event_target:home_liege (liege of home_commander, if there is one)
+
+			liege = {
+				if = {
+					limit = { NOT = { character = ROOT } }
+					save_event_target_as = home_liege
+					character_event = { id = battle.11 } # Send notification to home_liege...
+				}
+			}
+
+			event_target:enemy_liege = { #the LIEGE of the commander on the opposing side
+				if = {
+					limit = {
+						NOR = { #if they are not below you, or YOU...
+							is_vassal_or_below = ROOT
+							character = ROOT
+						}
+					}
+					set_character_flag = temp_battle_kill_242
+
+					if = {
+						limit = { ROOT = { has_character_flag = dropped_weapon } }
+						if = { #If there is a commander:
+							limit = { event_target:enemy_commander = { always = yes } }
+							# Do nothing. This will be handled by the commander (further down).
+						}
+						else = { #If there *was* no enemy commander, we need to deal with the dropped weapon...
+							character_event = { id = battle.13 } # Send choice event about taking the weapon from the dead commander...
+						}
+					}
+
+					else = { #If a dropped weapon is *not* involved (most common)...
+						if = {
+							limit = {
+								OR = {
+									AND = { #if there is a commander, and you are not that commander...
+										event_target:enemy_commander = { always = yes }
+										enemy_commander_and_liege_are_different_characters = yes
+									}
+									event_target:enemy_commander = { always = no } #Or there is no commander...
+								}
+							}
+							character_event = { id = battle.14 } # Send regular notification of killing this commander...
+						}
+					}
+				}
+			}
+			event_target:enemy_commander = { #the commander of the opposing side
+				if = {
+					limit = {
+						NOR = {
+							has_character_flag = temp_battle_kill_242
+							is_vassal_or_below = ROOT
+							character = ROOT
+						}
+					}
+					##### For tiered rewards...
+					if = {
+						limit = { duelist_skill_compared_to_prev_high_group_trigger = yes }
+						set_character_flag = fought_worse_warrior@ROOT #For later effects...
+					}
+					else_if = {
+						limit = { duelist_skill_compared_to_prev_low_group_trigger = yes }
+						set_character_flag = fought_great_warrior@ROOT #For later effects...
+					}
+					else = {
+						set_character_flag = fought_even_warrior@ROOT #For later effects...
+					}
+					#####
+
+					if = {
+						limit = { ROOT = { has_character_flag = dropped_weapon } }
+						character_event = { id = battle.12 } # Send choice event about taking the weapon from the dead commander (then forward to enemy liege)...
+					}
+					else = { #If a dropped weapon is *not* involved (most common)...
+						character_event = { id = battle.14 } # Send notification of killing this commander...
+					}
+				}
+			}
+			event_target:enemy_liege = {
+				clr_character_flag = temp_battle_kill_242 #For handling old TOG-events...
+			}
+			if = {
+				limit = { multiplayer = yes }
+				set_character_flag = is_battlefield_duel
+				debug_battle_death_counter_effect = yes #for debug purposes
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else_if = {
+					limit = { #The enemy commander cannot have struck the blow
+						OR = {
+							is_liege_or_above = event_target:enemy_commander
+							event_target:enemy_commander = { character = ROOT }
+							NOT = { event_target:enemy_commander = { always = yes } }
+						}
+					}
+					death = { death_reason = death_battle }
+				}
+				else = {
+					death = { death_reason = death_battle killer = event_target:enemy_commander }
+				}
+			}
+		}
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAbattle10
+			trigger = {
+				OR = {
+					AND = {
+						NOR = { trait = cruel is_impious_trigger = yes }
+						OR = { trait = kind is_pious_trigger = yes }
+					}
+					AND = {
+						OR = { trait = cruel is_impious_trigger = yes }
+						NOR = { trait = kind is_pious_trigger = yes }
+					}
+					event_target:random_rival_target = { always = no }
+				}
+				NOR = {
+					is_lover = event_target:my_beloved
+					is_father = event_target:my_beloved
+					is_mother = event_target:my_beloved
+					is_child_of = event_target:my_beloved
+				}
+			}
+		}
+
+		name = {
+			text = EVTOPTAbattle10_kind #I should've made peace with <Rival>
+			trigger = {
+				event_target:random_rival_target = { always = yes }
+				NOR = { trait = cruel is_impious_trigger = yes }
+				OR = { trait = kind is_pious_trigger = yes }
+				NOR = {
+					is_lover = event_target:my_beloved
+					is_father = event_target:my_beloved
+					is_mother = event_target:my_beloved
+					is_child_of = event_target:my_beloved
+				}
+			}
+		}
+		name = {
+			text = EVTOPTAbattle10_cruel #<Rival> outlived me?!
+			trigger = {
+				event_target:random_rival_target = { always = yes }
+				OR = { trait = cruel is_impious_trigger = yes }
+				NOR = { trait = kind is_pious_trigger = yes }
+				NOR = {
+					is_lover = event_target:my_beloved
+					is_father = event_target:my_beloved
+					is_mother = event_target:my_beloved
+					is_child_of = event_target:my_beloved
+				}
+			}
+		}
+		name = {
+			text = EVTOPTAbattle10_lover #Tell "my_beloved" that I love him/her...
+			trigger = {
+				OR = {
+					is_lover = event_target:my_beloved
+					is_father = event_target:my_beloved
+					is_mother = event_target:my_beloved
+					is_child_of = event_target:my_beloved
+				}
+			}
+		}
+
+		#For portraits and tooltips...
+		if = {
+			limit = {
+				OR = {
+					is_lover = event_target:my_beloved
+					is_father = event_target:my_beloved
+					is_mother = event_target:my_beloved
+					is_child_of = event_target:my_beloved
+				}
+			}
+			show_portrait = event_target:my_beloved
+		}
+		if = {
+			limit = { event_target:home_liege = { always = yes } }
+			custom_tooltip = { text = home_liege_will_be_notified_of_death_tt }
+			show_portrait = event_target:home_liege
+		}
+		if = {
+			limit = { event_target:enemy_commander = { always = yes } }
+			if = {
+				limit = { has_character_flag = dropped_weapon }
+				custom_tooltip = { text = enemy_commander_looms_over_your_artifact_tt }
+			}
+			else = { custom_tooltip = { text = enemy_commander_looms_over_you_tt } }
+			show_portrait = event_target:enemy_commander
+		}
+		if = {
+			limit = {
+				event_target:random_rival_target = { always = yes }
+				OR = {
+					AND = {
+						NOR = { trait = cruel is_impious_trigger = yes }
+						OR = { trait = kind is_pious_trigger = yes }
+					}
+					AND = {
+						NOR = { trait = kind is_pious_trigger = yes }
+						OR = { trait = cruel is_impious_trigger = yes }
+					}
+				}
+			}
+			show_portrait = event_target:random_rival_target
+		}
+		if = { #This is currently a little too common maybe?
+			limit = {
+				is_landed = yes
+				OR = {
+					is_member_of_any_warband_trigger = yes
+					is_member_of_any_warrior_lodge_trigger = yes
+				}
+			}
+			event_target:home_capital_province = {
+				show_scope_change = no
+				add_province_modifier = { name = province_mourning_warrior_death duration = 365 }
+				save_persistent_event_target = {
+					name = local_dead_commander_target #Hook-in: Warrior Lodges
+					scope = event_target:home_commander
+				}
+			}
+		}
+		### Actual death (if not MP)
+		if = {
+			limit = { multiplayer = no }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else_if = {
+				limit = { #The enemy commander cannot have struck the blow
+					OR = {
+						is_liege_or_above = event_target:enemy_commander
+						event_target:enemy_commander = { character = ROOT }
+						NOT = { event_target:enemy_commander = { always = yes } }
+					}
+				}
+				death = { death_reason = death_battle }
+			}
+			else = {
+				death = { death_reason = death_battle killer = event_target:enemy_commander }
+				set_character_flag = is_battlefield_duel
+				debug_battle_death_counter_effect = yes #for debug purposes
+			}
+		}
+	}
+}
+
+# battle.11 A commander lost
+# The liege hears that his commander fell. A lover swears vengeance on the
+# slayer.
+# Scope: ROOT is home_commander's liege. Fired from battle.10 and battle.33.
+character_event = {
+	id = battle.11
+	title = commander_lost
+	desc = EVTDESCbattle11
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	sound = lose_battle
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+	}
+
+	option = { #DEFAULT
+		name = EVTOPTAbattle11 #Another one bites the dust
+		prestige = -10
+
+		trigger = { NOT = { is_lover = event_target:home_commander } }
+	}
+	option = {
+		name = EVTOPTBbattle11 # I will avenge you, my beloved!
+		prestige = -10
+		add_character_modifier = { name = seeking_vengeance duration = 1000 }
+
+		show_portrait = event_target:enemy_commander #if empty, I assume it'll show nothing? (For some reason does not currently work to put after the limit below.)
+
+		if = {
+			limit = {
+				event_target:home_commander = {
+					killer = { character = event_target:enemy_commander }
+				}
+			}
+
+			tooltip = { event_target:enemy_commander = { prestige = 15 } }
+			add_rival = event_target:enemy_commander
+		}
+
+		trigger = { #If you had some kind of close relationship with them (and it makes sense)...BUT not lovers.
+			NOT = { is_lover = event_target:home_commander }
+			event_target:home_commander = {
+				OR = {
+					is_child_of = ROOT
+					any_spouse = { character = ROOT }
+					is_mother = ROOT
+					is_father = ROOT
+					any_sibling = { character = ROOT }
+				}
+				root_potentially_interested_in_rivaling_this_trigger = no
+			}
+			event_target:enemy_commander = { is_alive = yes }
+		}
+	}
+	option = {
+		name = EVTOPTbattle11_lover #Nooo, my sweet love!
+		prestige = -10
+		add_character_modifier = { name = grieving_over_warrior_lover duration = 1000 }
+
+		show_portrait = event_target:enemy_commander #same reasoning as option above.
+
+		if = {
+			limit = {
+				event_target:home_commander = {
+					killer = { character = event_target:enemy_commander }
+				}
+				event_target:enemy_commander = { is_alive = yes }
+			}
+
+			tooltip = { event_target:enemy_commander = { prestige = 15 } }
+			add_rival = event_target:enemy_commander
+		}
+		trigger = { is_lover = event_target:home_commander }
+	}
+}
+
+# battle.12 The fallen foe's blade
+# The enemy commander who struck the blow may claim the fallen
+# commander's weapon, or send it to his own liege (battle.13).
+# Scope: ROOT is enemy_commander. Fired from battle.10.
+character_event = {
+	id = battle.12
+	title = commander_slain
+	picture = GFX_evt_battle
+	desc = EVTDESCbattle12
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+
+	option = { #I'll take that
+		name = EVTOPTAbattle12
+
+		event_target:dueling_weapon_1 = { #the dropped weapon (during testing, will be inherited first)
+			show_scope_change = no
+			owner = {
+				show_scope_change = no
+				event_target:dueling_weapon_1 = {
+					show_scope_change = no
+					transfer_artifact = {
+						from = event_target:home_commander #not actually, but the tooltip will say so. It will *actually* come from the "owner", which might at this point be the heir of the dead commander...
+						to = ROOT
+					}
+				}
+			}
+		}
+		hidden_effect = {
+			if = {
+				limit = { enemy_commander_and_liege_are_different_characters = yes }
+				event_target:enemy_liege = {
+					character_event = { id = battle.14 days = 1 } #Liege gets generic notification about death...
+				}
+			}
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 1.5 trait = greedy }
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 1.5 is_evil_trigger = yes }
+			modifier = {
+				factor = 2
+				any_artifact = { is_dueling_weapon_artifact_and_equipped = no }
+			}
+		}
+	}
+	option = { #I'll give it to my liege
+		name = EVTOPTBbattle12
+
+		tooltip = {
+			reverse_opinion = {
+				who = event_target:enemy_liege
+				modifier = opinion_grateful
+				years = 3
+			}
+		}
+
+		event_target:enemy_liege = {
+			character_event = { id = battle.13 days = 1 } #Give liege the same option you got...
+		}
+
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 1.5 trait = charitable }
+			modifier = { factor = 1.5 trait = kind }
+			modifier = { factor = 1.5 trait = just }
+			modifier = {
+				factor = 1.5
+				any_artifact = { is_dueling_weapon_artifact_and_equipped = yes }
+			}
+		}
+		trigger = { enemy_commander_and_liege_are_different_characters = yes }
+	}
+	option = { #I won't steal from the dead
+		name = EVTOPTCbattle12
+		piety = 30
+
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 1.5 is_benevolent_trigger = yes }
+			modifier = { factor = 2 is_pious_trigger = yes }
+		}
+
+		hidden_effect = {
+			if = {
+				limit = { enemy_commander_and_liege_are_different_characters = yes }
+				event_target:enemy_liege = {
+					character_event = { id = battle.14 days = 1 } #Liege gets generic notification about death...
+				}
+			}
+		}
+	}
+	after = {
+		apply_opinion_reward_effect = yes
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.13 A trophy for the liege
+# The enemy liege receives the dead commander's weapon, or the news.
+# Scope: ROOT is enemy_liege. Fired from battle.10 and battle.12.
+character_event = {
+	id = battle.13
+	title = commander_slain
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	desc = { #If there was a commander...
+		trigger = { event_target:enemy_commander = { always = yes } }
+		text = EVTDESCbattle13_a
+	}
+	desc = { #Else, if the event was sent directly to you...
+		trigger = { NOT = { event_target:enemy_commander = { always = yes } } }
+		text = EVTDESCbattle13_b
+	}
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+
+	option = { #I'll take that
+		name = EVTOPTAbattle12
+		event_target:dueling_weapon_1 = { #the dropped weapon (during testing, will be inherited first)
+			show_scope_change = no
+			owner = {
+				show_scope_change = no
+				event_target:dueling_weapon_1 = {
+					show_scope_change = no
+					transfer_artifact = { from = PREV to = ROOT }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 1.5 trait = greedy }
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 1.5 is_evil_trigger = yes }
+			modifier = {
+				factor = 2
+				any_artifact = { is_dueling_weapon_artifact_and_equipped = no }
+			}
+		}
+	}
+	option = { #I won't steal from the dead
+		name = EVTOPTCbattle12
+		piety = 30
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 1.5 is_benevolent_trigger = yes }
+			modifier = { factor = 1.5 is_pious_trigger = yes }
+		}
+	}
+	after = {
+		apply_opinion_reward_effect = yes
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.14 Commander slain
+# The enemy liege hears that his men slew a commander.
+# Scope: ROOT is enemy_liege. Fired from battle.10, battle.12 and battle.33.
+character_event = {
+	id = battle.14
+	title = commander_slain
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+
+	desc = { #If you are the enemy liege...
+		trigger = { event_target:enemy_liege = { character = ROOT } }
+		text = EVTDESCbattle14_a
+	}
+	desc = { #If you are the enemy commander...
+		trigger = { event_target:enemy_commander = { character = ROOT } }
+		text = EVTDESCbattle14_b
+	}
+
+	trigger = {
+		is_alive = yes
+	}
+
+	option = {
+		name = EVTOPTAbattle14
+
+		show_portrait = event_target:home_commander
+		prestige = 15
+
+		apply_opinion_reward_effect = yes
+		allow_new_battle_events_effect = yes
+	}
+}
+
+###############################################################################
+# Wounds and scars
+###############################################################################
+
+# battle.20 Wounded
+# The commander takes a wound.
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.20
+	title = the_battle_at_location
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	sound = lose_battle
+	hide_from = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = wounded }
+		NOT = { trait = berserker }
+		is_alive = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_negative_effect = yes
+
+		if = {
+			limit = { event_target:enemy_commander = { is_alive = yes ai = yes } }
+			disallow_new_battle_events_effect = yes #to keep the tombola from spamming your potential target...
+		}
+		random_list = {
+			10 = { set_character_flag = desc_A }
+			10 = {
+				trigger = { event_target:enemy_commander = { always = no } }
+				set_character_flag = desc_B
+			}
+			10 = { set_character_flag = desc_C }
+		}
+
+		set_battle_duels_option_flag_effect = yes
+		set_character_flag = skip_wounded_trait
+		random_list = { #Randomize bruised body part.
+			10 = { #the eyes
+				trigger = { NOT = { trait = blinded } }
+				if = { limit = { trait = one_eyed } set_character_flag = injury_both_eyes }
+				else = { set_character_flag = injury_eye }
+			}
+			10 = { trigger = { NOT = { trait = one_handed } } set_character_flag = injury_hand }
+			10 = { trigger = { NOT = { trait = one_legged } } set_character_flag = injury_leg }
+			3 = { trigger = { NOT = { trait = disfigured } } set_character_flag = injury_face }
+			1 = { trigger = { NOT = { trait = mangled } } set_character_flag = injury_mangled_body }
+			10 = { #Only in case you already have ALL the other maimed traits?
+				trigger = {
+					trait = blinded
+					trait = one_handed
+					trait = one_legged
+					trait = disfigured
+					trait = mangled
+				}
+				set_character_flag = injury_could_be_lethal
+			}
+		}
+	}
+	desc = { text = EVTDESCbattle20_a trigger = { has_character_flag = desc_A } }
+	desc = { text = EVTDESCbattle20_b trigger = { has_character_flag = desc_B } }
+	desc = { text = EVTDESCbattle20_c trigger = { has_character_flag = desc_C } }
+
+	option = { #Special option: High Combat-rating only (no enemy commander present)
+		tooltip_info = combat_rating
+		name = EVTOPTCbattle20
+		prestige = 15
+		pacifists_lose_piety_effect = yes
+
+		ai_chance = { factor = 300 }
+
+		trigger = { has_character_flag = high_PCS_opt }
+	}
+	option = { #Special option: Duel enemy commander instead (if you have great combat rating)
+		tooltip_info_custom = available_because_duels
+		name = EVTOPTCbattle21
+
+		duel_enemy_commander_effect = yes
+		pacifists_lose_piety_effect = yes
+
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.5 trait = craven }
+			modifier = {
+				factor = 0
+				event_target:enemy_commander = { ai = no } #don't do this to players
+			}
+		}
+
+		trigger = {
+			has_character_flag = duel_enemy_opt
+			event_target:enemy_commander = { # To ensure you do not try to duel commanders who literally *just* died (in battle, presumably)
+				is_alive = yes
+				is_dying = no
+			}
+		}
+	}
+	option = { #Special option: Duel enemy commander instead (but you have terrible Combat Rating - blocks option above + gives Brave)
+		name = EVTOPTCbattle21
+		tooltip_info_custom = available_because_duels_bad
+		duel_enemy_commander_effect = yes
+		pacifists_lose_piety_effect = yes
+
+		if = { limit = { trait = craven } remove_trait = craven }
+		else = { add_trait = brave }
+
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.5 trait = craven }
+			modifier = {
+				factor = 0
+				event_target:enemy_commander = { ai = no } #don't do this to players
+			}
+		}
+
+		trigger = {
+			has_character_flag = duel_enemy_opt_gain_brave
+			event_target:enemy_commander = { # To ensure you do not try to duel commanders who literally *just* died (in battle, presumably)
+				is_alive = yes
+				is_dying = no
+			}
+		}
+	}
+	option = { #Special option: Duel enemy commander instead (you are Brave already - unlocks dueling regardless, but should block the two above)
+		name = EVTOPTCbattle21
+		tooltip_info = brave
+		duel_enemy_commander_effect = yes
+		pacifists_lose_piety_effect = yes
+
+		add_trait_silently_brave_effect = yes
+		remove_trait_silently_craven_effect = yes
+
+		ai_chance = {
+			factor = 50
+			modifier = {
+				factor = 0
+				event_target:enemy_commander = { ai = no } #don't do this to players
+			}
+		}
+
+		trigger = {
+			has_character_flag = duel_enemy_opt_is_brave
+			event_target:enemy_commander = { # To ensure you do not try to duel commanders who literally *just* died (in battle, presumably)
+				is_alive = yes
+				is_dying = no
+			}
+		}
+	}
+
+	option = { #Special option: I distract them with song!
+		tooltip_info_custom = because_bloodline_tt
+		name = {
+			text = EVTOPTbattle20_bard_1 #I must survive...
+			trigger = { has_character_flag = desc_A }
+		}
+		name = {
+			text = EVTOPTbattle20_bard_2 #"Let me sing you the one about the idiot [enemy culture]?"
+			trigger = { has_character_flag = desc_B }
+		}
+		name = {
+			text = EVTOPTbattle20_bard_3 #I will write songs, mocking you!
+			trigger = { has_character_flag = desc_C }
+		}
+		if = {
+			limit = { has_character_flag = desc_C }
+			custom_tooltip = { text = EVTOPTbattle20_bard_3_tt }
+		}
+
+		prestige = 15
+
+		allow_new_battle_events_effect = yes
+
+		ai_chance = { factor = 100 }
+		trigger = { any_owned_bloodline = { has_bloodline_flag = bloodline_battle_bards } } #Only for Battle Bard Bloodlines
+	}
+
+	option = { #I accept injury
+		name = EVTOPTAbattle20
+		apply_duel_wounded_effect = yes
+		add_blood_splatter_effect = yes
+		pacifists_lose_piety_effect = yes
+		random = { chance = 80 add_trait_brave_effect = yes remove_trait_craven_effect = yes }
+		allow_new_battle_events_effect = yes
+		ai_chance = { factor = 50 modifier = { factor = 3 trait = craven } }
+		if = {
+			limit = { any_artifact = { artifact = carstein_ring is_artifact_equipped = yes } }
+			prestige = -25
+		}
+	}
+
+	option = { #I will do nothing/escape somehow (lose brave/gain craven)
+		name = {
+			text = EVTOPTBbattle20_1 #hide
+			trigger = { has_character_flag = desc_A }
+		}
+		name = {
+			text = EVTOPTBbattle20_2 #run
+			trigger = { has_character_flag = desc_B }
+		}
+		name = {
+			text = EVTOPTBbattle20_3 #play dead/distract
+			trigger = { has_character_flag = desc_C }
+		}
+		random = { chance = 50 add_trait_craven_effect = yes remove_trait_brave_effect = yes }
+		prestige = -50
+
+		ai_chance = { factor = 100 bad_soldier_outcome_score = yes }
+		if = {
+			limit = { any_artifact = { artifact = carstein_ring is_artifact_equipped = yes } }
+			prestige = -100
+			piety = -50
+		}
+		allow_new_battle_events_effect = yes
+	}
+	after = {
+		clr_ABC_desc_flag_effect = yes
+
+		clr_character_flag = skip_wounded_trait
+		clr_character_flag = injury_both_eyes
+		clr_character_flag = injury_eye
+		clr_character_flag = injury_hand
+		clr_character_flag = injury_leg
+		clr_character_flag = injury_face
+		clr_character_flag = injury_mangled_body
+		clr_character_flag = injury_maimed
+		clr_character_flag = injury_could_be_lethal
+
+		clr_character_flag = high_PCS_opt
+		clr_character_flag = duel_enemy_opt
+		clr_character_flag = duel_enemy_opt_gain_brave
+		clr_character_flag = duel_enemy_opt_is_brave
+	}
+}
+
+# battle.21 Maimed
+# The commander loses an eye, a hand or a leg, or is scarred. A favourite
+# artifact may be lost on the field (battle.22).
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.21
+	title = the_battle_at_location
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	sound = lose_battle
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = maimed }
+		NAND = { trait = one_eyed trait = one_handed trait = one_legged trait = disfigured }
+		NOT = { trait = berserker }
+		is_alive = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_negative_effect = yes
+
+		if = {
+			limit = { event_target:enemy_commander = { is_alive = yes ai = yes } }
+			disallow_new_battle_events_effect = yes #to keep the tombola from spamming your potential target...
+		}
+		hidden_effect = { save_beloved_character_effect = yes } #event_target:my_beloved (might be platonic, children, etc)
+		randomize_ABC_desc_flag_effect = yes
+		set_battle_duels_option_flag_effect = yes
+		random_list = { #Randomize injured body part.
+			10 = { #the eyes
+				trigger = { NOT = { trait = blinded } }
+				if = { limit = { trait = one_eyed } set_character_flag = injury_both_eyes }
+				else = { set_character_flag = injury_eye }
+			}
+			10 = { trigger = { NOT = { trait = one_handed } } set_character_flag = injury_hand }
+			10 = { trigger = { NOT = { trait = one_legged } } set_character_flag = injury_leg }
+			3 = { trigger = { NOT = { trait = disfigured } } set_character_flag = injury_face }
+			1 = { trigger = { NOT = { trait = mangled } } set_character_flag = injury_mangled_body }
+			10 = { #Only in case you already have ALL the other maimed traits?
+				trigger = {
+					trait = blinded
+					trait = one_handed
+					trait = one_legged
+					trait = disfigured
+					trait = mangled
+				}
+				set_character_flag = injury_could_be_lethal
+			}
+		}
+
+		set_character_flag = skip_wounded_trait
+
+		random_artifact = {
+			limit = { is_artifact_equipped = yes }
+			preferred_limit = { artifact_type = military_strategy_guide }
+			preferred_limit = { has_artifact_flag = combat_weapon }
+			preferred_limit = { has_artifact_flag = armor }
+			preferred_limit = {
+				has_artifact_flag = about_martial
+				has_artifact_flag = book
+				has_artifact_flag = created
+			}
+			preferred_limit = { quality = 1 }
+			preferred_limit = { quality = 2 }
+			preferred_limit = { quality = 3 }
+			save_event_target_as = equipped_artifact
+		}
+	}
+
+	desc = { text = EVTDESCbattle21_a trigger = { has_character_flag = desc_A } }
+	desc = {
+		text = EVTDESCbattle21_b_1 #Default variant B
+		trigger = {
+			has_character_flag = desc_B
+			NOT = { event_target:enemy_commander = { always = yes } }
+		}
+	}
+	desc = {
+		text = EVTDESCbattle21_b_2 #Second variant: makes sure to fetch the correct culture for the enemy commander, if they exist
+		trigger = { has_character_flag = desc_B event_target:enemy_commander = { always = yes } }
+	}
+	desc = { text = EVTDESCbattle21_c trigger = { has_character_flag = desc_C } }
+
+	option = { #Special option: High Combat-rating only (no enemy commander present)
+		tooltip_info = combat_rating
+		name = EVTOPTAbattle21
+		apply_duel_wounded_effect = yes #Milder than other options
+		add_blood_splatter_effect = yes
+
+		ai_chance = { factor = 300 }
+
+		trigger = { has_character_flag = high_PCS_opt }
+	}
+	option = { #Special option: Duel enemy commander instead (if you have great combat rating)
+		tooltip_info_custom = available_because_duels
+		name = EVTOPTCbattle21
+		duel_enemy_commander_effect = yes
+		pacifists_lose_piety_effect = yes
+
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.5 trait = craven }
+			modifier = {
+				factor = 0
+				event_target:enemy_commander = { ai = no } #don't do this to players
+			}
+		}
+
+		trigger = {
+			has_character_flag = duel_enemy_opt
+			event_target:enemy_commander = { # To ensure you do not try to duel commanders who literally *just* died (in battle, presumably)
+				is_alive = yes
+				is_dying = no
+			}
+		}
+	}
+	option = { #Special option: Duel enemy commander instead (but you have terrible Combat Rating - blocks option above + gives Brave)
+		name = EVTOPTCbattle21
+		tooltip_info_custom = available_because_duels_bad
+		duel_enemy_commander_effect = yes
+		pacifists_lose_piety_effect = yes
+
+		if = { limit = { trait = craven } remove_trait = craven }
+		else = { add_trait = brave }
+
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.5 trait = craven }
+			modifier = {
+				factor = 0
+				event_target:enemy_commander = { ai = no } #don't do this to players
+			}
+		}
+
+		trigger = {
+			has_character_flag = duel_enemy_opt_gain_brave
+			event_target:enemy_commander = { # To ensure you do not try to duel commanders who literally *just* died (in battle, presumably)
+				is_alive = yes
+				is_dying = no
+			}
+		}
+	}
+	option = { #Special option: Duel enemy commander instead (you are Brave already - unlocks dueling regardless, but should block the two above)
+		name = EVTOPTCbattle21
+		tooltip_info = brave
+		duel_enemy_commander_effect = yes
+		pacifists_lose_piety_effect = yes
+
+		add_trait_silently_brave_effect = yes
+		remove_trait_silently_craven_effect = yes
+
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.5 trait = craven }
+			modifier = {
+				factor = 0
+				event_target:enemy_commander = { ai = no } #don't do this to players
+			}
+		}
+
+		trigger = {
+			has_character_flag = duel_enemy_opt_is_brave
+			event_target:enemy_commander = { # To ensure you do not try to duel commanders who literally *just* died (in battle, presumably)
+				is_alive = yes
+				is_dying = no
+			}
+		}
+	}
+	option = { #Special option: I distract them with song!
+		tooltip_info_custom = because_bloodline_tt
+		name = {
+			text = EVTOPTbattle21_bard_1 #I'll try to remember this...! *run*
+			trigger = { has_character_flag = desc_A }
+		}
+		name = {
+			text = EVTOPTbattle21_bard_2 #"Wait, have you heard the one about [enemy culture] [small animal]?"
+			trigger = { has_character_flag = desc_B }
+		}
+		name = {
+			text = EVTOPTbattle21_bard_3 #Come to hear me sing, have you?
+			trigger = { has_character_flag = desc_C }
+		}
+		trigger_switch = {
+			on_trigger = has_character_flag
+			desc_A = {
+				custom_tooltip = { text = EVTOPTbattle21_bard_1_tt } #run away
+				prestige = -50
+			}
+			desc_B = {
+				custom_tooltip = { text = EVTOPTbattle21_bard_2_tt } #talk your way out
+				apply_duel_wounded_effect = yes
+			}
+			desc_C = {
+				custom_tooltip = { text = EVTOPTbattle21_bard_3_tt } #BATTLE HYMN ATTACK!!
+				prestige = 15
+			}
+		}
+
+		allow_new_battle_events_effect = yes
+
+		ai_chance = { factor = 100 }
+		trigger = { any_owned_bloodline = { has_bloodline_flag = bloodline_battle_bards } } #Only for Battle Bard Bloodlines
+	}
+
+	option = { #Special option: if has an equipped artifact
+		tooltip_info_custom = reason_has_equipped_artifact
+		name = EVTOPTBbattle21 #Wait, take this artifact and spare me!
+
+		#You throw the [equipped_artifact] to the ground...
+		if = {
+			limit = { event_target:equipped_artifact = { has_artifact_flag = combat_weapon } }
+			custom_tooltip = { text = EVTOPTBbattle21_tt_weapon }
+		}
+		else_if = {
+			limit = { event_target:equipped_artifact = { has_artifact_flag = armor } }
+			custom_tooltip = { text = EVTOPTBbattle21_tt_armor }
+		}
+		else = { custom_tooltip = { text = EVTOPTBbattle21_tt_fallback } }
+
+		if = { #If there is an enemy commander, give them the artifact...
+			limit = { event_target:enemy_commander = { is_alive = yes } }
+			event_target:equipped_artifact = {
+				show_scope_change = no
+				set_artifact_flag = stolen_from@ROOT #Hook-in: Alex, for stolen artifact CB?
+				transfer_artifact = { from = ROOT to = event_target:enemy_commander }
+			}
+			event_target:enemy_commander = { character_event = { id = battle.22 } }
+		}
+		else_if = { #Else, if there is an enemy LIEGE, give them the artifact...
+			limit = { event_target:enemy_liege = { is_alive = yes } }
+			event_target:equipped_artifact = {
+				set_artifact_flag = stolen_from@ROOT #Hook-in: Alex, for stolen artifact CB?
+				show_scope_change = no
+				transfer_artifact = { from = ROOT to = event_target:enemy_liege }
+			}
+			event_target:enemy_liege = { character_event = { id = battle.22 } }
+		}
+		else = { #Else, just destroy it
+			custom_tooltip = { text = artifact_is_removed_tt }
+			hidden_effect = { event_target:equipped_artifact = { destroy_artifact = yes } }
+		}
+
+		allow_new_battle_events_effect = yes
+		if = {
+			limit = { any_artifact = { artifact = carstein_ring is_artifact_equipped = yes } }
+			prestige = -50
+			piety = -25
+		}
+
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = craven }
+			modifier = { factor = 0.5 trait = greedy }
+			modifier = {
+				factor = 2
+				any_artifact = { is_dueling_weapon_artifact_and_equipped = yes }
+			}
+		}
+
+		trigger = {
+			event_target:equipped_artifact = { always = yes }
+			OR = { #Either someone is alive to give it to, OR, it's something that is allowed to be destroyed...
+				event_target:enemy_commander = { is_alive = yes }
+				event_target:enemy_liege = { is_alive = yes }
+				event_target:equipped_artifact = {
+					NOR = { is_indestructible = yes has_artifact_flag = flag_considering_donation }
+				}
+			}
+		}
+	}
+
+	option = {
+		name = CURSES
+		apply_selected_duel_injury_effect = yes
+		add_blood_splatter_effect = yes
+
+		if = { #opinion malus with the enemy commander if relevant...
+			limit = { event_target:enemy_commander = { always = yes } }
+			opinion = {
+				modifier = opinion_injured_me_in_battle
+				who = event_target:enemy_commander
+				months = 180
+			}
+		}
+		else = { #otherwise, highlight the enemy liege...
+			show_portrait = event_target:enemy_liege
+		}
+
+		if = { #show the portrait of the person you're talking about...
+			limit = { has_character_flag = desc_A }
+			show_portrait = event_target:my_beloved
+		}
+
+		add_battle_PTSD_effect = yes #sends delayed follow-up event
+
+		hidden_effect = {
+			if = {
+				limit = {
+					OR = {
+						is_member_of_any_warband_trigger = yes
+						is_member_of_any_warrior_lodge_trigger = yes
+					}
+					event_target:enemy_commander = {
+						OR = {
+							is_member_of_any_warband_trigger = yes
+							is_member_of_any_warrior_lodge_trigger = yes
+						}
+					}
+				}
+				save_persistent_event_target = {
+					name = maimed_me_in_battle_target #Hook-in: Warrior Lodges (disliked_target_selection_score)
+					scope = event_target:enemy_commander
+				}
+			}
+		}
+
+		allow_new_battle_events_effect = yes
+
+		ai_chance = { factor = 50 modifier = { factor = 3 trait = craven } }
+	}
+	after = {
+		clr_ABC_desc_flag_effect = yes
+		clr_character_flag = skip_wounded_trait
+		clr_character_flag = injury_both_eyes
+		clr_character_flag = injury_eye
+		clr_character_flag = injury_hand
+		clr_character_flag = injury_leg
+		clr_character_flag = injury_face
+		clr_character_flag = injury_mangled_body
+		clr_character_flag = injury_maimed
+		clr_character_flag = injury_could_be_lethal
+		clr_character_flag = high_PCS_opt
+		clr_character_flag = duel_enemy_opt
+		clr_character_flag = duel_enemy_opt_gain_brave
+		clr_character_flag = duel_enemy_opt_is_brave
+	}
+}
+
+# battle.22 The lost heirloom
+# The artifact the commander dropped is gone for good.
+# Scope: ROOT is the commander. Fired from battle.21.
+character_event = {
+	id = battle.22
+	title = the_battle_at_location
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+
+	desc = {
+		text = EVTDESCbattle22_a_weapon
+		trigger = {
+			event_target:enemy_commander = { character = ROOT }
+			event_target:equipped_artifact = { has_artifact_flag = combat_weapon }
+		}
+	}
+	desc = {
+		text = EVTDESCbattle22_a_armor
+		trigger = {
+			event_target:enemy_commander = { character = ROOT }
+			event_target:equipped_artifact = { has_artifact_flag = armor }
+		}
+	}
+	desc = {
+		text = EVTDESCbattle22_a_other
+		trigger = {
+			event_target:enemy_commander = { character = ROOT }
+			event_target:equipped_artifact = {
+				NOT = { has_artifact_flag = armor }
+				NOT = { has_artifact_flag = combat_weapon }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCbattle22_b_weapon
+		trigger = {
+			event_target:enemy_liege = { character = ROOT }
+			NOT = { event_target:enemy_commander = { character = ROOT } }
+			event_target:equipped_artifact = { has_artifact_flag = combat_weapon }
+		}
+	}
+	desc = {
+		text = EVTDESCbattle22_b_armor
+		trigger = {
+			event_target:enemy_liege = { character = ROOT }
+			NOT = { event_target:enemy_commander = { character = ROOT } }
+			event_target:equipped_artifact = { has_artifact_flag = armor }
+		}
+	}
+	desc = {
+		text = EVTDESCbattle22_b_other
+		trigger = {
+			event_target:enemy_liege = { character = ROOT }
+			NOT = { event_target:enemy_commander = { character = ROOT } }
+			event_target:equipped_artifact = {
+				NOT = { has_artifact_flag = armor }
+				NOT = { has_artifact_flag = combat_weapon }
+			}
+		}
+	}
+
+	option = { #I... Someone pick that up!
+		name = EVTOPTAbattle22
+
+		custom_tooltip = { text = EVTOPTAbattle22_tt }
+		add_blood_splatter_effect = yes
+		allow_new_battle_events_effect = yes
+
+		trigger = { event_target:enemy_commander = { character = ROOT } } #If you are the enemy commander
+	}
+
+	option = {
+		name = {
+			text = EVTOPTBbattle22_high_quality #What a lunatic! I'll take that
+			trigger = { event_target:equipped_artifact = { quality > 3 } }
+		}
+		name = {
+			text = EVTOPTBbattle22 #I shall take that, thank you
+			trigger = { event_target:equipped_artifact = { NOT = { quality > 3 } } }
+		}
+
+		custom_tooltip = { text = EVTOPTAbattle22_tt }
+		allow_new_battle_events_effect = yes
+
+		trigger = { #If you are the enemy liege, AND not the commander
+			event_target:enemy_liege = { character = ROOT }
+			NOT = { event_target:enemy_commander = { character = ROOT } }
+		}
+	}
+}
+
+# battle.23 A head wound
+# A blow to the head leaves the commander incapable or disfigured.
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.23
+	title = the_battle_at_location
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	sound = lose_battle
+
+	desc = {
+		picture = GFX_evt_battle
+		text = EVTDESCbattle23_a #You become incapable
+		trigger = { has_character_flag = wounded_incapable }
+	}
+	desc = {
+		picture = GFX_evt_battle
+		text = EVTDESCbattle23_b #You are disfigured
+		trigger = { has_character_flag = wounded_disfigured }
+	}
+
+	is_triggered_only = yes
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_negative_effect = yes
+		add_blood_splatter_effect = yes
+		random_list = {
+			60 = {
+				trigger = { NOT = { trait = disfigured } }
+				set_character_flag = wounded_disfigured
+			}
+			40 = { set_character_flag = wounded_incapable }
+		}
+	}
+
+	trigger = {
+		NOT = { trait = incapable }
+		immortal = no
+		is_alive = yes
+	}
+
+	option = {
+		name = { text = EVTOPTAbattle23 trigger = { has_character_flag = wounded_incapable } }
+		name = { text = EVTOPTBbattle23 trigger = { has_character_flag = wounded_disfigured } }
+
+		if = {
+			limit = { has_character_flag = wounded_incapable }
+			custom_tooltip = { text = EVTOPTAbattle23_tt }
+			add_trait = incapable
+			clr_character_flag = wounded_incapable
+		}
+		if = {
+			limit = { has_character_flag = wounded_disfigured }
+			custom_tooltip = { text = EVTOPTBbattle23_tt }
+			add_trait = disfigured
+			add_trait = severely_injured
+			resolve_severely_injured_effect = yes
+			clr_character_flag = wounded_disfigured
+		}
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.24 A faithful beast
+# The commander's dog, cat, horse, owl or eagle saves him, or a common
+# camp animal does when he keeps none.
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.24
+	title = the_battle_at_location
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+	}
+
+	desc = { text = EVTDESCbattle24_dog trigger = { has_character_flag = desc_dog } }
+	desc = { text = EVTDESCbattle24_cat trigger = { has_character_flag = desc_cat } }
+	desc = { text = EVTDESCbattle24_horse trigger = { has_character_flag = desc_horse } }
+	desc = { text = EVTDESCbattle24_owl trigger = { has_character_flag = desc_owl } }
+	desc = { text = EVTDESCbattle24_eagle trigger = { has_character_flag = desc_eagle } }
+	desc = { text = EVTDESCbattle24_fallback trigger = { has_character_flag = desc_fallback } }
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_negative_effect = yes
+
+		if = {
+			limit = { event_target:enemy_commander = { is_alive = yes ai = yes } }
+			disallow_new_battle_events_effect = yes #to keep the tombola from spamming your potential target...
+		}
+		random_list = {
+			10 = {
+				trigger = { has_character_modifier = pet_hunting_dog }
+				set_character_flag = desc_dog
+			}
+			10 = { trigger = { has_character_modifier = pet_cat } set_character_flag = desc_cat }
+			10 = {
+				trigger = { has_character_modifier = nomad_warhorse }
+				set_character_flag = desc_horse
+			}
+			10 = { trigger = { has_character_modifier = pet_owl } set_character_flag = desc_owl }
+			10 = {
+				trigger = { has_character_modifier = pet_hunting_eagle }
+				set_character_flag = desc_eagle
+			}
+		}
+		if = { #no pet at hand: your men die around you instead
+			limit = {
+				NOR = {
+					has_character_flag = desc_dog
+					has_character_flag = desc_cat
+					has_character_flag = desc_horse
+					has_character_flag = desc_owl
+					has_character_flag = desc_eagle
+				}
+			}
+			set_character_flag = desc_fallback
+		}
+	}
+
+	### Let the pet die....
+	option = {
+		name = EVTOPTAbattle24_dog
+		custom_tooltip = { text = EVTOPTAbattle24_tt_dog }
+		remove_character_modifier = pet_hunting_dog
+		hidden_effect = {
+			remove_character_modifier = pet_best_friends
+			if = { #To handle omens from hermetics
+				limit = {
+					OR = {
+						has_character_modifier = good_relationship_omen
+						has_character_modifier = bad_relationship_omen
+					}
+				}
+				set_character_flag = dog_death_omen
+				character_event = { id = MNM.1213 days = 35 random = 30 } # Scrying vision come true
+			}
+		}
+		send_new_dog_event_effect = yes # Will only work for certain bloodlines...
+		clr_character_flag = about_to_challenge_enemy_commander
+		allow_new_battle_events_effect = yes
+		trigger = { has_character_flag = desc_dog }
+	}
+	option = {
+		name = EVTOPTAbattle24_cat
+		custom_tooltip = { text = EVTOPTAbattle24_tt_cat }
+		remove_character_modifier = pet_cat
+		hidden_effect = {
+			remove_character_modifier = pet_best_friends
+			if = { #To handle omens from hermetics
+				limit = {
+					OR = {
+						has_character_modifier = good_relationship_omen
+						has_character_modifier = bad_relationship_omen
+					}
+				}
+				set_character_flag = cat_death_omen
+				character_event = { id = MNM.1213 days = 35 random = 30 } # Scrying vision come true
+			}
+		}
+		clr_character_flag = about_to_challenge_enemy_commander
+		allow_new_battle_events_effect = yes
+		trigger = { has_character_flag = desc_cat }
+	}
+	option = {
+		name = EVTOPTAbattle24_horse
+		custom_tooltip = { text = EVTOPTAbattle24_tt_horse }
+		remove_character_modifier = nomad_warhorse
+		clr_character_flag = about_to_challenge_enemy_commander
+		allow_new_battle_events_effect = yes
+		trigger = { has_character_flag = desc_horse }
+	}
+	option = {
+		name = EVTOPTAbattle24_owl
+		custom_tooltip = { text = EVTOPTAbattle24_tt_owl }
+		remove_character_modifier = pet_owl
+		clr_character_flag = about_to_challenge_enemy_commander
+		allow_new_battle_events_effect = yes
+		trigger = { has_character_flag = desc_owl }
+	}
+	option = {
+		name = EVTOPTAbattle24_eagle
+		custom_tooltip = { text = EVTOPTAbattle24_tt_eagle }
+		remove_character_modifier = pet_hunting_eagle
+		clr_character_flag = about_to_challenge_enemy_commander
+		allow_new_battle_events_effect = yes
+		send_new_eagle_event_effect = yes #Only for certain bloodlines...!
+
+		trigger = { has_character_flag = desc_eagle }
+	}
+	option = {
+		name = EVTOPTAbattle24_fallback
+		custom_tooltip = { text = EVTOPTAbattle24_tt_fallback }
+
+		add_battle_PTSD_effect = yes
+
+		clr_character_flag = about_to_challenge_enemy_commander
+		allow_new_battle_events_effect = yes
+
+		trigger = { has_character_flag = desc_fallback }
+	}
+
+	### Chase after the enemy commander (if there is one)
+	option = {
+		name = EVTOPTBbattle24
+		if = {
+			limit = { NOT = { has_character_flag = desc_fallback } }
+			custom_tooltip = { text = EVTOPTBbattle24_tt }
+			hidden_effect = { duel_enemy_commander_effect = yes } #hides the usual tooltip for chasing down enemy commander...
+		}
+		else = {
+			duel_enemy_commander_effect = yes #instantly sends event for a duel!
+		}
+		pacifists_lose_piety_effect = yes
+		set_character_flag = skip_blood_splatter
+
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 0
+				event_target:enemy_commander = { ai = no } #don't do this to players
+			}
+		}
+		trigger = {
+			event_target:enemy_commander = { # To ensure you do not try to duel commanders who literally *just* died (in battle, presumably)
+				is_alive = yes
+				is_dying = no
+			}
+		}
+	}
+
+	after = {
+		clr_character_flag = desc_dog
+		clr_character_flag = desc_cat
+		clr_character_flag = desc_horse
+		clr_character_flag = desc_owl
+		clr_character_flag = desc_eagle
+		clr_character_flag = desc_fallback
+		if = {
+			limit = { has_character_flag = skip_blood_splatter }
+			clr_character_flag = skip_blood_splatter
+		}
+		else = { add_blood_splatter_effect = yes }
+	}
+}
+
+# battle.25 Jaws in the water
+# A river or lake in Lustria, Nehekhara or the Southlands holds something
+# hungry.
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.25
+	desc = EVTDESCbattle25
+	title = the_battle_at_location
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	hide_from = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:battlefield_location = {
+			OR = {
+				region = world_new_world_lustria
+				region = world_nehekhara
+				region = world_greater_araby_southlands
+				region = world_eastern_southlands
+			}
+			OR = { borders_major_river = yes borders_lake = yes }
+		}
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAbattle25
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = { death = { death_reason = death_crocodile } }
+	}
+}
+
+# battle.26 The Wounds Within
+# Years after the war the commander still carries it: drink, nightmares,
+# coldness or rage. The servants of the Dark Gods, greenskins, Dawi, Druchii
+# and Lizardmen each carry it their own way, and some never suffer it at
+# all (does_not_suffer_PTSD). Waits for peace and tries again each year.
+# Scope: ROOT is a landed survivor with flag has_PTSD. Fired from
+#   add_battle_PTSD_effect in 01_scripted_effects_duels.txt.
+character_event = {
+	id = battle.26
+	title = invisible_injury_title
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		is_landed = yes
+		has_character_flag = has_PTSD
+		war = no
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = {
+				is_landed = yes
+				has_character_flag = has_PTSD
+				war = yes #it's just this one that failed!
+			}
+			repeat_event = { id = battle.26 days = 365 random = 50 } #PTSD follow up (try again in a year)
+		}
+		else = { clr_character_flag = has_PTSD }
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_negative_effect = yes
+
+		random_list = {
+			10 = {
+				trigger = { num_of_children = 1 NOT = { does_not_suffer_PTSD = yes } }
+				set_character_flag = desc_A
+			}
+			10 = { trigger = { NOT = { does_not_suffer_PTSD = yes } } set_character_flag = desc_B }
+			10 = {
+				trigger = { #To make sure you're not the cause of the war?
+					NOT = { event_target:home_liege = { character = ROOT } }
+					NOT = { does_not_suffer_PTSD = yes }
+				}
+				set_character_flag = desc_C
+			}
+			10 = { trigger = { religion = khorne } set_character_flag = desc_Khorne }
+			10 = { trigger = { religion = nurgle } set_character_flag = desc_Nurgle }
+			10 = { trigger = { religion = slaanesh } set_character_flag = desc_Slaanesh }
+			10 = { trigger = { religion = tzeentch } set_character_flag = desc_Tzeentch }
+			10 = {
+				trigger = {
+					religion_group = chaos_gods_group
+					NOR = {
+						religion = khorne
+						religion = tzeentch
+						religion = nurgle
+						religion = slaanesh
+					}
+				}
+				set_character_flag = desc_ChaosGods
+			}
+			10 = { trigger = { religion = chaos } set_character_flag = desc_ChaosUndivided }
+			10 = { trigger = { culture_group = orc_group } set_character_flag = desc_Orc }
+			10 = { trigger = { culture_group = druchii_group } set_character_flag = desc_Druchi }
+			10 = { trigger = { culture_group = dwarf_group } set_character_flag = desc_Dwarf }
+			10 = { #lizard
+				trigger = { culture_group = lizardman_group }
+				set_character_flag = desc_Lizard
+			}
+			fallback = { set_character_flag = desc_Generic }
+		}
+	}
+
+	desc = {
+		text = EVTDESCbattle26_a # I can't be near my children
+		trigger = { has_character_flag = desc_A }
+	}
+	desc = {
+		text = EVTDESCbattle26_b #I'm not really here
+		trigger = { has_character_flag = desc_B }
+	}
+	desc = {
+		text = EVTDESCbattle26_c #Survivor's guilt
+		trigger = { has_character_flag = desc_C }
+	}
+	desc = {
+		text = EVTDESCbattle26_khorne #Khorne
+		trigger = { has_character_flag = desc_Khorne }
+	}
+	desc = {
+		text = EVTDESCbattle26_nurgle #Nurgle
+		trigger = { has_character_flag = desc_Nurgle }
+	}
+	desc = {
+		text = EVTDESCbattle26_slaanesh #Slaanesh
+		trigger = { has_character_flag = desc_Slaanesh }
+	}
+	desc = {
+		text = EVTDESCbattle26_tzeentch #Tzeentch
+		trigger = { has_character_flag = desc_Tzeentch }
+	}
+	desc = {
+		text = EVTDESCbattle26_chaosgods #Chaos gods
+		trigger = { has_character_flag = desc_ChaosGods }
+	}
+	desc = {
+		text = EVTDESCbattle26_chaosundivided #Chaos undivided
+		trigger = { has_character_flag = desc_ChaosUndivided }
+	}
+	desc = {
+		text = EVTDESCbattle26_orc #Orcs
+		trigger = { has_character_flag = desc_Orc }
+	}
+	desc = {
+		text = EVTDESCbattle26_dwarves #Dwarves
+		trigger = { has_character_flag = desc_Dwarf }
+	}
+	desc = {
+		text = EVTDESCbattle26_druchi #Druchi
+		trigger = { has_character_flag = desc_Druchi }
+	}
+	desc = {
+		text = EVTDESCbattle26_lizard #lizards
+		trigger = { has_character_flag = desc_Lizard }
+	}
+	desc = {
+		text = EVTDESCbattle26_generic #generic
+		trigger = { has_character_flag = desc_Generic }
+	}
+
+	option = { #Act out (#Scenario A: I can't be near my children)
+		name = EVTOPTAbattle26_1 #I need a drink
+		add_trait = drunkard
+		add_trait = cynical
+		trigger = { NOT = { does_not_suffer_PTSD = yes } has_character_flag = desc_A }
+	}
+	option = { #Try to cope (#Scenario A: I can't be near my children)
+		name = EVTOPTAbattle26_2 #I do NOT have nightmares, servant! How dare you?
+		add_trait = depressed
+		trigger = { NOT = { does_not_suffer_PTSD = yes } has_character_flag = desc_A }
+	}
+	option = { #Act out (Scenario A (last option) or B (top option if so))
+		name = EVTOPTFbattle26 #I can never be close to anyone.
+		add_trait = celibate
+		trigger = {
+			NOT = { does_not_suffer_PTSD = yes }
+			OR = { has_character_flag = desc_A has_character_flag = desc_B }
+		}
+	}
+	option = { #Try to cope (#Scenario B: I'm not really here)
+		name = EVTOPTBbattle26_2 #Some solitude is what's needed
+		add_trait = depressed
+		trigger = { NOT = { does_not_suffer_PTSD = yes } has_character_flag = desc_B }
+	}
+	option = { #Act out (#Scenario B: I'm not really here)
+		name = EVTOPTBbattle26_1 #I need to feel alive again
+		add_trait = lustful
+		add_trait = drunkard
+		trigger = { NOT = { does_not_suffer_PTSD = yes } has_character_flag = desc_B }
+	}
+	option = { #Act out (#Scenario C: Survivor's guilt)
+		name = EVTOPTCbattle26_1 #It should've been me who died
+		custom_tooltip = { text = EVTOPTCbattle26_1_tt }
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = { death = { death_reason = death_suicide } }
+		trigger = { NOT = { does_not_suffer_PTSD = yes } has_character_flag = desc_C }
+	}
+	option = { #Try to cope (Scenario C: Survivor's guilt)
+		name = EVTOPTCbattle26_2 #Some people will always want me dead
+		add_trait = cynical
+		add_trait = depressed
+		trigger = { NOT = { does_not_suffer_PTSD = yes } has_character_flag = desc_C }
+	}
+	option = { #Act out in anger (A, B, or C)
+		name = EVTOPTDbattle26 #Enough of these nonsense FEELINGS
+		add_trait = wroth
+		add_trait = stressed
+		pacifists_lose_piety_effect = yes
+		trigger = { NOT = { does_not_suffer_PTSD = yes } }
+		random = {
+			chance = 15
+			add_trait = depressed
+			hidden_effect = {
+				character_event = {
+					id = 38288 #Notify Depressed
+				}
+			}
+		}
+	}
+	option = { #For WL members only: comfort hunting
+		name = EVTOPTEbattle26 #Enough of these nonsense FEELINGS
+		tooltip_info_custom = available_due_to_warband
+		piety = -5
+		trigger = {
+			OR = {
+				is_member_of_any_warband_trigger = yes
+				is_member_of_any_warrior_lodge_trigger = yes
+			}
+		}
+	}
+	option = { #For chaos undivided followers: Don't stand in the way of the Chaos Gods
+		name = EVTOPTGbattle26
+		tooltip_info_custom = available_due_to_religion
+		prestige = 50
+		if = { limit = { trait = kind } remove_trait = kind }
+		trigger = { religion = chaos }
+	}
+	option = { #For khorne followers: blood for the blood god!
+		name = EVTOPTHbattle26
+		tooltip_info_custom = available_due_to_religion
+		prestige = 50
+		if = { limit = { trait = kind } remove_trait = kind }
+		trigger = { religion = khorne }
+	}
+	option = { #for khorne followers: skulls for the skull throne!
+		name = EVTOPTIbattle26
+		tooltip_info_custom = available_due_to_religion
+		piety = 50
+		if = { limit = { trait = kind } remove_trait = kind }
+		trigger = { religion = khorne }
+	}
+	option = { #For slaanesh followers: Yes! More, more! Scar me harder!!!
+		name = EVTOPTJbattle26
+		tooltip_info_custom = available_due_to_religion
+		piety = 25
+		prestige = 25
+		if = { limit = { trait = kind } remove_trait = kind }
+		trigger = { religion = slaanesh }
+	}
+	option = { #For nurgle followers: We could have been brothers, you could have all joined us!
+		name = EVTOPTKbattle26
+		tooltip_info_custom = available_due_to_religion
+		piety = 50
+		trigger = { religion = nurgle }
+	}
+	option = { #For nurgle followers: Yes, more carcasses for papa Nurgle!
+		name = EVTOPTLbattle26
+		tooltip_info_custom = available_due_to_religion
+		prestige = 50
+		trigger = { religion = nurgle }
+	}
+	option = { #For tzeentch followers: All according to plan!
+		name = EVTOPTMbattle26
+		tooltip_info_custom = available_due_to_religion
+		prestige = 50
+		trigger = { religion = tzeentch }
+	}
+	option = { #For tzeentch followers: Ahh you were supposed to be pawns!
+		name = EVTOPTMbattle26_b
+		tooltip_info_custom = available_due_to_religion
+		piety = 50
+		trigger = { religion = tzeentch }
+	}
+	option = { #For orcs: We bashed 'er 'eadz in
+		name = EVTOPTNbattle26
+		tooltip_info_custom = available_due_to_greenskin
+		prestige = 25
+		piety = 25
+		trigger = { religion_group = greenskin_gods_group }
+	}
+	option = { #Dark pantheon generic: For chaos!
+		name = EVTOPTObattle26
+		tooltip_info_custom = available_due_to_religion
+		prestige = 25
+		piety = 25
+		trigger = {
+			religion_group = chaos_gods_group
+			NOR = {
+				religion = khorne
+				religion = tzeentch
+				religion = nurgle
+				religion = slaanesh
+				religion = chaos
+			}
+		}
+	}
+	option = { #For dark elves: A willing sacrifice
+		name = EVTOPTPbattle26
+		tooltip_info_custom = available_due_to_culture
+		piety = 50
+		trigger = { culture_group = druchii_group }
+	}
+	option = { #For dark elves: A waste of slaves
+		name = EVTOPTQbattle26
+		tooltip_info_custom = available_due_to_culture
+		prestige = 50
+		trigger = { culture_group = druchii_group }
+	}
+	option = { #For dwarves: They have joined the ancestors
+		name = EVTOPTRbattle26
+		tooltip_info_custom = available_due_to_culture #TODO: loc
+		piety = 50
+		trigger = { culture_group = dwarf_group }
+	}
+	option = { #For dwarves: That's a new grudge
+		name = EVTOPTSbattle26
+		tooltip_info_custom = available_due_to_culture
+		prestige = 50
+		trigger = { culture_group = dwarf_group }
+	}
+	option = { #Lizard: The plan must proceed
+		name = EVTOPTTbattle26
+		tooltip_info_custom = available_due_to_culture
+		prestige = 25
+		piety = 25
+		trigger = { culture_group = lizardman_group }
+	}
+	option = { #Generic: Good
+		name = EVTOPTUbattle26
+		tooltip_info_custom = available_due_to_culture
+		prestige = 25
+		piety = 25
+		trigger = {
+			does_not_suffer_PTSD = yes
+			NOR = {
+				religion_group = chaos_gods_group
+				religion_group = greenskin_gods_group
+				trait = creature_dwarf
+				trait = creature_skink
+				culture_group = orc_group
+				culture_group = goblin_group
+				culture_group = lizardman_group
+			}
+		}
+	}
+
+	after = {
+		clr_ABC_desc_flag_effect = yes
+		clr_character_flag = desc_Khorne
+		clr_character_flag = desc_Nurgle
+		clr_character_flag = desc_Slaanesh
+		clr_character_flag = desc_Tzeentch
+		clr_character_flag = desc_ChaosGods
+		clr_character_flag = desc_ChaosUndivided
+		clr_character_flag = desc_Orc
+		clr_character_flag = desc_Druchi
+		clr_character_flag = desc_Dwarf
+		clr_character_flag = desc_Lizard
+		clr_character_flag = desc_Generic
+		allow_new_battle_events_effect = yes
+	}
+}
+
+###############################################################################
+# Duels and rescues
+###############################################################################
+
+# battle.30 Easy pickings
+# An AI enemy commander is cut off and alone. Take him prisoner, kill him,
+# duel him or let him go.
+# Scope: ROOT is the commander, enemy_commander the AI foe. Fired from battle.1.
+character_event = {
+	id = battle.30
+	title = the_battle_at_location
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	hide_from = yes
+	portrait = event_target:enemy_commander
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		event_target:enemy_commander = { is_alive = yes ai = yes }
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+
+		if = {
+			limit = { event_target:enemy_commander = { is_alive = yes ai = yes } }
+			disallow_new_battle_events_effect = yes #to keep the tombola from spamming your potential target...
+		}
+
+		set_battle_duels_option_flag_effect = yes
+		set_character_flag = skip_wounded_trait
+	}
+	desc = EVTDESCbattle30_a
+	desc = EVTDESCbattle30_b
+	desc = EVTDESCbattle30_c
+
+	option = { #Special option: Duel enemy commander instead (if you have great combat rating)
+		tooltip_info_custom = available_because_duels
+		name = EVTOPTAbattle30
+
+		duel_enemy_commander_effect = yes
+		pacifists_lose_piety_effect = yes
+
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.5 trait = craven }
+			modifier = {
+				factor = 0
+				event_target:enemy_commander = { ai = no } #don't do this to players
+			}
+		}
+
+		trigger = { has_character_flag = duel_enemy_opt }
+	}
+	option = { #Special option: Duel enemy commander instead (but you have terrible Combat Rating - blocks option above + gives Brave)
+		name = EVTOPTBbattle30
+		tooltip_info_custom = available_because_duels_bad
+		duel_enemy_commander_effect = yes
+		pacifists_lose_piety_effect = yes
+
+		if = { limit = { trait = craven } remove_trait = craven }
+		else = { add_trait = brave }
+
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.5 trait = craven }
+			modifier = {
+				factor = 0
+				event_target:enemy_commander = { ai = no } #don't do this to players
+			}
+		}
+
+		trigger = { has_character_flag = duel_enemy_opt_gain_brave }
+	}
+	option = { #Special option: Duel enemy commander instead (you are Brave already - unlocks dueling regardless, but should block the two above)
+		name = EVTOPTCbattle30
+		tooltip_info = brave
+		duel_enemy_commander_effect = yes
+		pacifists_lose_piety_effect = yes
+
+		add_trait_silently_brave_effect = yes
+		remove_trait_silently_craven_effect = yes
+
+		ai_chance = {
+			factor = 50
+			modifier = {
+				factor = 0
+				event_target:enemy_commander = { ai = no } #don't do this to players
+			}
+		}
+
+		trigger = { has_character_flag = duel_enemy_opt_is_brave }
+	}
+
+	option = { #I will publicly shame the enemy commander!
+		name = EVTOPTDbattle30
+		prestige = 15
+
+		reverse_opinion = {
+			who = event_target:enemy_commander
+			modifier = opinion_mocked_me_in_battle
+			years = 3
+		}
+
+		ai_chance = { factor = 100 bad_soldier_outcome_score = yes }
+		allow_new_battle_events_effect = yes
+	}
+	after = {
+		clr_ABC_desc_flag_effect = yes
+
+		clr_character_flag = skip_wounded_trait
+
+		clr_character_flag = high_PCS_opt
+		clr_character_flag = duel_enemy_opt
+		clr_character_flag = duel_enemy_opt_gain_brave
+		clr_character_flag = duel_enemy_opt_is_brave
+	}
+}
+
+# battle.31 To the rescue
+# A fellow commander saves the commander from a losing duel. Thank him or
+# resent him.
+# Scope: ROOT is home_commander, commander_to_the_rescue the rescuer. Fired
+#   from send_notifications_after_champion_stand_in_effect.
+character_event = {
+	id = battle.31
+	title = the_battle_at_location
+	desc = EVTDESCbattle31
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		event_target:home_commander = { character = ROOT }
+		NOT = { has_character_flag = show_once@event_target:commander_to_the_rescue }
+	}
+
+	fail_trigger_effect = { #clears flags, just in case
+		hidden_effect = {
+			event_target:commander_to_the_rescue = {
+				clr_character_flag = lost_battlefield_duel
+				clr_character_flag = won_battlefield_duel
+				clr_character_flag = already_taking_a_duel
+			}
+		}
+		allow_new_battle_events_effect = yes
+		clr_character_flag = show_once@event_target:commander_to_the_rescue
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		set_character_flag = show_once@event_target:commander_to_the_rescue
+	}
+
+	option = { #They did well
+		name = {
+			text = EVTOPTAbattle31_1
+			trigger = {
+				OR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+					trait = envious
+					trait = possessed
+					is_devil_worshiper_trigger = yes
+				}
+				OR = {
+					event_target:commander_to_the_rescue = {
+						duelist_skill_compared_to_prev_high_group_trigger = yes
+					} #commander_to_the_rescue is a better dueler than you...
+					NOT = { trait = kind }
+					is_evil_trigger = yes
+				}
+			}
+		}
+		name = EVTOPTAbattle31_2
+		custom_tooltip = { text = EVTOPTAbattle31_tt }
+		show_portrait = event_target:commander_to_the_rescue
+		trigger = {
+			event_target:commander_to_the_rescue = { has_character_flag = won_battlefield_duel }
+		}
+	}
+	option = { # They did poorly
+		name = {
+			text = EVTOPTBbattle31_1
+			trigger = {
+				OR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+					trait = envious
+					trait = possessed
+					is_devil_worshiper_trigger = yes
+				}
+				OR = {
+					event_target:commander_to_the_rescue = {
+						duelist_skill_compared_to_prev_high_group_trigger = yes
+					} #commander_to_the_rescue is a better dueler than you...
+					NOT = { trait = kind }
+					is_evil_trigger = yes
+				}
+			}
+		}
+		name = EVTOPTBbattle31_2
+		custom_tooltip = { text = EVTOPTBbattle31_tt }
+		show_portrait = event_target:commander_to_the_rescue
+		trigger = {
+			event_target:commander_to_the_rescue = { has_character_flag = lost_battlefield_duel }
+		}
+	}
+	option = { # They died for you...!
+		name = {
+			text = EVTOPTCbattle31_1
+			trigger = {
+				OR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+					trait = envious
+					trait = possessed
+					is_devil_worshiper_trigger = yes
+				}
+				OR = {
+					event_target:commander_to_the_rescue = {
+						duelist_skill_compared_to_prev_high_group_trigger = yes
+					} #commander_to_the_rescue is a better dueler than you...
+					NOT = { trait = kind }
+					is_evil_trigger = yes
+				}
+			}
+		}
+		name = {
+			text = EVTOPTCbattle31_2
+			trigger = {
+				NOR = {
+					is_lover = event_target:commander_to_the_rescue
+					is_friend = event_target:commander_to_the_rescue
+					is_child_of = event_target:commander_to_the_rescue
+					is_father = event_target:commander_to_the_rescue
+					is_mother = event_target:commander_to_the_rescue
+					sibling = event_target:commander_to_the_rescue
+					any_spouse = { character = event_target:commander_to_the_rescue }
+				}
+			}
+		}
+		name = {
+			text = EVTOPTCbattle31_3
+			trigger = {
+				OR = {
+					is_lover = event_target:commander_to_the_rescue
+					is_friend = event_target:commander_to_the_rescue
+					is_child_of = event_target:commander_to_the_rescue
+					is_father = event_target:commander_to_the_rescue
+					is_mother = event_target:commander_to_the_rescue
+					sibling = event_target:commander_to_the_rescue
+					any_spouse = { character = event_target:commander_to_the_rescue }
+				}
+			}
+		}
+		custom_tooltip = { text = EVTOPTCbattle31_tt }
+		show_portrait = event_target:commander_to_the_rescue
+		trigger = { event_target:commander_to_the_rescue = { NOT = { is_alive = yes } } }
+	}
+	after = {
+		hidden_effect = {
+			event_target:commander_to_the_rescue = {
+				clr_character_flag = lost_battlefield_duel
+				clr_character_flag = won_battlefield_duel
+				clr_character_flag = already_taking_a_duel
+			}
+		}
+		allow_new_battle_events_effect = yes
+		clr_character_flag = show_once@event_target:commander_to_the_rescue
+	}
+}
+
+# battle.32 The rescuer's fate
+# The liege hears that one commander died saving another. Shown only when
+# the rescuer fell (the other outcome never showed).
+# Scope: ROOT is home_liege. Fired from
+#   send_notifications_after_champion_stand_in_effect.
+character_event = {
+	id = battle.32
+	title = the_battle_at_location
+	desc = EVTDESCbattle32
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		event_target:commander_to_the_rescue = { is_alive = no }
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+
+	option = { #Fortune does not favor the brave.
+		name = { text = EVTOPTBbattle32_1 trigger = { trait = cynical } }
+		name = { text = EVTOPTBbattle32_2 trigger = { NOT = { trait = cynical } } }
+		custom_tooltip = { text = EVTOPTBbattle32_tt }
+		show_portrait = event_target:commander_to_the_rescue
+	}
+
+	after = {
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.33 Beaten on the field
+# The commander has lost a duel with the enemy commander. Surrender, betray
+# his own side for his life, or die fighting.
+# Scope: ROOT is the losing commander, combatant_1 the winner. Fired from
+#   send_duel_result_event_effect and send_duel_result_tournament_effect.
+character_event = {
+	id = battle.33
+	title = getDuelTitle
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	portrait = event_target:other_combatant
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_negative_effect = yes
+
+		set_loser_flags_and_save_opponent_effect = yes
+		#Find a potential AI to sacrifice...
+		find_cannon_fodder_commander_effect = yes
+		log = "BATTLE EVENTS: battle.33 fired and [Root.GetTitledFirstName] is currently choosing whether the be taken prisoner by [other_combatant.GetBestName] or not. [commander_cannon_fodder.GetBestName] is cannon fodder."
+	}
+
+	desc = {
+		text = EVTDESCbattle33_a
+		trigger = { event_target:other_combatant = { trait = deceitful } }
+	}
+	desc = {
+		text = EVTDESCbattle33_b
+		trigger = {
+			event_target:other_combatant = { duelist_skill_compared_to_prev_low_group_trigger = no } #opponent is NOT a worse dueler...
+		}
+	}
+
+	desc = {
+		text = EVTDESCbattle33_c
+		trigger = {
+			event_target:other_combatant = {
+				duelist_skill_compared_to_prev_low_group_trigger = yes
+			} #opponent is a worse dueler...
+		}
+	}
+
+	option = { #Wait! Take me prisoner instead!
+		name = EVTOPTAbattle33
+		show_portrait = event_target:other_combatant
+		prestige = -50
+		save_event_target_as = captured_commander
+		imprison = event_target:enemy_liege #ROOT is imprisoned *by* enemy_liege.
+		event_target:other_combatant = { character_event = { id = 50020 } } #Enemy_liege is notified about your capture...
+
+		hidden_effect = {
+			event_target:other_combatant = {
+				clr_character_flag = add_duel_xp #to not give rewards...
+				clr_character_flag = is_battlefield_duel #to not give opinion rewards..
+				allow_new_battle_events_effect = yes
+				clean_up_after_duel_effect = yes
+			}
+		}
+
+		log = "[Root.GetBestName] chose to be taken prisoner by [other_combatant.GetBestName] instead!"
+
+		ai_chance = { factor = 50 modifier = { factor = 0.5 trait = brave } }
+		trigger = { event_target:other_combatant = { is_alive = yes } }
+	}
+
+	option = {
+		name = EVTOPTBbattle33 #Take other commander instead?! #traitor
+		prestige = -50
+		if = {
+			limit = { has_nickname = no }
+			random = { chance = 50 give_nickname = nick_the_traitor }
+		}
+		add_character_modifier = { name = battlefield_betrayal years = 10 }
+		reverse_opinion = {
+			who = event_target:commander_cannon_fodder
+			modifier = opinion_betrayed_me_in_battle
+			years = 25
+		}
+		event_target:commander_cannon_fodder = {
+			show_scope_change = no
+			allow_new_battle_events_effect = yes
+			save_event_target_as = captured_commander
+			imprison = event_target:enemy_liege #Is imprisoned *by* enemy_liege.
+			hidden_effect = {
+				event_target:enemy_liege = { character_event = { id = 50020 days = 1 } } #Enemy_liege is notified about the capture... remove delay, it's for testing
+			}
+		}
+
+		hidden_effect = {
+			event_target:other_combatant = {
+				clr_character_flag = add_duel_xp #to not give rewards...
+				clr_character_flag = is_battlefield_duel #to not give opinion rewards...
+				allow_new_battle_events_effect = yes
+				clean_up_after_duel_effect = yes
+			}
+		}
+		log = "[Root.GetBestName] chose to give the enemy [commander_cannon_fodder.GetBestName] in exchange for their own life."
+
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = deceitful }
+			modifier = { factor = 1.5 is_devil_worshiper_trigger = yes }
+			modifier = {
+				factor = 0.1
+				OR = {
+					event_target:commander_cannon_fodder = { is_lover = ROOT }
+					event_target:commander_cannon_fodder = { is_friend = ROOT }
+				}
+			}
+		}
+
+		trigger = { event_target:commander_cannon_fodder = { is_alive = yes } }
+	}
+	option = {
+		name = EVTOPTCbattle33 #So this is how it all ends...
+		custom_tooltip = { text = you_lose_the_duel_tt }
+
+		#To handle clean-up...
+		set_character_flag = someone_died
+		set_character_flag = actually_injured
+		set_character_flag = injury_kills
+
+		event_target:combatant_2 = { set_character_flag = someone_died }
+		event_target:other_combatant = { character_event = { id = battle.34 } } #As the dueling opponent, find out that you killed home_commander...
+
+		if = {
+			limit = { event_target:home_liege = { NOT = { character = ROOT } } }
+			event_target:home_liege = { character_event = { id = battle.11 } } #send notification to home liege
+		}
+		if = {
+			limit = { enemy_commander_and_liege_are_different_characters = yes }
+			event_target:enemy_liege = { character_event = { id = battle.14 } } #send notification to enemy liege (only if they are not the one you just fought)
+		}
+
+		debug_battle_death_counter_effect = yes #for debug purposes
+
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = { death = { death_reason = death_duel killer = event_target:other_combatant } }
+
+		log = "[Root.GetBestName] chose to die."
+
+		ai_chance = { factor = 50 modifier = { factor = 1.5 trait = brave } }
+	}
+	after = {
+		hidden_effect = {
+			clr_character_flag = add_duel_xp #to not give rewards...
+			clr_character_flag = is_battlefield_duel #to not give opinion rewards..
+			allow_new_battle_events_effect = yes
+			clean_up_after_duel_effect = yes
+		}
+	}
+}
+
+# battle.34 Victory on the field
+# The commander has beaten his foe in a battlefield duel.
+# Scope: ROOT is the winning commander. Fired from battle.33.
+character_event = {
+	id = battle.34
+	title = getDuelTitle
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	portrait = event_target:other_combatant
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		set_winner_flags_and_save_opponent_effect = yes
+	}
+
+	desc = { text = EVTDESCbattle34_a trigger = { trait = deceitful } }
+	desc = EVTDESCbattle34_b
+	desc = EVTDESCbattle34_c
+
+	option = { #All shall fear me!
+		name = EVTOPTAbattle34
+		custom_tooltip = { text = you_win_the_duel_tt }
+		custom_tooltip = { text = EVTOPTAbattle34_tt }
+		show_portrait = event_target:home_commander
+		prestige = 15
+
+		apply_opinion_reward_effect = yes
+		allow_new_battle_events_effect = yes
+		clean_up_after_duel_effect = yes
+	}
+}
+
+# battle.35 Clean-up
+# Hidden. Clears the battle duel flags.
+# Scope: ROOT is a duellist. Fired from apply_opinion_reward_effect.
+character_event = {
+	id = battle.35
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		if = { #only clear if you are the commander...
+			limit = { event_target:enemy_commander = { character = ROOT } }
+			event_target:enemy_commander = {
+				clr_character_flag = fought_worse_warrior@event_target:home_commander
+				clr_character_flag = fought_even_warrior@event_target:home_commander
+				clr_character_flag = fought_great_warrior@event_target:home_commander
+			}
+		}
+	}
+}
+
+# battle.36 The AI yields
+# Hidden. A beaten AI commander yields to his foe (battle.37) or dies
+# fighting. Tamurkhan feeds instead.
+# Scope: ROOT is the beaten AI commander, FROM the winner. Fired from
+#   send_duel_result_event_effect.
+character_event = {
+	id = battle.36
+	is_triggered_only = yes
+	hide_window = yes
+	trigger = {
+		is_alive = yes
+		ai = yes
+	}
+
+	immediate = {
+		set_loser_flags_and_save_opponent_effect = yes
+		battle_commander_counter_negative_effect = yes
+
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		save_event_target_as = captured_commander
+	}
+
+	option = { #Wait! Take me prisoner instead!
+		FROM = { character_event = { id = battle.37 } }
+		ai_chance = { factor = 50 bad_soldier_outcome_score = yes }
+	}
+
+	option = {
+		#I would rather die...
+		if = { #Tamurkhan feeds instead
+			limit = { FROM = { trait = nurgle_maggot_lord } }
+			custom_tooltip = { text = maggot_lord_consumes_ROOT_tt }
+			save_event_target_as = target_character
+			FROM = { save_event_target_as = target_tamurkhan character_event = { id = TAMUR.6 } }
+		}
+		else = {
+			#To handle clean-up...
+			set_character_flag = someone_died
+			set_character_flag = actually_injured
+			set_character_flag = injury_kills
+
+			event_target:combatant_1 = {
+				set_character_flag = someone_died
+				character_event = { id = duel.13 }
+			}
+		}
+
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 1.5 trait = brave }
+			modifier = { factor = 1.5 trait = proud }
+		}
+	}
+}
+
+# battle.37 Spare or sacrifice
+# The winner of a battlefield duel holds the beaten foe. Spare him as a
+# prisoner, kill him, or give him to the gods. Sacrifice suits the bloody
+# gods, Ulric's wolves and warbands, or men facing Skaven or greenskins, and
+# costs piety only where the faith frowns on it.
+# Scope: ROOT is the winner, FROM the beaten foe. Fired from battle.36.
+character_event = {
+	id = battle.37
+	title = getDuelTitle
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	portrait = event_target:other_combatant
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		set_winner_flags_and_save_opponent_effect = yes
+	}
+
+	desc = {
+		text = EVTDESCbattle37_a
+		trigger = {
+			event_target:other_combatant = { duelist_skill_compared_to_prev_low_group_trigger = no } #opponent is NOT a worse dueler...
+		}
+	}
+
+	desc = {
+		text = EVTDESCbattle37_b
+		trigger = {
+			event_target:other_combatant = {
+				duelist_skill_compared_to_prev_low_group_trigger = yes
+			} #opponent is a worse dueler...
+		}
+	}
+
+	# Warrior Lodge members only...
+	option = {
+		name = EVTOPTTAMUR50020 #I shall Feast Today...
+		if = {
+			limit = { FROM = { trait = nurgle_maggot_lord } }
+			custom_tooltip = { text = maggot_lord_consumes_FROM_tt }
+			FROM = { save_event_target_as = target_character }
+			save_event_target_as = target_tamurkhan
+			character_event = { id = TAMUR.6 }
+		}
+		trigger = { trait = nurgle_maggot_lord }
+	}
+	# Warrior Lodge members only...
+	option = {
+		name = EVTOPTC50020 #[He/She]'ll make a good sacrifice to [HighGodName]
+		tooltip_info_custom = available_due_to_warband
+		custom_tooltip = { text = EVTOPTC50020_TT }
+		if = { #Only the bloody gods smile on it
+			limit = {
+				NOR = {
+					religion_group = chaos_gods_group
+					has_religion_feature = religion_ritual_sacrifice
+				}
+			}
+			tiered_high_piety_negative_effect = yes
+		}
+
+		if = { # If you already have three instances of this modifier...
+			limit = {
+				has_instances_of_character_modifier = { modifier = sacrificed_prisoner amount = 3 }
+			}
+			hidden_effect = { # Do some hidden removal and adding, in order to refresh the final date of the modifier...
+				remove_character_modifier = sacrificed_prisoner #Removes all instances
+				add_character_modifier = {
+					name = sacrificed_prisoner #Add 1st
+					duration = 1000
+					stacking = yes
+				}
+				add_character_modifier = { #Add 2nd
+					name = sacrificed_prisoner
+					duration = 1000
+					stacking = yes
+				}
+			}
+			add_character_modifier = { #Add 3rd
+				name = sacrificed_prisoner
+				duration = 1000
+				stacking = yes
+			}
+		}
+		else = { #If you don't have three instances, just add one...
+			add_character_modifier = { name = sacrificed_prisoner duration = 1000 stacking = yes }
+		}
+
+		hidden_effect = {
+			event_target:captured_commander = { character_event = { id = 50021 } } #"They took one look at me and then I was toast"-event.
+			if = {
+				limit = { has_religion_feature = religion_ritual_sacrifice }
+				if = { #A foreign religious head is also quite good.
+					limit = {
+						event_target:captured_commander = {
+							NOT = { religion = ROOT }
+							controls_religion = yes
+						}
+					}
+					change_variable = { which = burned_hearts_points value = 2 }
+				}
+				if = { #A foreign emperor is also well accepted.
+					limit = {
+						event_target:captured_commander = {
+							NOT = { religion = ROOT }
+							higher_tier_than = KING
+						}
+					}
+					change_variable = { which = burned_hearts_points value = 2 }
+				}
+				bloodthirsty_tiered_traits_effect = yes
+			}
+		}
+
+		tooltip = {
+			FROM = {
+				show_scope_change = no
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_sacrificed killer = ROOT } }
+			}
+		}
+
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 event_target:captured_commander = { is_rival = ROOT } }
+			modifier = { factor = 0.01 trait = kind }
+			modifier = { factor = 1.5 is_evil_trigger = yes }
+		}
+
+		trigger = { #Chaos warbands, the White Wolves, and men who catch a greenskin or ratman
+			OR = {
+				is_member_of_any_warband_trigger = yes
+				is_member_of_any_warrior_lodge_trigger = yes
+			}
+			NOR = {
+				society_member_of = knights_of_old_world
+				society_member_of = warriors_guild_dawi
+			}
+			OR = {
+				society_member_of = warriors_of_ulric
+				is_member_of_any_warband_trigger = yes
+				AND = {
+					trait = creature_human
+					FROM = {
+						OR = {
+							trait = creature_skaven
+							trait = creature_orc
+							trait = creature_goblin
+							trait = creature_hobgoblin
+						}
+					}
+				}
+			}
+		}
+	}
+	# Non-Warrior Lodge members only...
+	option = {
+		name = EVTOPTCbattle37 #I think I prefer you dead.
+
+		hidden_effect = {
+			event_target:captured_commander = { character_event = { id = battle.38 } } #"They took one look at me and then I was toast"-event.
+		}
+
+		tooltip = {
+			FROM = {
+				show_scope_change = no
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_duel killer = ROOT } }
+			}
+		}
+
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 event_target:captured_commander = { is_rival = ROOT } }
+			modifier = { factor = 0.01 trait = kind }
+			modifier = { factor = 1.5 is_evil_trigger = yes }
+		}
+
+		trigger = {
+			AND = {
+				is_member_of_any_warband_trigger = no
+				is_member_of_any_warrior_lodge_trigger = no
+			}
+		}
+	}
+	option = {
+		name = EVTOPTAbattle37 #Perfect!
+		event_target:captured_commander = { show_scope_change = no imprison = ROOT } #FROM is imprisoned *by* ROOT (home_commander (who is landed))
+		ai_chance = { factor = 10 }
+		trigger = { NOT = { event_target:captured_commander = { is_rival = ROOT } } }
+	}
+	option = {
+		name = EVTOPTBbattle37 #My rival, no less? Great!
+		event_target:captured_commander = { show_scope_change = no imprison = ROOT } #FROM is imprisoned *by* ROOT (home_commander (who is landed))
+		ai_chance = { factor = 10 }
+		trigger = { event_target:captured_commander = { is_rival = ROOT } }
+	}
+
+	after = { #I think I prefer you dead.
+		hidden_effect = {
+			clr_character_flag = add_duel_xp #to not give rewards...
+			clr_character_flag = is_battlefield_duel #to not give opinion rewards..
+			allow_new_battle_events_effect = yes # Clears flags, so tombola can fire again...
+			clean_up_after_duel_effect = yes
+
+			event_target:captured_commander = {
+				clr_character_flag = add_duel_xp #to not give rewards...
+				clr_character_flag = is_battlefield_duel #to not give opinion rewards..
+				allow_new_battle_events_effect = yes # Clears flags, so tombola can fire again...
+				clean_up_after_duel_effect = yes
+			}
+		}
+	}
+}
+
+# battle.38 A death in the duel
+# Hidden. Kills the beaten foe and tells his liege (battle.39).
+# Scope: ROOT is the beaten AI commander. Fired from battle.37.
+character_event = {
+	id = battle.38
+	is_triggered_only = yes
+
+	hide_window = yes
+
+	trigger = {
+		is_alive = yes
+		ai = yes
+	}
+
+	immediate = {
+		liege = {
+			character_event = { id = battle.39 } # See event below...
+		}
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = { death = { death_reason = death_duel killer = FROM } }
+	}
+}
+
+# battle.39 A duel lost for good
+# The liege learns that his commander died in a battlefield duel.
+# Scope: ROOT is the liege, FROM the dead commander, FROMFROM the killer.
+#   Fired from battle.38.
+character_event = {
+	id = battle.39
+	title = commander_lost
+	desc = EVTDESCbattle39
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+	}
+
+	option = { #DEFAULT
+		name = EVTOPTAbattle11 #Another one bites the dust
+		prestige = -10
+
+		trigger = { NOT = { is_lover = FROM } }
+	}
+	option = {
+		name = EVTOPTBbattle11 # I will avenge you, my beloved!
+		prestige = -10
+		add_character_modifier = { name = seeking_vengeance duration = 1000 }
+
+		show_portrait = FROMFROM #if empty, I assume it'll show nothing? (For some reason does not currently work to put after the limit below.)
+
+		if = {
+			limit = {
+				FROMFROM = { is_alive = yes } #checks that the murderer is still alive...
+			}
+
+			tooltip = { FROMFROM = { prestige = 15 } }
+			add_rival = FROMFROM
+		}
+
+		trigger = { #If you had some kind of close relationship with them (and it makes sense)...BUT not lovers.
+			NOT = { is_lover = FROM }
+			FROM = {
+				OR = {
+					is_child_of = ROOT
+					any_spouse = { character = ROOT }
+					is_mother = ROOT
+					is_father = ROOT
+					any_sibling = { character = ROOT }
+				}
+				root_potentially_interested_in_rivaling_this_trigger = no
+			}
+		}
+	}
+	option = {
+		name = EVTOPTbattle11_lover #Nooo, my sweet love!
+		prestige = -10
+		add_character_modifier = { name = grieving_over_warrior_lover duration = 1000 }
+
+		show_portrait = FROMFROM #same reasoning as option above.
+
+		if = {
+			limit = { FROMFROM = { is_alive = yes } }
+			tooltip = { FROMFROM = { prestige = 15 } }
+			add_rival = FROMFROM
+		}
+		trigger = { is_lover = FROM }
+	}
+}
+
+###############################################################################
+# Lessons of war
+###############################################################################
+
+# battle.40 Schooled by war
+# The battle teaches the commander more than any tutor.
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.40
+	title = the_battle_at_location
+	desc = EVTDESCbattle40_a #EVTDESC246
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	sound = win_battle
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	trigger = {
+		is_alive = yes
+		OR = { trait = misguided_warrior trait = tough_soldier trait = skilled_tactician }
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+	}
+
+	option = {
+		name = EVTOPTBbattle40
+
+		#Because bragging
+		add_trait = proud
+		upgrade_education_effect = yes
+		allow_new_battle_events_effect = yes
+	}
+	option = {
+		name = EVTOPTAbattle40
+
+		#Because not bragging
+		add_trait = humble
+		upgrade_education_effect = yes
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.41 A soldier's lesson
+# The commander learns from his men, and his liege may hear of it (battle.42).
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.41
+	title = the_battle_at_location
+	desc = EVTDESCbattle41_a
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	sound = win_battle
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	trigger = {
+		is_alive = yes
+		NOT = { martial = 10 }
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAbattle41
+		change_martial = 1
+		allow_new_battle_events_effect = yes
+	}
+	option = {
+		name = EVTOPTBbattle41
+
+		if = { limit = { trait = proud } remove_trait = proud }
+		else = { add_trait = humble }
+
+		if = {
+			limit = { is_landed = yes }
+			event_target:home_capital_province = {
+				show_scope_change = no
+				add_province_modifier = { modifier = province_team_spirit months = 24 }
+				save_persistent_event_target = {
+					name = local_inspiring_commander_target #Hook-in: Warrior Lodges
+					scope = event_target:home_commander
+				}
+			}
+		}
+
+		if = { #Liege (if there is one) is notified of this bonus
+			limit = { is_landed = no event_target:home_liege = { always = yes } }
+			event_target:home_liege = { character_event = { id = battle.42 } }
+		}
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.42 Team spirit
+# The liege hears of his commander's new comradeship.
+# Scope: ROOT is the liege. Fired from battle.41.
+character_event = {
+	id = battle.42
+	title = the_battle_at_location
+	desc = EVTDESCbattle42
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+
+	option = {
+		name = EVTOPTAbattle42
+		capital_scope = {
+			add_province_modifier = { modifier = province_team_spirit months = 24 }
+			save_persistent_event_target = {
+				name = local_inspiring_commander_target #Hook-in: Warrior Lodges
+				scope = event_target:home_commander
+			}
+		}
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.43 A better way to fight
+# The commander learns a new military art, or a fellow commander joins his
+# host.
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.43
+	title = the_battle_at_location
+	desc = EVTDESCbattle43
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		is_landed = yes
+		OR = {
+			trait = brilliant_strategist
+			trait = barbarian_3
+			trait = barbarian_4
+			trait = skilled_tactician
+		}
+		event_target:home_capital_province = { NOT = { has_province_modifier = war_knowledge } }
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+		spawn_good_commander_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAbattle43 #Yes, these are excellent news!
+		scaled_wealth = { value = -0.5 min = -45 max = -500 }
+		military_techpoints = 30
+		event_target:home_capital_province = {
+			show_scope_change = no
+			add_province_modifier = { name = war_knowledge years = 10 }
+		}
+		hidden_effect = { event_target:invited_character = { leave_court_and_die_effect = yes } }
+		allow_new_battle_events_effect = yes
+	}
+	option = { #We need to focus on the short term benefits right now
+		name = EVTOPTBbattle43
+		custom_tooltip = { text = a_commander_joins_your_court_tt }
+		show_portrait = event_target:invited_character
+
+		pacifists_lose_piety_effect = yes
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.44 Master of the field
+# The commander learns to fight on this ground: a terrain or unit trait.
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.44
+	title = the_battle_at_location
+	desc = EVTDESCbattle44
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	sound = win_battle
+
+	hide_from = yes
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		can_have_more_leadership_traits = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+	}
+
+	option = {
+		name = EVTOPTKbattle44 # Jungle Terrain Specialization
+		trigger = { location = { terrain = jungle } NOT = { trait = jungle_terrain_leader } }
+		add_trait = jungle_terrain_leader
+	}
+	option = {
+		name = EVTOPTLbattle44 # War elephants
+		trigger = {
+			capital_scope = { region = world_greater_araby }
+			NOT = { trait = war_elephant_leader }
+		}
+		add_trait = war_elephant_leader
+	}
+	option = {
+		name = EVTOPTMbattle44 # WINTER Terrain Specialization
+		trigger = { location = { is_winter = yes } NOT = { trait = winter_soldier } }
+		add_trait = winter_soldier
+	}
+	option = {
+		name = EVTOPTAbattle44 # Rough Terrain Specialization
+		trigger = {
+			OR = { location = { terrain = forest } location = { terrain = hills } }
+			NOT = {
+				trait = rough_terrain_leader
+				trait = flat_terrain_leader
+				trait = mountain_terrain_leader
+				trait = desert_terrain_leader
+			}
+		}
+		add_trait = rough_terrain_leader
+	}
+	option = {
+		name = EVTOPTBbattle44 # Flat Terrain Specialization
+		trigger = {
+			OR = {
+				location = { terrain = plains }
+				location = { terrain = farmlands }
+				location = { terrain = steppe }
+			}
+			NOT = {
+				trait = rough_terrain_leader
+				trait = flat_terrain_leader
+				trait = mountain_terrain_leader
+				trait = desert_terrain_leader
+			}
+		}
+		add_trait = flat_terrain_leader
+	}
+	option = {
+		name = EVTOPTCbattle44 # Mountain Terrain Specialization
+		trigger = {
+			location = { terrain = mountain }
+			NOT = {
+				trait = rough_terrain_leader
+				trait = flat_terrain_leader
+				trait = mountain_terrain_leader
+				trait = desert_terrain_leader
+			}
+		}
+		add_trait = mountain_terrain_leader
+	}
+	option = {
+		name = EVTOPTDbattle44 # Desert Terrain Leader
+		trigger = {
+			location = { terrain = desert }
+			NOT = {
+				trait = rough_terrain_leader
+				trait = flat_terrain_leader
+				trait = mountain_terrain_leader
+				trait = desert_terrain_leader
+			}
+		}
+		add_trait = desert_terrain_leader
+	}
+	option = {
+		name = EVTOPTEbattle44 # Cavalry
+		trigger = {
+			NOT = { trait = cavalry_leader trait = heavy_infantry_leader trait = light_foot_leader }
+		}
+		add_trait = cavalry_leader
+	}
+	option = {
+		name = EVTOPTFbattle44 # Light Infantry
+		trigger = {
+			NOT = { trait = cavalry_leader trait = heavy_infantry_leader trait = light_foot_leader }
+		}
+		add_trait = light_foot_leader
+	}
+	option = {
+		name = EVTOPTGbattle44 # Heavy Infantry
+		trigger = {
+			NOT = { trait = cavalry_leader trait = heavy_infantry_leader trait = light_foot_leader }
+		}
+		add_trait = heavy_infantry_leader
+	}
+	after = {
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.45 A commander's way
+# The commander gains a leadership trait.
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.45
+	title = the_battle_at_location
+	desc = EVTDESCbattle45
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	sound = win_battle
+
+	hide_from = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		can_have_more_leadership_traits = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+	}
+
+	option = { # Organizer
+		name = EVTOPTAbattle45
+		trigger = { NOT = { trait = organizer } }
+		add_trait = organizer
+	}
+	option = { # Experimenter
+		name = EVTOPTBbattle45
+		trigger = { NOT = { trait = experimenter } }
+		add_trait = experimenter
+	}
+	option = { # Holy Warrior
+		name = EVTOPTCbattle45
+		trigger = { trait = zealous NOT = { trait = holy_warrior trait = cynical } }
+		add_trait = holy_warrior
+	}
+	option = { # Unyielding
+		name = EVTOPTDbattle45
+		trigger = { NOT = { trait = unyielding_leader } }
+		add_trait = unyielding_leader
+	}
+	after = {
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.46 A commander's way
+# The commander gains a leadership trait.
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.46
+	title = the_battle_at_location
+	desc = EVTDESCbattle46
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	sound = win_battle
+
+	hide_from = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		can_have_more_leadership_traits = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAbattle46 # Aggressive
+		pacifists_lose_piety_effect = yes
+		trigger = { NOT = { trait = defensive_leader } NOT = { trait = aggressive_leader } }
+		add_trait = aggressive_leader
+	}
+	option = { # Defensive
+		name = {
+			text = EVTOPTBbattle46
+			trigger = {
+				NOT = { government = nomadic_government government = chaos_horde_government }
+			}
+		}
+		name = {
+			text = EVTOPTBbattle46_nomad
+			trigger = {
+				OR = { government = nomadic_government government = chaos_horde_government }
+			}
+		}
+		trigger = { NOT = { trait = defensive_leader } NOT = { trait = aggressive_leader } }
+		add_trait = defensive_leader
+	}
+	option = {
+		name = EVTOPTCbattle46 # Inspiring
+		trigger = { NOT = { trait = inspiring_leader } }
+		add_trait = inspiring_leader
+	}
+	option = { # Trickster
+		name = EVTOPTDbattle46
+		trigger = { NOT = { trait = trickster } }
+		add_trait = trickster
+	}
+	after = {
+		add_blood_splatter_effect = yes
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.47 A commander's way
+# The commander gains a leadership trait.
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.47
+	title = the_battle_at_location
+	desc = EVTDESCbattle47
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	sound = win_battle
+
+	hide_from = yes
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		can_have_more_leadership_traits = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAbattle47 # Rough Terrain Specialization
+		trigger = {
+			OR = { location = { terrain = forest } location = { terrain = hills } }
+			NOT = {
+				trait = rough_terrain_leader
+				trait = flat_terrain_leader
+				trait = mountain_terrain_leader
+				trait = desert_terrain_leader
+			}
+		}
+		add_trait = rough_terrain_leader
+	}
+	option = {
+		name = EVTOPTAbattle47 # Flat Terrain Specialization
+		trigger = {
+			OR = {
+				location = { terrain = plains }
+				location = { terrain = farmlands }
+				location = { terrain = steppe }
+			}
+			NOT = {
+				trait = rough_terrain_leader
+				trait = flat_terrain_leader
+				trait = mountain_terrain_leader
+				trait = desert_terrain_leader
+			}
+		}
+		add_trait = flat_terrain_leader
+	}
+	option = {
+		name = EVTOPTAbattle47 # Mountain Terrain Specialization
+		trigger = {
+			location = { terrain = mountain }
+			NOT = {
+				trait = rough_terrain_leader
+				trait = flat_terrain_leader
+				trait = mountain_terrain_leader
+				trait = desert_terrain_leader
+			}
+		}
+		add_trait = mountain_terrain_leader
+	}
+	option = {
+		name = EVTOPTAbattle47 # Desert Terrain Leader
+		trigger = {
+			location = { terrain = desert }
+			NOT = {
+				trait = rough_terrain_leader
+				trait = flat_terrain_leader
+				trait = mountain_terrain_leader
+				trait = desert_terrain_leader
+			}
+		}
+		add_trait = desert_terrain_leader
+	}
+	option = { # Flanker
+		name = EVTOPTBbattle47
+		trigger = { NOT = { trait = flanker } }
+		add_trait = flanker
+	}
+	option = { # Narrow flank leader
+		name = EVTOPTCbattle47
+		trigger = {
+			OR = {
+				location = { terrain = mountain }
+				location = { terrain = hills }
+				location = { terrain = forest }
+			}
+			NOT = { trait = narrow_flank_leader }
+		}
+		add_trait = narrow_flank_leader
+	}
+	option = { # Siege leader
+		name = EVTOPTDbattle47
+		trigger = { siege = { is_attacker = yes } NOT = { trait = siege_leader } }
+		add_trait = siege_leader
+	}
+
+	after = {
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.48 A familiar face
+# A foe looks like the commander's own child or friend. Grow wroth or
+# patient.
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.48
+	title = the_battle_at_location
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	portrait = event_target:my_dear
+
+	trigger = {
+		is_alive = yes
+		NOT = { trait = blinded }
+		OR = { #Either you have a child, or you have a friend...
+			any_child_even_if_dead = { age = 10 NOT = { age = 40 } NOT = { at_location = ROOT } }
+			any_friend = { age = 10 NOT = { at_location = ROOT } }
+		}
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		if = {
+			limit = {
+				any_child_even_if_dead = {
+					is_child_of = ROOT
+					age = 10
+					NOT = { age = 40 }
+					NOT = { at_location = ROOT }
+				}
+			}
+			any_child_even_if_dead = {
+				limit = {
+					is_child_of = ROOT
+					age = 10
+					NOT = { age = 40 }
+					NOT = { at_location = ROOT }
+				}
+				score_value = { #Prioritizes selecting some kind of loved person...
+					value = 1
+					beloved_target_selection_score = yes
+				}
+				save_event_target_as = my_dear
+			}
+			set_character_flag = chose_child
+		}
+		else = {
+			any_friend = {
+				limit = { age = 14 NOT = { at_location = ROOT } }
+				score_value = { #Prioritizes selecting some kind of loved person...
+					value = 1
+					beloved_target_selection_score = yes
+				}
+				save_event_target_as = my_dear
+			}
+			set_character_flag = chose_friend
+		}
+	}
+
+	desc = { text = EVTDESCbattle48_a trigger = { has_character_flag = chose_child } }
+	desc = { text = EVTDESCbattle48_b trigger = { has_character_flag = chose_friend } }
+
+	option = { # We need to *take* the time to tend to our wounds
+		name = EVTOPTAbattle48
+		add_trait = patient
+		piety = 10
+	}
+	option = { #This is war!
+		name = EVTOPTBbattle48
+		add_trait = wroth
+		prestige = 20
+	}
+
+	after = {
+		allow_new_battle_events_effect = yes
+		clr_character_flag = chose_friend
+		clr_character_flag = chose_child
+	}
+}
+
+###############################################################################
+# The marshal's cruelty
+###############################################################################
+
+# battle.50 The marshal's cruelty
+# The commander does something cruel, and his liege hears of it (battle.51).
+# Scope: ROOT is the commander. Fired from battle.1.
+character_event = {
+	id = battle.50
+	title = the_battle_at_location
+	desc = EVTDESCbattle50
+	picture = GFX_evt_torture
+	border = GFX_event_normal_frame_war
+
+	capable_only = yes
+	war = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		in_command = yes
+		has_job_title = job_marshal
+		trait = cruel
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+
+	option = {
+		name = EVTOPTAbattle50_a #You're just a boy! I can't do this
+		remove_trait = cruel
+		allow_new_battle_events_effect = yes
+		prestige = -20
+	}
+	option = {
+		name = EVTOPTAbattle50_b #You're just a tool for my enemy
+		prestige = 20
+		piety = -20
+		allow_new_battle_events_effect = yes
+
+		hidden_tooltip = { liege = { character_event = { id = battle.51 } } }
+	}
+}
+
+# battle.51 The liege reacts
+# The liege praises or punishes his cruel commander.
+# Scope: ROOT is the liege, FROM the commander. Fired from battle.50.
+character_event = {
+	id = battle.51
+	desc = EVTDESCbattle51
+	picture = GFX_evt_torture
+	border = GFX_event_normal_frame_war
+
+	war = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = incapable }
+		prisoner = no
+		is_inaccessible_trigger = no
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+
+	option = {
+		name = EVTOPTBbattle51 #Disapprove of his conduct
+		opinion = { modifier = opinion_disapprove who = FROM years = 5 }
+		random = {
+			chance = 50
+			add_trait = kind
+			hidden_tooltip = {
+				character_event = {
+					id = 38268 #Notify Kind
+				}
+			}
+		}
+	}
+	option = {
+		name = EVTOPTCbattle51 #He's right, we should terrorise our enemy
+		opinion = { modifier = opinion_approves who = FROM years = 5 }
+		prestige = -10
+		random = {
+			chance = 50
+			add_trait = cruel
+			hidden_tooltip = {
+				character_event = {
+					id = 38259 #Notify Cruel
+				}
+			}
+		}
+	}
+	option = {
+		name = EVTOPTAbattle51 #That's the cruelty of war
+		piety = -15
+	}
+
+	after = {
+		allow_new_battle_events_effect = yes
+	}
+}
+
+###############################################################################
+# Glory and trophies
+###############################################################################
+
+# battle.60 A blade from the field
+# The commander finds a weapon among the fallen.
+# Scope: ROOT is a lodge or warband member. Fired from battle.1.
+character_event = {
+	id = battle.60
+	title = the_battle_at_location
+	desc = EVTDESCbattle60
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	hide_from = yes
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+		if = { limit = { society_rank == 1 } set_character_flag = rank_1 }
+		else_if = { limit = { society_rank == 2 } set_character_flag = rank_2 }
+		else_if = { limit = { society_rank == 3 } set_character_flag = rank_3 }
+		else_if = { limit = { society_rank == 4 } set_character_flag = rank_4 }
+	}
+
+	option = {
+		name = EVTOPTAbattle60
+		trigger_switch = {
+			on_trigger = has_character_flag
+			rank_1 = {
+				add_artifact = sword_1_battlefield
+				new_artifact = {
+					set_name = weapon_battlefield_rename_1
+					set_description = weapon_battlefield_desc_rename_1
+				}
+			}
+			rank_2 = {
+				add_artifact = sword_2_battlefield
+				new_artifact = {
+					set_name = weapon_battlefield_rename_2
+					set_description = weapon_battlefield_desc_rename_2
+				}
+			}
+			rank_3 = {
+				add_artifact = sword_3_battlefield
+				new_artifact = {
+					set_name = weapon_battlefield_rename_3
+					set_description = weapon_battlefield_desc_rename_3
+				}
+			}
+			rank_4 = {
+				add_artifact = sword_3_battlefield #same as rank 3
+				new_artifact = {
+					set_name = weapon_battlefield_rename_3
+					set_description = weapon_battlefield_desc_rename_3
+				}
+			}
+		}
+		pacifists_lose_piety_effect = yes
+		add_blood_splatter_effect = yes
+	}
+	option = {
+		name = EVTOPTBbattle60
+		custom_tooltip = { text = EVTOPTBbattle60_tt }
+	}
+	after = {
+		clr_character_flag = rank_1
+		clr_character_flag = rank_2
+		clr_character_flag = rank_3
+		clr_character_flag = rank_4
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.61 A name earned
+# The commander earns a nickname.
+# Scope: ROOT is a lodge or warband member. Fired from battle.1.
+character_event = {
+	id = battle.61
+	title = the_battle_at_location
+	desc = EVTDESCbattle61
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	hide_from = yes
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+
+		### Set potential nickname-flags...
+		if = {
+			limit = { OR = { is_learned_trigger = yes trait = mystic } }
+			set_character_flag = the_astrologer
+		}
+		if = {
+			limit = { OR = { trait = hunter trait = wroth martial = 10 } }
+			set_character_flag = the_great_beast
+		}
+		if = {
+			limit = {
+				OR = {
+					has_education_diplomacy_trigger = yes
+					has_lifestyle_diplomacy_trigger = yes
+					has_education_intrigue_trigger = yes
+					has_lifestyle_intrigue_trigger = yes
+				}
+				OR = {
+					has_3rd_tier_education_trait_trigger = yes
+					has_top_tier_education_trait_trigger = yes
+				}
+			}
+			set_character_flag = the_artist_ruler
+		}
+		if = {
+			limit = { OR = { trait = ambitious is_weak_trigger = yes } }
+			set_character_flag = the_ambitious
+		}
+		if = {
+			limit = {
+				OR = {
+					any_kill_list_character = { count = 50 }
+					is_strong_trigger = yes
+					is_evil_trigger = yes
+					is_impious_trigger = yes
+				}
+			}
+			set_character_flag = the_bloody
+		}
+		if = {
+			limit = {
+				OR = {
+					has_pleasant_personality_trigger = yes
+					trait = grey_eminence
+					has_lifestyle_diplomacy_trigger = yes
+				}
+			}
+			set_character_flag = the_diplomat
+		}
+		if = {
+			limit = {
+				OR = {
+					has_pleasant_personality_trigger = yes
+					has_lifestyle_diplomacy_trigger = yes
+					trait = kind
+				}
+				NOT = { trait = cruel }
+			}
+			set_character_flag = the_kind_hearted
+		}
+		if = { limit = { trait = charitable } set_character_flag = the_generous }
+		if = {
+			limit = { OR = { is_evil_trigger = yes any_kill_list_character = { count = 50 } } }
+			set_character_flag = the_executioner
+		}
+		if = { limit = { trait = just } set_character_flag = iron_fist }
+		if = { limit = { trait = cynical } set_character_flag = stone_fist }
+		if = {
+			limit = { OR = { trait = stubborn trait = giant is_strong_trigger = yes } }
+			set_character_flag = the_bulwark
+		}
+		if = {
+			limit = { OR = { trait = giant AND = { trait = just trait = kind } } }
+			set_character_flag = the_tower
+		}
+		if = {
+			limit = {
+				event_target:enemy_commander = { is_alive = yes }
+				event_target:enemy_commander = {
+					duelist_skill_compared_to_prev_low_group_trigger = yes
+				}
+			}
+			set_character_flag = the_wall_of_title
+		}
+		if = {
+			limit = {
+				event_target:enemy_commander = { is_alive = yes }
+				event_target:enemy_commander = {
+					duelist_skill_compared_to_prev_high_group_trigger = yes
+				}
+			}
+			set_character_flag = the_underdog
+		}
+		random_list = {
+			10 = { set_character_flag = the_terrain_commander }
+			10 = { set_character_flag = the_ground_warrior }
+			10 = { set_character_flag = lord_lady_of_the_terrain }
+			10 = { set_character_flag = lord_lady_ground }
+		}
+	}
+
+	option = {
+		name = EVTOPTAbattle61
+		give_nickname = nick_the_astrologer
+		trigger = { has_character_flag = the_astrologer }
+	}
+	option = {
+		name = EVTOPTBbattle61
+		give_nickname = nick_the_great_beast
+		trigger = { has_character_flag = the_great_beast }
+	}
+	option = {
+		name = EVTOPTCbattle61
+		give_nickname = nick_the_artist_ruler
+		trigger = { has_character_flag = the_artist_ruler }
+	}
+	option = {
+		name = EVTOPTDbattle61
+		give_nickname = nick_the_ambitious
+		trigger = { has_character_flag = the_ambitious }
+	}
+	option = {
+		name = EVTOPTEbattle61
+		give_nickname = nick_the_bloody
+		trigger = { has_character_flag = the_bloody }
+	}
+	option = {
+		name = EVTOPTFbattle61
+		give_nickname = nick_the_diplomat
+		trigger = { has_character_flag = the_diplomat }
+	}
+	option = {
+		name = EVTOPTGbattle61
+		custom_tooltip = { text = EVTOPTGbattle61_tt }
+		give_nickname = nick_the_kind_hearted
+		trigger = { has_character_flag = the_kind_hearted }
+	}
+	option = {
+		name = EVTOPTHbattle61
+		tooltip_info = charitable
+		give_nickname = nick_the_generous
+		trigger = { has_character_flag = the_generous }
+	}
+	option = {
+		name = EVTOPTIbattle61
+		give_nickname = nick_the_executioner
+		trigger = { has_character_flag = the_executioner }
+	}
+	option = {
+		name = EVTOPTJbattle61
+		tooltip_info = just
+		give_nickname = nick_iron_fist
+		trigger = { has_character_flag = iron_fist }
+	}
+	option = {
+		name = EVTOPTKbattle61
+		tooltip_info = cynical
+		give_nickname = nick_stone_fist
+		trigger = { has_character_flag = stone_fist }
+	}
+	option = {
+		name = EVTOPTLbattle61
+		give_nickname = nick_the_bulwark
+		trigger = { has_character_flag = the_bulwark }
+	}
+	option = {
+		name = EVTOPTMbattle61
+		give_nickname = nick_the_tower
+		trigger = { has_character_flag = the_tower }
+	}
+	option = {
+		name = EVTOPTNbattle61
+		give_nickname = nick_the_wall_of_title
+		trigger = { has_character_flag = the_wall_of_title }
+	}
+	option = {
+		name = EVTOPTObattle61
+		tooltip_info_custom = string_available_due_to_duelist_skill_better_than_enemy
+		give_nickname = nick_the_underdog
+		trigger = { has_character_flag = the_underdog }
+	}
+	option = {
+		name = EVTOPTPbattle61
+		give_nickname = nick_the_terrain_commander
+		trigger = { has_character_flag = the_terrain_commander }
+	}
+	option = {
+		name = EVTOPTQbattle61
+		give_nickname = nick_the_ground_warrior
+		trigger = { has_character_flag = the_ground_warrior }
+	}
+	option = {
+		name = EVTOPTRbattle61
+		give_nickname = nick_lord_lady_of_the_terrain
+		trigger = { has_character_flag = lord_lady_of_the_terrain }
+	}
+	option = {
+		name = EVTOPTSbattle61
+		give_nickname = nick_lord_lady_ground
+		trigger = { has_character_flag = lord_lady_ground }
+	}
+	after = {
+		add_blood_splatter_effect = yes
+		add_character_modifier = { modifier = hardened_resolve years = 5 }
+		clr_battle_nickname_flags_effect = yes
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.62 A skull for the trophy rack
+# The commander takes the head of a fallen foe. He keeps one skull at a
+# time (otherwise he wins prestige), and a Khornate may give it to the Skull
+# Throne instead.
+# Scope: ROOT is a lodge or warband member. Fired from battle.1.
+character_event = {
+	id = battle.62
+	title = the_battle_at_location
+	desc = EVTDESCbattle62
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:enemy_commander = { always = yes } #There has to be an opponent...
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+
+		hidden_effect = {
+			#Sets up weapons for localization...
+			set_dueling_weapon_effect = yes
+			event_target:enemy_commander = { set_dueling_weapon_effect = yes }
+
+			### Saved in tombola:
+			# event_target:home_commander
+			# event_target:enemy_commander (originally FROM)
+			# event_target:enemy_liege (originally FROMFROM)
+			# event_target:battlefield_location (location of battle)
+
+			### Saved in *this* event:
+			# event_target:random_rival_target (if there is one)
+			# event_target:home_liege (liege of home_commander, if there is one)
+
+			random_rival = { save_event_target_as = random_rival_target } #For loc and extra fun
+			liege = {
+				if = { limit = { NOT = { character = ROOT } } save_event_target_as = home_liege }
+			}
+
+			# Send news/notification event to relevant parties...
+			if = {
+				limit = { enemy_commander_and_liege_are_different_characters = yes }
+				event_target:enemy_liege = { character_event = { id = battle.66 } } # Send notification of the enemy commander's death (to their liege)
+			}
+			if = {
+				limit = { home_commander_and_liege_are_different_characters = yes }
+				event_target:home_liege = { character_event = { id = battle.63 } } # Send notification of the enemy commander's death (to your own liege, for bragging rights)
+			}
+
+			event_target:enemy_commander = {
+				##### For tiered rewards...
+				if = { #if ROOT fought a worse warrior...
+					limit = { duelist_skill_compared_to_prev_low_group_trigger = yes }
+					PREV = {
+						set_character_flag = fought_worse_warrior@event_target:enemy_commander
+					} #For later effects...
+				}
+				else_if = { #if ROOT fought a greater warrior...
+					limit = { duelist_skill_compared_to_prev_high_group_trigger = yes }
+					PREV = {
+						set_character_flag = fought_great_warrior@event_target:enemy_commander
+					} #For later effects...
+				}
+				else = { #if ROOT was pretty evenly matched with the enemy warrior...
+					PREV = { set_character_flag = fought_even_warrior@event_target:enemy_commander } #For later effects...
+				}
+				#####
+				character_event = { id = battle.65 } # Send event to the killed enemy
+			}
+			if = {
+				limit = { multiplayer = yes }
+				event_target:enemy_commander = {
+					show_scope_change = no
+					if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+					else = {
+						death = {
+							death_reason = death_battle
+							killer = ROOT #aka event_target:home_commander
+						}
+					}
+				}
+			}
+		}
+	}
+
+	option = { #Take artifact, get lots of opinion reward...
+		name = EVTOPTAbattle62 #I will mount your head on the castle walls!
+		hidden_effect = { set_character_flag = took_enemy_skull }
+		if = { #One skull on the wall is a trophy; a second would be a habit
+			limit = { any_artifact = { artifact_type = enemy_skull } }
+			prestige = 10
+		}
+		else = {
+			add_artifact = enemy_skull #Hook-in: Warrior Lodges
+			new_artifact = {
+				set_original_owner = event_target:enemy_commander
+				set_description = enemy_skull_desc
+
+				random_list = { #Randomize names to avoid too much repetition.
+					20 = { set_name = enemy_skull_named }
+					20 = { #only if not same culture
+						set_name = enemy_skull_named_culture
+						trigger = { event_target:enemy_commander = { NOT = { culture = ROOT } } }
+					}
+					20 = { #only if other government could be deemed "barbarian"...
+						set_name = enemy_skull_barbarian
+						trigger = {
+							event_target:enemy_liege = { # Should still be alive (so check against them instead of the commander)...
+								OR = {
+									AND = {
+										OR = {
+											government = tribal_government
+											government = chaos_host_government
+											government = norscan_government
+											government = norscan_government_feudal
+										}
+										ROOT = {
+											NOR = {
+												government = tribal_government
+												government = chaos_host_government
+												government = norscan_government
+												government = norscan_government_feudal
+											}
+										}
+									}
+									AND = {
+										OR = {
+											government = nomadic_government
+											government = chaos_horde_government
+										}
+										ROOT = {
+											NOR = {
+												government = chaos_horde_government
+												government = nomadic_government
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		hidden_effect = {
+			if = {
+				limit = { is_landed = yes }
+				event_target:home_capital_province = {
+					save_persistent_event_target = {
+						name = local_fearsome_commander_target #Hook-in: Warrior Lodges
+						scope = event_target:home_commander
+					}
+				}
+			}
+		}
+		trigger_switch = { #For prestige rewards.
+			on_trigger = has_character_flag
+			fought_worse_warrior@event_target:enemy_commander = { prestige = 15 }
+			fought_even_warrior@event_target:enemy_commander = { prestige = 20 }
+			fought_great_warrior@event_target:enemy_commander = { prestige = 30 }
+		}
+
+		if = { #If you have a liege, slap on some opinion bonus...
+			limit = { home_commander_and_liege_are_different_characters = yes }
+			event_target:home_liege = {
+				show_scope_change = no
+				tooltip = {
+					opinion = {
+						who = event_target:home_liege
+						modifier = opinion_wildly_impressed
+						years = 10
+					}
+				}
+				reverse_opinion = {
+					who = event_target:home_liege
+					modifier = opinion_was_wildly_praised
+					years = 10
+				}
+			}
+		}
+		else = { #Otherwise, just clear flags.
+			clr_character_flag = fought_worse_warrior@event_target:enemy_commander
+			clr_character_flag = fought_even_warrior@event_target:enemy_commander
+			clr_character_flag = fought_great_warrior@event_target:enemy_commander
+		}
+
+		### Actual death (if not MP)
+		if = {
+			limit = { multiplayer = no }
+			event_target:enemy_commander = {
+				show_scope_change = no
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_battle
+						killer = ROOT #aka event_target:home_commander
+					}
+				}
+			}
+		}
+	}
+
+	option = { #Take no skull artifact, less opinion reward, but become more Kind...
+		name = EVTOPTBbattle62 #Or just go in peace...
+
+		hidden_effect = {
+			if = {
+				limit = { is_landed = yes }
+				event_target:home_capital_province = {
+					save_persistent_event_target = {
+						name = local_fearsome_commander_target #Hook-in: Warrior Lodges
+						scope = event_target:home_commander
+					}
+				}
+			}
+		}
+
+		if = { limit = { trait = cruel } remove_trait = cruel }
+		else = { add_trait = kind }
+
+		trigger_switch = { #For prestige rewards.
+			on_trigger = has_character_flag
+			fought_worse_warrior@event_target:enemy_commander = { prestige = 10 }
+			fought_even_warrior@event_target:enemy_commander = { prestige = 15 }
+			fought_great_warrior@event_target:enemy_commander = { prestige = 25 }
+		}
+
+		if = { #If you have a liege, slap on some opinion bonus...
+			limit = { home_commander_and_liege_are_different_characters = yes }
+			event_target:home_liege = {
+				show_scope_change = no
+				tooltip = {
+					opinion = {
+						who = event_target:home_liege
+						modifier = opinion_thoroughly_impressed
+						years = 10
+					}
+				}
+				reverse_opinion = {
+					who = event_target:home_liege
+					modifier = opinion_was_thoroughly_praised
+					years = 10
+				}
+			}
+		}
+		else = { #Otherwise, just clear flags.
+			clr_character_flag = fought_worse_warrior@event_target:enemy_commander
+			clr_character_flag = fought_even_warrior@event_target:enemy_commander
+			clr_character_flag = fought_great_warrior@event_target:enemy_commander
+		}
+
+		### Actual death (if not MP)
+		if = {
+			limit = { multiplayer = no }
+			event_target:enemy_commander = {
+				show_scope_change = no
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_battle
+						killer = ROOT #aka event_target:home_commander
+					}
+				}
+			}
+		}
+	}
+
+	option = { #Khorne cares not from where the blood flows, only that it flows
+		name = EVTOPTCbattle62
+		tooltip_info_custom = available_due_to_religion
+		piety = 25
+		trigger_switch = {
+			on_trigger = has_character_flag
+			fought_worse_warrior@event_target:enemy_commander = { prestige = 10 }
+			fought_even_warrior@event_target:enemy_commander = { prestige = 15 }
+			fought_great_warrior@event_target:enemy_commander = { prestige = 25 }
+		}
+		hidden_effect = {
+			if = {
+				limit = { is_landed = yes }
+				event_target:home_capital_province = {
+					save_persistent_event_target = {
+						name = local_fearsome_commander_target #Hook-in: Warrior Lodges
+						scope = event_target:home_commander
+					}
+				}
+			}
+		}
+		if = {
+			limit = { multiplayer = no }
+			event_target:enemy_commander = {
+				show_scope_change = no
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_battle killer = ROOT } }
+			}
+		}
+		ai_chance = { factor = 100 }
+		trigger = { religion = khorne }
+	}
+	after = {
+		clr_character_flag = fought_worse_warrior@event_target:enemy_commander
+		clr_character_flag = fought_even_warrior@event_target:enemy_commander
+		clr_character_flag = fought_great_warrior@event_target:enemy_commander
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.63 The liege rewards
+# The liege hears of the trophy and rewards it (battle.64).
+# Scope: ROOT is the liege. Fired from battle.62.
+character_event = {
+	id = battle.63
+	title = the_battle_at_location
+	desc = EVTDESCbattle63
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+
+	option = { #A reward is in order!
+		name = EVTOPTAbattle63
+		tooltip = {
+			opinion = {
+				who = event_target:home_commander
+				modifier = opinion_thoroughly_impressed
+				years = 10
+			}
+			reverse_opinion = {
+				who = event_target:home_commander
+				modifier = opinion_was_thoroughly_praised
+				years = 10
+			}
+		}
+		tooltip = { transfer_scaled_wealth = { to = event_target:home_commander value = 0.3 } }
+		event_target:home_commander = {
+			set_character_flag = got_paid
+			character_event = { id = battle.64 }
+		} #Sends thank you to home_commander again
+	}
+	option = { #They have my gratitude.
+		name = EVTOPTBbattle63
+		tooltip = {
+			opinion = { who = event_target:home_commander modifier = opinion_impressed years = 10 }
+			reverse_opinion = {
+				who = event_target:home_commander
+				modifier = opinion_was_praised
+				years = 10
+			}
+		}
+		event_target:home_commander = { character_event = { id = battle.64 } } #Sends thank you to home_commander again
+	}
+
+	after = {
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.64 A reward
+# The commander is rewarded for his trophy.
+# Scope: ROOT is the commander. Fired from battle.63.
+character_event = {
+	id = battle.64
+	title = the_battle_at_location
+	desc = EVTDESCbattle64
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+
+	option = {
+		name = EVTOPTAbattle64
+		if = {
+			limit = { has_character_flag = got_paid }
+			event_target:home_liege = {
+				show_scope_change = no
+				transfer_scaled_wealth = { to = ROOT value = 0.3 }
+			}
+		}
+		opinion = {
+			who = event_target:home_liege
+			modifier = opinion_was_thoroughly_praised
+			years = 10
+		}
+		reverse_opinion = {
+			who = event_target:home_liege
+			modifier = opinion_thoroughly_impressed
+			years = 10
+		}
+
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.65 Headless
+# The victim of battle.62 dies.
+# Scope: ROOT is the beheaded foe. Fired from battle.62.
+character_event = {
+	id = battle.65
+	title = the_battle_at_location
+	desc = EVTDESCbattle65
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAbattle65
+		if = {
+			limit = {
+				event_target:home_commander = {
+					any_artifact = {
+						artifact_type = enemy_skull
+						original_owner = { character = ROOT }
+					}
+				}
+			}
+			custom_tooltip = { text = EVTOPTAbattle65_tt } #They receive a brand new "Enemy Skull"
+		}
+	}
+}
+
+# battle.66 A head taken
+# The enemy liege hears that his man was beheaded.
+# Scope: ROOT is the enemy liege. Fired from battle.62.
+character_event = {
+	id = battle.66
+	title = the_battle_at_location
+	desc = EVTDESCbattle66
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+	option = {
+		name = EVTOPTAbattle66
+		if = {
+			limit = {
+				event_target:home_commander = {
+					any_artifact = {
+						artifact_type = enemy_skull
+						original_owner = { character = event_target:enemy_commander }
+					}
+				}
+			}
+			custom_tooltip = { text = EVTOPTAbattle65_tt } #They receive a brand new "Enemy Skull"
+		}
+	}
+	option = {
+		name = EVTOPTAbattle66_same_society
+		tooltip_info_custom = available_because_same_society
+
+		add_rival = event_target:home_commander
+
+		if = {
+			limit = {
+				event_target:home_commander = {
+					any_artifact = {
+						artifact_type = enemy_skull
+						original_owner = { character = event_target:enemy_commander }
+					}
+				}
+			}
+			custom_tooltip = { text = EVTOPTAbattle65_tt } #They receive a brand new "Enemy Skull"
+		}
+
+		event_target:home_commander = { character_event = { id = battle.67 days = 5 } }
+		trigger = { event_target:home_commander = { same_society_as = ROOT } }
+	}
+	after = {
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.67 A rival is born
+# The enemy liege may swear rivalry against the beheader.
+# Scope: ROOT is the enemy liege. Fired from battle.66.
+character_event = {
+	id = battle.67
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+
+	desc = {
+		text = EVTDESCbattle67_a
+		trigger = {
+			any_artifact = {
+				artifact_type = enemy_skull
+				original_owner = { character = event_target:enemy_commander }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCbattle67_b
+		trigger = {
+			NOT = {
+				any_artifact = {
+					artifact_type = enemy_skull
+					original_owner = { character = event_target:enemy_commander }
+				}
+			}
+		}
+	}
+
+	option = { #Very well.
+		name = {
+			text = EVTOPTAbattle67
+			trigger = {
+				any_artifact = {
+					artifact_type = enemy_skull
+					original_owner = { character = event_target:enemy_commander }
+				}
+			}
+		}
+		name = {
+			text = EVTOPTBbattle67
+			trigger = {
+				NOT = {
+					any_artifact = {
+						artifact_type = enemy_skull
+						original_owner = { character = event_target:enemy_commander }
+					}
+				}
+			}
+		}
+		tooltip = { add_rival = FROM }
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.68 The boulder
+# The commander heaves a boulder onto the foe and grows brawny. A fellow
+# commander sees it (battle.69).
+# Scope: ROOT is a lodge or warband member. Fired from battle.1.
+character_event = {
+	id = battle.68
+	title = the_battle_at_location
+	desc = EVTDESCbattle68
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	hide_from = yes
+
+	trigger = {
+		NOT = { trait = robust }
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+
+		random_unit_leader = {
+			limit = { NOT = { trait = robust } NOT = { character = ROOT } is_alive = yes }
+			save_event_target_as = my_fellow_commander
+		}
+	}
+
+	option = { #You become Brawny
+		name = EVTOPTAbattle68
+		custom_tooltip = { text = EVTOPTAbattle68_tt }
+
+		if = { limit = { trait = feeble } remove_trait = feeble }
+		else = { add_trait = robust }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 is_smart_trigger = yes }
+			modifier = { factor = 0.01 is_rival = event_target:my_fellow_commander }
+		}
+	}
+	option = { #Give the Brawny trait to someone nearby you!
+		name = EVTOPTBbattle68
+		custom_tooltip = { text = EVTOPTBbattle68_tt }
+		tooltip = {
+			event_target:my_fellow_commander = {
+				show_scope_change = no
+				if = { limit = { trait = feeble } remove_trait = feeble }
+				else = { add_trait = robust }
+			}
+		}
+
+		if = { #add friendships if appropriate...
+			limit = {
+				event_target:my_fellow_commander = {
+					potentially_interested_in_rivaling_root_trigger = no
+					root_potentially_interested_in_rivaling_this_trigger = no
+				}
+			}
+			if = { #if you already have an opinion in place, become friends...
+				limit = {
+					OR = {
+						reverse_has_opinion_modifier = {
+							who = event_target:my_fellow_commander
+							modifier = opinion_budding_friendship
+						}
+						has_opinion_modifier = {
+							who = event_target:my_fellow_commander
+							modifier = opinion_budding_friendship
+						}
+					}
+				}
+				tooltip = { add_friend = event_target:my_fellow_commander }
+			}
+			else = { #otherwise, add opinions... (*actually* added in follow-up)
+				tooltip = {
+					opinion = {
+						who = event_target:my_fellow_commander
+						modifier = opinion_budding_friendship
+						years = 10
+					}
+					reverse_opinion = {
+						who = event_target:my_fellow_commander
+						modifier = opinion_budding_friendship
+						years = 10
+					}
+				}
+			}
+		}
+
+		#Send event to fellow commander...
+		event_target:my_fellow_commander = { character_event = { id = battle.69 } }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 1.5 trait = charitable }
+			modifier = { factor = 1.5 trait = wroth }
+			modifier = { factor = 10 is_friend = event_target:my_fellow_commander }
+			modifier = { factor = 1.5 same_society_as = event_target:my_fellow_commander }
+			modifier = { factor = 1.5 same_society_as = event_target:my_fellow_commander }
+			modifier = {
+				factor = 5
+				event_target:my_fellow_commander = {
+					current_scope_and_root_make_sense_as_friendlies_trigger = yes
+				}
+			}
+		}
+		trigger = { event_target:my_fellow_commander = { always = yes NOT = { trait = robust } } }
+	}
+	after = {
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.69 The boulder seen
+# A fellow commander saw the boulder thrown.
+# Scope: ROOT is the fellow commander. Fired from battle.68.
+character_event = {
+	id = battle.69
+	title = the_battle_at_location
+	desc = EVTDESCbattle69
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = robust }
+		FROM = { is_alive = yes }
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+
+	option = {
+		name = EVTOPTAbattle69
+		custom_tooltip = { text = EVTOPTAbattle68_tt }
+		if = { limit = { trait = feeble } remove_trait = feeble }
+		else = { add_trait = robust }
+		if = { #add friendships if appropriate...
+			limit = {
+				FROM = {
+					potentially_interested_in_rivaling_root_trigger = no
+					root_potentially_interested_in_rivaling_this_trigger = no
+				}
+			}
+			if = {
+				limit = {
+					OR = {
+						reverse_has_opinion_modifier = {
+							who = FROM
+							modifier = opinion_budding_friendship
+						}
+						has_opinion_modifier = { who = FROM modifier = opinion_budding_friendship }
+					}
+				}
+				add_friend = FROM
+			}
+			else = {
+				opinion = { who = FROM modifier = opinion_budding_friendship years = 10 }
+				reverse_opinion = { who = FROM modifier = opinion_budding_friendship years = 10 }
+			}
+		}
+
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.70 Impressed
+# The commander is impressed by a fellow commander on the field, and
+# writes to him (battle.71).
+# Scope: ROOT is the commander, my_fellow_commander a unit leader beside him.
+#   Fired from battle.1.
+character_event = {
+	id = battle.70
+	title = the_battle_at_location
+	desc = EVTDESCbattle70
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	hide_from = yes
+
+	trigger = {
+		any_unit_leader = {
+			NOT = { character = ROOT }
+			root_has_terrible_opinion_modifier_of_this_extended_trigger = no
+		}
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+
+		random_unit_leader = {
+			limit = {
+				NOT = { character = ROOT }
+				root_has_terrible_opinion_modifier_of_this_extended_trigger = no #So it's not someone you hate
+			}
+			score_value = { #Prioritizes selecting some kind of loved person...
+				value = 100
+				good_soldier_outcome_score = yes
+			}
+			save_event_target_as = my_fellow_commander
+		}
+	}
+
+	option = {
+		name = EVTOPTAbattle70
+
+		if = { #if you already have an opinion in place, become friends...
+			limit = {
+				OR = {
+					reverse_has_opinion_modifier = {
+						who = event_target:my_fellow_commander
+						modifier = opinion_budding_friendship
+					}
+					has_opinion_modifier = {
+						who = event_target:my_fellow_commander
+						modifier = opinion_budding_friendship
+					}
+				}
+			}
+			tooltip = { add_friend = event_target:my_fellow_commander }
+		}
+		else = { #otherwise, add opinions... (*actually* added in follow-up)
+			tooltip = {
+				opinion = {
+					who = event_target:my_fellow_commander
+					modifier = opinion_impressed_me_in_battle
+					years = 10
+				}
+				reverse_opinion = {
+					who = event_target:my_fellow_commander
+					modifier = opinion_was_praised
+					years = 10
+				}
+			}
+		}
+
+		#Send event to fellow commander...
+		event_target:my_fellow_commander = { character_event = { id = battle.71 days = 1 } }
+	}
+	option = {
+		name = EVTOPTBbattle70 #It's not that hard!
+		random_list = {
+			50 = {
+				if = { limit = { trait = content } remove_trait = content }
+				else = { add_trait = ambitious }
+			}
+			50 = {
+				if = { limit = { trait = kind } remove_trait = kind }
+				else = { add_trait = envious }
+			}
+		}
+		trigger = { NOT = { trait = ambitious } NOT = { trait = envious } }
+	}
+
+	after = {
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.71 A comrade's reply
+# The fellow commander answers, and a friendship may begin.
+# Scope: ROOT is my_fellow_commander. Fired from battle.70.
+character_event = {
+	id = battle.71
+	title = the_battle_at_location
+	desc = EVTDESCbattle71
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAbattle71_default
+			trigger = {
+				NOR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+					trait = depressed
+					trait = kind
+					trait = cannibal_trait
+					is_evil_trigger = yes
+					AND = {
+						trait = zealous
+						has_religion_matching_joined_warrior_society_trigger = yes
+					}
+				}
+			}
+		}
+		name = {
+			text = EVTOPTAbattle71_lunatic
+			trigger = {
+				OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+				NOT = { trait = depressed }
+			}
+		}
+		name = {
+			text = EVTOPTAbattle71_evil
+			trigger = { is_evil_trigger = yes NOT = { trait = depressed } }
+		}
+		name = {
+			text = EVTOPTAbattle71_kind
+			trigger = { trait = kind NOT = { trait = depressed } }
+		}
+		name = {
+			text = EVTOPTAbattle71_cannibal
+			trigger = { trait = cannibal_trait NOT = { trait = depressed } }
+		}
+		name = { text = EVTOPTAbattle71_depressed trigger = { trait = depressed } }
+		name = {
+			text = EVTOPTAbattle71_zealous
+			trigger = { trait = zealous NOT = { trait = depressed } }
+		}
+
+		if = { limit = { trait = depressed } remove_trait = depressed }
+
+		if = {
+			limit = { #if you already have an opinion in place, become friends...
+				OR = {
+					reverse_has_opinion_modifier = {
+						who = FROM
+						modifier = opinion_budding_friendship
+					}
+					has_opinion_modifier = { who = FROM modifier = opinion_budding_friendship }
+				}
+			}
+			add_friend = FROM
+		}
+		else = {
+			opinion = { who = FROM modifier = opinion_was_praised years = 10 }
+			reverse_opinion = { who = FROM modifier = opinion_impressed_me_in_battle years = 10 }
+		}
+		add_blood_splatter_effect = yes
+		allow_new_battle_events_effect = yes
+	}
+}
+
+# battle.72 Old battles
+# The commander remembers earlier fights.
+# Scope: ROOT is a lodge or warband member. Fired from battle.1.
+character_event = {
+	id = battle.72
+	title = the_battle_at_location
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	desc = {
+		text = EVTDESCbattle72_a_1
+		trigger = { has_character_flag = kin_was_fallen_commander }
+	}
+	desc = {
+		text = EVTDESCbattle72_a_2
+		trigger = { has_character_flag = remember_fallen_commander }
+	}
+	desc = {
+		text = EVTDESCbattle72_b_1
+		trigger = { has_character_flag = i_was_inspiring_commander }
+	}
+	desc = {
+		text = EVTDESCbattle72_b_2
+		trigger = { has_character_flag = remember_inspiring_commander }
+	}
+	desc = {
+		text = EVTDESCbattle72_c_1
+		trigger = { has_character_flag = i_was_fearsome_commander }
+	}
+	desc = {
+		text = EVTDESCbattle72_c_2
+		trigger = { has_character_flag = remember_fearsome_commander }
+	}
+
+	portrait = event_target:target #might be empty!
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+
+		random_list = {
+			10 = { #the least interesting choice...
+				trigger = {
+					event_target:home_capital_province = {
+						persistent_event_target:local_dead_commander_target = { always = yes }
+					}
+				}
+				if = {
+					limit = {
+						event_target:home_capital_province = {
+							persistent_event_target:local_dead_commander_target = { dynasty = ROOT }
+						}
+					}
+					set_character_flag = kin_was_fallen_commander
+				}
+				else = { set_character_flag = remember_fallen_commander }
+				event_target:home_capital_province = {
+					persistent_event_target:local_dead_commander_target = {
+						save_event_target_as = target
+					}
+				}
+			}
+			50 = {
+				trigger = {
+					event_target:home_capital_province = {
+						persistent_event_target:local_inspiring_commander_target = { always = yes }
+					}
+				}
+				if = {
+					limit = {
+						event_target:home_capital_province = {
+							persistent_event_target:local_inspiring_commander_target = {
+								character = ROOT
+							}
+						}
+					}
+					set_character_flag = i_was_inspiring_commander
+				}
+				else = {
+					set_character_flag = remember_inspiring_commander
+					event_target:home_capital_province = {
+						persistent_event_target:local_inspiring_commander_target = {
+							save_event_target_as = target
+						}
+					}
+				}
+			}
+			100 = { #Means people remember a ruler once decapitated an enemy here...
+				trigger = {
+					event_target:home_capital_province = {
+						persistent_event_target:local_fearsome_commander_target = { always = yes }
+					}
+				}
+				if = { #Means YOU did it and text should reflect that.
+					limit = {
+						event_target:home_capital_province = {
+							persistent_event_target:local_fearsome_commander_target = {
+								character = ROOT
+							}
+						}
+					}
+					set_character_flag = i_was_fearsome_commander
+				}
+				else = {
+					set_character_flag = remember_fearsome_commander
+					event_target:home_capital_province = {
+						persistent_event_target:local_fearsome_commander_target = {
+							save_event_target_as = target
+						}
+					}
+				}
+			}
+		}
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAbattle72_1
+			trigger = { has_character_flag = kin_was_fallen_commander }
+		}
+		name = {
+			text = EVTOPTAbattle72_2
+			trigger = { has_character_flag = remember_fallen_commander }
+		}
+		name = {
+			text = EVTOPTBbattle72_1
+			trigger = { has_character_flag = i_was_inspiring_commander }
+		}
+		name = {
+			text = EVTOPTBbattle72_2
+			trigger = { has_character_flag = remember_inspiring_commander }
+		}
+		name = {
+			text = EVTOPTCbattle72_1
+			trigger = { has_character_flag = i_was_fearsome_commander }
+		}
+		name = {
+			text = EVTOPTCbattle72_2
+			trigger = { has_character_flag = remember_fearsome_commander }
+		}
+
+		show_portrait = event_target:target
+
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = kin_was_fallen_commander
+					has_character_flag = remember_fallen_commander
+				}
+			}
+			add_character_modifier = { name = glory_days years = 10 }
+		}
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = i_was_inspiring_commander
+					has_character_flag = remember_inspiring_commander
+				}
+			}
+			add_character_modifier = { name = proud_role_model years = 10 }
+		}
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = i_was_fearsome_commander
+					has_character_flag = remember_fearsome_commander
+				}
+			}
+			add_character_modifier = { name = center_of_attention years = 15 }
+		}
+		allow_new_battle_events_effect = yes
+	}
+	after = {
+		clr_character_flag = kin_was_fallen_commander
+		clr_character_flag = remember_fallen_commander
+		clr_character_flag = i_was_inspiring_commander
+		clr_character_flag = remember_inspiring_commander
+		clr_character_flag = i_was_fearsome_commander
+		clr_character_flag = remember_fearsome_commander
+	}
+}
+
+# battle.73 A purpose found
+# War gives the commander purpose, and a nickname.
+# Scope: ROOT is a lodge or warband member. Fired from battle.1.
+character_event = {
+	id = battle.73
+	title = the_battle_at_location
+	desc = EVTDESCbattle73
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	sound = win_battle
+
+	immediate = {
+		disallow_new_battle_events_effect = yes #to keep the tombola from spamming you...
+		battle_commander_counter_positive_effect = yes
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAbattle73_default #I have found my purpose
+			trigger = {
+				NOR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+					trait = depressed
+					trait = kind
+					trait = cannibal_trait
+					is_evil_trigger = yes
+					AND = { trait = zealous }
+				}
+			}
+		}
+		name = {
+			text = EVTOPTAbattle73_lunatic
+			trigger = {
+				OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+				NOT = { trait = depressed }
+			}
+		}
+		name = {
+			text = EVTOPTAbattle73_evil
+			trigger = { is_evil_trigger = yes NOT = { trait = depressed } }
+		}
+		name = {
+			text = EVTOPTAbattle73_kind
+			trigger = { trait = kind NOT = { trait = depressed } }
+		}
+		name = {
+			text = EVTOPTAbattle73_cannibal
+			trigger = { trait = cannibal_trait NOT = { trait = depressed } }
+		}
+		name = { text = EVTOPTAbattle73_depressed trigger = { trait = depressed } }
+		name = {
+			text = EVTOPTAbattle73_zealous
+			trigger = { trait = zealous NOT = { trait = depressed } }
+		}
+
+		prestige = 25
+
+		add_blood_splatter_effect = yes
+
+		if = { limit = { trait = depressed } remove_trait = depressed }
+		else_if = { limit = { trait = stressed } remove_trait = stressed }
+		if = { limit = { has_nickname = no } give_nickname = nick_warband_spirit }
+
+		allow_new_battle_events_effect = yes
+	}
+}
+
+###############################################################################
+# Duelist and strategist
+###############################################################################
+
+# battle.80 The duelist's way
+# A seasoned duellist with a kill to his name may take the Duelist trait.
+# Scope: ROOT is the duellist. Fired from increase_duel_exp_modifier_effect.
+character_event = {
+	id = battle.80
+	desc = EVTDESCbattle80
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	portrait = event_target:character_i_killed_in_duel
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOR = { has_character_flag = denied_duelist_trait lifestyle_traits = 1 }
+		any_kill_list_character = { death_reason = death_duel }
+	}
+
+	immediate = {
+		random_kill_list_character = {
+			limit = { death_reason = death_duel }
+			save_event_target_as = character_i_killed_in_duel
+		}
+	}
+
+	option = {
+		name = EVTOPTAbattle80
+		add_trait = duelist
+	}
+	option = {
+		name = EVTOPTBbattle80
+		set_character_flag = denied_duelist_trait
+	}
+}
+
+# battle.81 The strategist's way
+# A strong general may take the Strategist trait. Battlefield duel
+# experience could always offer it; now a hard fight can too.
+# Scope: ROOT is the commander. Fired from battle.1 and
+#   increase_battle_experience_effect.
+character_event = {
+	id = battle.81
+	desc = EVTDESCbattle81
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOR = { has_character_flag = denied_strategist_trait lifestyle_traits = 1 }
+	}
+
+	option = {
+		name = EVTOPTAbattle81
+		add_trait = strategist
+	}
+	option = {
+		name = EVTOPTBbattle81
+		set_character_flag = denied_strategist_trait
+	}
+}
+
+# battle.82 A duelist bloodline
+# A crafty, ruthless and experienced Duelist founds a bloodline. Once per
+# lifetime (flag got_duelist_bloodline).
+# Scope: ROOT is the duellist. Fired from increase_duel_exp_modifier_effect.
+character_event = {
+	id = battle.82
+	desc = EVTDESCbattle82
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = duelist
+	}
+
+	option = {
+		name = EVTOPTAbattle82
+		if = {
+			limit = { is_female = yes }
+			create_bloodline = { type = duelist_female }
+			new_bloodline = { set_description = "duelist_female_desc" }
+		}
+		else = {
+			create_bloodline = { type = duelist_male }
+			new_bloodline = { set_description = "duelist_male_desc" }
+		}
+		prestige = 500
+	}
+}
+
+###############################################################################
+# Housekeeping
+###############################################################################
+
+# battle.90 Commander bonus
+# Hidden. Gives commanders the hidden commander bonus.
+# Scope: ROOT is a holder of title_commander. Fired from on_startup.
+character_event = {
+	id = battle.90
+	is_triggered_only = yes
+	hide_window = yes
+
+	trigger = {
+		has_minor_title = title_commander
+		NOT = { has_character_modifier = hidden_commander_bonus }
+	}
+
+	immediate = {
+		hidden_effect = { # Because this cannot be added in the passive effects, for some code reason
+			add_character_modifier = { name = hidden_commander_bonus duration = -1 hidden = yes }
+		}
+	}
+}
+
+# battle.91 The roll of the dead
+# Hidden. Logs how many commanders died for this character.
+# Scope: ROOT is the dead character. Fired from on_death.
+character_event = {
+	id = battle.91
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = commanders_have_died_for_me
+	}
+
+	immediate = {
+		log = "BATTLE EVENTS: Commanders dead for ME (during my lifetime): [Root.my_commander_deaths_in_battle.GetValue] individual characters."
+		log = "BATTLE EVENTS: Commanders dead, in TOTAL: [global_deaths_in_battle.GetValue] individual characters."
+	}
+}

@@ -74,6 +74,10 @@ The first line is the id and a short title. Then a plain-language summary of wha
 - Avoid `any_character`, `random_character` and other world-wide loops in triggers and pulses. Use event targets, flags or a narrower scope.
 - Repeated trigger blocks become scripted triggers (`common/scripted_triggers/wh_<subject>_triggers.txt`).
 
+**Races and gender.**
+- Never test `is_female = yes` for a woman's role (daughter, wife, mother, sister, lover, lady of the court) or a gendered text variant. Use `is_woman_trigger = yes` / `= no` (`common/scripted_triggers/wh_scripted_triggers.txt`). Orcs, goblins, lizardmen, Skaven, Fimir and Tomb Kings have no women as vanilla shows them; their engine-female characters are snotlings, breeders, Saurus or the Maergh, and `is_no_females_race` is the one place that lists them. Romance partners also need `is_no_females_race = no`. Keep raw `is_female` only for race mechanics (racial traits, breeders, `set_gender`).
+- Faith and culture changes go through `faith_fits_race_of_prev_trigger` and `culture_fits_race_of_prev_trigger` (`WHG_race_triggers.txt`).
+
 **Modern syntax.**
 - `if` / `else_if` / `else` instead of chains of `if` with `break = yes`.
 - `death = { death_reason = ... }`, never `death = yes`.

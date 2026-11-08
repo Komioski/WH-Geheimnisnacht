@@ -8,10 +8,15 @@
 #   100-101  An ally sits out the war
 #   200-232  Pirates on the coast and a war of letters with an ally
 #
-# Namespace: favour (was ZE.8100-8120 in ze_favor_events).
+# Namespace: favour (was ZE.8100-8120 in ze_favor_events and
+# ZE.22300-23005 in ze_extra_events).
 #   10-13    Drunk after council: a vassal helps or mocks
 #   20-24    The ruler breaks up a vassal's marriage quarrel
 #   30       A favour is called in to force a pardon (ze_decisions)
+#   40-48    An overworked councillor, a mob of angry peasants
+#   50-72    A noble prisoner, saved in council, pious counsel
+#   80-89    Letters asking a foreign councillor for advice
+#   90-98    Land for a landless friend, training the liege's commanders
 ###############################################################################
 
 namespace = alliance
@@ -1338,5 +1343,1602 @@ character_event = {
 
 	option = {
 		name = EVTOPTAfavour30
+	}
+}
+
+###############################################################################
+# Council work and the mob
+###############################################################################
+
+# favour.40 Overburdened councillor
+# Yearly pulse. A voting councillor drowns in work and another voter offers
+# to help. Accepting means owing them a favour.
+# Scope: ROOT is the overworked councillor, target_help_councillor the
+#   helper.
+character_event = {
+	id = favour.40
+	picture = GFX_evt_noble_in_castle
+	desc = EVTDESCfavour40
+
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_voter = yes
+		NOT = { is_inaccessible_trigger = yes }
+		liege = {
+			any_vassal = {
+				NOR = {
+					character = ROOT
+					holds_favor_on = ROOT
+					trait = incapable
+					is_inaccessible_trigger = yes
+					is_rival = ROOT
+				}
+				is_voter = yes
+				prisoner = no
+			}
+		}
+	}
+
+	immediate = {
+		liege = {
+			random_vassal = {
+				limit = {
+					NOR = {
+						character = ROOT
+						holds_favor_on = ROOT
+						trait = incapable
+						is_inaccessible_trigger = yes
+						is_rival = ROOT
+					}
+					is_voter = yes
+					prisoner = no
+				}
+				save_event_target_as = target_help_councillor
+			}
+		}
+	}
+
+	option = { # Accept Help
+		name = EVTOPTAfavour40
+		ai_chance = { factor = 50 modifier = { factor = 1.5 trait = humble } }
+		reverse_add_favor = event_target:target_help_councillor
+		opinion = {
+			who = event_target:target_help_councillor
+			modifier = opinion_very_grateful
+			years = 3
+		}
+		event_target:target_help_councillor = {
+			hidden_tooltip = { character_event = { id = favour.41 days = 5 } }
+		}
+	}
+
+	option = { # Refuse Help
+		name = EVTOPTBfavour40
+		ai_chance = { factor = 50 modifier = { factor = 1.5 trait = proud } }
+		if = { limit = { trait = stressed trait = depressed } prestige = -100 }
+		if = {
+			limit = { trait = stressed NOT = { trait = depressed } }
+			random = {
+				chance = 50
+				add_trait = depressed
+				hidden_tooltip = {
+					character_event = { id = 38288 } # Notify Depressed
+				}
+			}
+			prestige = -20
+		}
+		if = {
+			limit = { NOT = { trait = stressed } }
+			random = {
+				chance = 75
+				add_trait = stressed
+				hidden_tooltip = {
+					character_event = { id = 38282 } # Notify Stressed
+				}
+			}
+			prestige = -20
+		}
+		reverse_opinion = {
+			who = event_target:target_help_councillor
+			modifier = insulted
+			years = 3
+		}
+		event_target:target_help_councillor = {
+			hidden_tooltip = { character_event = { id = favour.42 days = 5 } }
+		}
+	}
+}
+
+# favour.41 Help accepted
+# The helper hears the councillor took the help and now holds a favour on
+# them.
+# Scope: ROOT is the helper, FROM the councillor.
+character_event = {
+	id = favour.41
+	picture = GFX_evt_noble_in_castle
+	desc = EVTDESCfavour41
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAfavour41
+		tooltip = {
+			add_favor = FROM
+			reverse_opinion = { who = FROM modifier = opinion_very_grateful years = 3 }
+		}
+		prestige = 20
+	}
+}
+
+# favour.42 Help refused
+# The helper is turned away.
+# Scope: ROOT is the helper, FROM the councillor.
+character_event = {
+	id = favour.42
+	picture = GFX_evt_noble_in_castle
+	desc = EVTDESCfavour42
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAfavour42
+		tooltip = { opinion = { who = FROM modifier = insulted years = 3 } }
+	}
+}
+
+# favour.45 Angry peasants
+# Yearly pulse. The ruler speaks too frankly to the peasants of a vassal
+# capital and a mob gives chase. Hide with the vassal or try to outrun them
+# (can be wounded).
+# Scope: ROOT is the ruler, helping_vassal the vassal.
+long_character_event = {
+	id = favour.45
+	picture = GFX_evt_noble_haughty_talking_to_peasants
+	desc = EVTDESCfavour45
+
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = no
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOR = {
+			trait = grey_eminence
+			trait = gregarious
+			trait = wounded
+			is_maimed_trigger = yes
+			OR = { government = nomadic_government government = chaos_horde_government }
+		}
+		any_vassal = {
+			NOR = {
+				character = ROOT
+				holds_favor_on = ROOT
+				trait = incapable
+				is_inaccessible_trigger = yes
+				is_rival = ROOT
+			}
+			is_adult = yes
+			is_voter = no
+			prisoner = no
+		}
+	}
+
+	immediate = {
+		random_vassal = {
+			limit = {
+				NOR = {
+					character = ROOT
+					holds_favor_on = ROOT
+					trait = incapable
+					is_inaccessible_trigger = yes
+					is_rival = ROOT
+				}
+				is_adult = yes
+				is_voter = no
+				prisoner = no
+			}
+			save_event_target_as = helping_vassal
+		}
+	}
+
+	option = { # Run for Nearby Vassal
+		name = EVTOPTAfavour45
+		custom_tooltip = { text = EVTOPTAfavour45_custom_tooltip_a }
+		hidden_tooltip = {
+			event_target:helping_vassal = { character_event = { id = favour.46 days = 5 } }
+		}
+	}
+
+	option = { # Make a run for it
+		name = EVTOPTBfavour45
+		random_list = {
+			50 = {
+				add_trait = wounded
+				hidden_tooltip = {
+					character_event = { id = 38280 } # Notify Wounded
+				}
+			}
+			10 = { add_maimed_trait_effect = yes }
+			40 = { custom_tooltip = { text = EVTOPTAfavour45_custom_tooltip_b } }
+		}
+	}
+}
+
+# favour.46 Hide me!
+# The vassal sees the ruler fleeing the mob and decides whether to open the
+# door.
+# Scope: ROOT is the vassal, FROM the ruler.
+character_event = {
+	id = favour.46
+	picture = GFX_evt_hiding_from_pursuers
+	desc = EVTDESCfavour46
+
+	is_triggered_only = yes
+
+	option = { # Aid Liege
+		name = EVTOPTAfavour46
+		ai_chance = {
+			factor = 60
+
+			modifier = { factor = 1.5 trait = kind }
+			modifier = { factor = 1.5 trait = content }
+			modifier = { factor = 1.5 trait = just }
+		}
+		tooltip = {
+			add_favor = FROM
+			reverse_opinion = { who = FROM modifier = opinion_very_grateful years = 3 }
+		}
+		FROM = { hidden_tooltip = { character_event = { id = favour.47 days = 5 } } }
+	}
+
+	option = { # Ignore Liege
+		name = EVTOPTBfavour46
+		ai_chance = { factor = 40 modifier = { factor = 1.2 trait = cruel } }
+		tooltip = {
+			FROM = { opinion = { who = ROOT modifier = opinion_hate years = 3 } }
+			add_rival = FROM
+		}
+		FROM = { hidden_tooltip = { character_event = { id = favour.48 days = 5 } } }
+	}
+}
+
+# favour.47 Safe inside
+# The vassal hid the ruler and gains a favour on them.
+# Scope: ROOT is the ruler, FROM the vassal.
+character_event = {
+	id = favour.47
+	picture = GFX_evt_hiding_from_pursuers
+	desc = EVTDESCfavour47
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAfavour47
+		reverse_add_favor = FROM
+		opinion = { who = FROM modifier = opinion_very_grateful years = 3 }
+	}
+}
+
+# favour.48 Door slammed shut
+# The vassal shut the door and the ruler faces the mob alone.
+# Scope: ROOT is the ruler, FROM the vassal.
+character_event = {
+	id = favour.48
+	picture = GFX_evt_hiding_from_pursuers
+	desc = EVTDESCfavour48
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAfavour48
+		opinion = { who = FROM modifier = opinion_hate years = 3 }
+		add_rival = FROM
+		random_list = {
+			70 = { custom_tooltip = { text = EVTOPTAfavour45_custom_tooltip_b } }
+			30 = {
+				add_trait = wounded
+				hidden_tooltip = {
+					character_event = { id = 38280 } # Notify Wounded
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# Pardons and council quarrels
+###############################################################################
+
+# favour.50 Noble prisoner
+# Yearly pulse. A guilty young noble is brought before the throne: pardon
+# him for a favour or throw him in the dungeon.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = favour.50
+	desc = EVTDESCfavour50
+	picture = GFX_evt_judged_by_ruler
+
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	ai = no
+	war = no
+
+	only_playable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_nomadic = no
+		NOT = { is_inaccessible_trigger = yes }
+	}
+
+	# Pardon
+	option = {
+		name = EVTOPTAfavour50
+
+		prestige = -50
+		create_character = {
+			random_traits = yes
+			dynasty = RANDOM
+			female = no
+			age = 20
+			religion = ROOT
+			culture = ROOT
+		}
+		new_character = {
+			# Set Racial Trait
+			character_event = { id = aiclean.31 }
+			reverse_add_favor = ROOT
+		}
+		custom_tooltip = { text = character_owe_favor }
+	}
+
+	# Condemn
+	option = {
+		name = EVTOPTBfavour50
+
+		prestige = 50
+	}
+}
+
+# favour.60 Saved in council
+# Yearly pulse. A gifted voter wins a council argument for a clumsy one, who
+# can thank them with a favour or scorn the help.
+# Scope: ROOT is the clumsy voter, target_saved_voter the helper.
+character_event = {
+	id = favour.60
+	desc = EVTDESCfavour60
+	picture = GFX_evt_council_quarrelling
+
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	only_playable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_voter = yes
+		NOR = { diplomacy = 10 is_inaccessible_trigger = yes }
+
+		liege = {
+			any_realm_character = {
+				same_liege = ROOT
+				diplomacy = 10
+				NOR = {
+					character = ROOT
+					owes_favor_to = ROOT
+					trait = incapable
+					is_inaccessible_trigger = yes
+					is_rival = ROOT
+				}
+				is_voter = yes
+				prisoner = no
+			}
+		}
+	}
+
+	immediate = {
+		liege = {
+			random_realm_character = {
+				limit = {
+					same_liege = ROOT
+					diplomacy = 10
+					NOR = {
+						character = ROOT
+						owes_favor_to = ROOT
+						trait = incapable
+						is_inaccessible_trigger = yes
+						is_rival = ROOT
+					}
+					is_voter = yes
+					prisoner = no
+				}
+				save_event_target_as = target_saved_voter
+			}
+		}
+	}
+
+	# Accept save of face
+	option = {
+		name = EVTOPTAfavour60
+
+		ai_chance = { factor = 70 modifier = { factor = 0.5 trait = proud } }
+
+		prestige = 150
+		event_target:target_saved_voter = {
+			add_favor = ROOT
+			character_event = { id = favour.61 days = 1 }
+		}
+	}
+
+	# Deny
+	option = {
+		name = EVTOPTBfavour60
+
+		ai_chance = { factor = 30 }
+
+		prestige = -150
+		add_character_modifier = { modifier = publicly_humiliated months = 36 }
+
+		event_target:target_saved_voter = {
+			opinion = { modifier = opinion_dislike who = ROOT years = 15 }
+			character_event = { id = favour.62 days = 1 }
+		}
+	}
+}
+
+# favour.61 Thanks for the save
+# The helper gains a favour.
+# Scope: ROOT is the helper, FROM the clumsy voter.
+character_event = {
+	id = favour.61
+	desc = EVTDESCfavour61
+	picture = GFX_evt_council_agreement
+
+	is_triggered_only = yes
+
+	# Accept save of face
+	option = {
+		name = EVTOPTAfavour61
+
+		tooltip = { FROM = { prestige = 150 add_favor = ROOT } }
+	}
+}
+
+# favour.62 Ingratitude
+# The helper is scorned.
+# Scope: ROOT is the helper, FROM the clumsy voter.
+character_event = {
+	id = favour.62
+	desc = EVTDESCfavour62
+	picture = GFX_evt_leaving_table_angrily
+
+	is_triggered_only = yes
+
+	# Decline save of face
+	option = {
+		name = EVTOPTAfavour62
+
+		prestige = 50
+
+		tooltip = { FROM = { prestige = -150 } }
+	}
+}
+
+# favour.70 Pious counsel
+# Yearly pulse. A pious voter offers to steer an impious one back to the
+# scriptures, for a favour.
+# Scope: ROOT is the impious voter, target_pious_voter the pious one.
+character_event = {
+	id = favour.70
+	desc = EVTDESCfavour70
+	picture = GFX_evt_council_agreement
+
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	only_playable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_voter = yes
+		NOR = {
+			piety = 200
+			trait = zealous
+			trait = humble
+			trait = erudite
+			trait = theologian
+			trait = faqih
+			trait = hafiz
+			is_inaccessible_trigger = yes
+		}
+
+		liege = {
+			any_realm_character = {
+				same_liege = ROOT
+				religion = ROOT
+				OR = {
+					AND = {
+						is_theocracy = yes
+						piety = 0
+						NOR = { trait = bad_priest trait = cynical }
+					}
+					AND = {
+						piety = 200
+						NOT = { trait = cynical }
+						OR = {
+							trait = zealous
+							trait = humble
+							trait = erudite
+							trait = theologian
+							trait = faqih
+							trait = hafiz
+						}
+					}
+				}
+				NOR = {
+					character = ROOT
+					owes_favor_to = ROOT
+					trait = incapable
+					is_inaccessible_trigger = yes
+					is_rival = ROOT
+				}
+				is_voter = yes
+				prisoner = no
+			}
+		}
+	}
+
+	immediate = {
+		liege = {
+			random_realm_character = {
+				limit = {
+					same_liege = ROOT
+					religion = ROOT
+					OR = {
+						AND = {
+							is_theocracy = yes
+							piety = 0
+							NOR = { trait = bad_priest trait = cynical }
+						}
+						AND = {
+							piety = 200
+							NOT = { trait = cynical }
+							OR = {
+								trait = zealous
+								trait = humble
+								trait = erudite
+								trait = theologian
+								trait = faqih
+								trait = hafiz
+							}
+						}
+					}
+					NOR = {
+						character = ROOT
+						owes_favor_to = ROOT
+						trait = incapable
+						is_inaccessible_trigger = yes
+						is_rival = ROOT
+					}
+					is_voter = yes
+					prisoner = no
+				}
+				save_event_target_as = target_pious_voter
+			}
+		}
+	}
+
+	# Accept
+	option = {
+		name = EVTOPTAfavour70
+
+		ai_chance = { factor = 70 modifier = { factor = 0.5 trait = proud } }
+
+		piety = 100
+		add_character_modifier = { name = the_pious years = 3 }
+		event_target:target_pious_voter = {
+			add_favor = ROOT
+			character_event = { id = favour.71 days = 1 }
+		}
+	}
+
+	# Deny
+	option = {
+		name = EVTOPTBfavour70
+
+		ai_chance = { factor = 30 }
+
+		piety = -50
+
+		event_target:target_pious_voter = {
+			opinion = { modifier = opinion_dislike who = ROOT years = 15 }
+			character_event = { id = favour.72 days = 1 }
+		}
+	}
+}
+
+# favour.71 Counsel accepted
+# The pious voter gains a favour.
+# Scope: ROOT is the pious voter, FROM the impious one.
+character_event = {
+	id = favour.71
+	desc = EVTDESCfavour71
+	picture = GFX_evt_council_agreement
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAfavour71
+
+		piety = 100
+
+		tooltip = { add_favor = FROM }
+	}
+}
+
+# favour.72 Counsel refused
+# The pious voter is refused.
+# Scope: ROOT is the pious voter, FROM the impious one.
+character_event = {
+	id = favour.72
+	desc = EVTDESCfavour72
+	picture = GFX_evt_leaving_table_angrily
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAfavour72
+
+		piety = 50
+
+		tooltip = { FROM = { piety = -50 } }
+	}
+}
+
+###############################################################################
+# Letters between councillors
+###############################################################################
+
+# favour.80 A foreign master
+# Yearly pulse in peacetime. A weak councillor hears of a skilled foreign
+# councillor in the same job and may write asking for advice.
+# Scope: ROOT is the weak councillor, target_foreign_voter the foreign one.
+character_event = {
+	id = favour.80
+	desc = EVTDESCfavour80
+	picture = GFX_evt_council_quarrelling
+
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = no
+
+	only_playable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_voter = yes
+		liege = { war = no }
+		NOR = {
+			is_inaccessible_trigger = yes
+			trait = slothful
+			has_character_flag = asked_for_job_advice
+		}
+		OR = {
+			AND = { NOT = { diplomacy = 10 } has_job_title = job_chancellor }
+			AND = { NOT = { stewardship = 10 } has_job_title = job_treasurer }
+			AND = { NOT = { intrigue = 10 } has_job_title = job_spymaster }
+			AND = { NOT = { learning = 10 } has_job_title = job_spiritual }
+			AND = { NOT = { martial = 10 } has_job_title = job_marshal }
+		}
+
+		top_liege = {
+			any_realm_province = {
+				any_neighbor_province = {
+					holder_scope = {
+						top_liege = {
+							any_courtier = {
+								NOR = {
+									holds_favor_on = ROOT
+									trait = incapable
+									is_inaccessible_trigger = yes
+									is_rival = ROOT
+									same_realm = ROOT
+								}
+								OR = {
+									AND = {
+										diplomacy = 10
+										has_job_title = job_chancellor
+										ROOT = { has_job_title = job_chancellor }
+									}
+									AND = {
+										stewardship = 10
+										has_job_title = job_treasurer
+										ROOT = { has_job_title = job_treasurer }
+									}
+									AND = {
+										intrigue = 10
+										has_job_title = job_spymaster
+										ROOT = { has_job_title = job_spymaster }
+									}
+									AND = {
+										learning = 10
+										has_job_title = job_spiritual
+										ROOT = { has_job_title = job_spiritual }
+									}
+									AND = {
+										martial = 10
+										has_job_title = job_marshal
+										ROOT = { has_job_title = job_marshal }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		top_liege = {
+			any_realm_province = {
+				any_neighbor_province = {
+					holder_scope = {
+						top_liege = {
+							any_courtier = {
+								limit = {
+									NOR = {
+										holds_favor_on = ROOT
+										trait = incapable
+										is_inaccessible_trigger = yes
+										is_rival = ROOT
+										same_realm = ROOT
+									}
+									OR = {
+										AND = {
+											diplomacy = 10
+											has_job_title = job_chancellor
+											ROOT = { has_job_title = job_chancellor }
+										}
+										AND = {
+											stewardship = 10
+											has_job_title = job_treasurer
+											ROOT = { has_job_title = job_treasurer }
+										}
+										AND = {
+											intrigue = 10
+											has_job_title = job_spymaster
+											ROOT = { has_job_title = job_spymaster }
+										}
+										AND = {
+											learning = 10
+											has_job_title = job_spiritual
+											ROOT = { has_job_title = job_spiritual }
+										}
+										AND = {
+											martial = 10
+											has_job_title = job_marshal
+											ROOT = { has_job_title = job_marshal }
+										}
+									}
+								}
+								save_event_target_as = target_foreign_voter
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	# I should approach the voter
+	option = {
+		name = EVTOPTAfavour80
+
+		ai_chance = { factor = 90 modifier = { factor = 0.5 trait = proud } }
+
+		event_target:target_foreign_voter = { letter_event = { id = favour.81 } }
+	}
+
+	# Lets not
+	option = {
+		name = EVTOPTBfavour80
+
+		ai_chance = { factor = 10 }
+
+		prestige = -10
+	}
+}
+
+# favour.81 A letter asking advice
+# The foreign councillor helps or refuses.
+# Scope: ROOT is the foreign councillor, FROM the asker.
+letter_event = {
+	id = favour.81
+	desc = EVTDESCfavour81
+
+	is_triggered_only = yes
+
+	# Agree
+	option = {
+		name = EVTOPTAfavour81
+
+		ai_chance = {
+			factor = 50
+
+			modifier = { factor = 2 trait = charitable }
+
+			modifier = { factor = 2 trait = kind }
+
+			modifier = { factor = 2 opinion = { who = FROM value = 25 } }
+		}
+
+		FROM = { letter_event = { id = favour.82 days = 5 } }
+	}
+
+	# Deny
+	option = {
+		name = EVTOPTBfavour81
+
+		ai_chance = {
+			factor = 50
+
+			modifier = { factor = 3 trait = paranoid }
+
+			modifier = { factor = 0 is_friend = FROM }
+		}
+
+		FROM = { letter_event = { id = favour.83 days = 5 } }
+	}
+}
+
+# favour.82 Advice given
+# The foreign councillor sends advice and a treatise. The asker raises the
+# skill and owes a favour.
+# Scope: ROOT is the asker, FROM the foreign councillor.
+letter_event = {
+	id = favour.82
+	desc = EVTDESCfavour82
+
+	is_triggered_only = yes
+
+	# Fantastic!
+	option = {
+		name = EVTOPTAfavour82
+
+		set_character_flag = asked_for_job_advice
+
+		reverse_add_favor = FROM
+		if = { limit = { NOT = { is_friend = FROM } } add_friend = FROM }
+
+		if = { limit = { has_job_title = job_chancellor } change_diplomacy = 2 }
+		if = { limit = { has_job_title = job_treasurer } change_stewardship = 2 }
+		if = { limit = { has_job_title = job_spymaster } change_intrigue = 2 }
+		if = { limit = { has_job_title = job_spiritual } change_learning = 2 }
+		if = { limit = { has_job_title = job_marshal } change_martial = 2 }
+
+		FROM = { letter_event = { id = favour.84 } }
+	}
+}
+
+# favour.83 Advice refused
+# An insulting refusal. Apologise, insult back or offer gold.
+# Scope: ROOT is the asker, FROM the foreign councillor.
+letter_event = {
+	id = favour.83
+	desc = EVTDESCfavour83
+
+	is_triggered_only = yes
+
+	# Disappointed!
+	option = {
+		name = EVTOPTAfavour83
+
+		ai_chance = { factor = 20 modifier = { factor = 2 trait = humble } }
+
+		prestige = -50
+
+		FROM = { letter_event = { id = favour.85 } }
+	}
+
+	# You dare to deny me help?
+	option = {
+		name = EVTOPTBfavour83
+		tooltip_info = wroth
+
+		ai_chance = { factor = 60 }
+
+		trigger = { trait = wroth }
+
+		prestige = -25
+		add_rival = FROM
+
+		FROM = { letter_event = { id = favour.86 } }
+	}
+
+	# Perhaps some money will help?
+	option = {
+		name = EVTOPTCfavour83
+
+		ai_chance = {
+			factor = 20
+
+			modifier = { factor = 2 trait = ambitious }
+
+			modifier = { factor = 2 trait = stubborn }
+		}
+
+		trigger = { wealth = 100 }
+
+		wealth = -100
+
+		FROM = { letter_event = { id = favour.87 days = 5 } }
+	}
+}
+
+# favour.84 Gratitude
+# The asker thanks the foreign councillor.
+# Scope: ROOT is the foreign councillor, FROM the asker.
+letter_event = {
+	id = favour.84
+	desc = EVTDESCfavour84
+
+	is_triggered_only = yes
+
+	# Lovely!
+	option = {
+		name = EVTOPTAfavour84
+
+		tooltip = { add_favor = FROM add_friend = FROM }
+		custom_tooltip = { text = stats_increased_tooltip }
+	}
+}
+
+# favour.85 An apology
+# The asker apologises.
+# Scope: ROOT is the foreign councillor, FROM the asker.
+letter_event = {
+	id = favour.85
+	desc = EVTDESCfavour85
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAfavour85
+
+		tooltip = { FROM = { prestige = -25 } }
+	}
+}
+
+# favour.86 Insult for insult
+# The asker swears to remember the slight.
+# Scope: ROOT is the foreign councillor, FROM the asker.
+letter_event = {
+	id = favour.86
+	desc = EVTDESCfavour86
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAfavour86
+
+		tooltip = { FROM = { prestige = -25 } add_rival = FROM }
+	}
+}
+
+# favour.87 A bribe
+# The asker offers gold for the advice.
+# Scope: ROOT is the foreign councillor, FROM the asker.
+letter_event = {
+	id = favour.87
+	desc = EVTDESCfavour87
+
+	is_triggered_only = yes
+
+	# When you put it like that!
+	option = {
+		name = EVTOPTAfavour87
+
+		ai_chance = {
+			factor = 70
+
+			modifier = { factor = 5 trait = greedy }
+
+			modifier = { factor = 5 NOT = { wealth = 100 } }
+		}
+
+		wealth = 100
+		tooltip = { FROM = { wealth = -100 } add_favor = FROM }
+		custom_tooltip = { text = stats_increased_tooltip }
+
+		FROM = { letter_event = { id = favour.88 } }
+	}
+
+	# Still no.
+	option = {
+		name = EVTOPTBfavour87
+
+		ai_chance = { factor = 30 modifier = { factor = 2 trait = stubborn } }
+
+		FROM = { letter_event = { id = favour.89 } }
+	}
+}
+
+# favour.88 Bought advice
+# The gold worked and the treatise arrives.
+# Scope: ROOT is the asker, FROM the foreign councillor.
+letter_event = {
+	id = favour.88
+	desc = EVTDESCfavour88
+
+	is_triggered_only = yes
+
+	# Fantastic!
+	option = {
+		name = EVTOPTAfavour88
+
+		set_character_flag = asked_for_job_advice
+
+		reverse_add_favor = FROM
+
+		if = { limit = { has_job_title = job_chancellor } change_diplomacy = 2 }
+		if = { limit = { has_job_title = job_treasurer } change_stewardship = 2 }
+		if = { limit = { has_job_title = job_spymaster } change_intrigue = 2 }
+		if = { limit = { has_job_title = job_spiritual } change_learning = 2 }
+		if = { limit = { has_job_title = job_marshal } change_martial = 2 }
+	}
+}
+
+# favour.89 Not for sale
+# The gold is sent back.
+# Scope: ROOT is the asker, FROM the foreign councillor.
+letter_event = {
+	id = favour.89
+	desc = EVTDESCfavour89
+
+	is_triggered_only = yes
+
+	# Disappointed!
+	option = {
+		name = EVTOPTAfavour89
+
+		wealth = 100
+		prestige = -50
+	}
+}
+
+###############################################################################
+# Gifts of land and training
+###############################################################################
+
+# favour.90 Land for a friend
+# Hidden, yearly pulse. A ruler with a spare county has a landless friend
+# and the chain begins.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = favour.90
+
+	hide_window = yes
+
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = no
+
+	only_playable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_nomadic = no
+		NOT = { is_inaccessible_trigger = yes }
+		higher_tier_than = COUNT
+
+		any_demesne_title = {
+			tier = COUNT
+			can_be_given_away = yes
+			is_feudal = yes
+			NOT = { location = { is_capital = yes } }
+		}
+
+		any_friend = {
+			NOR = {
+				is_inaccessible_trigger = yes
+				trait = eunuch
+				trait = celibate
+				is_ascetic_trigger = yes
+				owes_favor_to = ROOT
+				trait = incapable
+				any_heir_title = { always = yes }
+				liege = { character = ROOT }
+				is_close_relative = ROOT
+			}
+			OR = {
+				is_female = no
+				AND = {
+					is_female = yes
+					ROOT = {
+						OR = {
+							religion = amazon
+							religion = shallyan
+							primary_title = { has_law = status_of_women_4 }
+						}
+					}
+				}
+			}
+			prisoner = no
+			is_ruler = no
+			is_adult = yes
+		}
+	}
+
+	immediate = {
+		any_friend = {
+			limit = {
+				NOR = {
+					is_inaccessible_trigger = yes
+					trait = eunuch
+					trait = celibate
+					is_ascetic_trigger = yes
+					owes_favor_to = ROOT
+					trait = incapable
+					any_heir_title = { always = yes }
+					liege = { character = ROOT }
+					is_close_relative = ROOT
+				}
+				OR = {
+					is_female = no
+					AND = {
+						is_female = yes
+						ROOT = {
+							OR = {
+								religion = amazon
+								religion = shallyan
+								primary_title = { has_law = status_of_women_4 }
+							}
+						}
+					}
+				}
+				prisoner = no
+				is_ruler = no
+				is_adult = yes
+			}
+			save_event_target_as = target_unlanded_friend
+		}
+		random_demesne_title = {
+			limit = {
+				tier = COUNT
+				can_be_given_away = yes
+				is_feudal = yes
+				NOT = { location = { is_capital = yes } }
+			}
+			save_event_target_as = target_friend_land
+		}
+		event_target:target_unlanded_friend = { character_event = { id = favour.91 } }
+	}
+}
+
+# favour.91 Land for a friend
+# Hidden relay that picks the friend and sends the offer.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = favour.91
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { character_event = { id = favour.92 } }
+	}
+}
+
+# favour.92 Land for a friend
+# Grant the friend a county and gain a favour, or let them stay landless.
+# Scope: ROOT is the ruler, target_unlanded_friend the friend.
+character_event = {
+	id = favour.92
+	desc = EVTDESCfavour92
+	picture = GFX_evt_council_agreement
+
+	is_triggered_only = yes
+
+	# Give friend land
+	option = {
+		name = EVTOPTAfavour92
+
+		ai_chance = {
+			factor = 50
+
+			modifier = { factor = 0.5 trait = greedy }
+
+			modifier = { factor = 0.5 trait = paranoid }
+
+			modifier = { factor = 2 trait = charitable }
+
+			modifier = { factor = 2 trait = kind }
+		}
+
+		event_target:target_unlanded_friend = {
+			opinion = { modifier = opinion_loyal_servant who = ROOT months = 1200 }
+			reverse_add_favor = ROOT
+			hidden_tooltip = {
+				if = {
+					limit = { religion_group = ormazd_gods_group }
+					set_government_type = muslim_government
+				}
+				else = { set_government_type = feudal_government }
+			}
+			grant_title = event_target:target_friend_land
+		}
+		custom_tooltip = {
+			text = indebted_to_family_tooltip
+			hidden_tooltip = {
+				any_dynasty_member = {
+					event_target:target_unlanded_friend = {
+						opinion = { who = PREV modifier = opinion_loyal_servant months = 1200 }
+					}
+				}
+			}
+		}
+		If = { limit = { NOT = { trait = charitable } } add_trait = charitable }
+	}
+
+	# Deny friend land
+	option = {
+		name = EVTOPTBfavour92
+
+		ai_chance = { factor = 50 }
+	}
+}
+
+# favour.95 Train the commanders
+# Yearly pulse. A skilled vassal tactician offers to train the liege's
+# weaker commanders.
+# Scope: ROOT is the vassal.
+character_event = {
+	id = favour.95
+	desc = EVTDESCfavour95
+	picture = GFX_evt_war_planning
+
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = no
+
+	only_playable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		martial = 12
+		independent = no
+		NOR = {
+			is_inaccessible_trigger = yes
+			trait = slothful
+			trait = shy
+			liege = { is_rival = ROOT }
+			holds_favor_on = LIEGE
+		}
+		# Only traits favour.96 knows how to teach
+		OR = {
+			trait = light_foot_leader
+			trait = heavy_infantry_leader
+			trait = cavalry_leader
+			trait = inspiring_leader
+			trait = trickster
+			trait = organizer
+			trait = defensive_leader
+			trait = experimenter
+			trait = flanker
+			trait = aggressive_leader
+			trait = siege_leader
+			trait = flat_terrain_leader
+			trait = rough_terrain_leader
+			trait = mountain_terrain_leader
+			trait = desert_terrain_leader
+			trait = unyielding_leader
+			trait = narrow_flank_leader
+			trait = war_elephant_leader
+			trait = jungle_terrain_leader
+			trait = winter_soldier
+		}
+
+		liege = {
+			prisoner = no
+			NOR = { trait = incapable is_inaccessible_trigger = yes }
+			any_realm_character = {
+				count = 3
+				can_have_more_leadership_traits = yes
+				martial = 6
+				same_liege = ROOT
+				has_minor_title = title_commander
+				ai = yes
+				NOT = { has_any_leadership_trait_trigger = yes }
+			}
+		}
+	}
+
+	immediate = {
+		liege = { save_event_target_as = letter_event_portrait }
+		liege = {
+			any_realm_character = {
+				limit = {
+					martial = 6
+					same_liege = ROOT
+					has_minor_title = title_commander
+					ai = yes
+					can_have_more_leadership_traits = yes
+					NOR = {
+						character = event_target:commander_two
+						character = event_target:commander_three
+					}
+					NOT = { has_any_leadership_trait_trigger = yes }
+				}
+				save_event_target_as = commander_one
+			}
+			any_realm_character = {
+				limit = {
+					martial = 6
+					same_liege = ROOT
+					has_minor_title = title_commander
+					ai = yes
+					can_have_more_leadership_traits = yes
+					NOR = {
+						character = event_target:commander_one
+						character = event_target:commander_three
+					}
+					NOT = { has_any_leadership_trait_trigger = yes }
+				}
+				save_event_target_as = commander_two
+			}
+			any_realm_character = {
+				limit = {
+					martial = 6
+					same_liege = ROOT
+					has_minor_title = title_commander
+					ai = yes
+					can_have_more_leadership_traits = yes
+					NOR = {
+						character = event_target:commander_two
+						character = event_target:commander_one
+					}
+					NOT = { has_any_leadership_trait_trigger = yes }
+				}
+				save_event_target_as = commander_three
+			}
+		}
+	}
+
+	# Offer to train
+	option = {
+		name = EVTOPTAfavour95
+
+		ai_chance = { factor = 90 }
+
+		liege = { letter_event = { id = favour.96 } }
+	}
+
+	# Rather not bother with it
+	option = {
+		name = EVTOPTBfavour95
+
+		ai_chance = { factor = 10 }
+	}
+}
+
+# favour.96 An offer to train
+# The liege accepts (commanders learn the vassal's leadership trait, the
+# vassal gains a favour) or refuses.
+# Scope: ROOT is the liege, FROM the vassal.
+letter_event = {
+	id = favour.96
+	desc = EVTDESCfavour96
+
+	border = GFX_event_letter_frame_war
+
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	only_playable = yes
+
+	is_triggered_only = yes
+
+	# Accept offer
+	option = {
+		name = EVTOPTAfavour96
+
+		ai_chance = {
+			factor = 90
+
+			modifier = { factor = 0.5 trait = paranoid }
+			modifier = { factor = 0.5 trait = proud }
+		}
+
+		hidden_tooltip = { FROM = { letter_event = { id = favour.97 days = 7 } } }
+		tooltip = { FROM = { add_favor = ROOT } }
+
+		if = {
+			limit = { FROM = { trait = siege_leader } }
+			event_target:commander_one = { add_trait = siege_leader }
+			event_target:commander_two = { add_trait = siege_leader }
+			event_target:commander_three = { add_trait = siege_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = flat_terrain_leader } }
+			event_target:commander_one = { add_trait = flat_terrain_leader }
+			event_target:commander_two = { add_trait = flat_terrain_leader }
+			event_target:commander_three = { add_trait = flat_terrain_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = rough_terrain_leader } }
+			event_target:commander_one = { add_trait = rough_terrain_leader }
+			event_target:commander_two = { add_trait = rough_terrain_leader }
+			event_target:commander_three = { add_trait = rough_terrain_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = mountain_terrain_leader } }
+			event_target:commander_one = { add_trait = mountain_terrain_leader }
+			event_target:commander_two = { add_trait = mountain_terrain_leader }
+			event_target:commander_three = { add_trait = mountain_terrain_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = desert_terrain_leader } }
+			event_target:commander_one = { add_trait = desert_terrain_leader }
+			event_target:commander_two = { add_trait = desert_terrain_leader }
+			event_target:commander_three = { add_trait = desert_terrain_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = jungle_terrain_leader } }
+			event_target:commander_one = { add_trait = jungle_terrain_leader }
+			event_target:commander_two = { add_trait = jungle_terrain_leader }
+			event_target:commander_three = { add_trait = jungle_terrain_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = winter_soldier } }
+			event_target:commander_one = { add_trait = winter_soldier }
+			event_target:commander_two = { add_trait = winter_soldier }
+			event_target:commander_three = { add_trait = winter_soldier }
+		}
+		else_if = {
+			limit = { FROM = { trait = organizer } }
+			event_target:commander_one = { add_trait = organizer }
+			event_target:commander_two = { add_trait = organizer }
+			event_target:commander_three = { add_trait = organizer }
+		}
+		else_if = {
+			limit = { FROM = { trait = light_foot_leader } }
+			event_target:commander_one = { add_trait = light_foot_leader }
+			event_target:commander_two = { add_trait = light_foot_leader }
+			event_target:commander_three = { add_trait = light_foot_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = heavy_infantry_leader } }
+			event_target:commander_one = { add_trait = heavy_infantry_leader }
+			event_target:commander_two = { add_trait = heavy_infantry_leader }
+			event_target:commander_three = { add_trait = heavy_infantry_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = cavalry_leader } }
+			event_target:commander_one = { add_trait = cavalry_leader }
+			event_target:commander_two = { add_trait = cavalry_leader }
+			event_target:commander_three = { add_trait = cavalry_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = inspiring_leader } }
+			event_target:commander_one = { add_trait = inspiring_leader }
+			event_target:commander_two = { add_trait = inspiring_leader }
+			event_target:commander_three = { add_trait = inspiring_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = defensive_leader } }
+			event_target:commander_one = { add_trait = defensive_leader }
+			event_target:commander_two = { add_trait = defensive_leader }
+			event_target:commander_three = { add_trait = defensive_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = experimenter } }
+			event_target:commander_one = { add_trait = experimenter }
+			event_target:commander_two = { add_trait = experimenter }
+			event_target:commander_three = { add_trait = experimenter }
+		}
+		else_if = {
+			limit = { FROM = { trait = flanker } }
+			event_target:commander_one = { add_trait = flanker }
+			event_target:commander_two = { add_trait = flanker }
+			event_target:commander_three = { add_trait = flanker }
+		}
+		else_if = {
+			limit = { FROM = { trait = aggressive_leader } }
+			event_target:commander_one = { add_trait = aggressive_leader }
+			event_target:commander_two = { add_trait = aggressive_leader }
+			event_target:commander_three = { add_trait = aggressive_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = unyielding_leader } }
+			event_target:commander_one = { add_trait = unyielding_leader }
+			event_target:commander_two = { add_trait = unyielding_leader }
+			event_target:commander_three = { add_trait = unyielding_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = narrow_flank_leader } }
+			event_target:commander_one = { add_trait = narrow_flank_leader }
+			event_target:commander_two = { add_trait = narrow_flank_leader }
+			event_target:commander_three = { add_trait = narrow_flank_leader }
+		}
+		else_if = {
+			limit = { FROM = { trait = trickster } }
+			event_target:commander_one = { add_trait = trickster }
+			event_target:commander_two = { add_trait = trickster }
+			event_target:commander_three = { add_trait = trickster }
+		}
+		else_if = {
+			limit = { FROM = { trait = war_elephant_leader } }
+			event_target:commander_one = { add_trait = war_elephant_leader }
+			event_target:commander_two = { add_trait = war_elephant_leader }
+			event_target:commander_three = { add_trait = war_elephant_leader }
+		}
+	}
+
+	# An insult!
+	option = {
+		name = EVTOPTBfavour96
+
+		ai_chance = { factor = 10 }
+
+		opinion = { modifier = insulted who = FROM years = 5 }
+
+		FROM = { letter_event = { id = favour.98 days = 7 } }
+	}
+}
+
+# favour.97 Offer accepted
+# The vassal now holds a favour on the liege.
+# Scope: ROOT is the vassal, FROM the liege.
+letter_event = {
+	id = favour.97
+	desc = EVTDESCfavour97
+
+	is_triggered_only = yes
+
+	immediate = {
+		ROOT = { add_favor = FROM }
+	}
+
+	option = {
+		name = EVTOPTAfavour97
+		tooltip = { ROOT = { add_favor = FROM } }
+	}
+}
+
+# favour.98 Offer refused
+# The liege calls it deceit.
+# Scope: ROOT is the vassal, FROM the liege.
+letter_event = {
+	id = favour.98
+	desc = EVTDESCfavour98
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAfavour98
+
+		tooltip = { FROM = { opinion = { modifier = insulted who = FROM years = 5 } } }
 	}
 }

@@ -1,0 +1,4287 @@
+###############################################################################
+# Duels
+# Namespace: duel (was HFP.10095 - HFP.10197, HF.10095 - HF.10107 and
+#   HF.16000 - HF.16002 in hfp_duel_events.txt)
+# Faction: Generic
+# Serves: every duelling race; the warrior societies, greenskin head-bashing,
+#   Khornates and Bretonnian knights have their own rules
+#
+# The Holy Fury duel engine. A challenge (duel.1, or duel.40 for a duel over
+# claims) is accepted, fought dirty or refused; the fight itself is scored by
+# the effects in 01_scripted_effects_duels.txt (from duel.10), which send one
+# of the outcomes below. The scars of a duel may turn into rivalry, friendship
+# or love. A craven lord who keeps refusing shames his vassals.
+#
+# The challenge                    duel.1 - duel.6
+# The fight                        duel.10
+# Death                            duel.11 - duel.14
+# Wounds and flight                duel.20 - duel.26
+# After the fight                  duel.30 - duel.39
+# Claim duels                      duel.40 - duel.45
+# The craven liege                 duel.50 - duel.52
+# Housekeeping                     duel.90
+#
+# Callers: duel.1 from the duel decisions (decisions/hf_warrior_lodge_,
+#   wh_greenskin_decisions) and many events and effects; duel.10 from the
+#   society, monster-hunt and battle duels; the outcomes from
+#   send_duel_result_event_effect; duel.40 from the claim duel decision.
+# Saved: event targets combatant_1, combatant_2, other_combatant; flags
+#   mock_duel, deadly_duel@, claim_duel@, punish_declining, took_duel_trophy
+#   (once per lifetime); modifiers recent_duel_timer,
+#   declined_prestige_duel_timer, has_recently_declined_duel_cooldown.
+###############################################################################
+
+namespace = duel
+
+# duel.1 A challenge
+# The target of a duel hears the challenge: an ordinary duel, a society
+# sparring bout, a deadly society duel, a regent's rival or a greenskin
+# head-bashing. He may accept, fight dirty (intrigue 12) or refuse. Refusing
+# when it counts costs prestige and may make him craven, and a lord of Khorne
+# loses piety for it. Warrior priests of Sigmar, Ulric, Myrmidia and Solkan
+# accept gladly; only priests of Shallya and Morr never fight. Khornates and
+# Bretonnian knights almost never refuse.
+# Scope: ROOT is the challenged (combatant_2), combatant_1 the challenger.
+#   Fired from the duel decisions and most duel callers in the mod.
+character_event = {
+	id = duel.1
+	border = GFX_event_normal_frame_war
+
+	picture = {
+		picture = GFX_evt_armory
+		trigger = {
+			NOR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+	}
+	picture = {
+		picture = GFX_evt_orcthrone
+		trigger = {
+			OR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { has_character_flag = greenskin_bash_head_duel } #set in Greenskin Decisions
+		}
+		text = EVTDESCduel1_bash_duel
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = {
+				NOR = {
+					has_character_flag = mock_duel
+					has_character_flag = greenskin_bash_head_duel
+					has_character_flag = deadly_duel@ROOT
+					has_character_flag = flag_courtier_challenging_regent
+				}
+			}
+		}
+		text = EVTDESCduel1_default
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { has_character_flag = mock_duel } #set in lodge.5
+		}
+		text = EVTDESCduel1_mock_duel
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { has_character_flag = deadly_duel@ROOT } #set in lodge.226
+		}
+		text = EVTDESCduel1_deadly_duel
+	}
+	desc = {
+		trigger = {
+			event_target:combatant_1 = { has_character_flag = flag_courtier_challenging_regent } #set in regency_events
+		}
+		text = EVTDESCduel1_courtier_regent_duel
+	}
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { event_target:combatant_1 = { has_character_flag = mock_duel } }
+			set_character_flag = mock_duel #makes sure outcome results works correctly for both parties...
+		}
+		if = {
+			limit = {
+				AND = {
+					NOT = { has_character_modifier = declined_prestige_duel_timer }
+					NOT = {
+						AND = {
+							is_female = no
+							event_target:combatant_1 = { is_female = yes }
+							top_liege = { is_nomadic = no }
+						}
+					}
+				}
+			}
+			add_character_modifier = {
+				modifier = declined_prestige_duel_timer
+				duration = 1095
+				hidden = yes
+			}
+			set_character_flag = punish_declining
+		}
+		if = {
+			limit = { NOT = { has_character_modifier = recent_duel_timer } }
+			add_character_modifier = { modifier = recent_duel_timer hidden = yes months = 3 }
+		}
+		event_target:combatant_1 = { #combatant_1/attacker
+			if = {
+				limit = { NOT = { has_character_modifier = recent_duel_timer } }
+				#special circumstances, like initiation duel, etc
+				add_character_modifier = { #OUTCOMMENT FOR TESTING PURPOSES
+					modifier = recent_duel_timer
+					hidden = yes
+					months = 3
+				}
+			}
+		}
+
+		if = { #If the challenger did this for a mission...
+			limit = {
+				event_target:combatant_1 = {
+					OR = {
+						has_quest = quest_warband_duel_honor
+						has_quest = quest_chaos_cult_duel_honor
+					}
+					quest_target = { character = event_target:combatant_2 }
+				}
+			}
+			event_target:combatant_1 = { set_character_flag = mock_duel }
+			set_character_flag = mock_duel #makes sure outcome results works correctly for both parties...
+		}
+	}
+
+	option = { #Challenge accepted
+		name = EVTOPTAduel1
+		clr_character_flag = flag_duel_no_backsies
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 0.05 trait = craven }
+			modifier = { factor = 0.3 religion = shallyan }
+			modifier = {
+				is_priest = yes
+				OR = { religion = shallyan religion = morrian }
+				factor = 0
+			}
+			modifier = {
+				is_priest = yes
+				OR = {
+					religion = sigmarite
+					religion = ulrican
+					religion = myrmidian
+					religion = solkanite
+				}
+				factor = 1.5
+			}
+			modifier = { religion = khorne factor = 3 }
+			modifier = {
+				OR = {
+					trait = bretonnian_knight
+					trait = bretonnian_knight_errant
+					trait = questing
+					trait = grail_knight
+				}
+				factor = 2
+			}
+			modifier = {
+				is_female = no
+				event_target:combatant_1 = { is_female = yes }
+				top_liege = { is_nomadic = no }
+				factor = 0.025
+			}
+		}
+		if = { limit = { trait = craven } random = { chance = 20 remove_trait = craven } }
+		pacifists_lose_piety_effect = yes
+		if = { #If they previously offended you, this rectifies that.
+			limit = {
+				event_target:combatant_1 = {
+					has_opinion_modifier = { who = ROOT modifier = grievously_offended }
+				}
+			}
+			event_target:combatant_1 = {
+				remove_opinion = { who = ROOT modifier = grievously_offended }
+			}
+		}
+		if = {
+			limit = { #Warriors like a warrior who acts like one...
+				OR = {
+					is_member_of_any_warband_trigger = yes
+					is_member_of_any_warrior_lodge_trigger = yes
+				}
+			}
+			add_legend_progress_trivial_effect = yes
+		}
+		event_target:combatant_1 = { character_event = { id = duel.2 days = 3 } }
+		set_character_flag = add_duel_xp
+		clr_character_flag = punish_declining
+	}
+
+	option = { # [INTRIGUE OPTION]
+		name = {
+			text = EVTOPTduel_intrigue #I will do something.... special.
+		}
+		tooltip_info = intrigue
+
+		custom_tooltip = { text = EVTOPTduel_intrigue_TT } #you will use any means necessary...
+
+		set_character_flag = defender_using_poison@event_target:combatant_1
+
+		if = { limit = { trait = honest } remove_trait = honest }
+		else_if = { limit = { NOT = { trait = deceitful } } add_trait = deceitful }
+		else_if = { limit = { trait = brave } remove_trait = brave }
+		else_if = { limit = { NOT = { trait = craven } } add_trait = craven }
+
+		if = { #There is a chance the poison fails...
+			limit = {
+				OR = {
+					event_target:combatant_1 = {
+						job_spymaster = {
+							opinion = { who = PREV value = 15 } #if they like their employer
+							intrigue = ROOT #and they can match your intrigue
+						}
+					}
+					event_target:combatant_1 = { intrigue = ROOT } #they alone can match your intrigue
+				}
+			}
+			set_character_flag = poison_can_fail_against@event_target:combatant_1
+		}
+
+		pacifists_lose_piety_effect = yes
+		if = { #If they previously offended you, this rectifies that.
+			limit = {
+				event_target:combatant_1 = {
+					has_opinion_modifier = { who = ROOT modifier = grievously_offended }
+				}
+			}
+			event_target:combatant_1 = {
+				remove_opinion = { who = ROOT modifier = grievously_offended }
+			}
+		}
+		event_target:combatant_1 = { character_event = { id = duel.2 days = 3 } }
+		set_character_flag = add_duel_xp
+		clr_character_flag = punish_declining
+
+		ai_chance = { factor = 20 dishonorable_ai_chance_increase_score = yes }
+
+		trigger = { intrigue = 12 NOT = { has_character_flag = mock_duel } has_dlc = "Holy Fury" }
+	}
+
+	option = { #No, that sounds dangerous
+		name = EVTOPTBduel1
+		ai_chance = {
+			factor = 10
+			modifier = { trait = craven factor = 1.5 }
+			modifier = {
+				is_priest = yes
+				NOR = {
+					religion = sigmarite
+					religion = ulrican
+					religion = myrmidian
+					religion = solkanite
+					religion = khorne
+				}
+				factor = 5
+			}
+			modifier = { religion = khorne factor = 0 }
+			modifier = {
+				OR = {
+					trait = bretonnian_knight
+					trait = bretonnian_knight_errant
+					trait = questing
+					trait = grail_knight
+				}
+				factor = 0.1
+			}
+			modifier = { event_target:combatant_1 = { has_character_flag = mock_duel } factor = 0 }
+			modifier = { trait = green_knight factor = 0 }
+			modifier = {
+				event_target:combatant_1 = {
+					OR = {
+						has_quest = quest_warband_duel_honor
+						has_quest = quest_warband_duel_deadly
+						has_quest = quest_chaos_cult_duel_honor
+						has_quest = quest_chaos_cult_duel_deadly
+					}
+					quest_target = { character = event_target:combatant_2 }
+				}
+				factor = 0
+			}
+		}
+		if = { #Khorne despises the lord who will not shed blood
+			limit = { religion = khorne }
+			piety = -50
+		}
+		if = {
+			limit = { has_character_flag = punish_declining }
+			if = {
+				limit = { NOR = { trait = craven trait = brave trait = berserker } }
+				random = {
+					chance = 30
+					add_trait = craven
+					hidden_tooltip = {
+						character_event = {
+							id = 38257 #Notify Craven
+						}
+					}
+				}
+			}
+			if = { limit = { trait = brave } remove_trait = brave }
+			prestige = -50
+			add_character_modifier = {
+				modifier = declined_prestige_duel_timer
+				hidden = yes
+				duration = 1095
+			}
+		}
+		hidden_tooltip = { remove_character_modifier = recent_duel_timer }
+		event_target:combatant_1 = { #the attacker/combatant_1
+			hidden_tooltip = {
+				remove_character_modifier = recent_duel_timer
+				if = {
+					limit = { NOT = { has_character_modifier = duels_declined } }
+					opinion = { modifier = opinion_fled_duel who = ROOT years = 100 }
+				}
+				else = {
+					opinion = {
+						modifier = opinion_declined_my_duel #For visuals
+						who = ROOT
+						years = 100
+					}
+				}
+				character_event = { id = duel.3 days = 3 } #Duel rejected...
+			}
+		}
+		increase_cowardly_status_effect = yes #tracks duel cowardice
+		clr_character_flag = punish_declining
+
+		if = { #For characters who were recruited by their parents...
+			limit = {
+				has_character_flag = is_being_recruited_to_warband_by_parent
+				event_target:recruiting_parent = { is_alive = yes }
+			}
+			custom_tooltip = { text = notify_parent_recruiter_tt } #Your parent will be notified.
+			set_character_flag = failed_initiation
+			set_character_flag = chickened_out
+			event_target:recruiting_parent = { character_event = { id = lodge.13 } }
+			clr_character_flag = society_join_block
+		}
+
+		trigger = {
+			NOT = { event_target:duel_target = { character = event_target:hero_character } } #if set-up failed spectacularly, and it's a case of MP, the player leader will be unable to turn down the duel just for the hell of it
+			NOT = { has_character_flag = flag_duel_no_backsies }
+		}
+	}
+}
+
+# duel.2 The challenge is accepted
+# The challenger learns the answer and may still fight dirty. If the target
+# died in the meantime he is told (duel.6); otherwise the fight is set up
+# (duel.10).
+# Scope: ROOT is the challenger, FROM the challenged. Fired by duel.1 and
+#   duel.4.
+character_event = {
+	id = duel.2
+	is_triggered_only = yes
+	border = GFX_event_normal_frame_war
+
+	picture = {
+		picture = GFX_evt_armory
+		trigger = {
+			NOR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+	}
+	picture = {
+		picture = GFX_evt_greenskinanimosity
+		trigger = {
+			OR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+			FROM = {
+				OR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+			}
+		}
+	}
+	picture = {
+		picture = GFX_evt_orcthrone
+		trigger = {
+			OR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+			FROM = {
+				NOR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+			}
+		}
+	}
+	desc = { trigger = { NOT = { has_character_flag = mock_duel } } text = EVTDESCduel2 }
+	desc = {
+		trigger = {
+			has_character_flag = mock_duel #Set in quest_warband_duel_honor mission hand-out
+			OR = { has_quest = quest_warband_duel_honor has_quest = quest_chaos_cult_duel_honor }
+			quest_target = { character = event_target:combatant_2 }
+		}
+		text = EVTDESCduel2
+	}
+	desc = {
+		trigger = {
+			has_character_flag = mock_duel #set in lodge.5
+			NOT = { any_spouse = { character = event_target:combatant_2 } }
+			NOT = { has_quest = quest_warband_duel_honor }
+			NOT = { has_quest = quest_chaos_cult_duel_honor }
+			NOT = { any_owned_bloodline = { has_bloodline_flag = bloodline_legendary_warrior } }
+		}
+		picture = GFX_evt_teaching_moment
+		text = EVTDESCduel2_mock_duel #Default initation-duel text
+	}
+	desc = {
+		trigger = {
+			has_character_flag = mock_duel #set in lodge.5
+			any_spouse = { character = event_target:combatant_2 }
+			NOT = { has_quest = quest_warband_duel_honor }
+			NOT = { has_quest = quest_chaos_cult_duel_honor }
+		}
+		picture = GFX_evt_teaching_moment
+		text = EVTDESCduel2_mock_duel_spouse #Initation duel against spouse
+	}
+	desc = {
+		trigger = {
+			has_character_flag = mock_duel #set in lodge.5
+			NOT = { any_spouse = { character = event_target:combatant_2 } }
+			NOT = { has_quest = quest_warband_duel_honor }
+			NOT = { has_quest = quest_chaos_cult_duel_honor }
+			any_owned_bloodline = { has_bloodline_flag = bloodline_legendary_warrior }
+		}
+		picture = GFX_evt_teaching_moment
+		text = EVTDESCduel2_bloodline #Initiation duel as special bloodline owner
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAduel2 #Let's fight!
+			trigger = {
+				NOT = { has_character_flag = mock_duel }
+				NOT = { has_character_flag = target_was_threatened }
+			}
+		}
+		name = {
+			text = EVTOPTAduel2_mock # A [GetDuelType], huh?
+			trigger = {
+				has_character_flag = mock_duel
+				NOT = { has_character_flag = target_was_threatened }
+			}
+		}
+		name = {
+			text = EVTOPTBduel2 # That's what I thought...
+			trigger = { has_character_flag = target_was_threatened }
+		}
+		if = {
+			limit = { has_character_flag = mock_duel }
+			custom_tooltip = { text = EVTOPTAduel2_TT } #the duel will take place within the next few days.
+		}
+
+		if = {
+			limit = { #Warriors like a warrior who acts like one...
+				OR = {
+					is_member_of_any_warband_trigger = yes
+					is_member_of_any_warrior_lodge_trigger = yes
+				}
+			}
+			add_legend_progress_trivial_effect = yes
+		}
+
+		#FALLBACK:
+		if = { #If FROM is no longer alive, clear relevant flags, etc...
+			limit = { FROM = { NOT = { is_alive = yes } } }
+			reset_martial_joining_chain_effect = yes
+			character_event = { id = duel.6 }
+		}
+		else = {
+			hidden_effect = {
+				set_character_flag = add_duel_xp
+				reset_duel_timers_effect = yes
+				character_event = { id = duel.10 } #Send hidden set-up of duel (from there: result)
+			}
+		}
+		ai_chance = { factor = 80 }
+	}
+
+	option = { # [INTRIGUE OPTION]
+		name = {
+			text = EVTOPTduel_intrigue #I will do something.... special.
+		}
+		tooltip_info = intrigue
+
+		custom_tooltip = { text = EVTOPTduel_intrigue_TT } #you will use any means necessary...
+
+		set_character_flag = attacker_using_poison@event_target:combatant_2
+
+		if = { limit = { trait = honest } remove_trait = honest }
+		else_if = { limit = { NOT = { trait = deceitful } } add_trait = deceitful }
+		else_if = { limit = { trait = brave } remove_trait = brave }
+		else_if = { limit = { NOT = { trait = craven } } add_trait = craven }
+
+		if = { #There is a chance the poison fails...
+			limit = {
+				OR = {
+					FROM = {
+						job_spymaster = {
+							opinion = { who = PREV value = 15 } #if they like their employer
+							intrigue = ROOT #and they can match your intrigue
+						}
+					}
+					FROM = { intrigue = ROOT } #they alone can match your intrigue
+				}
+			}
+			set_character_flag = poison_can_fail_against@event_target:combatant_2
+		}
+
+		#FALLBACK:
+		if = { #If FROM is no longer alive, clear relevant flags, etc...
+			limit = { FROM = { NOT = { is_alive = yes } } }
+			character_event = { id = duel.6 }
+		}
+		else = {
+			hidden_effect = {
+				set_character_flag = add_duel_xp
+				reset_duel_timers_effect = yes
+				character_event = { id = duel.10 } #Send hidden set-up of duel (from there: result)
+			}
+		}
+		ai_chance = { factor = 20 dishonorable_ai_chance_increase_score = yes }
+		trigger = { intrigue = 12 NOT = { has_character_flag = mock_duel } has_dlc = "Holy Fury" }
+	}
+}
+
+# duel.3 The challenge is refused
+# The challenger hears the refusal. A schemer (intrigue 15, the Elusive
+# Shadow or a schemer) may try to corner the coward; if it works he must
+# fight (duel.4), if not the schemer is caught (duel.5).
+# Scope: ROOT is the challenger, FROM the challenged. Fired by duel.1 and
+#   duel.40.
+character_event = {
+	id = duel.3
+	is_triggered_only = yes
+	desc = EVTDESCduel3
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+
+	immediate = {
+		# To block spamming the decision when rejected...
+		FROM = {
+			add_character_modifier = {
+				name = has_recently_declined_duel_cooldown
+				hidden = yes
+				months = 6
+			}
+		}
+		if = { #only if intrigue character...
+			limit = {
+				NOT = { has_character_flag = mock_duel }
+				OR = { intrigue = 15 trait = elusive_shadow trait = schemer }
+			}
+			random_list = {
+				20 = { #success
+					modifier = {
+						has_bottom_tier_education_trait_trigger = no
+						FROM = { has_bottom_tier_education_trait_trigger = yes }
+						factor = 2
+					}
+					modifier = {
+						trait = elusive_shadow
+						FROM = { NOT = { trait = elusive_shadow } }
+						factor = 2
+					}
+					modifier = { intrigue = 15 FROM = { NOT = { intrigue = 15 } } factor = 2 }
+					modifier = { trait = schemer FROM = { NOT = { trait = schemer } } factor = 2 }
+					modifier = { intrigue = FROM factor = 2 }
+					modifier = {
+						is_smart_trigger = yes
+						FROM = { is_smart_trigger = no }
+						factor = 2
+					}
+
+					set_character_flag = likely_to_succeed
+				}
+				10 = { #failure
+					modifier = {
+						has_bottom_tier_education_trait_trigger = yes
+						FROM = { has_bottom_tier_education_trait_trigger = no }
+						factor = 2
+					}
+					modifier = {
+						NOT = { trait = elusive_shadow }
+						FROM = { trait = elusive_shadow }
+						factor = 2
+					}
+					modifier = { NOT = { intrigue = 15 } FROM = { intrigue = 15 } factor = 2 }
+					modifier = { NOT = { trait = schemer } FROM = { trait = schemer } factor = 2 }
+					modifier = { NOT = { intrigue = FROM } factor = 2 }
+					modifier = { is_dumb_trigger = yes FROM = { is_dumb_trigger = no } factor = 2 }
+					set_character_flag = likely_to_fail
+				}
+			}
+		}
+	}
+
+	option = { #"Corner"-option
+		name = EVTOPTAduel3 # You won't get away that easily! (Only for INTRIGUE characters)
+		tooltip_info = intrigue
+		custom_tooltip = { text = EVTOPTAduel3_TT }
+
+		random_list = {
+			10 = { #success! (sends event to target)
+				additive_modifier = { value = 60 has_character_flag = likely_to_succeed }
+				custom_tooltip = { text = you_succeeding_to_corner_tt }
+				hidden_effect = { FROM = { character_event = { id = duel.4 } } }
+			}
+			20 = { #failure... (sends event to self)
+				additive_modifier = { value = 60 has_character_flag = likely_to_fail }
+				custom_tooltip = { text = you_failing_to_corner_tt }
+				hidden_effect = { character_event = { id = duel.5 } }
+			}
+		}
+
+		#Set specific effects
+		trigger = {
+			OR = { intrigue = 15 trait = elusive_shadow trait = schemer }
+			NOT = { has_character_flag = mock_duel }
+			NOT = { has_character_flag = claim_duel@event_target:combatant_2 }
+		}
+	}
+	option = {
+		name = EVTOPTBduel3 #Pathethic.
+	}
+	after = {
+		clr_character_flag = likely_to_succeed
+		clr_character_flag = likely_to_fail
+		clr_character_flag = claim_duel@event_target:combatant_2
+		clr_character_flag = wants_multiple_titles_from@event_target:combatant_2
+		clr_character_flag = wants_single_title_from@event_target:combatant_2
+	}
+}
+
+# duel.4 Cornered
+# A knife at the throat in the dark: the coward must fight after all.
+# Scope: ROOT is the challenged, FROM the challenger. Fired by duel.3.
+character_event = {
+	id = duel.4
+	desc = EVTDESCduel4 #"You WILL duel me..." knifey threat-style
+	picture = GFX_evt_shadow
+	border = GFX_event_normal_frame_intrigue
+	title = getDuelTitle
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAduel4
+		custom_tooltip = { text = EVTOPTAduel4_TT }
+		FROM = {
+			character_event = { id = duel.2 days = 1 }
+			set_character_flag = target_was_threatened
+		}
+	}
+}
+
+# duel.5 Caught in the act
+# The challenger is caught sneaking into the coward's hall and runs. No
+# duel, and no new one for a year.
+# Scope: ROOT is the challenger, FROM the challenged. Fired by duel.3.
+character_event = {
+	id = duel.5
+	desc = EVTDESCduel5 #
+	picture = GFX_evt_shadow
+	border = GFX_event_normal_frame_intrigue
+	title = getDuelTitle
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAduel5
+		custom_tooltip = { text = EVTOPTAduel5_TT }
+		hidden_effect = {
+			add_character_modifier = { modifier = recent_duel_timer hidden = yes duration = 365 }
+		}
+	}
+
+	after = {
+		clr_duel_flags_effect = yes
+	}
+}
+
+# duel.6 The foe is dead
+# Notice: the challenged died before the duel could be fought.
+# Scope: ROOT is the challenger. Fired by duel.2.
+character_event = {
+	id = duel.6
+	desc = EVTDESCduel6
+	picture = GFX_evt_battle
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+	}
+
+	notification = yes
+
+	option = { #Alas
+		name = EVTOPTAduel6
+	}
+}
+
+###############################################################################
+# The fight
+###############################################################################
+
+# duel.10 The fight
+# Hidden. Picks the weapons and the wound, scores both fighters and sends
+# the outcome (send_duel_result_event_effect): both die (duel.11, 12), one
+# dies (duel.13), one is wounded (duel.20), one flees (duel.22) or both are
+# wounded (duel.24). Fire this event to run any duel with an outcome.
+# Scope: ROOT is combatant_1; event targets combatant_1 and combatant_2 must be
+#   set. Fired by duel.2, duel.41 and duel_enemy_commander_effect, and by
+#   society, monster-hunt and battle events.
+character_event = {
+	id = duel.10
+	is_triggered_only = yes
+
+	hide_window = yes
+
+	immediate = {
+		### Room for any existing pre-conditions (is this an initiation duel? Is this a Challenge for a title?):
+		# -- set here, or in previous event/decision...
+
+		#Chooses a weapon for mainly loc purposes (but has a tiny effect on outcomes, too)...
+		set_dueling_weapon_effect = yes #You get a weapon!
+		event_target:combatant_2 = { set_dueling_weapon_effect = yes } #and YOU get a weapon!
+
+		#Chooses a body part for injury (if it occurs), also for loc purposes (effect handles both characters)
+		set_potential_injury_flag_effect = yes
+
+		#Scripted effect requiring event-targets combatant_1 & combatant_2! RAW NUMBERS...
+		evaluate_duel_result_score_effect = yes
+
+		#Room for extra special calculations... (based on traits, and other special circumstances?)
+		evaluate_extra_duel_result_score_effect = yes
+
+		#Send the correct result event (from random_list)...
+		send_duel_result_event_effect = yes
+	}
+}
+
+###############################################################################
+# Death
+###############################################################################
+
+# duel.11 Both fall (challenger)
+# Both fighters deal a mortal blow; poison may be to blame.
+# Scope: ROOT is combatant_1. Fired by send_duel_result_event_effect.
+character_event = {
+	id = duel.11
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+	portrait = event_target:combatant_2
+	immediate = {
+		if = {
+			limit = { multiplayer = yes }
+			debug_battle_death_counter_effect = yes #for debug purposes
+			send_notifications_after_champion_stand_in_effect = yes
+			if = {
+				limit = {
+					event_target:combatant_1 = {
+						has_character_flag = deadly_duel@event_target:combatant_2
+					}
+				}
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_mission_duel #for flavor
+						killer = event_target:combatant_2
+					}
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = is_battlefield_duel }
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = { death_reason = death_battle_duel killer = event_target:combatant_2 }
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_duel #regular duel death
+						killer = event_target:combatant_2
+					}
+				}
+			}
+		}
+	}
+	desc = {
+		trigger = {
+			NOR = { has_character_flag = elegant_double_KO has_character_flag = clumsy_double_KO }
+			is_using_intrigue_trigger = no
+		}
+		text = EVTDESCduel11_default
+	}
+	desc = {
+		trigger = { has_character_flag = clumsy_double_KO is_using_intrigue_trigger = no }
+		text = EVTDESCduel11_clumsy
+	}
+	desc = {
+		trigger = { has_character_flag = elegant_double_KO is_using_intrigue_trigger = no }
+		text = EVTDESCduel11_elegant
+	}
+	desc = { #They used intrigue option to kill you (both die)
+		trigger = {
+			is_using_intrigue_trigger = no
+			event_target:other_combatant = { is_using_intrigue_trigger = yes }
+		}
+		text = EVTDESCduel11_poison_me
+	}
+	desc = { #You used intrigue option to kill them (both die)
+		trigger = {
+			is_using_intrigue_trigger = yes
+			event_target:other_combatant = { is_using_intrigue_trigger = no }
+		}
+		text = EVTDESCduel11_poison_them
+	}
+	desc = { #BOTH used intrigue option?! OH NOES.
+		trigger = {
+			is_using_intrigue_trigger = yes
+			event_target:other_combatant = { is_using_intrigue_trigger = yes }
+		}
+		text = EVTDESCduel11_poison_both
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAduel11_default
+			trigger = {
+				NOR = {
+					has_character_flag = elegant_double_KO
+					has_character_flag = clumsy_double_KO
+				}
+			}
+		}
+		name = { text = EVTOPTAduel11_clumsy trigger = { has_character_flag = clumsy_double_KO } }
+		name = { text = EVTOPTAduel11_elegant trigger = { has_character_flag = elegant_double_KO } }
+		custom_tooltip = { text = no_one_wins_the_duel_tt }
+		tooltip = {
+			event_target:combatant_2 = {
+				show_scope_change = no
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_duel killer = ROOT } }
+			}
+		}
+		if = {
+			limit = { multiplayer = no }
+			debug_battle_death_counter_effect = yes #for debug purposes
+			send_notifications_after_champion_stand_in_effect = yes
+			if = {
+				limit = {
+					event_target:combatant_1 = {
+						has_character_flag = deadly_duel@event_target:combatant_2
+					}
+				}
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_mission_duel #for flavor
+						killer = event_target:combatant_2
+					}
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = is_battlefield_duel }
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = { death_reason = death_battle_duel killer = event_target:combatant_2 }
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_duel #regular duel death
+						killer = event_target:combatant_2
+					}
+				}
+			}
+		}
+	}
+	after = {
+		if = {
+			limit = {
+				is_using_intrigue_trigger = no
+				event_target:other_combatant = { is_using_intrigue_trigger = yes }
+			}
+			tooltip = { handle_poison_effect = yes }
+		}
+		hidden_effect = { clean_up_after_duel_effect = yes }
+	}
+}
+
+# duel.12 Both fall (challenged)
+# The same death, told by the challenged.
+# Scope: ROOT is combatant_2. Fired by send_duel_result_event_effect.
+character_event = {
+	id = duel.12
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+	portrait = event_target:combatant_1
+
+	immediate = {
+		if = {
+			limit = { multiplayer = yes }
+			debug_battle_death_counter_effect = yes #for debug purposes
+			send_notifications_after_champion_stand_in_effect = yes
+			if = {
+				limit = {
+					event_target:combatant_1 = {
+						has_character_flag = deadly_duel@event_target:combatant_2
+					}
+				}
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_mission_duel #for flavor
+						killer = event_target:combatant_1
+					}
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = is_battlefield_duel }
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = { death_reason = death_battle_duel killer = event_target:combatant_1 }
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_duel #regular duel death
+						killer = event_target:combatant_1
+					}
+				}
+			}
+		}
+	}
+
+	desc = {
+		trigger = {
+			NOR = { has_character_flag = elegant_double_KO has_character_flag = clumsy_double_KO }
+			is_using_intrigue_trigger = no
+		}
+		text = EVTDESCduel12_default
+	}
+	desc = {
+		trigger = { has_character_flag = clumsy_double_KO is_using_intrigue_trigger = no }
+		text = EVTDESCduel12_clumsy
+	}
+	desc = {
+		trigger = { has_character_flag = elegant_double_KO is_using_intrigue_trigger = no }
+		text = EVTDESCduel12_elegant
+	}
+	desc = { #They used intrigue option to kill you (both die)
+		trigger = {
+			is_using_intrigue_trigger = no
+			event_target:other_combatant = { is_using_intrigue_trigger = yes }
+		}
+		text = EVTDESCduel11_poison_me
+	}
+	desc = { #You used intrigue option to kill them (both die)
+		trigger = {
+			is_using_intrigue_trigger = yes
+			event_target:other_combatant = { is_using_intrigue_trigger = no }
+		}
+		text = EVTDESCduel11_poison_them
+	}
+	desc = { #BOTH used intrigue option?! OH NOES.
+		trigger = {
+			is_using_intrigue_trigger = yes
+			event_target:other_combatant = { is_using_intrigue_trigger = yes }
+		}
+		text = EVTDESCduel11_poison_both
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAduel12_default
+			trigger = {
+				NOR = {
+					has_character_flag = elegant_double_KO
+					has_character_flag = clumsy_double_KO
+				}
+			}
+		}
+		name = { text = EVTOPTAduel12_clumsy trigger = { has_character_flag = clumsy_double_KO } }
+		name = { text = EVTOPTAduel12_elegant trigger = { has_character_flag = elegant_double_KO } }
+		custom_tooltip = { text = no_one_wins_the_duel_tt }
+		tooltip = {
+			event_target:combatant_1 = {
+				show_scope_change = no
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_duel killer = ROOT } }
+			}
+		}
+		if = {
+			limit = { multiplayer = no }
+			debug_battle_death_counter_effect = yes #for debug purposes
+			send_notifications_after_champion_stand_in_effect = yes
+			if = {
+				limit = {
+					event_target:combatant_1 = {
+						has_character_flag = deadly_duel@event_target:combatant_2
+					}
+				}
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_mission_duel #for flavor
+						killer = event_target:combatant_1
+					}
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = is_battlefield_duel }
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = { death_reason = death_battle_duel killer = event_target:combatant_1 }
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_duel #regular duel death
+						killer = event_target:combatant_1
+					}
+				}
+			}
+		}
+	}
+	after = {
+		if = {
+			limit = {
+				is_using_intrigue_trigger = no
+				event_target:other_combatant = { is_using_intrigue_trigger = yes }
+			}
+			tooltip = { handle_poison_effect = yes }
+		}
+		hidden_effect = { clean_up_after_duel_effect = yes }
+	}
+}
+
+# duel.13 The killing blow
+# The winner kills the loser (duel.14). In a claim duel the winner may
+# instead offer mercy if the loser gives up his claims (duel.42). Killing a
+# famed duellist may, rarely, leave the winner the fallen man's blade
+# (duel_trophy_effect).
+# Scope: ROOT is the winner, other_combatant the loser. Fired by
+#   send_duel_result_event_effect.
+character_event = {
+	id = duel.13
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+	portrait = event_target:other_combatant
+
+	immediate = {
+		sound_effect = duel_win
+		set_winner_flags_and_save_opponent_effect = yes
+		random_list = {
+			10 = {
+				set_character_flag = desc_A
+				event_target:other_combatant = { set_character_flag = desc_A }
+			}
+			10 = {
+				set_character_flag = desc_B
+				event_target:other_combatant = { set_character_flag = desc_B }
+			}
+			10 = {
+				set_character_flag = desc_C
+				event_target:other_combatant = { set_character_flag = desc_C }
+			}
+		}
+		if = { #If this is a claim duel and the defender also has claims on combatant_1...
+			limit = {
+				event_target:combatant_1 = {
+					has_character_flag = claim_duel@event_target:combatant_2
+					any_demesne_title = { event_target:combatant_2 = { has_strong_claim = PREV } }
+				}
+			}
+			event_target:combatant_1 = {
+				random_demesne_title = {
+					limit = { event_target:combatant_2 = { has_strong_claim = PREV } }
+					save_event_target_as = target_title_2
+				}
+			}
+		}
+	}
+
+	desc = {
+		text = EVTDESCduel13_claim_intrigue_default #I used intrigue and won
+		trigger = {
+			is_using_intrigue_trigger = yes
+			NOT = {
+				event_target:combatant_1 = {
+					has_character_flag = claim_duel@event_target:combatant_2
+				}
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCduel13_a
+		trigger = {
+			has_character_flag = desc_A
+			NOT = {
+				event_target:combatant_1 = {
+					has_character_flag = claim_duel@event_target:combatant_2
+				}
+			}
+			is_using_intrigue_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCduel13_b
+		trigger = {
+			has_character_flag = desc_B
+			NOT = {
+				event_target:combatant_1 = {
+					has_character_flag = claim_duel@event_target:combatant_2
+				}
+			}
+			is_using_intrigue_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCduel13_c
+		trigger = {
+			has_character_flag = desc_C
+			NOT = {
+				event_target:combatant_1 = {
+					has_character_flag = claim_duel@event_target:combatant_2
+				}
+			}
+			is_using_intrigue_trigger = no
+		}
+	}
+	# CLAIM DUELS...
+	desc = {
+		text = EVTDESCduel13_claim_a
+		trigger = {
+			has_character_flag = desc_A
+			event_target:combatant_1 = {
+				has_character_flag = claim_duel@event_target:combatant_2
+				NOT = { has_character_flag = attacker_using_poison@event_target:combatant_2 }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCduel13_claim_b
+		trigger = {
+			has_character_flag = desc_B
+			event_target:combatant_1 = {
+				has_character_flag = claim_duel@event_target:combatant_2
+				NOT = { has_character_flag = attacker_using_poison@event_target:combatant_2 }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCduel13_claim_c
+		trigger = {
+			has_character_flag = desc_C
+			event_target:combatant_1 = {
+				has_character_flag = claim_duel@event_target:combatant_2
+				NOT = { has_character_flag = attacker_using_poison@event_target:combatant_2 }
+			}
+		}
+	}
+	desc = { # Can happen both in regular duels and claim duels
+		text = EVTDESCduel13_claim_intrigue_a_attacker #I attacked using intrigue and won
+		trigger = { is_using_intrigue_trigger = yes }
+	}
+	desc = { # Can happen both in regular duels and claim duels
+		text = EVTDESCduel13_claim_intrigue_a_defender_spymaster #They used intrigue, but I won anyway (thanks to my spymaster)
+		trigger = {
+			job_spymaster = {
+				opinion = { who = PREV value = 15 } #if they like their employer
+				intrigue = event_target:other_combatant #and they can match their intrigue
+			}
+			is_using_intrigue_trigger = no
+			event_target:other_combatant = { is_using_intrigue_trigger = yes }
+		}
+	}
+	desc = { # Can happen both in regular duels and claim duels
+		text = EVTDESCduel13_claim_intrigue_a_defender_self #They used intrigue, but I won anyway (thanks to my own intrigue)
+		trigger = {
+			intrigue = event_target:other_combatant
+			is_using_intrigue_trigger = no
+			event_target:other_combatant = { is_using_intrigue_trigger = yes }
+		}
+	}
+
+	picture = {
+		picture = GFX_evt_duel_team #snowy picture
+		trigger = { capital_scope = { location = { is_winter = yes } } }
+	}
+
+	### Regular option: ###
+
+	option = {
+		name = {
+			text = EVTOPTAduel13_default #I... Yes, that was on purpose!
+			trigger = {
+				NOR = {
+					trait = duelist
+					trait = kind
+					is_rival = event_target:other_combatant
+					is_friend = event_target:other_combatant
+					event_target:other_combatant = {
+						duelist_skill_compared_to_prev_low_group_trigger = yes
+					}
+					duelist_skill_is_high_group_trigger = yes
+				}
+			}
+		}
+		name = {
+			text = EVTOPTAduel13_duelist #Another victorious match.
+			trigger = {
+				OR = {
+					trait = duelist
+					event_target:other_combatant = {
+						duelist_skill_compared_to_prev_low_group_trigger = yes
+					}
+					duelist_skill_is_high_group_trigger = yes
+				}
+			}
+		}
+		name = {
+			text = EVTOPTAduel13_sad #I'm sorry it had to end this way.
+			trigger = { OR = { trait = kind is_friend = event_target:other_combatant } }
+		}
+		name = {
+			text = EVTOPTAduel13_mean #Your death makes sense
+			trigger = { OR = { trait = cruel is_rival = event_target:other_combatant } }
+		}
+		custom_tooltip = { text = you_win_the_duel_tt }
+		apply_generic_duel_victory_effect = yes
+		add_blood_splatter_effect = yes
+
+		tooltip = {
+			event_target:other_combatant = {
+				if = {
+					limit = {
+						has_character_flag = injury_face
+						has_character_flag = desc_A #decapitation desc
+						has_nickname = no
+					}
+					give_nickname = nick_the_headless
+				}
+			}
+			event_target:other_combatant = {
+				show_scope_change = no
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_duel killer = ROOT } }
+			}
+		}
+		duel_trophy_effect = yes
+		hidden_effect = {
+			event_target:other_combatant = { character_event = { id = duel.14 } } #"I was decapitated" event
+		}
+		trigger = {
+			NOT = {
+				event_target:combatant_1 = {
+					has_character_flag = claim_duel@event_target:combatant_2
+				}
+			}
+		}
+	}
+
+	###### Claim duels Options: #########
+
+	option = { #If claim duel, the following options are displayed instead...
+		name = {
+			text = EVTOPTAduel13_claim_default #You brought your own death.
+			trigger = {
+				#always available for randomization
+			}
+		}
+		name = {
+			text = EVTOPTAduel13_claim_sad #Curse you, for making me do this!
+			trigger = {
+				OR = { trait = kind is_friend = event_target:other_combatant }
+				NOT = { is_rival = event_target:other_combatant }
+			}
+		}
+		name = {
+			text = EVTOPTAduel13_claim_mean #I had a feeling I would have to destroy you.
+			trigger = {
+				OR = { trait = cruel is_rival = event_target:other_combatant }
+				NOT = { is_friend = event_target:other_combatant }
+			}
+		}
+		custom_tooltip = { text = you_win_the_duel_tt }
+		apply_generic_duel_victory_effect = yes
+		add_blood_splatter_effect = yes
+
+		tooltip = {
+			handle_claim_duel_result_effect = yes #Claim duels only...
+			event_target:other_combatant = {
+				if = {
+					limit = {
+						has_character_flag = injury_face
+						has_character_flag = desc_A #decapitation desc
+						has_nickname = no
+					}
+					give_nickname = nick_the_headless
+				}
+			}
+			event_target:other_combatant = {
+				show_scope_change = no
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_duel killer = ROOT } }
+			}
+		}
+		duel_trophy_effect = yes
+		hidden_effect = {
+			event_target:other_combatant = { character_event = { id = duel.14 } } #"I was decapitated (CLAIM DUEL VERSION)" event
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = impaler }
+			modifier = { factor = 1.1 trait = cruel }
+			modifier = { factor = 5 is_rival = event_target:other_combatant }
+		}
+		trigger = {
+			event_target:combatant_1 = { has_character_flag = claim_duel@event_target:combatant_2 }
+		}
+	}
+	option = { #If KIND/CHARITABLE/ETC: spare their life?
+		name = EVTOPTBduel13_claim #Or... we could make a deal?
+		tooltip_info_custom = available_because_benevolent_tt
+
+		custom_tooltip = { text = you_win_the_duel_tt }
+		custom_tooltip = { text = EVTOPTBduel13_claim_TT }
+
+		apply_merciful_modifier_effect = yes
+
+		tooltip = { # *actually* added further down the line...
+			if = { limit = { has_character_flag = is_rival_fight } prestige = 100 }
+			else = { prestige = 50 }
+
+			add_character_modifier = {
+				modifier = recent_duel_victory
+				months = 12 #also clears upon new duel!
+			}
+		}
+
+		hidden_effect = {
+			event_target:other_combatant = {
+				if = {
+					limit = {
+						character = event_target:combatant_1
+						has_character_flag = attacker_using_poison@event_target:combatant_2
+					}
+					set_character_flag = is_spared_poisoner
+				}
+				character_event = { id = duel.42 } #"I could be spared (CLAIM DUEL VERSION)" event
+			}
+		}
+
+		ai_chance = {
+			factor = 10
+			likes_other_combatant_score = yes
+			modifier = { factor = 1.5 has_character_modifier = the_merciful }
+		}
+
+		trigger = {
+			event_target:combatant_1 = { has_character_flag = claim_duel@event_target:combatant_2 }
+			OR = {
+				trait = kind
+				trait = charitable
+				trait = temperate
+				trait = humble
+				trait = patient
+				trait = trusting
+			}
+			OR = {
+				character = event_target:combatant_2 #You are the defender
+
+				AND = { # OR, you are the attacker, but the defender also has claims on YOUR titles
+					character = event_target:combatant_1
+					any_demesne_title = { event_target:combatant_2 = { has_strong_claim = PREV } }
+				}
+			}
+		}
+	}
+	after = {
+		tooltip = { clean_up_after_duel_effect = yes }
+	}
+}
+
+# duel.14 Slain
+# The loser dies; a claim duel settles the claims first.
+# Scope: ROOT is the loser, other_combatant the winner. Fired by duel.13.
+character_event = {
+	id = duel.14
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+	portrait = event_target:other_combatant
+
+	immediate = {
+		sound_effect = duel_lose
+		set_loser_flags_and_save_opponent_effect = yes
+		if = {
+			limit = {
+				multiplayer = yes
+				NOT = {
+					event_target:combatant_1 = {
+						has_character_flag = claim_duel@event_target:combatant_2
+					}
+				}
+			}
+			debug_battle_death_counter_effect = yes #for debug purposes
+			send_notifications_after_champion_stand_in_effect = yes
+			if = {
+				limit = {
+					has_character_flag = injury_face
+					has_character_flag = desc_A
+					has_nickname = no
+				}
+				give_nickname = nick_the_headless
+			}
+			if = {
+				limit = {
+					event_target:combatant_1 = {
+						has_character_flag = deadly_duel@event_target:combatant_2
+					}
+				}
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_mission_duel #for flavor
+						killer = event_target:other_combatant
+					}
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = is_battlefield_duel }
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_battle_duel
+						killer = event_target:other_combatant
+					}
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_duel #regular duel death
+						killer = event_target:other_combatant
+					}
+				}
+			}
+		}
+	}
+
+	desc = {
+		text = EVTDESCduel14_a
+		trigger = {
+			has_character_flag = desc_A
+			NOT = {
+				event_target:combatant_1 = {
+					has_character_flag = claim_duel@event_target:combatant_2
+				}
+			}
+			is_using_intrigue_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCduel14_b
+		trigger = {
+			has_character_flag = desc_B
+			NOT = {
+				event_target:combatant_1 = {
+					has_character_flag = claim_duel@event_target:combatant_2
+				}
+			}
+			is_using_intrigue_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCduel14_c
+		trigger = {
+			has_character_flag = desc_C
+			NOT = {
+				event_target:combatant_1 = {
+					has_character_flag = claim_duel@event_target:combatant_2
+				}
+			}
+			is_using_intrigue_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCduel14_claim_intrigue_default # They used intrigue and I lost (die)
+		trigger = {
+			event_target:other_combatant = { is_using_intrigue_trigger = yes }
+			NOT = {
+				event_target:combatant_1 = {
+					has_character_flag = claim_duel@event_target:combatant_2
+				}
+			}
+		}
+	}
+
+	# CLAIM DUELS...
+	desc = {
+		text = EVTDESCduel14_d
+		trigger = {
+			has_character_flag = desc_A
+			event_target:combatant_1 = {
+				has_character_flag = claim_duel@event_target:combatant_2
+				NOT = { has_character_flag = attacker_using_poison@event_target:combatant_2 }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCduel14_e
+		trigger = {
+			has_character_flag = desc_B
+			event_target:combatant_1 = {
+				has_character_flag = claim_duel@event_target:combatant_2
+				NOT = { has_character_flag = attacker_using_poison@event_target:combatant_2 }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCduel14_f
+		trigger = {
+			has_character_flag = desc_C
+			event_target:combatant_1 = {
+				has_character_flag = claim_duel@event_target:combatant_2
+				NOT = { has_character_flag = attacker_using_poison@event_target:combatant_2 }
+			}
+		}
+	}
+
+	desc = { # Can happen both in regular duels and claim duels
+		text = EVTDESCduel14_claim_intrigue_a_attacker #I used poison and lost
+		trigger = { is_using_intrigue_trigger = yes }
+	}
+	desc = { # Can happen both in regular duels and claim duels
+		text = EVTDESCduel14_claim_intrigue_a_defender #attacker used poison, and I am dying
+		trigger = {
+			is_using_intrigue_trigger = no
+			event_target:other_combatant = { is_using_intrigue_trigger = yes }
+		}
+	}
+
+	picture = {
+		picture = GFX_evt_duel_team #snowy picture
+		trigger = { capital_scope = { location = { is_winter = yes } } }
+	}
+
+	option = {
+		name = EVTOPTAduel14 #Nooooo...!
+		custom_tooltip = { text = you_lose_the_duel_tt }
+
+		hidden_effect = { FROM = { handle_claim_duel_result_effect = yes } }
+		handle_claim_duel_result_effect = yes #Claim duels only...
+
+		if = {
+			limit = {
+				event_target:combatant_1 = {
+					character = ROOT
+					has_character_flag = claim_duel@event_target:combatant_2
+					has_character_flag = attacker_using_poison@event_target:combatant_2
+					event_target:other_combatant = {
+						job_spymaster = {
+							opinion = { who = PREV value = 15 } #if they like their employer
+							intrigue = ROOT #and they can match your intrigue
+						}
+						NOT = { intrigue = ROOT }
+					}
+				}
+			}
+			event_target:other_combatant = { #Because saving event target is one more line :P
+				job_spymaster = { set_character_flag = hi_flag set_character_flag = bye_flag }
+			}
+		}
+
+		if = {
+			limit = {
+				OR = {
+					multiplayer = no
+					event_target:combatant_1 = {
+						has_character_flag = claim_duel@event_target:combatant_2
+					}
+				}
+			}
+			debug_battle_death_counter_effect = yes #for debug purposes
+			send_notifications_after_champion_stand_in_effect = yes
+			if = {
+				limit = {
+					has_character_flag = injury_face
+					has_character_flag = desc_A
+					has_nickname = no
+				}
+				give_nickname = nick_the_headless
+			}
+			if = {
+				limit = {
+					event_target:combatant_1 = {
+						has_character_flag = deadly_duel@event_target:combatant_2
+					}
+				}
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_mission_duel #for flavor
+						killer = event_target:other_combatant
+					}
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = is_battlefield_duel }
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_battle_duel
+						killer = event_target:other_combatant
+					}
+				}
+			}
+			else_if = {
+				limit = {
+					event_target:combatant_1 = {
+						has_character_flag = claim_duel@event_target:combatant_2
+					}
+				}
+				if = {
+					limit = { character = event_target:combatant_1 }
+					if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+					else = {
+						death = {
+							death_reason = death_claim_duel_attacker #for flavor
+							killer = event_target:other_combatant
+						}
+					}
+				}
+				else = {
+					if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+					else = {
+						death = {
+							death_reason = death_claim_duel_defender #for flavor
+							killer = event_target:other_combatant
+						}
+					}
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_duel #regular duel death
+						killer = event_target:other_combatant
+					}
+				}
+			}
+		}
+	}
+
+	# SPECIAL OPTION: Only in Claim Duels, for players, if the opponent is an AI of your dynasty...
+	option = {
+		name = EVTOPTBduel14
+		tooltip_info_custom = available_because_dynasty_member_tt
+		hidden_effect = { FROM = { handle_claim_duel_result_effect = yes } }
+		handle_claim_duel_result_effect = yes #Claim duels only...
+
+		if = {
+			limit = { multiplayer = no }
+			debug_battle_death_counter_effect = yes #for debug purposes
+			send_notifications_after_champion_stand_in_effect = yes
+			if = {
+				limit = {
+					has_character_flag = injury_face
+					has_character_flag = desc_A
+					has_nickname = no
+				}
+				give_nickname = nick_the_headless
+			}
+			if = {
+				limit = { character = event_target:combatant_1 }
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_claim_duel_attacker #for flavor
+						killer = event_target:other_combatant
+					}
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_claim_duel_defender #for flavor
+						killer = event_target:other_combatant
+					}
+				}
+			}
+		}
+
+		set_player_character = event_target:other_combatant #take control of the winner...
+
+		trigger = {
+			event_target:combatant_1 = { has_character_flag = claim_duel@event_target:combatant_2 }
+			ai = no
+			event_target:other_combatant = { ai = yes dynasty = ROOT }
+		}
+	}
+	after = {
+		if = {
+			limit = {
+				is_using_intrigue_trigger = no
+				event_target:other_combatant = { is_using_intrigue_trigger = yes }
+			}
+			tooltip = { handle_poison_effect = yes }
+		}
+		hidden_effect = {
+			clean_up_after_duel_effect = yes
+			FROM = { clean_up_after_duel_effect = yes } #test if this works, even if character is_dying
+		}
+	}
+}
+
+###############################################################################
+# Wounds and flight
+###############################################################################
+
+# duel.20 A wound dealt
+# The winner wounds the loser (duel.21) and may finish him off (duel.26),
+# which the realm will not forget unless it happened in battle. In a
+# greenskin head-bashing the winner may take the beaten warboss's respect
+# (warboss.3). Finishing off a famed duellist may leave his blade
+# (duel_trophy_effect).
+# Scope: ROOT is the winner, other_combatant the loser. Fired by
+#   send_duel_result_event_effect.
+character_event = {
+	id = duel.20
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+	portrait = event_target:other_combatant
+
+	#Mock duels
+	desc = {
+		text = EVTDESCduel20_mock_duel_a
+		trigger = { has_character_flag = mock_duel has_character_flag = desc_A }
+	}
+	desc = {
+		text = EVTDESCduel20_mock_duel_b
+		trigger = { has_character_flag = mock_duel has_character_flag = desc_B }
+	}
+	desc = {
+		text = EVTDESCduel20_mock_duel_c
+		trigger = { has_character_flag = mock_duel has_character_flag = desc_C }
+	}
+	### Regular duels
+	desc = {
+		text = EVTDESCduel20_intrigue_default
+		trigger = { NOT = { has_character_flag = mock_duel } is_using_intrigue_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCduel20_default_a
+		trigger = {
+			NOT = { has_character_flag = mock_duel }
+			has_character_flag = desc_A
+			is_using_intrigue_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCduel20_default_b
+		trigger = {
+			NOT = { has_character_flag = mock_duel }
+			has_character_flag = desc_B
+			is_using_intrigue_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCduel20_default_c
+		trigger = {
+			NOT = { has_character_flag = mock_duel }
+			has_character_flag = desc_C
+			is_using_intrigue_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCduel20_default_e
+		trigger = {
+			NOT = { has_character_flag = mock_duel }
+			has_character_flag = desc_E
+			is_using_intrigue_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCduel20_duel_d
+		trigger = {
+			NOT = { has_character_flag = mock_duel }
+			has_character_flag = desc_D
+			is_using_intrigue_trigger = no
+		}
+	}
+
+	picture = {
+		picture = GFX_evt_duel_team #snowy picture
+		trigger = { capital_scope = { location = { is_winter = yes } } }
+	}
+
+	immediate = {
+		sound_effect = duel_win
+		set_winner_flags_and_save_opponent_effect = yes
+		if = {
+			limit = { has_character_flag = mock_duel }
+			random_list = {
+				10 = {
+					set_character_flag = desc_A
+					event_target:other_combatant = { set_character_flag = desc_A }
+				}
+				10 = {
+					set_character_flag = desc_B
+					event_target:other_combatant = { set_character_flag = desc_B }
+				}
+				10 = {
+					set_character_flag = desc_C
+					event_target:other_combatant = { set_character_flag = desc_C }
+				}
+			}
+		}
+		if = {
+			limit = { NOT = { has_character_flag = mock_duel } }
+			random_list = {
+				10 = {
+					set_character_flag = desc_A
+					event_target:other_combatant = { set_character_flag = desc_A }
+				}
+				10 = {
+					set_character_flag = desc_B
+					event_target:other_combatant = { set_character_flag = desc_B }
+				}
+				10 = {
+					set_character_flag = desc_C
+					event_target:other_combatant = { set_character_flag = desc_C }
+				}
+				10 = {
+					set_character_flag = desc_D
+					event_target:other_combatant = { set_character_flag = desc_D }
+				}
+				10 = {
+					set_character_flag = desc_E
+					event_target:other_combatant = { set_character_flag = desc_E }
+				}
+			}
+		}
+	}
+
+	option = {
+		trigger = { has_character_flag = greenskin_bash_head_duel }
+		name = EVTOPTAduel20_bash_duel
+		random_list = {
+			50 = { }
+			50 = { remove_character_modifier = weak_warboss }
+		}
+		custom_tooltip = { text = you_win_the_duel_tt }
+		apply_generic_duel_victory_effect = yes
+
+		tooltip = {
+			event_target:other_combatant = {
+				show_scope_change = no
+				apply_selected_duel_injury_effect = yes
+			}
+		}
+		tooltip = { clean_up_after_duel_effect = yes }
+		hidden_effect = {
+			event_target:other_combatant = { character_event = { id = duel.21 days = 1 } } #"I was wounded somehow" event
+			event_target:other_combatant = { character_event = { id = warboss.3 days = 2 } } # A beaten warboss loses respect
+		}
+		ai_chance = { factor = 60 }
+	}
+	option = { #Kill them anyway
+		trigger = { has_character_flag = greenskin_bash_head_duel }
+		name = EVTOPTBduel20_bash_duel
+		if = { limit = { trait = kind } remove_trait = kind }
+		else_if = { limit = { trait = patient } remove_trait = patient }
+		else_if = { limit = { NOT = { trait = cruel } } add_trait = cruel }
+		else_if = { limit = { NOT = { trait = arbitrary } } add_trait = arbitrary }
+		else_if = { limit = { NOT = { trait = envious } } add_trait = envious }
+		remove_character_modifier = weak_warboss
+		custom_tooltip = { text = you_win_the_duel_tt }
+		set_character_flag = someone_died #to handle Kinslayer in the effect below...
+		apply_generic_duel_victory_effect = yes
+		add_blood_splatter_effect = yes
+
+		if = { #If this happens during a battle (from on_combat_pulse), no consequences...
+			limit = { has_character_flag = is_battlefield_duel }
+			custom_tooltip = { text = you_will_get_away_with_it_tt }
+		}
+		else_if = { #But if regular duel...
+			limit = { NOT = { has_character_flag = flag_antagonizer_duel } } #Barring antagonizing ones...
+			custom_tooltip = {
+				text = duel_ruthless_kill_TT #People will be upset
+				hidden_tooltip = {
+					generate_tooltip = no
+					any_realm_character = {
+						opinion = { modifier = opinion_ruthless who = ROOT months = 60 }
+					}
+				}
+			}
+			if = {
+				limit = { has_character_modifier = merciless }
+				if = { limit = { has_nickname = no } give_nickname = nick_the_ruthless }
+			}
+			if = {
+				limit = { NOT = { has_character_modifier = merciless } }
+				add_character_modifier = { modifier = merciless duration = -1 }
+			}
+		}
+
+		tooltip = {
+			event_target:other_combatant = {
+				show_scope_change = no
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_duel killer = ROOT } }
+			}
+		}
+		tooltip = { clean_up_after_duel_effect = yes } #To show that duel exp increases...
+		tooltip = {
+			if = {
+				limit = {
+					OR = {
+						has_quest = quest_warband_duel_deadly
+						has_quest = quest_chaos_cult_duel_deadly
+					}
+					quest_target = { character = event_target:other_combatant }
+				}
+				if = {
+					limit = {
+						OR = {
+							has_character_flag = is_victorious_attacker
+							has_character_flag = is_victorious_defender
+						}
+					}
+					add_society_currency_minor_effect = yes #in addition to the regular 200... (for tooltips, the effect is actually handled by clean_up_after_duel_effect)
+				}
+			}
+		}
+
+		duel_trophy_effect = yes
+		hidden_effect = {
+			event_target:other_combatant = { character_event = { id = duel.26 } } #"I was murdered" event
+		}
+
+		ai_chance = {
+			factor = 1
+			modifier = { trait = kind factor = 0.1 }
+			modifier = { trait = impaler factor = 15 }
+			modifier = { trait = cruel factor = 5 }
+			modifier = { has_character_flag = is_rival_fight factor = 10 }
+			modifier = {
+				OR = {
+					is_member_of_any_warband_trigger = yes
+					is_member_of_any_warrior_lodge_trigger = yes
+				}
+				event_target:other_combatant = { NOT = { religion = ROOT } }
+				factor = 80
+			}
+		}
+		trigger = { is_allowed_deadly_duels_trigger = yes }
+	}
+	option = {
+		trigger = { NOT = { has_character_flag = greenskin_bash_head_duel } }
+		name = {
+			text = EVTOPTAduel20_default
+			trigger = {
+				NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 trait = kind }
+			}
+		}
+		name = {
+			text = EVTOPTAduel20_lunatic
+			trigger = {
+				OR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+					trait = cannibal_trait
+					trait = possessed
+				}
+				NOR = { trait = kind has_character_flag = mock_duel }
+			}
+		}
+		name = {
+			text = EVTOPTAduel20_cruel
+			trigger = {
+				OR = { trait = impaler trait = cruel }
+				NOR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+					trait = cannibal_trait
+					trait = possessed
+				}
+			}
+		}
+		name = {
+			text = EVTOPTAduel20_kind
+			trigger = {
+				OR = { trait = kind trait = shy }
+				NOR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+					trait = cannibal_trait
+					trait = possessed
+					trait = cruel
+				}
+			}
+		}
+		custom_tooltip = { text = you_win_the_duel_tt }
+		apply_generic_duel_victory_effect = yes
+
+		tooltip = {
+			event_target:other_combatant = {
+				show_scope_change = no
+				apply_selected_duel_injury_effect = yes
+			}
+		}
+		tooltip = { clean_up_after_duel_effect = yes }
+		hidden_effect = {
+			event_target:other_combatant = { character_event = { id = duel.21 days = 1 } } #"I was wounded somehow" event
+		}
+		ai_chance = { factor = 60 }
+	}
+	option = { #Kill them anyway
+		trigger = { NOT = { has_character_flag = greenskin_bash_head_duel } }
+		name = {
+			text = EVTOPTBduel20_default
+			trigger = {
+				NOT = { has_character_flag = is_rival_fight }
+				NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 trait = possessed }
+			}
+		}
+		name = {
+			text = EVTOPTBduel20_rival
+			trigger = {
+				has_character_flag = is_rival_fight
+				NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 trait = possessed }
+			}
+		}
+		name = {
+			text = EVTOPTBduel20_lunatic
+			trigger = {
+				OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 trait = possessed }
+			}
+		}
+		custom_tooltip = { text = you_win_the_duel_tt }
+		set_character_flag = someone_died #to handle Kinslayer in the effect below...
+		apply_generic_duel_victory_effect = yes
+		add_blood_splatter_effect = yes
+
+		if = { #If this happens during a battle (from on_combat_pulse), no consequences...
+			limit = { has_character_flag = is_battlefield_duel }
+			custom_tooltip = { text = you_will_get_away_with_it_tt }
+		}
+		else_if = { #But if regular duel...
+			limit = { NOT = { has_character_flag = flag_antagonizer_duel } } #Barring antagonizing ones...
+			custom_tooltip = {
+				text = duel_ruthless_kill_TT #People will be upset
+				hidden_tooltip = {
+					generate_tooltip = no
+					any_realm_character = {
+						opinion = { modifier = opinion_ruthless who = ROOT months = 60 }
+					}
+				}
+			}
+			if = {
+				limit = { has_character_modifier = merciless }
+				if = { limit = { has_nickname = no } give_nickname = nick_the_ruthless }
+			}
+			if = {
+				limit = { NOT = { has_character_modifier = merciless } }
+				add_character_modifier = { modifier = merciless duration = -1 }
+			}
+		}
+
+		tooltip = {
+			event_target:other_combatant = {
+				show_scope_change = no
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_duel killer = ROOT } }
+			}
+		}
+		tooltip = { clean_up_after_duel_effect = yes } #To show that duel exp increases...
+		tooltip = {
+			if = {
+				limit = {
+					OR = {
+						has_quest = quest_warband_duel_deadly
+						has_quest = quest_chaos_cult_duel_deadly
+					}
+					quest_target = { character = event_target:other_combatant }
+				}
+				if = {
+					limit = {
+						OR = {
+							has_character_flag = is_victorious_attacker
+							has_character_flag = is_victorious_defender
+						}
+					}
+					add_society_currency_minor_effect = yes #in addition to the regular 200... (for tooltips, the effect is actually handled by clean_up_after_duel_effect)
+				}
+			}
+		}
+
+		duel_trophy_effect = yes
+		hidden_effect = {
+			event_target:other_combatant = { character_event = { id = duel.26 } } #"I was murdered" event
+		}
+
+		ai_chance = {
+			factor = 1
+			modifier = { trait = kind factor = 0.1 }
+			modifier = { trait = impaler factor = 15 }
+			modifier = { trait = cruel factor = 5 }
+			modifier = { has_character_flag = is_rival_fight factor = 10 }
+			modifier = {
+				OR = {
+					is_member_of_any_warband_trigger = yes
+					is_member_of_any_warrior_lodge_trigger = yes
+				}
+				event_target:other_combatant = { NOT = { religion = ROOT } }
+				factor = 80
+			}
+		}
+		trigger = { is_allowed_deadly_duels_trigger = yes }
+	}
+}
+
+# duel.21 A wound taken
+# The loser takes the wound. The fight may later turn into a rivalry
+# (duel.30), a friendship (duel.32) or a romance (duel.35).
+# Scope: ROOT is the loser, other_combatant the winner. Fired by duel.20.
+character_event = {
+	id = duel.21
+	title = getDuelTitle
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	portrait = event_target:other_combatant
+
+	desc = {
+		text = EVTDESCduel21_mock_duel_a
+		trigger = { has_character_flag = mock_duel has_character_flag = desc_A }
+	}
+	desc = {
+		text = EVTDESCduel21_mock_duel_b
+		trigger = { has_character_flag = mock_duel has_character_flag = desc_B }
+	}
+	desc = {
+		text = EVTDESCduel21_mock_duel_c
+		trigger = { has_character_flag = mock_duel has_character_flag = desc_C }
+	}
+
+	#Regular duels...
+	desc = {
+		text = EVTDESCduel21_intrigue_default
+		trigger = { NOT = { has_character_flag = mock_duel } is_using_intrigue_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCduel21_default_a
+		trigger = {
+			NOT = { has_character_flag = mock_duel }
+			has_character_flag = desc_A
+			is_using_intrigue_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCduel21_default_b
+		trigger = {
+			NOT = { has_character_flag = mock_duel }
+			has_character_flag = desc_B
+			is_using_intrigue_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCduel21_default_c
+		trigger = {
+			NOT = { has_character_flag = mock_duel }
+			has_character_flag = desc_C
+			is_using_intrigue_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCduel21_default_e
+		trigger = {
+			NOT = { has_character_flag = mock_duel }
+			has_character_flag = desc_E
+			is_using_intrigue_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCduel21_duel_d
+		trigger = {
+			NOT = { has_character_flag = mock_duel }
+			has_character_flag = desc_D
+			is_using_intrigue_trigger = no
+		}
+	}
+
+	picture = {
+		picture = GFX_evt_duel_team #snowy picture
+		trigger = { capital_scope = { location = { is_winter = yes } } }
+	}
+
+	immediate = {
+		sound_effect = duel_lose
+		set_loser_flags_and_save_opponent_effect = yes
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAduel21_bare_hands #HOW?! With your bare hands?
+			trigger = {
+				FROM = { has_character_flag = weapon_is_hand }
+				has_character_flag = actually_injured
+				has_character_flag = mock_duel
+			}
+		}
+		name = {
+			text = EVTOPTAduel21_sword #HOW?! With a WOODEN sword?
+			trigger = {
+				FROM = { has_character_flag = weapon_is_sword }
+				has_character_flag = actually_injured
+				has_character_flag = mock_duel
+			}
+		}
+		name = {
+			text = EVTOPTAduel21_staff #HOW?! With a wooden staff?
+			trigger = {
+				FROM = { has_character_flag = weapon_is_staff }
+				has_character_flag = actually_injured
+				has_character_flag = mock_duel
+			}
+		}
+		name = {
+			text = EVTOPTAduel21_spear #HOW?! With a wooden spear?
+			trigger = {
+				FROM = { has_character_flag = weapon_is_spear }
+				has_character_flag = actually_injured
+				has_character_flag = mock_duel
+			}
+		}
+		name = {
+			text = EVTOPTAduel21 #I don't feel so good
+			trigger = {
+				NOT = { trait = stubborn }
+				NOT = { trait = envious }
+				NOT = { has_character_flag = mock_duel }
+				has_character_flag = actually_injured
+			}
+		}
+		name = {
+			text = EVTOPTAduel21_stubborn #I'll get you next time!
+			trigger = {
+				OR = { trait = stubborn trait = envious }
+				has_character_flag = actually_injured
+				NOT = { has_character_flag = mock_duel }
+			}
+		}
+		name = {
+			text = EVTOPTAduel21_aaargh #you won this one, [name]
+			trigger = { has_character_flag = mildly_injured }
+		}
+		custom_tooltip = { text = you_lose_the_duel_tt }
+		apply_selected_duel_injury_effect = yes
+	}
+	after = {
+		tooltip = { clean_up_after_duel_effect = yes }
+		hidden_effect = { #To handle follow-ups (rivarly/friendship/romance)
+			random_list = {
+				10 = {
+					trigger = { has_character_flag = fight_could_spark_rivalry }
+					if = {
+						limit = { has_character_flag = mock_duel }
+						set_character_flag = was_mock_duel@event_target:other_combatant
+					}
+					if = {
+						limit = { has_character_flag = is_battlefield_duel }
+						set_character_flag = was_battlefield_duel@event_target:other_combatant
+					}
+					character_event = { id = duel.30 days = 22 random = 5 }
+				}
+				10 = {
+					trigger = { has_character_flag = fight_could_spark_friendship }
+					if = {
+						limit = { has_character_flag = mock_duel }
+						set_character_flag = was_mock_duel@event_target:other_combatant
+					}
+					if = {
+						limit = { has_character_flag = is_battlefield_duel }
+						set_character_flag = was_battlefield_duel@event_target:other_combatant
+					}
+					character_event = { id = duel.32 days = 22 random = 5 }
+				}
+				10 = {
+					trigger = { has_character_flag = fight_could_spark_romance }
+					additive_modifier = {
+						value = 100
+						prev_is_lonely_this_romance_makes_sense_trigger = yes
+					}
+					if = {
+						limit = { has_character_flag = mock_duel }
+						set_character_flag = was_mock_duel@event_target:other_combatant
+					}
+					if = {
+						limit = { has_character_flag = is_battlefield_duel }
+						set_character_flag = was_battlefield_duel@event_target:other_combatant
+					}
+					character_event = { id = duel.35 days = 22 random = 5 }
+				}
+			}
+
+			character_event = { id = duel.90 days = 1 } #Send delayed clean-up, to ensure flags are set properly in this after effect
+		}
+	}
+}
+
+# duel.22 The coward runs (winner)
+# The opponent fled; the winner takes the victory.
+# Scope: ROOT is the winner. Fired by send_duel_result_event_effect.
+character_event = {
+	id = duel.22
+	desc = EVTDESCduel22
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+
+	portrait = event_target:other_combatant
+
+	picture = {
+		picture = GFX_evt_camaraderie
+		trigger = { has_character_flag = use_tribal_victory_pic }
+	}
+	picture = {
+		picture = GFX_evt_armory
+		trigger = { NOT = { has_character_flag = use_tribal_victory_pic } }
+	}
+
+	immediate = {
+		set_winner_flags_and_save_opponent_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAduel22 # Look at them run!
+		custom_tooltip = { text = you_win_the_duel_tt }
+		apply_generic_duel_victory_effect = yes
+		handle_claim_duel_result_effect = yes #Claim duels only...
+		#If expanded upon, set specific effects here
+	}
+	after = {
+		clean_up_after_duel_effect = yes
+	}
+}
+
+# duel.23 I ran
+# The loser fled the duel: no experience, a failed society mission and,
+# for a recruit, a failed initiation.
+# Scope: ROOT is the loser. Fired by send_duel_result_event_effect.
+character_event = {
+	id = duel.23
+	desc = EVTDESCduel23 #I ran away...!
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+	immediate = {
+		set_loser_flags_and_save_opponent_effect = yes
+		clr_character_flag = add_duel_xp #Because you are chicken! No reward!
+
+		if = {
+			limit = {
+				OR = {
+					has_quest = quest_warband_duel_honor
+					has_quest = quest_warband_duel_deadly
+					has_quest = quest_chaos_cult_duel_honor
+					has_quest = quest_chaos_cult_duel_deadly
+				}
+				quest_target = { character = event_target:other_combatant }
+			}
+			set_character_flag = failed_mission #Because makes no sense this clears the mission...
+		}
+	}
+
+	portrait = event_target:other_combatant
+
+	option = {
+		name = { text = EVTOPTAduel23_craven trigger = { trait = craven } }
+		name = { text = EVTOPTAduel23_shy trigger = { trait = shy } }
+		name = { text = EVTOPTAduel23_wroth trigger = { trait = wroth } }
+		name = {
+			text = EVTOPTAduel23 #I should've stayed and fought!
+			trigger = { NOR = { trait = craven trait = shy trait = wroth } }
+		}
+		custom_tooltip = { text = you_lose_the_duel_tt }
+
+		handle_claim_duel_result_effect = yes #Claim duels only...
+
+		#In case you were dueling to join a Warrior Lodge...
+		if = {
+			limit = { has_character_flag = awaiting_initiation_trial }
+			hidden_effect = {
+				add_character_modifier = {
+					name = warband_failed_joining_cd
+					duration = 3650
+					hidden = yes
+				}
+			}
+		}
+	}
+	after = {
+		set_character_flag = skip_blood_effect
+		clean_up_after_duel_effect = yes
+	}
+}
+
+# duel.24 Both bloodied (winner)
+# Both fighters are wounded, but the crowd cheers the winner.
+# Scope: ROOT is the winner. Fired by send_duel_result_event_effect.
+character_event = {
+	id = duel.24
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+
+	portrait = event_target:other_combatant
+
+	desc = {
+		text = EVTDESCduel24
+		trigger = { NOT = { has_character_flag = is_battlefield_duel } has_character_flag = desc_A }
+	}
+	desc = {
+		text = EVTDESCduel24_b
+		trigger = { NOT = { has_character_flag = is_battlefield_duel } has_character_flag = desc_B }
+	}
+	desc = {
+		text = EVTDESCduel24_c
+		trigger = { NOT = { has_character_flag = is_battlefield_duel } has_character_flag = desc_C }
+	}
+	desc = {
+		text = EVTDESCduel24_battlefield_duel
+		trigger = { has_character_flag = is_battlefield_duel }
+	}
+
+	picture = {
+		picture = GFX_evt_duel_team #snowy picture
+		trigger = {
+			capital_scope = { location = { is_winter = yes } }
+			NOT = { has_character_flag = is_battlefield_duel }
+		}
+	}
+
+	immediate = {
+		set_winner_flags_and_save_opponent_effect = yes
+		set_character_flag = stalemate_won
+		random_list = {
+			10 = {
+				set_character_flag = desc_A
+				event_target:other_combatant = { set_character_flag = desc_A }
+			}
+			10 = {
+				set_character_flag = desc_B
+				event_target:other_combatant = { set_character_flag = desc_B }
+			}
+			10 = {
+				set_character_flag = desc_C
+				event_target:other_combatant = { set_character_flag = desc_C }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAduel24 # It was all worth it
+		custom_tooltip = { text = you_win_the_duel_tt }
+		apply_generic_duel_victory_effect = yes
+		apply_selected_duel_injury_effect = yes
+		tooltip = {
+			event_target:other_combatant = {
+				show_scope_change = no
+				apply_selected_duel_injury_effect = yes
+			}
+		}
+		tooltip = { clean_up_after_duel_effect = yes }
+
+		#sends event to opponent ("Both wounded - I lost")...
+		hidden_effect = {
+			event_target:other_combatant = { character_event = { id = duel.25 days = 1 } }
+		}
+	}
+}
+
+# duel.25 Both bloodied (loser)
+# Both fighters are wounded, and the crowd cheers the other. May lead to
+# a rivalry, friendship or romance like duel.21.
+# Scope: ROOT is the loser, FROM the winner. Fired by duel.24.
+character_event = {
+	id = duel.25
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+
+	portrait = event_target:other_combatant
+
+	desc = {
+		text = EVTDESCduel25
+		trigger = { NOT = { has_character_flag = is_battlefield_duel } has_character_flag = desc_A }
+	}
+	desc = {
+		text = EVTDESCduel25_b
+		trigger = { NOT = { has_character_flag = is_battlefield_duel } has_character_flag = desc_B }
+	}
+	desc = {
+		text = EVTDESCduel25_c
+		trigger = { NOT = { has_character_flag = is_battlefield_duel } has_character_flag = desc_C }
+	}
+
+	desc = {
+		text = EVTDESCduel25_battlefield_duel
+		trigger = { has_character_flag = is_battlefield_duel }
+	}
+	picture = {
+		picture = GFX_evt_duel_team #snowy picture
+		trigger = {
+			capital_scope = { location = { is_winter = yes } }
+			NOT = { has_character_flag = is_battlefield_duel }
+		}
+	}
+
+	immediate = {
+		set_loser_flags_and_save_opponent_effect = yes
+		set_character_flag = stalemate_lost
+	}
+
+	option = {
+		name = EVTOPTAduel25 #Humiliating!
+		custom_tooltip = { text = you_lose_the_duel_tt }
+		apply_selected_duel_injury_effect = yes
+		tooltip = { FROM = { show_scope_change = no apply_selected_duel_injury_effect = yes } }
+	}
+	after = {
+		tooltip = { clean_up_after_duel_effect = yes }
+		hidden_effect = { #To handle follow-ups (rivarly/friendship/romance)
+			random_list = {
+				10 = {
+					trigger = { has_character_flag = fight_could_spark_rivalry }
+					if = {
+						limit = { has_character_flag = mock_duel }
+						set_character_flag = was_mock_duel@event_target:other_combatant
+					}
+					if = {
+						limit = { has_character_flag = is_battlefield_duel }
+						set_character_flag = was_battlefield_duel@event_target:other_combatant
+					}
+					character_event = { id = duel.30 days = 22 random = 5 }
+				}
+				10 = {
+					trigger = { has_character_flag = fight_could_spark_friendship }
+					if = {
+						limit = { has_character_flag = mock_duel }
+						set_character_flag = was_mock_duel@event_target:other_combatant
+					}
+					if = {
+						limit = { has_character_flag = is_battlefield_duel }
+						set_character_flag = was_battlefield_duel@event_target:other_combatant
+					}
+					character_event = { id = duel.32 days = 22 random = 5 }
+				}
+				10 = {
+					trigger = { has_character_flag = fight_could_spark_romance }
+					additive_modifier = {
+						value = 100
+						prev_is_lonely_this_romance_makes_sense_trigger = yes
+					}
+					if = {
+						limit = { has_character_flag = mock_duel }
+						set_character_flag = was_mock_duel@event_target:other_combatant
+					}
+					if = {
+						limit = { has_character_flag = is_battlefield_duel }
+						set_character_flag = was_battlefield_duel@event_target:other_combatant
+					}
+					character_event = { id = duel.35 days = 22 random = 5 }
+				}
+			}
+
+			character_event = { id = duel.90 days = 1 } #Send delayed clean-up, to ensure flags are set properly in this after effect
+		}
+	}
+}
+
+# duel.26 No mercy
+# The winner finishes off the wounded loser.
+# Scope: ROOT is the loser, other_combatant the winner. Fired by duel.20.
+character_event = {
+	id = duel.26
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+
+	immediate = {
+		set_loser_flags_and_save_opponent_effect = yes
+		if = {
+			limit = { multiplayer = yes }
+			debug_battle_death_counter_effect = yes #for debug purposes
+			send_notifications_after_champion_stand_in_effect = yes
+			if = {
+				limit = {
+					event_target:combatant_1 = {
+						has_character_flag = deadly_duel@event_target:combatant_2
+					}
+				}
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_mission_duel #for flavor
+						killer = event_target:other_combatant
+					}
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = is_battlefield_duel }
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_battle_duel
+						killer = event_target:other_combatant
+					}
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_duel #regular duel death
+						killer = event_target:other_combatant
+					}
+				}
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCduel26_default
+		trigger = {
+			NOT = { has_character_flag = intrigue_options_available }
+			NOT = { has_character_flag = is_battlefield_duel }
+		}
+	}
+	desc = {
+		text = EVTDESCduel26_battlefield_duel
+		trigger = { has_character_flag = is_battlefield_duel }
+	}
+	desc = {
+		text = EVTDESCduel26_intrigue
+		trigger = { has_character_flag = intrigue_options_available }
+	}
+
+	picture = {
+		picture = GFX_evt_duel_team #snowy picture
+		trigger = {
+			capital_scope = { location = { is_winter = yes } }
+			NOT = { has_character_flag = is_battlefield_duel }
+		}
+	}
+
+	option = {
+		name = EVTOPTAduel26 #then there was nothing
+		custom_tooltip = { text = you_lose_the_duel_tt }
+		if = {
+			limit = { multiplayer = no }
+			debug_battle_death_counter_effect = yes #for debug purposes
+			send_notifications_after_champion_stand_in_effect = yes
+			if = {
+				limit = {
+					event_target:combatant_1 = {
+						has_character_flag = deadly_duel@event_target:combatant_2
+					}
+				}
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_mission_duel #for flavor
+						killer = event_target:other_combatant
+					}
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = is_battlefield_duel }
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_battle_duel
+						killer = event_target:other_combatant
+					}
+				}
+			}
+			else = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = {
+						death_reason = death_duel #regular duel death
+						killer = event_target:other_combatant
+					}
+				}
+			}
+		}
+	}
+	after = {
+		if = {
+			limit = {
+				is_using_intrigue_trigger = no
+				event_target:other_combatant = { is_using_intrigue_trigger = yes }
+			}
+			tooltip = { handle_poison_effect = yes }
+		}
+		hidden_effect = {
+			clean_up_after_duel_effect = yes
+			FROM = { clean_up_after_duel_effect = yes }
+		}
+	}
+}
+
+###############################################################################
+# After the fight
+###############################################################################
+
+# duel.30 The shame lingers
+# Weeks after losing, the loser may swear revenge and make a rival
+# (duel.31), or swallow it.
+# Scope: ROOT is the loser, other_combatant the winner. Fired by duel.21 and
+#   duel.25.
+character_event = {
+	id = duel.30
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:other_combatant = { is_alive = yes NOT = { is_rival = ROOT } }
+	}
+
+	desc = {
+		text = EVTDESCduel30_mock_duel
+		picture = GFX_evt_camaraderie
+		trigger = {
+			has_character_flag = was_mock_duel@event_target:other_combatant
+			NOT = { trait = incapable }
+		}
+	}
+	desc = {
+		text = EVTDESCduel30_default
+		trigger = {
+			NOT = { has_character_flag = was_mock_duel@event_target:other_combatant }
+			NOT = { trait = incapable }
+		}
+	}
+	desc = { text = EVTDESCduel30_incapable trigger = { trait = incapable } }
+
+	option = {
+		name = EVTOPTAduel30 #I'll make them pay
+		add_character_modifier = { modifier = fueled_by_rage months = 24 }
+
+		add_rival = event_target:other_combatant
+
+		event_target:other_combatant = { character_event = { id = duel.31 days = 1 } }
+	}
+	option = {
+		name = EVTOPTBduel30 #These feelings shall pass
+		prestige = -15
+		opinion = {
+			who = event_target:other_combatant
+			modifier = opinion_fought_duel #Update to something cooler?
+			years = 10
+		}
+		trigger = {
+			NOT = {
+				has_opinion_modifier = {
+					who = event_target:other_combatant
+					modifier = opinion_fought_duel
+				}
+			}
+		}
+	}
+	after = {
+		clr_character_flag = was_mock_duel@event_target:other_combatant
+	}
+}
+
+# duel.31 A sworn enemy
+# Notice to the winner: the loser has sworn to avenge the defeat.
+# Scope: ROOT is the winner, FROM the loser. Fired by duel.30.
+character_event = {
+	id = duel.31
+	is_triggered_only = yes
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+
+	desc = {
+		text = EVTDESCduel31 #They did not take lightly, being defeated and has sworn revenge
+		trigger = { FROM = { NOT = { trait = incapable } } }
+	}
+	desc = {
+		text = EVTDESCduel31_incapable #The last thing they muttered before the slipped into slumber was that they'd kill me?
+		trigger = { FROM = { trait = incapable } }
+	}
+
+	option = {
+		name = EVTOPTAduel31
+		trigger = { NOT = { num_of_rivals = 3 } FROM = { NOT = { trait = incapable } } }
+		add_rival = FROM
+	}
+
+	option = {
+		name = EVTOPTBduel31
+		trigger = { num_of_rivals = 3 FROM = { NOT = { trait = incapable } } }
+		add_rival = FROM
+	}
+	option = {
+		name = EVTOPTAduel31_incapable
+		trigger = { FROM = { trait = incapable } }
+		add_rival = FROM
+	}
+}
+
+# duel.32 A worthy opponent
+# The loser comes to respect the winner; they may become friends (duel.33).
+# Scope: ROOT is the loser, other_combatant the winner. Fired by duel.21 and
+#   duel.25.
+character_event = {
+	id = duel.32
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:other_combatant = {
+			is_alive = yes
+			NOT = { is_friend = ROOT }
+			NOT = { trait = incapable }
+			prisoner = no
+			is_adult = yes
+		}
+		NOT = { trait = incapable }
+		prisoner = no
+		is_adult = yes
+	}
+
+	desc = {
+		text = EVTDESCduel32_mock_duel
+		trigger = { has_character_flag = was_mock_duel@event_target:other_combatant }
+	}
+	desc = {
+		text = EVTDESCduel32_battlefield_duel
+		trigger = { has_character_flag = was_battlefield_duel@event_target:other_combatant }
+	}
+	desc = {
+		text = EVTDESCduel32_default
+		trigger = {
+			NOT = { has_character_flag = was_mock_duel@event_target:other_combatant }
+			NOT = { has_character_flag = was_battlefield_duel@event_target:other_combatant }
+		}
+	}
+
+	option = {
+		name = EVTOPTAduel32 #They were a worthy opponent!
+
+		if = { #if you already have an opinion in place, become friends...
+			limit = {
+				OR = {
+					reverse_has_opinion_modifier = {
+						who = event_target:other_combatant
+						modifier = opinion_budding_friendship
+					}
+					has_opinion_modifier = {
+						who = event_target:other_combatant
+						modifier = opinion_budding_friendship
+					}
+				}
+			}
+			tooltip = { add_friend = event_target:other_combatant }
+		}
+		else = { #otherwise, add opinions... (*actually* added in follow-up)
+			tooltip = {
+				opinion = {
+					who = event_target:other_combatant
+					modifier = opinion_budding_friendship
+					years = 10
+				}
+				reverse_opinion = {
+					who = event_target:other_combatant
+					modifier = opinion_budding_friendship
+					years = 10
+				}
+			}
+		}
+		event_target:other_combatant = { character_event = { id = duel.33 days = 1 } }
+
+		trigger = { NOT = { is_friend = event_target:other_combatant } }
+	}
+	option = {
+		name = EVTOPTBduel32 #I have enough sparring partners
+		add_trait = proud
+		clr_character_flag = was_mock_duel@event_target:other_combatant
+		clr_character_flag = was_battlefield_duel@event_target:other_combatant
+	}
+}
+
+# duel.33 Sparring partners
+# The winner hears the loser's good words and the two grow close.
+# Scope: ROOT is the winner, FROM the loser. Fired by duel.32.
+character_event = {
+	id = duel.33
+	is_triggered_only = yes
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_diplomacy
+
+	desc = {
+		text = EVTDESCduel33_mock_duel
+		trigger = { FROM = { has_character_flag = was_mock_duel@event_target:other_combatant } }
+	}
+	desc = {
+		text = EVTDESCduel33_default
+		trigger = {
+			FROM = {
+				NOT = { has_character_flag = was_mock_duel@event_target:other_combatant }
+				NOT = { has_character_flag = was_battlefield_duel@event_target:other_combatant }
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCduel33_battlefield_duel
+		trigger = {
+			FROM = { has_character_flag = was_battlefield_duel@event_target:other_combatant }
+		}
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAduel33_honest #Honest? How refreshing!
+			trigger = {
+				trait = honest
+				FROM = { NOT = { has_character_flag = was_mock_duel@event_target:other_combatant } }
+				FROM = {
+					NOT = { has_character_flag = was_battlefield_duel@event_target:other_combatant }
+				}
+			}
+		}
+		name = {
+			text = EVTOPTAduel33_default #Don't be too hard on yourself!
+			trigger = {
+				NOT = { trait = honest }
+				FROM = { NOT = { has_character_flag = was_mock_duel@event_target:other_combatant } }
+				FROM = {
+					NOT = { has_character_flag = was_battlefield_duel@event_target:other_combatant }
+				}
+			}
+		}
+		name = {
+			text = EVTOPTAduel33_mock_duel #Don't be too hard on yourself!
+			trigger = { FROM = { has_character_flag = was_mock_duel@event_target:other_combatant } }
+		}
+		name = {
+			text = EVTOPTAduel33_battlefield_duel #Friendships come in many forms
+			trigger = {
+				FROM = { has_character_flag = was_battlefield_duel@event_target:other_combatant }
+				NOT = { FROM = { has_character_flag = was_mock_duel@event_target:other_combatant } }
+			}
+		}
+
+		if = {
+			limit = {
+				OR = {
+					reverse_has_opinion_modifier = {
+						who = FROM
+						modifier = opinion_budding_friendship
+					}
+					has_opinion_modifier = { who = FROM modifier = opinion_budding_friendship }
+				}
+			}
+			add_friend = FROM
+		}
+		else = {
+			opinion = { who = FROM modifier = opinion_budding_friendship years = 10 }
+			reverse_opinion = { who = FROM modifier = opinion_budding_friendship years = 10 }
+		}
+		hidden_effect = {
+			FROM = {
+				clr_character_flag = was_mock_duel@event_target:other_combatant
+				clr_character_flag = was_battlefield_duel@event_target:other_combatant
+			}
+		}
+	}
+}
+
+# duel.35 Struck by more than steel
+# The loser cannot stop thinking about the winner: write a love letter
+# (duel.36) or carry a torch in silence.
+# Scope: ROOT is the loser, other_combatant the winner. Fired by duel.21 and
+#   duel.25.
+character_event = {
+	id = duel.35
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:other_combatant = {
+			is_alive = yes
+			NOT = { is_lover = ROOT }
+			NOT = { trait = incapable }
+			prisoner = no
+			is_adult = yes
+		}
+		NOT = { trait = incapable }
+		prisoner = no
+		is_adult = yes
+	}
+
+	immediate = {
+		random_list = {
+			10 = {
+				set_character_flag = desc_A
+				event_target:other_combatant = { set_character_flag = desc_A }
+			}
+			10 = {
+				set_character_flag = desc_B
+				event_target:other_combatant = { set_character_flag = desc_B }
+			}
+			10 = {
+				set_character_flag = desc_C
+				event_target:other_combatant = { set_character_flag = desc_C }
+			}
+		}
+	}
+
+	desc = {
+		text = EVTDESCduel35_new_crush_a #not spouse/no romance past or budding
+		trigger = {
+			NOR = {
+				has_character_flag = carried_torch_for@event_target:other_combatant
+				has_character_flag = carrying_torch_for@event_target:other_combatant
+				has_opinion_modifier = {
+					who = event_target:other_combatant
+					modifier = opinion_budding_romance
+				}
+				has_opinion_modifier = {
+					who = event_target:other_combatant
+					modifier = opinion_marital_love
+				}
+			}
+			has_character_flag = desc_A
+		}
+	}
+	desc = {
+		text = EVTDESCduel35_new_crush_b #not spouse/no romance past or budding
+		trigger = {
+			NOR = {
+				has_character_flag = carried_torch_for@event_target:other_combatant
+				has_character_flag = carrying_torch_for@event_target:other_combatant
+				has_opinion_modifier = {
+					who = event_target:other_combatant
+					modifier = opinion_budding_romance
+				}
+				has_opinion_modifier = {
+					who = event_target:other_combatant
+					modifier = opinion_marital_love
+				}
+			}
+			has_character_flag = desc_B
+		}
+	}
+	desc = {
+		text = EVTDESCduel35_new_crush_c #not spouse/no romance past or budding
+		trigger = {
+			NOR = {
+				has_character_flag = carried_torch_for@event_target:other_combatant
+				has_character_flag = carrying_torch_for@event_target:other_combatant
+				has_opinion_modifier = {
+					who = event_target:other_combatant
+					modifier = opinion_budding_romance
+				}
+				has_opinion_modifier = {
+					who = event_target:other_combatant
+					modifier = opinion_marital_love
+				}
+			}
+			has_character_flag = desc_C
+		}
+	}
+
+	desc = {
+		text = EVTDESCduel35_crushing_already #not spouse/romance budding already
+		trigger = {
+			NOT = { has_character_flag = carried_torch_for@event_target:other_combatant }
+			OR = {
+				has_character_flag = carrying_torch_for@event_target:other_combatant
+				has_opinion_modifier = {
+					who = event_target:other_combatant
+					modifier = opinion_budding_romance
+				}
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCduel35_crush_past #not spouse/used to carry torch
+		trigger = {
+			has_character_flag = carried_torch_for@event_target:other_combatant
+			NOR = {
+				has_character_flag = carrying_torch_for@event_target:other_combatant
+				has_opinion_modifier = {
+					who = event_target:other_combatant
+					modifier = opinion_budding_romance
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAduel35 #I have to express my feelings to them!
+		custom_tooltip = { text = EVTOPTAduel35_TT }
+		hidden_effect = {
+			if = { #if they already like you, you'll likely become lovers...
+				limit = {
+					event_target:other_combatant = {
+						OR = {
+							has_opinion_modifier = { who = ROOT modifier = opinion_budding_romance }
+							has_character_flag = carried_torch_for@ROOT
+							has_character_flag = carrying_torch_for@ROOT
+						}
+					}
+				}
+				event_target:other_combatant = { set_character_flag = finally_lovers }
+			}
+			else = { #otherwise, add opinion of them...
+				event_target:other_combatant = { set_character_flag = they_like_me }
+			}
+			opinion = {
+				who = event_target:other_combatant
+				modifier = opinion_budding_romance
+				years = 10
+			}
+		}
+		event_target:other_combatant = { character_event = { id = duel.36 } }
+
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = lustful }
+			modifier = { factor = 2 has_lover = no }
+			modifier = {
+				factor = 2
+				event_target:other_combatant = { has_fair_trait_trigger = yes }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBduel35 #They can never know...!
+		add_character_modifier = { name = carrying_torch duration = 1825 }
+		hidden_effect = {
+			event_target:other_combatant = { save_event_target_as = dream_person }
+			set_character_flag = carrying_torch_for@event_target:dream_person
+			character_event = { id = duel.39 days = 1825 } #delayed event to update torch-flag to relate to the past
+			clr_character_flag = was_mock_duel@event_target:other_combatant
+		}
+
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 200
+				event_target:other_combatant = {
+					root_has_terrible_opinion_modifier_of_this_trigger = yes
+				}
+			}
+		}
+	}
+	after = {
+		clr_character_flag = desc_A
+		clr_character_flag = desc_B
+		clr_character_flag = desc_C
+		clr_character_flag = desc_D
+	}
+}
+
+# duel.36 A love letter
+# The winner reads the letter and answers it (duel.37) or not (duel.38).
+# Scope: ROOT is the winner, FROM the letter writer. Fired by duel.35.
+character_event = {
+	id = duel.36
+	is_triggered_only = yes
+	picture = GFX_evt_recieve_letter
+	border = GFX_event_normal_frame_diplomacy
+
+	picture = { picture = GFX_evt_pleasing_letter trigger = { is_female = yes } }
+
+	picture = { picture = GFX_evt_upsetting_letter trigger = { is_female = no age = 50 } }
+
+	desc = { text = EVTDESCduel36_finally_lovers trigger = { has_character_flag = finally_lovers } }
+	desc = {
+		text = EVTDESCduel36_a
+		trigger = { has_character_flag = they_like_me has_character_flag = desc_A }
+	}
+	desc = {
+		text = EVTDESCduel36_b
+		trigger = { has_character_flag = they_like_me has_character_flag = desc_B }
+	}
+	desc = {
+		text = EVTDESCduel36_c
+		trigger = { has_character_flag = they_like_me has_character_flag = desc_C }
+	}
+
+	option = {
+		name = EVTOPTAduel36 #I want to act on these feelings!
+
+		if = {
+			limit = { has_character_flag = they_like_me }
+			custom_tooltip = { text = EVTOPTAduel36_TT }
+			opinion = { who = FROM modifier = opinion_budding_romance years = 10 }
+		}
+		if = { limit = { has_character_flag = finally_lovers } tooltip = { add_lover = FROM } }
+
+		if = { limit = { ai = no } set_character_flag = achievement_love_is_a_battlefield }
+
+		FROM = { character_event = { id = duel.37 days = 15 random = 5 } }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 2 trait = lustful }
+			modifier = { factor = 2 has_lover = no }
+			modifier = { factor = 2 FROM = { has_fair_trait_trigger = yes } }
+			modifier = { factor = 2 FROM = { has_top_tier_education_trait_trigger = yes } }
+			modifier = { factor = 2 FROM = { is_benevolent_trigger = yes } }
+			modifier = { factor = 2 FROM = { has_pleasant_personality_trigger = yes } }
+		}
+	}
+
+	option = {
+		name = EVTOPTBduel36 #I think I'd rather not get involved with <from>.
+		if = {
+			limit = { has_character_flag = they_like_me }
+			custom_tooltip = { text = EVTOPTAduel36_TT }
+		}
+		FROM = { character_event = { id = duel.38 days = 15 random = 5 } }
+		hidden_effect = {
+			FROM = { clr_character_flag = was_mock_duel@event_target:other_combatant }
+			FROM = { clr_character_flag = was_battlefield_duel@event_target:other_combatant }
+		}
+
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 200
+				FROM = { root_has_terrible_opinion_modifier_of_this_trigger = yes }
+			}
+			modifier = { factor = 10 FROM = { has_negative_congenital_trigger = yes } }
+			modifier = { factor = 2 FROM = { has_bottom_tier_education_trait_trigger = yes } }
+		}
+	}
+	after = {
+		clr_character_flag = desc_A
+		clr_character_flag = desc_B
+		clr_character_flag = desc_C
+		clr_character_flag = desc_D
+	}
+}
+
+# duel.37 The letter is answered
+# Love returned: the two become lovers or the romance buds, and the
+# writer grows a little.
+# Scope: ROOT is the letter writer, FROM the winner. Fired by duel.36.
+character_event = {
+	id = duel.37
+	picture = GFX_evt_recieve_letter
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes
+
+	picture = { picture = GFX_evt_pleasing_letter trigger = { is_female = yes } }
+
+	picture = { picture = GFX_evt_upsetting_letter trigger = { is_female = no age = 50 } }
+
+	immediate = { #Selects a trait effect...
+		if = {
+			limit = { NOR = { trait = honest trait = deceitful } }
+			set_character_flag = add_honest
+		}
+		else_if = {
+			limit = { NOR = { trait = lustful trait = chaste } }
+			set_character_flag = add_lustful
+		}
+		else_if = { limit = { trait = shy } set_character_flag = remove_shy }
+		else_if = {
+			limit = { NOT = { trait = kind } FROM = { trait = kind } }
+			set_character_flag = add_kind
+		}
+		else_if = { limit = { trait = envious } set_character_flag = remove_envious }
+		else_if = {
+			limit = { trait = cruel FROM = { trait = kind } }
+			set_character_flag = remove_cruel
+		}
+	}
+
+	desc = {
+		text = EVTDESCduel37_finally_lovers
+		trigger = { FROM = { has_character_flag = finally_lovers } }
+	}
+	desc = { text = EVTDESCduel37_a trigger = { FROM = { has_character_flag = they_like_me } } }
+
+	option = {
+		name = {
+			text = EVTOPTAduel37_honest
+			trigger = {
+				NOR = {
+					has_character_flag = add_honest
+					has_character_flag = add_lustful
+					has_character_flag = remove_shy
+					has_character_flag = add_kind
+					has_character_flag = remove_envious
+					has_character_flag = remove_cruel
+				}
+			}
+		}
+		name = { text = EVTOPTAduel37_honest trigger = { has_character_flag = add_honest } }
+		name = { text = EVTOPTAduel37_lustful trigger = { has_character_flag = add_lustful } }
+		name = { text = EVTOPTAduel37_shy trigger = { has_character_flag = remove_shy } }
+		name = { text = EVTOPTAduel37_kind trigger = { has_character_flag = add_kind } }
+		name = { text = EVTOPTAduel37_envious trigger = { has_character_flag = remove_envious } }
+		name = { text = EVTOPTAduel37_cruel trigger = { has_character_flag = remove_cruel } }
+
+		if = { limit = { FROM = { has_character_flag = finally_lovers } } add_lover = FROM }
+		else = {
+			custom_tooltip = { text = EVTOPTAduel36_TT } #FROM  has received the opinion Budding Romance
+			trigger_switch = {
+				on_trigger = has_character_flag
+				add_honest = { add_trait = honest }
+				add_lustful = { add_trait = lustful }
+				remove_shy = { remove_trait = shy }
+				add_kind = { add_trait = kind }
+				remove_envious = { remove_trait = envious }
+				remove_cruel = { remove_trait = cruel }
+			}
+		}
+
+		if = { limit = { ai = no } set_character_flag = achievement_love_is_a_battlefield }
+
+		FROM = { clr_character_flag = finally_lovers clr_character_flag = they_like_me }
+		clr_character_flag = add_honest
+		clr_character_flag = add_lustful
+		clr_character_flag = remove_shy
+		clr_character_flag = add_kind
+		clr_character_flag = remove_envious
+		clr_character_flag = remove_cruel
+	}
+}
+
+# duel.38 No answer
+# No reply comes: carry the torch or sink into melancholy.
+# Scope: ROOT is the letter writer, FROM the winner. Fired by duel.36.
+character_event = {
+	id = duel.38
+	desc = EVTDESCduel38
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes
+
+	immediate = {
+		job_chancellor = { #For GetMyChancellorName
+			save_event_target_as = advisor_target
+		}
+	}
+
+	option = {
+		name = EVTOPTAduel38 #I will keep this to myself then...
+		add_character_modifier = { name = carrying_torch duration = 1825 }
+		hidden_effect = {
+			event_target:other_combatant = { save_event_target_as = dream_person }
+			set_character_flag = carrying_torch_for@event_target:dream_person
+			character_event = { id = duel.39 days = 1825 } #delayed event to update torch-flag to relate to the past
+			clr_character_flag = was_mock_duel@event_target:other_combatant
+		}
+	}
+	option = {
+		name = EVTOPTBduel38 #It is useless.
+		add_trait = depressed
+	}
+	after = {
+		FROM = { clr_character_flag = finally_lovers clr_character_flag = they_like_me }
+	}
+}
+
+# duel.39 The torch burns low
+# Hidden. Five years on, the secret love becomes a love of the past.
+# Scope: ROOT is the one carrying a torch. Fired by duel.35 and duel.38.
+character_event = {
+	id = duel.39
+	hide_window = yes
+	is_triggered_only = yes
+	immediate = {
+		clr_character_flag = carrying_torch_for@event_target:dream_person
+		set_character_flag = carried_torch_for@event_target:dream_person
+	}
+}
+
+###############################################################################
+# Claim duels
+###############################################################################
+
+# duel.40 A claim duel
+# A claimant challenges the holder to a duel for his titles. Accepting
+# may rid him of cravenness; refusing makes him craven, costs prestige and
+# angers the challenger (duel.3). A lord of Khorne loses piety for refusing.
+# Scope: ROOT is the challenged (combatant_2), combatant_1 the claimant. Fired
+#   by the claim duel decision (hf_warrior_lodge_decisions.txt) and
+#   wh_assign_racial_trait.
+character_event = {
+	id = duel.40
+	title = claim_duel_challenge_title
+	picture = GFX_evt_bloodlines
+	border = GFX_event_normal_frame_war
+
+	desc = {
+		text = EVTDESCduel40_a
+		trigger = {
+			event_target:combatant_1 = {
+				has_character_flag = wants_single_title_from@event_target:combatant_2
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCduel40_b
+		trigger = {
+			event_target:combatant_1 = {
+				has_character_flag = wants_multiple_titles_from@event_target:combatant_2
+			}
+		}
+	}
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = { #to prevent spam...
+			limit = { NOT = { has_character_modifier = recent_duel_timer } }
+			add_character_modifier = { modifier = recent_duel_timer hidden = yes months = 3 }
+		}
+		event_target:combatant_1 = { #combatant_1/attacker
+			if = {
+				limit = { NOT = { has_character_modifier = recent_duel_timer } }
+				#special circumstances, like initiation duel, etc
+				add_character_modifier = { #OUTCOMMENT FOR TESTING PURPOSES
+					modifier = recent_duel_timer
+					hidden = yes
+					months = 3
+				}
+			}
+		}
+	}
+
+	option = { #Challenge accepted
+		name = EVTOPTAduel1
+		custom_tooltip = { text = EVTOPTAduel40_TT }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 0.5 trait = craven }
+			modifier = { religion = khorne factor = 3 }
+			modifier = { factor = 0.3 religion = shallyan }
+		}
+		if = { limit = { trait = craven } random = { chance = 20 remove_trait = craven } }
+		pacifists_lose_piety_effect = yes
+		if = {
+			limit = { #Warriors like a warrior who acts like one...
+				OR = {
+					is_member_of_any_warband_trigger = yes
+					is_member_of_any_warrior_lodge_trigger = yes
+				}
+			}
+			add_legend_progress_trivial_effect = yes
+		}
+		event_target:combatant_1 = { character_event = { id = duel.41 days = 2 } }
+		set_character_flag = add_duel_xp
+		clr_character_flag = punish_declining
+	}
+	option = { #No way! He/She can't just DUEL me for my titles...!
+		name = { text = EVTOPTBduel40_wroth trigger = { trait = wroth } }
+		name = {
+			text = EVTOPTBduel40_orderly
+			trigger = { OR = { trait = administrator is_learned_trigger = yes } }
+		}
+		name = { text = EVTOPTBduel40 trigger = { NOT = { trait = wroth } } }
+
+		if = {
+			limit = { trait = craven }
+			add_character_modifier = { modifier = cowardly_ruler years = 5 }
+		}
+		else = { add_trait = craven }
+		ai_chance = {
+			factor = 3
+			modifier = { trait = craven factor = 1.5 }
+			modifier = { religion = khorne factor = 0 }
+			modifier = {
+				OR = {
+					trait = bretonnian_knight
+					trait = bretonnian_knight_errant
+					trait = questing
+					trait = grail_knight
+				}
+				factor = 0.1
+			}
+		}
+		if = { #Khorne despises the lord who will not shed blood
+			limit = { religion = khorne }
+			piety = -50
+		}
+		if = {
+			limit = { has_character_flag = punish_declining }
+			if = {
+				limit = { NOR = { trait = craven trait = brave trait = berserker } }
+				random = {
+					chance = 50
+					add_trait = craven
+					hidden_tooltip = {
+						character_event = {
+							id = 38257 #Notify Craven
+						}
+					}
+				}
+			}
+			if = { limit = { trait = brave } remove_trait = brave }
+			prestige = -50
+			add_character_modifier = {
+				modifier = declined_prestige_duel_timer
+				hidden = yes
+				duration = 1095
+			}
+		}
+		hidden_tooltip = { remove_character_modifier = recent_duel_timer }
+		event_target:combatant_1 = { #the attacker/combatant_1
+			hidden_tooltip = {
+				remove_character_modifier = recent_duel_timer
+				if = {
+					limit = { NOT = { has_character_modifier = duels_declined } }
+					opinion = { modifier = opinion_fled_duel who = ROOT years = 100 }
+				}
+				else = {
+					opinion = {
+						modifier = opinion_declined_my_duel #For visuals
+						who = ROOT
+						years = 100
+					}
+				}
+				character_event = { id = duel.3 days = 3 } #Duel rejected...
+			}
+		}
+		increase_cowardly_status_effect = yes #tracks duel cowardice
+		clr_character_flag = punish_declining
+	}
+}
+
+# duel.41 The claim duel is accepted
+# The claimant learns the answer and may still fight dirty; then the fight
+# is set up (duel.10).
+# Scope: ROOT is the claimant, FROM the challenged. Fired by duel.40.
+character_event = {
+	id = duel.41
+	title = challenge_accepted_title
+	is_triggered_only = yes
+	picture = GFX_evt_bloodlines
+	border = GFX_event_normal_frame_war
+
+	desc = {
+		text = EVTDESCduel41_a
+		trigger = {
+			event_target:combatant_1 = {
+				has_character_flag = wants_single_title_from@event_target:combatant_2
+			}
+		}
+	}
+	desc = {
+		text = EVTDESCduel41_b
+		trigger = {
+			event_target:combatant_1 = {
+				has_character_flag = wants_multiple_titles_from@event_target:combatant_2
+			}
+		}
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAduel2 #Let's fight!
+		}
+		if = {
+			limit = { has_character_flag = mock_duel }
+			custom_tooltip = { text = EVTOPTAduel2_TT } #the duel will take place within the next few days.
+		}
+		if = {
+			limit = {
+				is_tribal = yes
+				has_strong_claim = FROM # if attacker has strong claim on target
+				FROM = { is_tribal = yes }
+			}
+			custom_tooltip = { text = EVTOPTAduel41_claim_duel_TT } # "This might affect the fate of <title>..."
+		}
+
+		if = {
+			limit = { #Warriors like a warrior who acts like one...
+				OR = {
+					is_member_of_any_warband_trigger = yes
+					is_member_of_any_warrior_lodge_trigger = yes
+				}
+			}
+			add_legend_progress_trivial_effect = yes
+		}
+
+		#FALLBACK:
+		if = { #If FROM is no longer alive, clear relevant flags, etc...
+			limit = { FROM = { NOT = { is_alive = yes } } }
+			hidden_effect = {
+				remove_character_modifier = recent_duel_timer
+				clr_duel_flags_effect = yes
+			}
+		}
+		else = {
+			hidden_effect = {
+				set_character_flag = add_duel_xp
+				reset_duel_timers_effect = yes
+				character_event = { id = duel.10 } #Send hidden set-up of duel (from there: result)
+			}
+		}
+		ai_chance = { factor = 80 }
+	}
+
+	option = { # [INTRIGUE OPTION]
+		name = {
+			text = EVTOPTduel_intrigue #I will do something.... special.
+		}
+		tooltip_info = intrigue
+
+		custom_tooltip = { text = EVTOPTduel_intrigue_TT } #you will use any means necessary...
+
+		set_character_flag = attacker_using_poison@event_target:combatant_2
+
+		if = { #There is a chance the poison fails...
+			limit = {
+				OR = {
+					FROM = {
+						job_spymaster = {
+							opinion = { who = PREV value = 15 } #if they like their employer
+							intrigue = ROOT #and they can match your intrigue
+						}
+					}
+					FROM = { intrigue = ROOT } #they alone can match your intrigue
+				}
+			}
+			set_character_flag = poison_can_fail_against@event_target:combatant_2
+		}
+
+		#FALLBACK:
+		if = { #If FROM is no longer alive, clear relevant flags, etc...
+			limit = { FROM = { NOT = { is_alive = yes } } }
+			hidden_effect = {
+				remove_character_modifier = recent_duel_timer
+				clr_duel_flags_effect = yes
+			}
+		}
+		else = {
+			hidden_effect = {
+				set_character_flag = add_duel_xp
+				reset_duel_timers_effect = yes
+				character_event = { id = duel.10 } #Send hidden set-up of duel (from there: result)
+			}
+		}
+
+		ai_chance = { factor = 20 dishonorable_ai_chance_increase_score = yes }
+
+		trigger = { intrigue = 12 has_dlc = "Holy Fury" }
+	}
+}
+
+# duel.42 At the victor's mercy
+# The beaten fighter of a claim duel is offered his life for his claims:
+# yield them and walk away (duel.43), or die (duel.44). A player may
+# instead die and play on as the victor, if the victor is an AI of the
+# same dynasty.
+# Scope: ROOT is the loser, FROM the winner. Fired by duel.13.
+character_event = {
+	id = duel.42
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	title = getDuelTitle
+	is_triggered_only = yes
+	portrait = event_target:other_combatant
+
+	immediate = {
+		sound_effect = duel_lose
+		set_loser_flags_and_save_opponent_effect = yes
+	}
+
+	desc = {
+		text = EVTDESCduel42_a
+		trigger = { has_character_flag = desc_A NOT = { has_character_flag = is_spared_poisoner } }
+	}
+	desc = {
+		text = EVTDESCduel42_b
+		trigger = { has_character_flag = desc_B NOT = { has_character_flag = is_spared_poisoner } }
+	}
+	desc = {
+		text = EVTDESCduel42_c
+		trigger = { has_character_flag = desc_C NOT = { has_character_flag = is_spared_poisoner } }
+	}
+	desc = { text = EVTDESCduel42_d trigger = { has_character_flag = is_spared_poisoner } }
+
+	picture = {
+		picture = GFX_evt_duel_team #snowy picture
+		trigger = { capital_scope = { location = { is_winter = yes } } }
+	}
+
+	option = { # I'll walk away while I can...
+		name = EVTOPTAduel42
+		custom_tooltip = { text = you_lose_the_duel_tt }
+
+		#to take care of after effects...
+		event_target:combatant_1 = { clr_character_flag = someone_died }
+		event_target:combatant_2 = { clr_character_flag = someone_died }
+
+		if = {
+			limit = { character = event_target:combatant_1 }
+			remove_all_claims_for_combatant_1_effect = yes #Claim duels only...
+		}
+		else = {
+			remove_all_claims_for_combatant_2_effect = yes #Claim duels only...
+		}
+		FROM = { character_event = { id = duel.43 days = 1 } } #follow-up
+
+		tooltip = { clean_up_after_duel_effect = yes }
+
+		ai_chance = { factor = 10 likes_other_combatant_score = yes }
+	}
+
+	# I would rather DIE
+	option = {
+		name = EVTOPTBduel42
+
+		custom_tooltip = { text = you_lose_the_duel_tt }
+
+		# For correct effects and tooltips...
+		hidden_effect = { FROM = { handle_claim_duel_result_effect = yes } }
+		handle_claim_duel_result_effect = yes
+
+		if = {
+			limit = {
+				has_character_flag = injury_face
+				has_character_flag = desc_A
+				has_nickname = no
+			}
+			give_nickname = nick_the_headless
+		}
+		if = {
+			limit = { character = event_target:combatant_1 }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = {
+				death = {
+					death_reason = death_claim_duel_attacker #for flavor
+					killer = event_target:other_combatant
+				}
+			}
+		}
+		else = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = {
+				death = {
+					death_reason = death_claim_duel_defender #for flavor
+					killer = event_target:other_combatant
+				}
+			}
+		}
+		tooltip = { clean_up_after_duel_effect = yes }
+		FROM = { character_event = { id = duel.44 days = 1 } } #follow-up
+
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 2 has_character_modifier = proving_bravery }
+			title_tier_reduction_score = yes # less likely, the more they have to lose...
+		}
+	}
+
+	# SPECIAL OPTION: for players, if the opponent is an AI of your dynasty...
+	option = {
+		name = EVTOPTCduel42
+		tooltip_info_custom = available_because_dynasty_member_tt
+
+		custom_tooltip = { text = you_lose_the_duel_tt }
+
+		# For correct effects and tooltips...
+		hidden_effect = { FROM = { handle_claim_duel_result_effect = yes } }
+		handle_claim_duel_result_effect = yes
+
+		if = {
+			limit = {
+				has_character_flag = injury_face
+				has_character_flag = desc_A
+				has_nickname = no
+			}
+			give_nickname = nick_the_headless
+		}
+		if = {
+			limit = { character = event_target:combatant_1 }
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = {
+				death = {
+					death_reason = death_claim_duel_attacker #for flavor
+					killer = event_target:other_combatant
+				}
+			}
+		}
+		else = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = {
+				death = {
+					death_reason = death_claim_duel_defender #for flavor
+					killer = event_target:other_combatant
+				}
+			}
+		}
+
+		tooltip = { clean_up_after_duel_effect = yes }
+
+		set_player_character = event_target:other_combatant #take control of the winner...
+
+		FROM = { character_event = { id = duel.44 days = 1 } } #follow-up
+
+		trigger = {
+			event_target:combatant_1 = { has_character_flag = claim_duel@event_target:combatant_2 }
+			ai = no
+			event_target:other_combatant = { ai = yes dynasty = ROOT }
+		}
+	}
+}
+
+# duel.43 He yields
+# The merciful winner hears that the loser gave up his claims, and
+# forgives him (duel.45) or shames him.
+# Scope: ROOT is the winner, FROM the loser. Fired by duel.42.
+character_event = {
+	id = duel.43
+	title = duel_aftermath_title
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	picture = {
+		picture = GFX_evt_duel_scene
+		trigger = {
+			NOR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+	}
+	picture = {
+		picture = GFX_evt_greenskinanimosity
+		trigger = {
+			OR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+	}
+	desc = EVTDESCduel43_a
+
+	picture = {
+		picture = GFX_evt_duel_team #snowy picture
+		trigger = { capital_scope = { location = { is_winter = yes } } }
+	}
+
+	### Become friendly
+	option = { # You have my forgiveness
+		name = EVTOPTAduel43
+		custom_tooltip = { text = EVTOPTAduel43_TT }
+
+		if = { limit = { trait = cruel } remove_trait = cruel }
+		else_if = { limit = { trait = envious } remove_trait = envious }
+		else_if = { limit = { NOT = { trait = kind } } add_trait = kind }
+		else_if = { limit = { NOT = { trait = patient } } add_trait = patient }
+
+		if = { #if you already have an opinion in place, become friends...
+			limit = {
+				OR = {
+					reverse_has_opinion_modifier = {
+						who = FROM
+						modifier = opinion_budding_friendship
+					}
+					has_opinion_modifier = { who = FROM modifier = opinion_budding_friendship }
+				}
+			}
+			tooltip = { add_friend = FROM }
+		}
+		else = { #otherwise, add opinions... (*actually* added in follow-up)
+			tooltip = {
+				opinion = { who = FROM modifier = opinion_budding_friendship years = 10 }
+				reverse_opinion = { who = FROM modifier = opinion_budding_friendship years = 10 }
+			}
+		}
+		FROM = { set_character_flag = they_were_nice_about_it }
+	}
+
+	### Become rivals
+	option = { #I will be WATCHING you...
+		name = EVTOPTBduel43
+		tooltip_info_custom = available_because_malevolent_tt
+
+		if = { limit = { trait = kind } remove_trait = kind }
+		else_if = { limit = { trait = patient } remove_trait = patient }
+		else_if = { limit = { NOT = { trait = cruel } } add_trait = cruel }
+		else_if = { limit = { NOT = { trait = arbitrary } } add_trait = arbitrary }
+		else_if = { limit = { NOT = { trait = envious } } add_trait = envious }
+
+		custom_tooltip = { text = EVTOPTBduel43_TT }
+		tooltip = {
+			FROM = {
+				show_scope_change = no
+				add_character_modifier = { name = publicly_humiliated years = 5 }
+			}
+			if = { limit = { NOT = { is_rival = FROM } } add_rival = event_target:other_combatant }
+		}
+		FROM = { set_character_flag = they_were_mean_about_it }
+
+		trigger = {
+			OR = {
+				trait = deceitful
+				trait = cruel
+				trait = arbitrary
+				trait = wroth
+				trait = envious
+				trait = cynical
+				trait = lunatic_1
+				trait = lunatic_2
+				trait = lunatic_3
+				trait = proud
+				trait = paranoid
+				trait = possessed
+			}
+		}
+	}
+
+	after = {
+		FROM = { character_event = { id = duel.45 } }
+		hidden_effect = { clean_up_after_duel_effect = yes }
+	}
+}
+
+# duel.44 He would rather die
+# The merciful winner had to cut the loser down after all.
+# Scope: ROOT is the winner, FROM the loser. Fired by duel.42.
+character_event = {
+	id = duel.44
+	title = getDuelTitle
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	desc = { text = EVTDESCduel44_a trigger = { character = event_target:combatant_1 } }
+	desc = { text = EVTDESCduel44_b trigger = { character = event_target:combatant_2 } }
+
+	picture = {
+		picture = GFX_evt_duel_team #snowy picture
+		trigger = { capital_scope = { location = { is_winter = yes } } }
+	}
+
+	option = {
+		name = EVTOPTAduel44 #what a waste of a man/woman
+		trigger = { character = event_target:combatant_1 }
+	}
+	option = {
+		name = EVTOPTBduel44 #such needless drama
+		custom_tooltip = { text = EVTOPTBduel44_TT }
+		trigger = { character = event_target:combatant_2 }
+	}
+
+	after = {
+		clean_up_after_duel_effect = yes
+		hidden_effect = { FROM = { clean_up_after_duel_effect = yes } }
+	}
+}
+
+# duel.45 Spared
+# The spared loser learns how the winner took his surrender.
+# Scope: ROOT is the loser, FROM the winner. Fired by duel.43.
+character_event = {
+	id = duel.45
+	title = duel_aftermath_title
+	desc = EVTDESCduel45_a
+	picture = GFX_evt_duel_scene
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	picture = {
+		picture = GFX_evt_duel_team #snowy picture
+		trigger = { capital_scope = { location = { is_winter = yes } } }
+	}
+
+	option = {
+		name = EVTOPTAduel45 #I could never have expected this generosity
+
+		if = { #if you already have an opinion in place, become friends...
+			limit = {
+				OR = {
+					reverse_has_opinion_modifier = {
+						who = FROM
+						modifier = opinion_budding_friendship
+					}
+					has_opinion_modifier = { who = FROM modifier = opinion_budding_friendship }
+				}
+			}
+			add_friend = FROM
+		}
+		else = { #otherwise, add opinions...
+			opinion = { who = FROM modifier = opinion_budding_friendship years = 10 }
+			reverse_opinion = { who = FROM modifier = opinion_budding_friendship years = 10 }
+		}
+
+		clr_character_flag = they_were_nice_about_it
+		trigger = { has_character_flag = they_were_nice_about_it }
+	}
+
+	option = {
+		name = EVTOPTBduel45 #I'm glad you show your true feelings...
+
+		add_character_modifier = { name = publicly_humiliated years = 5 }
+
+		if = { limit = { NOT = { is_rival = FROM } } add_rival = event_target:other_combatant }
+
+		clr_character_flag = they_were_mean_about_it
+		trigger = { has_character_flag = they_were_mean_about_it }
+	}
+
+	after = {
+		hidden_effect = {
+			clean_up_after_duel_effect = yes
+			FROM = { clean_up_after_duel_effect = yes }
+		}
+	}
+}
+
+###############################################################################
+# The craven liege
+###############################################################################
+
+# duel.50 Like liege, like vassal
+# A vassal hears that his craven liege keeps refusing duels: be craven
+# too (duel.51) or be ashamed of him (duel.52).
+# Scope: ROOT is the vassal, FROM the craven liege. Fired by
+#   spread_cowardice_trait_effect.
+character_event = {
+	id = duel.50
+	picture = GFX_evt_camaraderie
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	portrait = event_target:craven_ruler
+
+	trigger = {
+		NOT = { trait = craven }
+		is_inaccessible_or_incapable_trigger = no
+		FROM = {
+			is_alive = yes
+			has_character_modifier = duels_declined
+			trait = craven
+			is_incapable = no
+		}
+		NAND = { #one part should be AI, for ease of choices
+			ai = no
+			FROM = { ai = no }
+		}
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = craven_ruler }
+	}
+
+	desc = { text = EVTDESCduel50_a trigger = { event_target:craven_ruler = { dynasty = ROOT } } }
+	desc = {
+		text = EVTDESCduel50_b
+		trigger = { event_target:craven_ruler = { NOT = { dynasty = ROOT } } }
+	}
+
+	option = { # Yes, you can't be too careful
+		name = EVTOPTAduel50
+		if = {
+			limit = { ai = no } #otherwise, liege is player, and traits are added later
+			if = { limit = { trait = brave } remove_trait = brave }
+			else_if = { limit = { NOT = { trait = craven } } add_trait = craven }
+		}
+
+		event_target:craven_ruler = { character_event = { id = duel.51 days = 1 } }
+
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = trusting }
+			modifier = { factor = 1.5 trait = weak }
+			modifier = { factor = 1.5 trait = feeble }
+			modifier = { factor = 1.5 opinion = { who = event_target:craven_ruler value = 50 } }
+			modifier = { factor = 1.5 opinion = { who = event_target:craven_ruler value = 70 } }
+			modifier = { factor = 1.5 opinion = { who = event_target:craven_ruler value = 80 } }
+			modifier = { factor = 1.5 is_child_of = event_target:craven_ruler }
+		}
+	}
+	option = { # No, I am ashamed of my liege
+		name = EVTOPTBduel50
+
+		tooltip = { #added for real in follow up event
+			opinion = {
+				modifier = opinion_renowned_chicken
+				who = event_target:craven_ruler
+				years = 20
+			}
+			reverse_opinion = {
+				modifier = opinion_disrespectful_subject
+				who = event_target:craven_ruler
+				years = 20
+			}
+		}
+		event_target:craven_ruler = { character_event = { id = duel.52 days = 1 } }
+
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 1.5 trait = wroth }
+			modifier = { factor = 1.5 trait = ambitious }
+			modifier = { factor = 1.5 trait = strong }
+			modifier = { factor = 1.5 trait = robust }
+			modifier = {
+				factor = 1.5
+				NOT = { opinion = { who = event_target:craven_ruler value = 25 } }
+			}
+			modifier = {
+				factor = 1.5
+				NOT = { opinion = { who = event_target:craven_ruler value = 0 } }
+			}
+			modifier = {
+				factor = 1.5
+				NOT = { opinion = { who = event_target:craven_ruler value = -25 } }
+			}
+		}
+	}
+}
+
+# duel.51 A craven vassal
+# The liege learns his vassal follows his example.
+# Scope: ROOT is the liege, FROM the vassal. Fired by duel.50.
+character_event = {
+	id = duel.51
+	desc = EVTDESCduel51
+	picture = GFX_evt_camaraderie
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAduel51 # Thank you! Let's be Craven together
+		prestige = 10
+		if = {
+			limit = { FROM = { NOT = { trait = craven } } }
+			FROM = { show_scope_change = no add_trait = craven }
+		}
+		else_if = {
+			limit = { FROM = { trait = brave } }
+			FROM = { show_scope_change = no remove_trait = brave }
+		}
+	}
+	option = {
+		name = EVTOPTBduel51 #No, do as I SAY, not what... Argh..
+
+		custom_tooltip = { text = EVTOPTBduel51_TT }
+
+		reverse_opinion = { modifier = opinion_hypocrit_ruler who = FROM years = 20 }
+		FROM = { clr_character_flag = reacting_to_craven_duelist }
+	}
+}
+
+# duel.52 An ashamed vassal
+# The liege learns his vassal is ashamed of him.
+# Scope: ROOT is the liege, FROM the vassal. Fired by duel.50.
+character_event = {
+	id = duel.52
+	desc = EVTDESCduel52
+	picture = GFX_evt_upsetting_letter
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAduel52 #They... have a point.
+
+		if = {
+			limit = { trait = craven }
+			random = {
+				chance = 20
+				remove_trait = craven
+				hidden_tooltip = { character_event = { id = 38296 } } # Notify Lost Craven
+			}
+		}
+
+		reverse_opinion = { modifier = opinion_renowned_chicken who = FROM years = 20 }
+	}
+	option = {
+		name = EVTOPTBduel52 #Political nonsense! I do as I please!
+
+		prestige = 10
+
+		opinion = { modifier = opinion_disrespectful_subject who = FROM years = 20 }
+		reverse_opinion = { modifier = opinion_renowned_chicken who = FROM years = 20 }
+	}
+	after = {
+		hidden_effect = { FROM = { clr_character_flag = reacting_to_craven_duelist } }
+	}
+}
+
+###############################################################################
+# Housekeeping
+###############################################################################
+
+# duel.90 Clean-up
+# Hidden. Clears the duel flags of both fighters a day after the fight.
+# Scope: ROOT is the loser. Fired by duel.21 and duel.25.
+character_event = {
+	id = duel.90
+	hide_window = yes
+	is_triggered_only = yes
+	immediate = {
+		event_target:combatant_1 = { clean_up_after_duel_effect = yes }
+		event_target:combatant_2 = { clean_up_after_duel_effect = yes }
+	}
+}

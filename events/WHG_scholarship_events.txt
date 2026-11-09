@@ -1,0 +1,1005 @@
+###############################################################################
+# Way of Life: the scholarship focus, the observatory
+# Namespace: scholarship (was WoL.6000 - WoL.6370 in wol_scholarship_events.txt)
+# Faction: Generic
+#
+# A ruler with the scholarship focus may build an observatory (the
+# build_observatory decision) and spend years of clear nights under the two
+# moons. One road charts the Sun, Mannslieb and the wandering stars and ends
+# in a heresy that most priests will not forgive. The other follows the
+# stars that vanish, Morrslieb that keeps no table, and the Liber Caelestior
+# of Necrodomo the Insane, and ends in knowledge no mortal should keep.
+#
+# Faiths that read the will of their gods in the sky (Tzeentch, the Old Ones,
+# Cathay's dragons, Nehekhara and the Asur of Hoeth) see no heresy in either
+# road (scholarship_star_faith_trigger). Tzeentch, the Slann and the Dawi
+# have their own voices.
+#
+# The chain runs through scholarship.4, the next clear night: each step sets
+# the variable stargazing_step to the event that comes next, and the router
+# waits while the stargazer is jailed, ill, away from the scholarship focus
+# or travelling, instead of dropping the chain.
+#
+# The observatory                     scholarship.1 - scholarship.4
+# The road of the heavens             scholarship.10 - scholarship.17
+# The road of the strange             scholarship.20 - scholarship.28
+# The fate of the Liber Caelestior    scholarship.30 - scholarship.31
+#
+# Fired from: the build_observatory decision in way_of_life_decisions.txt
+#   (scholarship.1) and on_death in 00_on_actions.txt (scholarship.30).
+#   Shared triggers and effects are in WHG_focus_triggers.txt and
+#   WHG_focus_effects.txt.
+###############################################################################
+
+namespace = scholarship
+
+###############################################################################
+# The observatory
+###############################################################################
+
+# scholarship.1 Building the observatory
+# The decision has paid for the work; the observatory is ready half a year
+# later (scholarship.2).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = scholarship.1
+	desc = EVTDESCscholarship1
+	picture = GFX_evt_construction_site
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # build_observatory decision
+
+	option = { # I can't wait
+		name = EVTOPTAscholarship1
+		hidden_tooltip = { character_event = { id = scholarship.2 days = 180 } }
+	}
+}
+
+# scholarship.2 The observatory is ready
+# The ruler starts Studying the Stars, and the first question comes half a
+# year later (scholarship.3).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = scholarship.2
+	desc = EVTDESCscholarship2
+	picture = GFX_evt_comet
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.1
+
+	option = { # What will I find?
+		name = EVTOPTAscholarship2
+		clr_character_flag = building_observatory
+		set_character_flag = built_observatory
+		add_character_modifier = { name = studying_the_stars duration = -1 }
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 3 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+}
+
+# scholarship.3 Two roads under the moons
+# The stargazer chooses between the laws of the heavens (scholarship.10)
+# and the strange things beyond them (scholarship.20, only with
+# supernatural events on).
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.3
+	desc = { trigger = { scholarship_star_voice_trigger = no } text = EVTDESCscholarship3 }
+	desc = { trigger = { religion = tzeentch } text = EVTDESCscholarship3b }
+	desc = { trigger = { religion_group = old_ones_group } text = EVTDESCscholarship3c }
+	desc = { trigger = { religion_group = dwarf_gods_group } text = EVTDESCscholarship3d }
+	picture = GFX_evt_comet
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # How do the heavens move?
+		name = EVTOPTAscholarship3
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2 trait = cynical }
+			modifier = { factor = 2 trait = scholar }
+		}
+		prestige = 10
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 10 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+	option = { # Is something out there?
+		name = EVTOPTBscholarship3
+		trigger = {
+			NOT = { has_game_rule = { name = supernatural_events value = off } }
+		}
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 10 trait = possessed }
+			modifier = {
+				factor = 10
+				OR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+				}
+			}
+			modifier = { factor = 5 religion = tzeentch }
+			modifier = { factor = 2 trait = zealous }
+		}
+		prestige = 5
+		hidden_tooltip = {
+			set_character_flag = stargazing_strange
+			set_variable = { which = stargazing_step value = 20 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+}
+
+# scholarship.4 The next clear night
+# Hidden router for the whole chain. While the stargazer cannot study
+# (scholarship_stargazer_busy_trigger, or away from court before the
+# journey of scholarship.23) it looks again every 90 days. Otherwise it
+# fires the step stored in stargazing_step. The worried kin
+# (scholarship.12, scholarship.22) and the angry priest (scholarship.15)
+# are picked here and fire the event as FROM; without one the chain moves on.
+# Abandoning the studies removes Studying the Stars and ends the chain.
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.4
+	hide_window = yes
+
+	is_triggered_only = yes # scholarship.2 - scholarship.27
+
+	trigger = {
+		has_character_modifier = studying_the_stars
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				OR = {
+					scholarship_stargazer_busy_trigger = yes
+					AND = {
+						is_variable_equal = { which = stargazing_step value = 23 }
+						OR = {
+							has_regent = yes
+							in_command = yes
+							has_character_flag = do_not_disturb
+						}
+					}
+				}
+			}
+			repeat_event = { id = scholarship.4 days = 90 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 12 } }
+			if = {
+				limit = { any_courtier = { scholarship_worried_kin_trigger = yes } }
+				random_courtier = {
+					limit = { scholarship_worried_kin_trigger = yes }
+					ROOT = { character_event = { id = scholarship.12 } }
+				}
+			}
+			else = {
+				set_variable = { which = stargazing_step value = 13 }
+				repeat_event = { id = scholarship.4 days = 180 }
+			}
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 15 } }
+			if = {
+				limit = {
+					scholarship_star_faith_trigger = no
+					religion_head = {
+						is_alive = yes
+						ai = yes
+						NOT = { character = ROOT }
+					}
+				}
+				religion_head = {
+					ROOT = { letter_event = { id = scholarship.15 } }
+				}
+			}
+			else = {
+				character_event = { id = scholarship.16 }
+			}
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 22 } }
+			if = {
+				limit = { any_courtier = { scholarship_worried_kin_trigger = yes } }
+				random_courtier = {
+					limit = { scholarship_worried_kin_trigger = yes }
+					ROOT = { character_event = { id = scholarship.22 } }
+				}
+			}
+			else = {
+				set_variable = { which = stargazing_step value = 23 }
+				repeat_event = { id = scholarship.4 days = 180 }
+			}
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 3 } }
+			character_event = { id = scholarship.3 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 10 } }
+			character_event = { id = scholarship.10 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 11 } }
+			character_event = { id = scholarship.11 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 13 } }
+			character_event = { id = scholarship.13 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 14 } }
+			character_event = { id = scholarship.14 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 16 } }
+			character_event = { id = scholarship.16 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 17 } }
+			character_event = { id = scholarship.17 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 20 } }
+			character_event = { id = scholarship.20 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 23 } }
+			character_event = { id = scholarship.23 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 25 } }
+			character_event = { id = scholarship.25 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 26 } }
+			character_event = { id = scholarship.26 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 27 } }
+			character_event = { id = scholarship.27 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = stargazing_step value = 28 } }
+			character_event = { id = scholarship.28 }
+		}
+	}
+}
+
+###############################################################################
+# The road of the heavens
+###############################################################################
+
+# scholarship.10 The world is not the centre
+# Regular patterns in the sky. Learning for the realm's engineers; in a faith
+# that fears the heavens, perhaps cynicism or a loss of zeal.
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.10
+	desc = EVTDESCscholarship10
+	picture = GFX_evt_comet
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # Interesting
+		name = EVTOPTAscholarship10
+		military_techpoints = 30
+		if = {
+			limit = { scholarship_star_faith_trigger = no }
+			if = {
+				limit = { trait = zealous }
+				random = {
+					chance = 50
+					remove_trait = zealous
+					hidden_tooltip = { character_event = { id = 38310 } } # Notify lost zeal
+				}
+			}
+			else_if = {
+				limit = { NOT = { trait = cynical } }
+				random = {
+					chance = 50
+					add_trait = cynical
+					hidden_tooltip = { character_event = { id = 38258 } } # Notify cynical
+				}
+			}
+		}
+		if = {
+			limit = { NOR = { trait = diligent trait = slothful } }
+			random = {
+				chance = 20
+				add_trait = diligent
+				hidden_tooltip = { character_event = { id = 38256 } } # Notify diligent
+			}
+		}
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 11 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+}
+
+# scholarship.11 New instruments
+# Both roads need better lenses and tables. Owners of observatory equipment
+# (also bought in the Hermetic and Verena society events) pay nothing.
+# Next: the worried kin of the road taken (scholarship.12 or 22).
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.11
+	desc = EVTDESCscholarship11
+	picture = {
+		trigger = { has_character_flag = stargazing_strange }
+		picture = GFX_evt_ritual_scroll
+	}
+	picture = {
+		trigger = { NOT = { has_character_flag = stargazing_strange } }
+		picture = GFX_evt_scientist
+	}
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # Buy them
+		name = EVTOPTAscholarship11
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 0
+				NOT = { has_character_flag = owns_observatory_equipment }
+				NOT = { wealth = 30 }
+			}
+		}
+		if = {
+			limit = { has_character_flag = owns_observatory_equipment }
+			custom_tooltip = { text = CUSTOM_TOOLTIP_OWNS_OBSERVATORY_EQUIPMENT }
+		}
+		else = {
+			set_character_flag = owns_observatory_equipment
+			wealth = -30
+		}
+		if = {
+			limit = { has_character_flag = stargazing_strange }
+			hidden_tooltip = { set_variable = { which = stargazing_step value = 22 } }
+		}
+		else = {
+			hidden_tooltip = { set_variable = { which = stargazing_step value = 12 } }
+		}
+		hidden_tooltip = { character_event = { id = scholarship.4 days = 180 } }
+	}
+	option = { # Too expensive
+		name = EVTOPTBscholarship11
+		ai_chance = { factor = 1 }
+		remove_character_modifier = studying_the_stars
+	}
+}
+
+# scholarship.12 A worried kinsman
+# A zealous relative or friend at court (FROM, picked by scholarship.4) begs
+# the stargazer to stop the heretical studies.
+# Scope: ROOT is the stargazer, FROM the worried kin.
+character_event = {
+	id = scholarship.12
+	desc = EVTDESCscholarship12
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # Don't worry
+		name = EVTOPTAscholarship12
+		if = {
+			limit = {
+				NOR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+					trait = brave
+					trait = stressed
+				}
+			}
+			random = {
+				chance = 10
+				add_trait = stressed
+				hidden_tooltip = { character_event = { id = 38282 } } # Notify stressed
+			}
+		}
+		reverse_opinion = { modifier = opinion_worried who = FROM years = 2 }
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 13 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+	option = { # Stay out of my business
+		name = EVTOPTBscholarship12
+		prestige = 30
+		reverse_opinion = { modifier = opinion_angry who = FROM years = 2 }
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 13 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+	option = { # I only write poetry (a lie)
+		name = EVTOPTCscholarship12
+		trigger = { NOT = { trait = honest } }
+		if = {
+			limit = { NOT = { trait = deceitful } }
+			add_trait = deceitful
+		}
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 13 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+}
+
+# scholarship.13 A harmony in the sky
+# The studies pay off: learning for the realm's engineers.
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.13
+	desc = EVTDESCscholarship13
+	picture = GFX_evt_comet
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # A harmony out there
+		name = EVTOPTAscholarship13
+		military_techpoints = 100
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 14 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+}
+
+# scholarship.14 Clouds and broken lenses
+# Persist (maybe diligent, maybe stressed) or give up the studies.
+# Next: the priests find out (scholarship.15).
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.14
+	desc = EVTDESCscholarship14
+	picture = GFX_evt_scientist
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # Persist
+		name = EVTOPTAscholarship14
+		scholarship_persist_effect = yes
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 15 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+	option = { # Give up
+		name = EVTOPTBscholarship14
+		scholarship_give_up_effect = yes
+	}
+}
+
+# scholarship.15 A letter from the high priest
+# The head of a faith that fears the heavens (FROM, an AI) warns the
+# stargazer off. Defy, keep silent or stop the studies.
+# Scope: ROOT is the stargazer, FROM the head of the faith.
+letter_event = {
+	id = scholarship.15
+	desc = EVTDESCscholarship15
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # Mind your own temple
+		name = EVTOPTAscholarship15
+		prestige = 50
+		piety = -50
+		if = {
+			limit = { NOR = { trait = brave trait = craven } }
+			add_trait = brave
+		}
+		reverse_opinion = { modifier = opinion_angry who = FROM years = 10 }
+		add_character_modifier = { name = annoyed_religious years = 2 }
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 16 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+	option = { # Silence
+		name = EVTOPTBscholarship15
+		piety = -20
+		reverse_opinion = { modifier = opinion_irritated who = FROM years = 5 }
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 16 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+	option = { # Stop the studies
+		name = EVTOPTCscholarship15
+		reverse_opinion = { modifier = opinion_pleased who = FROM years = 3 }
+		add_character_modifier = { name = religious_appreciate years = 2 }
+		remove_character_modifier = studying_the_stars
+	}
+}
+
+# scholarship.16 The laws of the spheres
+# A point of learning and more for the engineers.
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.16
+	desc = EVTDESCscholarship16
+	picture = GFX_evt_comet
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # And what is the world?
+		name = EVTOPTAscholarship16
+		change_learning = 1
+		military_techpoints = 100
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 17 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+}
+
+# scholarship.17 The world turns about the Sun
+# The breakthrough. Publish (prestige, a nickname, and in a faith that fears
+# the heavens the scorn of its priests and zealots), keep studying in
+# secret, stop with the achievement, or burn the work as the whisper of the
+# Dark Gods. The studies end; a ruler without a lifestyle trait becomes a
+# scholar, the others keep the Heliocentrist Scholar modifier.
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.17
+	desc = { trigger = { scholarship_star_faith_trigger = no } text = EVTDESCscholarship17 }
+	desc = { trigger = { scholarship_star_faith_trigger = yes } text = EVTDESCscholarship17b }
+	picture = GFX_evt_scientist
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # Publish
+		name = EVTOPTAscholarship17
+		prestige = 300
+		scholarship_heavens_master_effect = yes
+		if = {
+			limit = { has_nickname = no }
+			random_list = {
+				10 = { give_nickname = nick_the_wise }
+				10 = { give_nickname = nick_the_able }
+				10 = { give_nickname = nick_the_scholar }
+				10 = {
+					modifier = { factor = 0 scholarship_star_faith_trigger = yes }
+					give_nickname = nick_priest_hater
+				}
+			}
+		}
+		if = {
+			limit = { scholarship_star_faith_trigger = no }
+			add_character_modifier = { name = annoyed_religious years = 5 }
+			custom_tooltip = {
+				text = EVTTOOLTIPscholarship17
+				hidden_effect = {
+					any_realm_character = {
+						limit = {
+							OR = {
+								is_priest = yes
+								trait = zealous
+							}
+							scholarship_star_faith_trigger = no
+						}
+						opinion = { modifier = opinion_heretic who = ROOT years = 5 }
+					}
+				}
+			}
+		}
+	}
+	option = { # Keep studying in secret
+		name = EVTOPTBscholarship17
+		scholarship_heavens_master_effect = yes
+	}
+	option = { # Enough
+		name = EVTOPTCscholarship17
+		remove_character_modifier = studying_the_stars
+		add_character_modifier = { name = heliocentrist_scholar duration = -1 }
+	}
+	option = { # Burn it
+		name = EVTOPTDscholarship17
+		trigger = { scholarship_star_faith_trigger = no }
+		ai_chance = {
+			factor = 0.5
+			modifier = { factor = 4 trait = zealous }
+			modifier = { factor = 0 trait = cynical }
+		}
+		remove_character_modifier = studying_the_stars
+		if = {
+			limit = { trait = cynical }
+			remove_trait = cynical
+		}
+		else_if = {
+			limit = { NOT = { trait = zealous } }
+			add_trait = zealous
+		}
+	}
+}
+
+###############################################################################
+# The road of the strange
+###############################################################################
+
+# scholarship.20 Stars that vanish
+# Odd lights and Morrslieb keeping no table. The stargazer grows paranoid,
+# perhaps diligent. Next: new instruments (scholarship.11).
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.20
+	desc = { trigger = { NOT = { religion = tzeentch } } text = EVTDESCscholarship20 }
+	desc = { trigger = { religion = tzeentch } text = EVTDESCscholarship20b }
+	picture = GFX_evt_comet
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # That star vanishes when I look at it
+		name = EVTOPTAscholarship20
+		if = {
+			limit = { NOT = { trait = paranoid } }
+			add_trait = paranoid
+		}
+		if = {
+			limit = { NOR = { trait = diligent trait = slothful } }
+			random = {
+				chance = 30
+				add_trait = diligent
+				hidden_tooltip = { character_event = { id = 38256 } } # Notify diligent
+			}
+		}
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 11 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+}
+
+# scholarship.22 A frightened kinsman
+# A zealous relative or friend at court (FROM, picked by scholarship.4) has
+# heard the stargazer talk in riddles and begs them to stop.
+# Scope: ROOT is the stargazer, FROM the worried kin.
+character_event = {
+	id = scholarship.22
+	desc = EVTDESCscholarship22
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # I only admire the stars
+		name = EVTOPTAscholarship22
+		reverse_opinion = { modifier = opinion_worried who = FROM years = 2 }
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 23 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+	option = { # There are things out there
+		name = EVTOPTBscholarship22
+		prestige = 30
+		reverse_opinion = { modifier = opinion_afraid who = FROM years = 2 }
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 23 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+	option = { # Lies (a lie)
+		name = EVTOPTCscholarship22
+		trigger = { NOT = { trait = honest } }
+		if = {
+			limit = { NOT = { trait = deceitful } }
+			add_trait = deceitful
+		}
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 23 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+}
+
+# scholarship.23 The collector in Remas
+# Word of an old Tilean collector who knows the strange spheres. Travel to
+# him (a fifth of a year's income, scholarship.24) or abandon the studies.
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.23
+	desc = EVTDESCscholarship23
+	picture = GFX_evt_ritual_scroll
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # Go and see him
+		name = EVTOPTAscholarship23
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 NOT = { scaled_wealth = 0.3 } }
+		}
+		scaled_wealth = -0.2
+		set_character_flag = do_not_disturb
+		hidden_tooltip = { narrative_event = { id = scholarship.24 days = 90 } }
+	}
+	option = { # This frightens me
+		name = EVTOPTBscholarship23
+		ai_chance = { factor = 1 }
+		if = {
+			limit = { NOR = { trait = brave trait = craven trait = berserker } }
+			add_trait = craven
+		}
+		remove_character_modifier = studying_the_stars
+	}
+}
+
+# scholarship.24 The Liber Caelestior
+# Gianetto Zucaro offers a copy of Necrodomo's book of prophecy for 100
+# gold. The book is a cursed artifact (learning, lost piety); it is taken
+# from its owner's library at death (scholarship.30). The AI rarely buys.
+# Scope: ROOT is the stargazer.
+narrative_event = {
+	id = scholarship.24
+	title = EVTTITLEscholarship24
+	desc = EVTDESCscholarship24
+	picture = GFX_evt_lunatic
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # scholarship.23
+
+	option = { # Buy it
+		name = EVTOPTAscholarship24
+		trigger = { NOT = { has_artifact = necronomicon } }
+		ai_chance = {
+			factor = 0.1
+			modifier = { factor = 0 NOT = { wealth = 150 } }
+			modifier = { factor = 5 religion = tzeentch }
+			modifier = {
+				factor = 3
+				OR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+					trait = possessed
+				}
+			}
+		}
+		culture_techpoints = 30
+		wealth = -100
+		add_artifact = necronomicon
+		new_artifact = { set_creation_date = 1.1.1 }
+		clr_character_flag = do_not_disturb
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 25 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+	option = { # No, thank you
+		name = EVTOPTBscholarship24
+		ai_chance = { factor = 1 }
+		culture_techpoints = 30
+		clr_character_flag = do_not_disturb
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 25 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+}
+
+# scholarship.25 Things in the dark
+# Noises, huge insects and watching figures. Persist (the book's owner goes
+# on to read it, scholarship.26; others to scholarship.27) or give up.
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.25
+	desc = EVTDESCscholarship25
+	picture = GFX_evt_ritual_scroll
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # I must focus
+		name = EVTOPTAscholarship25
+		scholarship_persist_effect = yes
+		if = {
+			limit = { NOT = { trait = stressed } }
+			random = {
+				chance = 10
+				add_trait = stressed
+				hidden_tooltip = { character_event = { id = 38282 } } # Notify stressed
+			}
+		}
+		if = {
+			limit = { has_artifact = necronomicon }
+			hidden_tooltip = { set_variable = { which = stargazing_step value = 26 } }
+		}
+		else = {
+			hidden_tooltip = { set_variable = { which = stargazing_step value = 27 } }
+		}
+		hidden_tooltip = { character_event = { id = scholarship.4 days = 180 } }
+	}
+	option = { # Give up
+		name = EVTOPTBscholarship25
+		scholarship_give_up_effect = yes
+	}
+}
+
+# scholarship.26 Deeper into the book
+# Leave the book on the shelf, or read on: great learning for the realm,
+# two steps towards lunacy (mutate.5), perhaps paranoia and a dark nickname.
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.26
+	desc = EVTDESCscholarship26
+	picture = GFX_evt_ritual_scroll
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # Leave it on the shelf
+		name = EVTOPTAscholarship26
+		culture_techpoints = 20
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 27 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+	option = { # Deeper
+		name = EVTOPTBscholarship26
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 religion = tzeentch }
+			modifier = { factor = 0.5 trait = craven }
+		}
+		culture_techpoints = 200
+		if = {
+			limit = { NOT = { trait = lunatic_3 } }
+			hidden_tooltip = {
+				change_variable = { which = lunatic_counter value = 2 }
+				character_event = { id = mutate.5 }
+			}
+		}
+		if = {
+			limit = { NOT = { trait = paranoid } }
+			random = {
+				chance = 30
+				add_trait = paranoid
+				hidden_tooltip = { character_event = { id = 38275 } } # Notify paranoid
+			}
+		}
+		if = {
+			limit = { has_nickname = no }
+			random_list = {
+				10 = { give_nickname = nick_the_scholar }
+				10 = { give_nickname = nick_the_strange }
+				10 = { give_nickname = nick_the_devil }
+				10 = { give_nickname = nick_the_accursed }
+				10 = {
+					modifier = { factor = 0 NOT = { religion_group = old_world_group } }
+					give_nickname = nick_the_black
+				}
+			}
+		}
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 27 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+}
+
+# scholarship.27 The stars are right
+# A point of learning and much culture learning for the realm.
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.27
+	desc = EVTDESCscholarship27
+	picture = GFX_evt_comet
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # The stars are right
+		name = EVTOPTAscholarship27
+		change_learning = 1
+		culture_techpoints = 100
+		hidden_tooltip = {
+			set_variable = { which = stargazing_step value = 28 }
+			character_event = { id = scholarship.4 days = 180 }
+		}
+	}
+}
+
+# scholarship.28 Keeper of secrets
+# The end of the strange road. Keep the secrets (a mystic, or the Weird
+# Scholar modifier for a ruler who already has a lifestyle trait) or turn
+# to other things (Weird Scholar).
+# Scope: ROOT is the stargazer.
+character_event = {
+	id = scholarship.28
+	desc = { trigger = { scholarship_star_voice_trigger = no } text = EVTDESCscholarship28 }
+	desc = { trigger = { religion = tzeentch } text = EVTDESCscholarship28b }
+	desc = { trigger = { religion_group = old_ones_group } text = EVTDESCscholarship28c }
+	desc = { trigger = { religion_group = dwarf_gods_group } text = EVTDESCscholarship28d }
+	picture = GFX_evt_comet
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.4
+
+	option = { # Keep the secrets
+		name = EVTOPTAscholarship28
+		remove_character_modifier = studying_the_stars
+		if = {
+			limit = { NOT = { lifestyle_traits = 1 } }
+			add_trait = mystic
+		}
+		else = {
+			add_character_modifier = { name = weird_scholar duration = -1 }
+		}
+		if = {
+			limit = { has_nickname = no }
+			random_list = {
+				10 = { give_nickname = nick_the_scholar }
+				10 = { give_nickname = nick_the_strange }
+			}
+		}
+	}
+	option = { # Other things in life
+		name = EVTOPTBscholarship28
+		remove_character_modifier = studying_the_stars
+		add_character_modifier = { name = weird_scholar duration = -1 }
+	}
+}
+
+###############################################################################
+# The fate of the Liber Caelestior
+###############################################################################
+
+# scholarship.30 The book is taken
+# Hidden. When the owner of the Liber Caelestior dies, the book vanishes
+# from the library and the heir hears of it (scholarship.31).
+# Scope: ROOT is the dead owner.
+character_event = {
+	id = scholarship.30
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+
+	trigger = { has_artifact = necronomicon }
+
+	immediate = {
+		destroy_artifact = necronomicon
+		current_heir = {
+			character_event = { id = scholarship.31 days = 7 }
+		}
+	}
+}
+
+# scholarship.31 The raided library
+# The heir learns the book is gone and two servants are dead.
+# Scope: ROOT is the heir, FROM the dead owner.
+character_event = {
+	id = scholarship.31
+	desc = EVTDESCscholarship31
+	picture = GFX_evt_ritual_scroll
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # scholarship.30
+
+	option = { # Strange
+		name = EVTOPTAscholarship31
+	}
+}

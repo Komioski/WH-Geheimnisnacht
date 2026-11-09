@@ -1,0 +1,2783 @@
+###############################################################################
+# Way of Life: the business focus
+# Namespace: business (was WoL.10100 - WoL.10999 in wol_business_events.txt)
+# Faction: Generic
+#
+# A ruler with the business focus keeps an eye on coin and trade. Once a
+# year the focus pulse may bring a venture or a worry (business.1): a
+# trading expedition to a foreign court that may open a trade route for
+# thirty years, a great tower (which may one day lean, and draw visitors
+# who want to meet the genius who built it), a hedge maze, a carpenters'
+# guild, new coin for the realm, a burgher who wants land, a workshop to
+# fund, or simply sleepless nights over the accounts.
+#
+# The partner of an expedition is event_target:business_partner, the
+# steward event_target:steward; the tower's mason is
+# event_target:stonemason, its priest event_target:tower_priest and its
+# province, once it leans, event_target:leaning_tower_province.
+#
+# The hub                              business.1 - business.2
+# The trading expedition               business.10 - business.35
+# The great tower                      business.40 - business.58
+# The hedge maze                       business.60 - business.66
+# Guild, coin, land, workshop          business.70 - business.76
+# A head for business                  business.80
+#
+# Fired from: on_focus_pulse in 00_on_actions.txt (business.1). Shared
+#   triggers and effects are in WHG_focus_triggers.txt and
+#   WHG_focus_effects.txt.
+###############################################################################
+
+namespace = business
+
+###############################################################################
+# The hub
+###############################################################################
+
+# business.1 Hub: a venture or a worry
+# Picks one of the business events; the big ventures need the trader
+# modifier and no lifestyle trait yet, and come once a lifetime.
+# Scope: the ruler.
+character_event = {
+	id = business.1
+	hide_window = yes
+	is_triggered_only = yes # on_focus_pulse
+
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		has_focus = focus_business
+		in_command = no
+		demesne_size = 1
+		NOT = { trait = infirm }
+		NOT = { has_character_flag = do_not_disturb }
+	}
+
+	immediate = {
+		random_list = {
+			15 = { # Sleepless nights
+				modifier = { factor = 0 trait = stressed }
+				character_event = { id = business.2 }
+			}
+			30 = { # A workshop to fund
+				modifier = {
+					factor = 0
+					NOT = {
+						any_demesne_province = {
+							any_province_holding = { business_burgher_holding_trigger = yes }
+							NOT = { has_province_modifier = artisan_workshop }
+							NOT = { has_province_flag = workshop_construction }
+						}
+					}
+				}
+				random_demesne_province = {
+					limit = {
+						any_province_holding = { business_burgher_holding_trigger = yes }
+						NOT = { has_province_modifier = artisan_workshop }
+						NOT = { has_province_flag = workshop_construction }
+					}
+					set_province_flag = workshop_construction
+					save_event_target_as = business_province
+				}
+				character_event = { id = business.74 }
+			}
+			30 = { # A burgher wants land
+				modifier = { factor = 0 has_character_modifier = sell_land_cd }
+				modifier = {
+					factor = 0
+					NOT = {
+						capital_scope = {
+							NOT = { has_province_modifier = sold_off_land }
+							any_province_holding = {
+								business_burgher_holding_trigger = yes
+								holder_scope = { wealth = 150 }
+							}
+						}
+					}
+				}
+				add_character_modifier = { name = sell_land_cd hidden = yes years = 5 }
+				capital_scope = {
+					random_province_holding = {
+						limit = {
+							business_burgher_holding_trigger = yes
+							holder_scope = { wealth = 150 }
+						}
+						holder_scope = { save_event_target_as = business_burgher }
+					}
+				}
+				character_event = { id = business.73 }
+			}
+			30 = { # New coin
+				modifier = { factor = 0 has_character_modifier = wol_debase_timer }
+				character_event = { id = business.71 }
+			}
+			30 = { # The carpenters' guild
+				modifier = {
+					factor = 0
+					NOT = {
+						any_demesne_province = {
+							any_province_holding = { business_burgher_holding_trigger = yes }
+							NOT = { has_province_modifier = carpenters_guild }
+							NOT = { has_province_modifier = outlawed_guild }
+						}
+					}
+				}
+				random_demesne_province = {
+					limit = {
+						any_province_holding = { business_burgher_holding_trigger = yes }
+						NOT = { has_province_modifier = carpenters_guild }
+						NOT = { has_province_modifier = outlawed_guild }
+					}
+					save_event_target_as = business_province
+				}
+				long_character_event = { id = business.70 }
+			}
+			30 = { # The great tower
+				modifier = {
+					factor = 0
+					OR = {
+						is_tribal = yes
+						is_nomadic = yes
+						NOT = { has_character_modifier = trader }
+						lifestyle_traits = 1
+						has_character_flag = tower_start
+						has_character_flag = tower_end
+						has_character_flag = hedge_maze
+					}
+				}
+				character_event = { id = business.40 }
+			}
+			30 = { # The hedge maze
+				modifier = {
+					factor = 0
+					OR = {
+						NOT = { has_character_modifier = trader }
+						lifestyle_traits = 1
+						has_character_flag = tower_start
+						has_character_flag = hedge_maze
+						has_character_flag = maze_end
+					}
+				}
+				character_event = { id = business.60 }
+			}
+			30 = { # The trading expedition
+				modifier = {
+					factor = 0
+					OR = {
+						NOT = { job_treasurer = { always = yes } }
+						has_character_flag = est_trade_route
+						has_character_flag = trade_route_progress
+						business_trading_race_trigger = no
+						NOT = {
+							any_independent_ruler = { business_trade_partner_trigger = yes }
+						}
+					}
+				}
+				character_event = { id = business.10 }
+			}
+			1 = { } # Nothing this year
+		}
+	}
+}
+
+# business.2 Sleepless nights
+# Scope: the ruler.
+character_event = {
+	id = business.2
+	desc = EVTDESCbusiness2
+	picture = GFX_evt_stressed_ruler
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.1
+
+	option = {
+		name = EVTOPTAbusiness2
+		add_trait = stressed
+	}
+}
+
+###############################################################################
+# The trading expedition
+###############################################################################
+
+# business.10 The steward has an idea
+# Scope: the ruler.
+character_event = {
+	id = business.10
+	hide_window = yes
+	is_triggered_only = yes # business.1
+
+	immediate = {
+		job_treasurer = { character_event = { id = business.11 } }
+	}
+}
+
+# business.11 The steward's plan
+# The steward takes the plan to the ruler (business.12).
+# Scope: the steward; FROM is the ruler.
+character_event = {
+	id = business.11
+	desc = EVTDESCbusiness11
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.10
+
+	option = {
+		name = EVTOPTAbusiness11
+		save_event_target_as = steward
+		FROM = { character_event = { id = business.12 } }
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		name = EVTOPTBbusiness11
+		ai_chance = { factor = 0 }
+	}
+}
+
+# business.12 A trade route to a foreign realm
+# Overland from a capital with no harbour (or in the holds, the deep woods
+# and the wastes, business.13), by sea from the rest (business.14).
+# Scope: the ruler; FROM is the steward.
+character_event = {
+	id = business.12
+	desc = EVTDESCbusiness12
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.11
+
+	option = {
+		name = EVTOPTAbusiness12
+		set_character_flag = trade_route_progress
+		if = {
+			limit = { capital_scope = { business_land_route_trigger = yes } }
+			character_event = { id = business.13 }
+		}
+		else = {
+			character_event = { id = business.14 }
+		}
+		ai_chance = {
+			factor = 3
+			modifier = { factor = 0.25 NOT = { yearly_income = 25 } }
+		}
+	}
+	option = {
+		name = EVTOPTBbusiness12
+		business_trade_cleanup_effect = yes
+		ai_chance = { factor = 1 }
+	}
+}
+
+# business.13 Beasts of burden
+# Scope: the ruler.
+character_event = {
+	id = business.13
+	desc = { trigger = { NOT = { religion_group = dwarf_gods_group } } text = EVTDESCbusiness13 }
+	desc = { trigger = { religion_group = dwarf_gods_group } text = EVTDESCbusiness13b }
+	picture = GFX_evt_merchant_caravan
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.12
+
+	option = { # Buy them
+		name = EVTOPTAbusiness13
+		set_character_flag = trade_is_land
+		business_pay_expedition_effect = yes
+		hidden_tooltip = { character_event = { id = business.15 days = 3 } }
+		ai_chance = { factor = 2 }
+	}
+	option = { # Have them stolen
+		name = EVTOPTBbusiness13
+		set_character_flag = trade_is_land
+		business_hire_thieves_effect = yes
+		ai_chance = {
+			factor = 0.5
+			modifier = { factor = 3 trait = deceitful }
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 0.1 trait = honest }
+		}
+	}
+	option = { # Too dear
+		name = EVTOPTCbusiness13
+		business_trade_cleanup_effect = yes
+		ai_chance = {
+			factor = 0.5
+			modifier = { factor = 3 NOT = { yearly_income = 25 } }
+		}
+	}
+}
+
+# business.14 A merchant ship
+# Scope: the ruler.
+character_event = {
+	id = business.14
+	desc = EVTDESCbusiness14
+	picture = GFX_evt_busy_trading_dock_republic
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.12
+
+	option = { # Buy it
+		name = EVTOPTAbusiness14
+		business_pay_expedition_effect = yes
+		hidden_tooltip = { character_event = { id = business.15 days = 3 } }
+		ai_chance = { factor = 2 }
+	}
+	option = { # Have it stolen
+		name = EVTOPTBbusiness14
+		business_hire_thieves_effect = yes
+		ai_chance = {
+			factor = 0.5
+			modifier = { factor = 3 trait = deceitful }
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 0.1 trait = honest }
+		}
+	}
+	option = { # Too dear
+		name = EVTOPTCbusiness14
+		business_trade_cleanup_effect = yes
+		ai_chance = {
+			factor = 0.5
+			modifier = { factor = 3 NOT = { yearly_income = 25 } }
+		}
+	}
+}
+
+# business.15 The priests want to come along
+# They pay part of the cost. Word of the venture may reach a merchant
+# prince nearby (business.17). A failed theft ends it here (business.20).
+# Scope: the ruler.
+character_event = {
+	id = business.15
+	desc = EVTDESCbusiness15
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.13, business.14
+
+	option = { # Welcome
+		name = EVTOPTAbusiness15
+		set_character_flag = trade_priest
+		if = {
+			limit = { yearly_income = 200 }
+			wealth = 80
+		}
+		else_if = {
+			limit = { yearly_income = 25 }
+			scaled_wealth = 0.4
+		}
+		else = {
+			wealth = 5
+		}
+		hidden_tooltip = {
+			if = {
+				limit = { has_character_flag = trade_bandits_fail }
+				character_event = { id = business.20 days = 7 }
+			}
+			else = {
+				random = {
+					chance = 50
+					random_independent_ruler = {
+						limit = {
+							NOT = { character = ROOT }
+							is_within_diplo_range = ROOT
+							is_merchant_republic = yes
+						}
+						character_event = { id = business.17 }
+					}
+				}
+				character_event = { id = business.21 days = 14 }
+			}
+		}
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 0.25 trait = cynical }
+		}
+	}
+	option = { # No
+		name = EVTOPTBbusiness15
+		any_vassal = {
+			limit = { is_priest = yes }
+			opinion = { modifier = opinion_disappointed who = ROOT years = 5 }
+		}
+		hidden_tooltip = {
+			if = {
+				limit = { has_character_flag = trade_bandits_fail }
+				character_event = { id = business.20 days = 7 }
+			}
+			else = {
+				character_event = { id = business.21 days = 7 }
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 has_character_flag = trade_bandits }
+		}
+	}
+}
+
+# business.16 The priests and the thieves
+# Scope: the ruler.
+character_event = {
+	id = business.16
+	desc = EVTDESCbusiness16
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.21
+
+	option = {
+		name = EVTOPTAbusiness16
+		piety = -15
+	}
+	option = {
+		name = EVTOPTBbusiness16
+		tooltip_info = diplomacy
+		trigger = { diplomacy = 12 }
+	}
+}
+
+# business.17 A merchant prince hears of the venture
+# Demand compensation (business.18) or let it go.
+# Scope: the merchant prince; FROM is the ruler.
+character_event = {
+	id = business.17
+	desc = EVTDESCbusiness17
+	picture = GFX_evt_doge_republic
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.15
+
+	option = { # Demand compensation
+		name = EVTOPTAbusiness17
+		FROM = {
+			opinion = { modifier = opinion_irritated who = ROOT years = 3 }
+			letter_event = { id = business.18 }
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+	option = { # Never mind
+		name = EVTOPTBbusiness17
+		ai_chance = { factor = 1 }
+	}
+}
+
+# business.18 The merchant prince's letter
+# Scope: the ruler; FROM is the merchant prince.
+letter_event = {
+	id = business.18
+	desc = EVTDESCbusiness18
+
+	is_triggered_only = yes # business.17
+
+	option = { # Pay
+		name = EVTOPTAbusiness18
+		wealth = -50
+		FROM = {
+			set_character_flag = trade_compensation
+			opinion = { modifier = opinion_happy who = ROOT years = 5 }
+			hidden_tooltip = { letter_event = { id = business.19 days = 3 } }
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 NOT = { wealth = 50 } }
+			modifier = { factor = 0.25 trait = greedy }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBbusiness18
+		FROM = {
+			opinion = { modifier = opinion_angry who = ROOT years = 5 }
+			hidden_tooltip = { letter_event = { id = business.19 days = 3 } }
+		}
+		ai_chance = { factor = 1 }
+	}
+}
+
+# business.19 The answer
+# Scope: the merchant prince; FROM is the ruler.
+letter_event = {
+	id = business.19
+	desc = { trigger = { has_character_flag = trade_compensation } text = EVTDESCbusiness19 }
+	desc = { trigger = { NOT = { has_character_flag = trade_compensation } } text = EVTDESCbusiness19b }
+
+	is_triggered_only = yes # business.18
+
+	option = {
+		name = EVTOPTAbusiness19
+		trigger = { has_character_flag = trade_compensation }
+		wealth = 50
+		clr_character_flag = trade_compensation
+	}
+	option = {
+		name = EVTOPTBbusiness19
+		trigger = { NOT = { has_character_flag = trade_compensation } }
+	}
+}
+
+# business.20 The thieves are caught
+# Scope: the ruler.
+character_event = {
+	id = business.20
+	desc = { trigger = { has_character_flag = trade_is_land } text = EVTDESCbusiness20 }
+	desc = { trigger = { NOT = { has_character_flag = trade_is_land } } text = EVTDESCbusiness20b }
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.15
+
+	option = {
+		name = EVTOPTAbusiness20
+		prestige = -50
+		character_event = { id = business.32 }
+	}
+}
+
+# business.21 Setting out
+# Scope: the ruler.
+character_event = {
+	id = business.21
+	desc = EVTDESCbusiness21
+	picture = GFX_evt_market
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.15
+
+	option = {
+		name = EVTOPTAbusiness21
+		hidden_tooltip = {
+			if = {
+				limit = {
+					has_character_flag = trade_bandits
+					has_character_flag = trade_priest
+				}
+				character_event = { id = business.16 days = 10 }
+			}
+			character_event = { id = business.22 days = 35 random = 15 }
+		}
+	}
+}
+
+# business.22 Router: a court to trade with
+# Best a ruler of another faith family within reach, then another faith,
+# then anyone within reach, then anyone at all.
+# Scope: the ruler.
+character_event = {
+	id = business.22
+	hide_window = yes
+	is_triggered_only = yes # business.21
+
+	immediate = {
+		if = {
+			limit = {
+				any_independent_ruler = {
+					business_trade_partner_trigger = yes
+					is_within_diplo_range = ROOT
+					NOT = { religion_group = ROOT }
+				}
+			}
+			random_independent_ruler = {
+				limit = {
+					business_trade_partner_trigger = yes
+					is_within_diplo_range = ROOT
+					NOT = { religion_group = ROOT }
+				}
+				save_event_target_as = business_partner
+			}
+			character_event = { id = business.24 }
+		}
+		else_if = {
+			limit = {
+				any_independent_ruler = {
+					business_trade_partner_trigger = yes
+					is_within_diplo_range = ROOT
+					NOT = { religion = ROOT }
+				}
+			}
+			random_independent_ruler = {
+				limit = {
+					business_trade_partner_trigger = yes
+					is_within_diplo_range = ROOT
+					NOT = { religion = ROOT }
+				}
+				save_event_target_as = business_partner
+			}
+			character_event = { id = business.24 }
+		}
+		else_if = {
+			limit = {
+				any_independent_ruler = {
+					business_trade_partner_trigger = yes
+					is_within_diplo_range = ROOT
+				}
+			}
+			random_independent_ruler = {
+				limit = {
+					business_trade_partner_trigger = yes
+					is_within_diplo_range = ROOT
+				}
+				save_event_target_as = business_partner
+			}
+			character_event = { id = business.24 }
+		}
+		else_if = {
+			limit = {
+				any_independent_ruler = { business_trade_partner_trigger = yes }
+			}
+			random_independent_ruler = {
+				limit = { business_trade_partner_trigger = yes }
+				save_event_target_as = business_partner
+			}
+			character_event = { id = business.24 }
+		}
+		else = {
+			character_event = { id = business.23 }
+		}
+	}
+}
+
+# business.23 No one to trade with
+# Scope: the ruler.
+character_event = {
+	id = business.23
+	desc = EVTDESCbusiness23
+	picture = GFX_evt_market
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.22
+
+	option = {
+		name = EVTOPTAbusiness23
+		business_trade_cleanup_effect = yes
+	}
+}
+
+# business.24 A gift for the foreign ruler
+# Scope: the ruler; event_target:business_partner is the foreign ruler.
+character_event = {
+	id = business.24
+	desc = EVTDESCbusiness24
+	picture = GFX_evt_market
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.22
+
+	option = { # A splendid gift
+		name = {
+			text = EVTOPTAbusiness24
+			trigger = {
+				NOR = {
+					religion_group = ormazd_gods_group
+					religion_group = oriental_gods_group
+					religion_group = chaos_gods_group
+					religion_group = dwarf_gods_group
+					religion = norscan_gods
+					religion = norscan_gods_reformed
+					religion = northern_gods
+					religion = northern_gods_reformed
+				}
+			}
+		}
+		name = { # Camels
+			text = EVTOPTAbusiness24_camels
+			trigger = { religion_group = ormazd_gods_group }
+		}
+		name = { # An elephant
+			text = EVTOPTAbusiness24_elephant
+			trigger = { religion_group = oriental_gods_group }
+		}
+		name = { # Warriors
+			text = EVTOPTAbusiness24_warriors
+			trigger = {
+				OR = {
+					religion_group = chaos_gods_group
+					religion = norscan_gods
+					religion = norscan_gods_reformed
+					religion = northern_gods
+					religion = northern_gods_reformed
+				}
+			}
+		}
+		name = { # Ale
+			text = EVTOPTAbusiness24_ale
+			trigger = { religion_group = dwarf_gods_group }
+		}
+		wealth = -30
+		event_target:business_partner = {
+			opinion = { modifier = opinion_flattered who = ROOT years = 5 }
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 NOT = { wealth = 30 } }
+			modifier = { factor = 0.25 trait = greedy }
+		}
+	}
+	option = { # Fine cloth
+		name = EVTOPTBbusiness24
+		wealth = -15
+		event_target:business_partner = {
+			opinion = { modifier = opinion_fine_gift who = ROOT years = 3 }
+		}
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 0 NOT = { wealth = 15 } }
+		}
+	}
+	option = { # Rare herbs
+		name = EVTOPTCbusiness24
+		wealth = -5
+		ai_chance = { factor = 1 }
+	}
+	option = { # Only courtesy
+		name = EVTOPTDbusiness24
+		event_target:business_partner = {
+			opinion = { modifier = opinion_mildly_disappointed who = ROOT years = 3 }
+		}
+		ai_chance = {
+			factor = 0.5
+			modifier = { factor = 3 trait = greedy }
+		}
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = business.25 days = 7 } }
+	}
+}
+
+# business.25 Strange manners at the feast
+# The steward eats with his hands, to the host's disgust.
+# Scope: the ruler; event_target:business_partner is the host.
+character_event = {
+	id = business.25
+	desc = EVTDESCbusiness25
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.24
+
+	option = { # Explain the custom
+		name = EVTOPTAbusiness25
+		tooltip_info = learning
+		trigger = { learning = 10 }
+		ai_chance = { factor = 5 }
+	}
+	option = { # Apologise for the steward
+		name = EVTOPTBbusiness25
+		event_target:steward = {
+			opinion = { modifier = opinion_angry who = ROOT years = 1 }
+		}
+		ai_chance = { factor = 1 }
+	}
+	option = { # Join in
+		name = EVTOPTCbusiness25
+		event_target:business_partner = {
+			opinion = { modifier = opinion_disrespecting_culture who = ROOT years = 1 }
+		}
+		ai_chance = {
+			factor = 0.5
+			modifier = { factor = 3 trait = gluttonous }
+		}
+	}
+
+	after = {
+		hidden_tooltip = {
+			if = {
+				limit = {
+					has_character_flag = trade_priest
+					event_target:business_partner = { NOT = { religion = ROOT } }
+				}
+				character_event = { id = business.26 days = 7 }
+			}
+			else = {
+				character_event = { id = business.27 days = 7 }
+			}
+		}
+	}
+}
+
+# business.26 The priests start a quarrel
+# One of the expedition's priests argues theology with a local noble.
+# Scope: the ruler; event_target:business_partner is the host.
+character_event = {
+	id = business.26
+	desc = EVTDESCbusiness26
+	picture = GFX_evt_bishop_pagan_group
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.25
+
+	option = { # Stop it
+		name = EVTOPTAbusiness26
+		any_vassal = {
+			limit = { is_priest = yes }
+			opinion = { modifier = opinion_angry who = ROOT years = 5 }
+		}
+		ai_chance = { factor = 1 }
+	}
+	option = { # Charm them all
+		name = EVTOPTBbusiness26
+		tooltip_info = gregarious
+		trigger = { trait = gregarious }
+		ai_chance = { factor = 5 }
+	}
+	option = { # Join the debate
+		name = {
+			text = EVTOPTCbusiness26
+			trigger = { event_target:business_partner = { religion_group = ROOT } }
+		}
+		name = {
+			text = EVTOPTDbusiness26
+			trigger = { event_target:business_partner = { NOT = { religion_group = ROOT } } }
+		}
+		random = {
+			chance = 50
+			add_trait = zealous
+			hidden_tooltip = { character_event = { id = 38269 } } # Notify Zealous
+		}
+		event_target:business_partner = {
+			opinion = { modifier = opinion_religious_quarrel who = ROOT months = 12 }
+		}
+		ai_chance = {
+			factor = 0.5
+			modifier = { factor = 5 trait = zealous }
+		}
+	}
+
+	after = {
+		hidden_tooltip = { character_event = { id = business.27 days = 7 } }
+	}
+}
+
+# business.27 Router: how the talks end
+# A friend, a deal or a rival, as the host likes the ruler and as the
+# ruler drives a bargain.
+# Scope: the ruler; event_target:business_partner is the host.
+character_event = {
+	id = business.27
+	hide_window = yes
+	is_triggered_only = yes # business.25, business.26
+
+	immediate = {
+		random_list = {
+			30 = { # A friend
+				modifier = {
+					factor = 0
+					event_target:business_partner = {
+						NOT = { personal_opinion = { who = ROOT value = 0 } }
+					}
+				}
+				modifier = {
+					factor = 2
+					event_target:business_partner = { personal_opinion = { who = ROOT value = 20 } }
+				}
+				modifier = {
+					factor = 2
+					event_target:business_partner = { personal_opinion = { who = ROOT value = 40 } }
+				}
+				modifier = { factor = 1.3 stewardship = 10 }
+				modifier = { factor = 1.3 stewardship = 13 }
+				set_character_flag = trade_friend
+			}
+			30 = { # A deal
+				modifier = { factor = 1.3 stewardship = 10 }
+				modifier = { factor = 1.3 stewardship = 13 }
+				set_character_flag = trade_success
+				event_target:business_partner = {
+					opinion = { modifier = opinion_trade_partner who = ROOT years = 10 }
+				}
+			}
+			30 = { # A rival
+				modifier = {
+					factor = 0
+					event_target:business_partner = { personal_opinion = { who = ROOT value = -10 } }
+				}
+				modifier = {
+					factor = 2
+					event_target:business_partner = {
+						NOT = { personal_opinion = { who = ROOT value = -40 } }
+					}
+				}
+				modifier = {
+					factor = 2
+					event_target:business_partner = {
+						NOT = { personal_opinion = { who = ROOT value = -65 } }
+					}
+				}
+				set_character_flag = trade_rival
+			}
+		}
+		character_event = { id = business.28 }
+	}
+}
+
+# business.28 The host's answer
+# Scope: the ruler; event_target:business_partner is the host.
+character_event = {
+	id = business.28
+	desc = { trigger = { has_character_flag = trade_friend } text = EVTDESCbusiness28 }
+	desc = { trigger = { has_character_flag = trade_success } text = EVTDESCbusiness28b }
+	desc = { trigger = { has_character_flag = trade_rival } text = EVTDESCbusiness28c }
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.27
+
+	option = { # A friend and a deal
+		name = EVTOPTAbusiness28
+		trigger = { has_character_flag = trade_friend }
+		add_friend = event_target:business_partner
+		hidden_tooltip = {
+			random = {
+				chance = 50
+				character_event = { id = business.29 days = 3 }
+			}
+			character_event = { id = business.30 days = 7 }
+		}
+	}
+	option = { # A deal
+		name = EVTOPTBbusiness28
+		trigger = { has_character_flag = trade_success }
+		hidden_tooltip = {
+			random = {
+				chance = 50
+				character_event = { id = business.29 days = 3 }
+			}
+			character_event = { id = business.30 days = 7 }
+		}
+	}
+	option = { # A rival
+		name = EVTOPTCbusiness28
+		trigger = { has_character_flag = trade_rival }
+		add_rival = event_target:business_partner
+		opinion = { modifier = grievously_offended who = event_target:business_partner years = 10 }
+		event_target:business_partner = {
+			hidden_tooltip = {
+				opinion = { modifier = grievously_offended who = ROOT years = 10 }
+			}
+		}
+		hidden_tooltip = { character_event = { id = business.32 days = 5 } }
+	}
+}
+
+# business.29 Lessons from a foreign court
+# The ruler's stewardship education improves by a step.
+# Scope: the ruler.
+character_event = {
+	id = business.29
+	desc = EVTDESCbusiness29
+	picture = GFX_evt_relaxed_ruler
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.28
+
+	trigger = {
+		OR = {
+			trait = fortune_builder
+			trait = thrifty_clerk
+			trait = indulgent_wastrel
+		}
+	}
+
+	option = {
+		name = EVTOPTAbusiness29
+		if = {
+			limit = { trait = fortune_builder }
+			hidden_tooltip = { remove_trait = fortune_builder }
+			add_trait = midas_touched
+		}
+		else_if = {
+			limit = { trait = thrifty_clerk }
+			hidden_tooltip = { remove_trait = thrifty_clerk }
+			add_trait = fortune_builder
+		}
+		else = {
+			hidden_tooltip = { remove_trait = indulgent_wastrel }
+			add_trait = thrifty_clerk
+		}
+	}
+}
+
+# business.30 The trade route is open
+# Coin, prestige, a trade route at the capital for thirty years and the
+# trader's calling. Rarely, a precious gift from the foreign court: pearls
+# from over the sea or gold bracelets from the caravans (once a lifetime,
+# only if none is held).
+# Scope: the ruler.
+character_event = {
+	id = business.30
+	desc = EVTDESCbusiness30
+	picture = GFX_evt_relaxed_ruler
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.28
+
+	option = {
+		name = EVTOPTAbusiness30
+		if = {
+			limit = { yearly_income = 200 }
+			wealth = 500
+		}
+		else_if = {
+			limit = { yearly_income = 40 }
+			scaled_wealth = 2.5
+		}
+		else = {
+			wealth = 100
+		}
+		prestige = 150
+		set_character_flag = est_trade_route
+		if = {
+			limit = { ai = no }
+			set_character_flag = achievement_were_in_business
+		}
+		capital_scope = {
+			business_open_trade_route_effect = yes
+			business_capital_prospers_effect = yes
+		}
+		if = {
+			limit = {
+				NOT = { trait = architect }
+				NOT = { trait = gardener }
+			}
+			hidden_tooltip = { remove_character_modifier = aspiring_trader }
+			add_character_modifier = { name = trader duration = -1 }
+		}
+		add_character_modifier = { name = business_contacts duration = -1 }
+		if = {
+			limit = {
+				NOT = { has_character_flag = business_trade_gift_given }
+				NOT = { has_artifact = collar_of_pearls }
+				NOT = { has_artifact = golden_bracelets }
+			}
+			random = {
+				chance = 20
+				set_character_flag = business_trade_gift_given
+				if = {
+					limit = { has_character_flag = trade_is_land }
+					add_artifact = golden_bracelets
+				}
+				else = {
+					add_artifact = collar_of_pearls
+				}
+			}
+		}
+		business_trade_cleanup_effect = yes
+		hidden_tooltip = { character_event = { id = business.31 days = 5 } }
+	}
+}
+
+# business.31 A share for the steward?
+# Scope: the ruler; event_target:steward ran the venture.
+character_event = {
+	id = business.31
+	desc = EVTDESCbusiness31
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.30
+
+	trigger = {
+		event_target:steward = { is_alive = yes }
+	}
+
+	option = { # Reward
+		name = EVTOPTAbusiness31
+		transfer_scaled_wealth = {
+			to = event_target:steward
+			value = 0.5
+			max = 200
+		}
+		event_target:steward = {
+			opinion = { modifier = opinion_grateful who = ROOT years = 5 }
+		}
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 0.25 trait = greedy }
+			modifier = { factor = 2 trait = charitable }
+		}
+	}
+	option = { # Duty is its own reward
+		name = EVTOPTBbusiness31
+		random = {
+			chance = 50
+			add_trait = greedy
+			hidden_tooltip = { character_event = { id = 38252 } } # Notify Greedy
+		}
+		event_target:steward = {
+			opinion = { modifier = opinion_disappointed who = ROOT years = 5 }
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = greedy }
+		}
+	}
+}
+
+# business.32 The venture failed
+# At least the ruler learned something.
+# Scope: the ruler.
+character_event = {
+	id = business.32
+	desc = EVTDESCbusiness32
+	picture = GFX_evt_stressed_ruler
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.20, business.28
+
+	option = {
+		name = EVTOPTAbusiness32
+		business_gain_experience_effect = yes
+		business_trade_cleanup_effect = yes
+	}
+}
+
+# business.33 Router: the trade route needs renewing
+# Scope: the capital province of the founder (whoever holds it now).
+province_event = {
+	id = business.33
+	hide_window = yes
+	is_triggered_only = yes # business.30, .34, .35 (after 28 years)
+
+	immediate = {
+		if = {
+			limit = { business_land_route_trigger = yes }
+			province_event = { id = business.34 }
+		}
+		else = {
+			province_event = { id = business.35 }
+		}
+	}
+}
+
+# business.34 New beasts for the caravans
+# Scope: the province; its holder decides.
+province_event = {
+	id = business.34
+	desc = EVTDESCbusiness34
+	picture = GFX_evt_merchant_caravan
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.33
+
+	trigger = {
+		has_province_modifier = trade_route
+		NOT = { has_province_modifier = refresh_trade_route_timer }
+	}
+
+	option = { # Pay
+		name = EVTOPTAbusiness34
+		holder_scope = {
+			if = {
+				limit = { yearly_income = 80 }
+				wealth = -200
+			}
+			else = {
+				scaled_wealth = -2.5
+			}
+		}
+		business_open_trade_route_effect = yes
+		ai_chance = { factor = 1 }
+	}
+	option = { # Too dear
+		name = EVTOPTBbusiness34
+		holder_scope = { prestige = -25 }
+		ai_chance = { factor = 3 }
+	}
+}
+
+# business.35 A new ship for the route
+# Scope: the province; its holder decides.
+province_event = {
+	id = business.35
+	desc = EVTDESCbusiness35
+	picture = GFX_evt_busy_trading_dock_republic
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.33
+
+	trigger = {
+		has_province_modifier = trade_route
+		NOT = { has_province_modifier = refresh_trade_route_timer }
+	}
+
+	option = { # Pay
+		name = EVTOPTAbusiness34
+		holder_scope = {
+			if = {
+				limit = { yearly_income = 80 }
+				wealth = -200
+			}
+			else = {
+				scaled_wealth = -2.5
+			}
+		}
+		business_open_trade_route_effect = yes
+		ai_chance = { factor = 1 }
+	}
+	option = { # Too dear
+		name = EVTOPTBbusiness34
+		holder_scope = { prestige = -25 }
+		ai_chance = { factor = 3 }
+	}
+}
+
+###############################################################################
+# The great tower
+###############################################################################
+
+# business.40 A tower to dwarf all others
+# Scope: the ruler.
+character_event = {
+	id = business.40
+	desc = { trigger = { NOT = { religion_group = dwarf_gods_group } } text = EVTDESCbusiness40 }
+	desc = { trigger = { religion_group = dwarf_gods_group } text = EVTDESCbusiness40b }
+	picture = GFX_evt_relaxed_ruler
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.1
+
+	option = { # Build it
+		name = EVTOPTAbusiness40
+		set_character_flag = tower_start
+		custom_tooltip = { text = tower_start }
+		hidden_tooltip = { character_event = { id = business.41 days = 7 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 NOT = { scaled_wealth = 2 } }
+			modifier = { factor = 2 trait = proud }
+		}
+	}
+	option = { # Too dear
+		name = EVTOPTBbusiness40
+		ai_chance = { factor = 1 }
+	}
+}
+
+# business.41 Hiring a mason
+# A skilled master (dear, but sound) or, for a greedy ruler, some boy off
+# the street (cheap, and the tower may lean for it).
+# Scope: the ruler.
+character_event = {
+	id = business.41
+	desc = EVTDESCbusiness41
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.40
+
+	option = { # A master mason
+		name = EVTOPTAbusiness41
+		scaled_wealth = -1
+		capital_scope = {
+			create_character = {
+				random_traits = no
+				dynasty = NONE
+				religion = ROOT
+				culture = PREV
+				age = 28
+				trait = thrifty_clerk
+				trait = quick
+				trait = diligent
+				trait = lustful
+				trait = cynical
+				trait = gregarious
+				attributes = {
+					diplomacy = 9
+					martial = 1
+					stewardship = 6
+					intrigue = 4
+					learning = 6
+				}
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Racial trait
+				set_defacto_liege = ROOT
+				save_event_target_as = stonemason
+			}
+		}
+		hidden_tooltip = { character_event = { id = business.42 days = 7 } }
+		ai_chance = { factor = 3 }
+	}
+	option = { # A boy off the street
+		name = EVTOPTBbusiness41
+		tooltip_info = greedy
+		trigger = { trait = greedy }
+		hidden_tooltip = { } # New random seed, do not remove
+		scaled_wealth = -0.08
+		set_character_flag = tower_street_mason
+		capital_scope = {
+			create_character = {
+				random_traits = no
+				dynasty = NONE
+				religion = PREV
+				culture = PREV
+				age = 17
+				trait = indulgent_wastrel
+				trait = humble
+				trait = slothful
+				trait = shy
+				trait = trusting
+				attributes = {
+					diplomacy = 4
+					martial = 5
+					stewardship = 5
+					intrigue = 6
+					learning = 2
+				}
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Racial trait
+				set_defacto_liege = ROOT
+				save_event_target_as = stonemason
+				set_character_flag = is_street_mason
+			}
+		}
+		hidden_tooltip = { character_event = { id = business.42 days = 7 } }
+		ai_chance = { factor = 1 }
+	}
+}
+
+# business.42 The burghers are impressed
+# Scope: the ruler.
+character_event = {
+	id = business.42
+	desc = EVTDESCbusiness42
+	picture = GFX_evt_scandal
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.41
+
+	option = {
+		name = EVTOPTAbusiness42
+		any_vassal = {
+			limit = {
+				is_republic = yes
+				is_adult = yes
+				prisoner = no
+				NOT = { trait = incapable }
+			}
+			opinion = { modifier = opinion_impressed who = ROOT years = 2 }
+		}
+		hidden_tooltip = { character_event = { id = business.43 days = 20 } }
+	}
+}
+
+# business.43 The mason wants more coin
+# Scope: the ruler; event_target:stonemason is the mason.
+character_event = {
+	id = business.43
+	desc = { trigger = { has_character_flag = tower_street_mason } text = EVTDESCbusiness43b }
+	desc = { trigger = { NOT = { has_character_flag = tower_street_mason } } text = EVTDESCbusiness43 }
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.42
+
+	option = { # Pay the master
+		name = EVTOPTAbusiness43
+		trigger = { NOT = { has_character_flag = tower_street_mason } }
+		scaled_wealth = -1
+		hidden_tooltip = { character_event = { id = business.44 days = 7 } }
+		ai_chance = { factor = 1 }
+	}
+	option = { # See through the master
+		name = EVTOPTBbusiness43
+		tooltip_info = intrigue
+		trigger = {
+			NOT = { has_character_flag = tower_street_mason }
+			intrigue = 10
+		}
+		hidden_tooltip = { character_event = { id = business.44 days = 7 } }
+		ai_chance = { factor = 5 }
+	}
+	option = { # Pay the boy
+		name = EVTOPTCbusiness43
+		trigger = { has_character_flag = tower_street_mason }
+		scaled_wealth = -0.08
+		hidden_tooltip = { character_event = { id = business.44 days = 7 } }
+		ai_chance = { factor = 1 }
+	}
+	option = { # Threaten the boy
+		name = EVTOPTDbusiness43
+		trigger = { has_character_flag = tower_street_mason }
+		if = {
+			limit = { NOT = { trait = cruel } }
+			random = {
+				chance = 50
+				add_trait = cruel
+				hidden_tooltip = { character_event = { id = 38259 } } # Notify Cruel
+			}
+		}
+		hidden_tooltip = { character_event = { id = business.44 days = 7 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 0.25 trait = kind }
+		}
+	}
+}
+
+# business.44 Stone for the tower
+# Import it, open a quarry (eighty years of cheaper building at the
+# capital, business.46 closes it), or (greedy) strip the old castle walls.
+# Scope: the ruler.
+character_event = {
+	id = business.44
+	desc = EVTDESCbusiness44
+	picture = GFX_evt_stressed_ruler
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.43
+
+	option = { # Import
+		name = EVTOPTAbusiness44
+		scaled_wealth = -1
+		hidden_tooltip = { character_event = { id = business.45 days = 5 } }
+		ai_chance = { factor = 2 }
+	}
+	option = { # A quarry
+		name = EVTOPTBbusiness44
+		scaled_wealth = -3
+		capital_scope = {
+			hidden_tooltip = {
+				remove_province_modifier = stone_quarry
+				province_event = { id = business.46 days = 29200 }
+			}
+			add_province_modifier = { name = stone_quarry duration = 29200 }
+			business_capital_prospers_effect = yes
+		}
+		hidden_tooltip = { character_event = { id = business.45 days = 5 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 NOT = { scaled_wealth = 3 } }
+		}
+	}
+	option = { # Old stones
+		name = EVTOPTCbusiness44
+		trigger = { trait = greedy }
+		wealth = -10
+		hidden_tooltip = { character_event = { id = business.45 days = 60 } }
+		ai_chance = { factor = 2 }
+	}
+}
+
+# business.45 An accident on the site
+# Scope: the ruler.
+character_event = {
+	id = business.45
+	desc = EVTDESCbusiness45
+	picture = GFX_evt_peasants
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.44
+
+	option = { # Peasants are cheap
+		name = EVTOPTAbusiness45
+		capital_scope = {
+			add_province_modifier = { name = construction_accident duration = 365 }
+		}
+		if = {
+			limit = { NOT = { trait = cruel } }
+			add_trait = cruel
+		}
+		hidden_tooltip = { character_event = { id = business.47 days = 120 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 0.1 trait = kind }
+		}
+	}
+	option = { # Pay the families
+		name = EVTOPTBbusiness45
+		scaled_wealth = -0.5
+		hidden_tooltip = { character_event = { id = business.47 days = 300 } }
+		ai_chance = { factor = 2 }
+	}
+}
+
+# business.46 The quarry is worked out
+# Scope: the capital province.
+province_event = {
+	id = business.46
+	desc = EVTDESCbusiness46
+	picture = GFX_evt_construction_site
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.44 (80 years later)
+
+	option = {
+		name = EVTOPTAbusiness46
+		remove_province_modifier = stone_quarry
+	}
+}
+
+# business.47 Router: the priests object
+# A priest of the ruler's own faith among the vassals may object to a
+# tower taller than the temples (business.48). Otherwise the tower is
+# finished in two months.
+# Scope: the ruler.
+character_event = {
+	id = business.47
+	hide_window = yes
+	is_triggered_only = yes # business.45
+
+	immediate = {
+		if = {
+			limit = {
+				business_temple_proud_faith_trigger = yes
+				any_vassal = {
+					ai = yes
+					is_priest = yes
+					religion = ROOT
+				}
+			}
+			random_vassal = {
+				limit = {
+					ai = yes
+					is_priest = yes
+					religion = ROOT
+				}
+				save_event_target_as = tower_priest
+			}
+			character_event = { id = business.48 }
+		}
+		else = {
+			long_character_event = { id = business.52 days = 60 }
+		}
+	}
+}
+
+# business.48 Taller than the temples
+# Scope: the ruler; event_target:tower_priest objects.
+character_event = {
+	id = business.48
+	desc = EVTDESCbusiness48
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.47
+
+	option = { # Dismiss the priest
+		name = EVTOPTAbusiness48
+		event_target:tower_priest = {
+			opinion = { modifier = opinion_annoyed who = ROOT months = 12 }
+		}
+		hidden_tooltip = { long_character_event = { id = business.52 days = 60 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 2 trait = cynical }
+		}
+	}
+	option = { # Build it lower
+		name = EVTOPTBbusiness48
+		prestige = -50
+		event_target:tower_priest = {
+			opinion = { modifier = opinion_happy who = ROOT months = 240 }
+		}
+		religion_head = {
+			opinion = { modifier = opinion_happy who = ROOT months = 240 }
+		}
+		hidden_tooltip = { long_character_event = { id = business.52 days = 60 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = zealous }
+			modifier = { factor = 2 trait = humble }
+		}
+	}
+	option = { # The god told me to
+		name = EVTOPTCbusiness48
+		trigger = { trait = possessed }
+		if = {
+			limit = { NOT = { trait = zealous } }
+			add_trait = zealous
+		}
+		religion_head = {
+			opinion = { modifier = opinion_religious_agenda who = ROOT months = 60 }
+		}
+		hidden_tooltip = { long_character_event = { id = business.52 days = 60 } }
+		ai_chance = { factor = 1 }
+	}
+	option = { # He must disappear
+		name = EVTOPTDbusiness48
+		trigger = {
+			OR = {
+				trait = lunatic_1
+				trait = lunatic_2
+				trait = lunatic_3
+			}
+		}
+		custom_tooltip = {
+			text = EVTTOOLTIPbusiness48
+			hidden_tooltip = { character_event = { id = business.49 days = 3 } }
+		}
+		ai_chance = { factor = 0.5 }
+	}
+}
+
+# business.49 The view from the top
+# Nine times in ten the priest goes over the edge (business.51); once in
+# ten the ruler does (business.50).
+# Scope: the ruler; event_target:tower_priest is the priest.
+character_event = {
+	id = business.49
+	desc = EVTDESCbusiness49
+	picture = GFX_evt_lunatic
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.48
+
+	option = {
+		name = EVTOPTAbusiness49
+		custom_tooltip = {
+			text = EVTTOOLTIPbusiness49
+			hidden_tooltip = {
+				random_list = {
+					10 = { character_event = { id = business.50 } }
+					90 = { character_event = { id = business.51 } }
+				}
+			}
+		}
+	}
+}
+
+# business.50 The priest bends down
+# Scope: the ruler; event_target:tower_priest is the priest.
+character_event = {
+	id = business.50
+	desc = EVTDESCbusiness50
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.49
+
+	immediate = {
+		if = {
+			limit = { is_invincible_trigger = yes }
+			antideath_effect = yes
+			long_character_event = { id = business.52 days = 57 }
+		}
+		else = {
+			death = { death_reason = death_accident_fall }
+		}
+	}
+
+	option = {
+		name = EVTOPTAbusiness50
+	}
+}
+
+# business.51 The priest falls
+# Scope: the ruler; event_target:tower_priest is the priest.
+character_event = {
+	id = business.51
+	desc = EVTDESCbusiness51
+	picture = GFX_evt_drunk
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.49
+
+	immediate = {
+		event_target:tower_priest = {
+			if = {
+				limit = { is_invincible_trigger = yes }
+				antideath_effect = yes
+			}
+			else = {
+				death = {
+					death_reason = death_murder_unknown_fall
+					killer = ROOT
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAbusiness51
+		hidden_tooltip = { long_character_event = { id = business.52 days = 57 } }
+	}
+}
+
+# business.52 The tower is finished
+# The builder becomes an architect (or keeps it a pastime for more
+# prestige). Five times in a hundred the tower will begin to lean in ten
+# years (three times that for a boy's work).
+# Scope: the ruler.
+long_character_event = {
+	id = business.52
+	desc = EVTDESCbusiness52
+	picture = GFX_evt_powerful_tower
+	border = GFX_event_long_frame_economy
+
+	is_triggered_only = yes # business.47, .48, .50, .51
+
+	immediate = {
+		save_event_target_as = tower_founder
+		set_character_flag = is_tower_founder
+		clr_character_flag = tower_start
+		set_character_flag = tower_end
+	}
+
+	option = { # An architect
+		name = EVTOPTAbusiness52
+		prestige = 100
+		add_trait = architect
+		remove_character_modifier = trader
+		add_character_modifier = { name = great_tower duration = -1 }
+		ai_chance = { factor = 2 }
+	}
+	option = { # A pastime
+		name = EVTOPTBbusiness52
+		prestige = 250
+		add_character_modifier = { name = great_tower duration = -1 }
+		ai_chance = { factor = 1 }
+	}
+
+	after = {
+		hidden_effect = {
+			random_list = {
+				5 = { # It will lean
+					modifier = { factor = 3 has_character_flag = tower_street_mason }
+					if = {
+						limit = {
+							capital_scope = {
+								NOT = { has_province_modifier = leaning_tower }
+								NOT = { has_province_modifier = leaning_tower_bad }
+							}
+						}
+						capital_scope = { province_event = { id = business.53 days = 3650 } }
+					}
+					else_if = {
+						limit = {
+							any_demesne_province = {
+								NOT = { has_province_modifier = leaning_tower }
+								NOT = { has_province_modifier = leaning_tower_bad }
+							}
+						}
+						random_demesne_province = {
+							limit = {
+								NOT = { has_province_modifier = leaning_tower }
+								NOT = { has_province_modifier = leaning_tower_bad }
+							}
+							province_event = { id = business.53 days = 3650 }
+						}
+					}
+					else = {
+						character_event = { id = business.58 }
+					}
+				}
+				95 = { # It stands straight
+					character_event = { id = business.58 }
+				}
+			}
+		}
+	}
+}
+
+# business.53 The tower leans
+# Its builder may blame the mason (imprisoned), the workers or themselves;
+# a later holder can only shrug. Then: save it (business.54).
+# Scope: the province; its holder decides.
+province_event = {
+	id = business.53
+	desc = {
+		trigger = { holder_scope = { has_character_flag = is_tower_founder } }
+		text = EVTDESCbusiness53
+	}
+	desc = {
+		trigger = { holder_scope = { NOT = { has_character_flag = is_tower_founder } } }
+		text = EVTDESCbusiness53b
+	}
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.52 (ten years later)
+
+	immediate = {
+		save_event_target_as = leaning_tower_province
+	}
+
+	option = { # The mason's fault
+		name = EVTOPTAbusiness53
+		trigger = {
+			holder_scope = {
+				has_character_flag = is_tower_founder
+				any_courtier = {
+					event_target:stonemason = { character = PREV }
+				}
+			}
+		}
+		add_province_modifier = { name = leaning_tower_bad duration = -1 }
+		holder_scope = {
+			event_target:stonemason = { imprison = PREV }
+			set_character_flag = tower_blamed_mason
+			remove_character_modifier = great_tower
+			hidden_tooltip = { character_event = { id = business.54 days = 30 } }
+		}
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 0.25 trait = just }
+		}
+	}
+	option = { # Lazy workers
+		name = EVTOPTBbusiness53
+		trigger = { holder_scope = { has_character_flag = is_tower_founder } }
+		add_province_modifier = { name = peasant_unrest duration = 365 }
+		add_province_modifier = { name = leaning_tower_bad duration = -1 }
+		holder_scope = {
+			remove_character_modifier = great_tower
+			hidden_tooltip = { character_event = { id = business.54 days = 30 } }
+		}
+		ai_chance = { factor = 1 }
+	}
+	option = { # My own fault
+		name = EVTOPTCbusiness53
+		trigger = { holder_scope = { has_character_flag = is_tower_founder } }
+		add_province_modifier = { name = leaning_tower_bad duration = -1 }
+		holder_scope = {
+			if = {
+				limit = { trait = proud }
+				prestige = -100
+			}
+			else = {
+				prestige = -50
+			}
+			remove_character_modifier = great_tower
+			hidden_tooltip = { character_event = { id = business.54 days = 30 } }
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = just }
+			modifier = { factor = 0.1 trait = proud }
+		}
+	}
+	option = { # How unfortunate
+		name = EVTOPTDbusiness53
+		trigger = { holder_scope = { NOT = { has_character_flag = is_tower_founder } } }
+		add_province_modifier = { name = leaning_tower_bad duration = -1 }
+		holder_scope = {
+			hidden_tooltip = { character_event = { id = business.54 days = 30 } }
+		}
+	}
+}
+
+# business.54 Saving the tower
+# More coin, better odds.
+# Scope: the holder; event_target:leaning_tower_province is the tower.
+character_event = {
+	id = business.54
+	desc = EVTDESCbusiness54
+	picture = GFX_evt_leaning_tower
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.53
+
+	option = { # Whatever it costs
+		name = EVTOPTAbusiness54
+		scaled_wealth = -2
+		random_list = {
+			99 = {
+				modifier = { factor = 0.7 has_character_flag = tower_street_mason }
+				custom_tooltip = {
+					text = tower_stands
+					hidden_tooltip = { character_event = { id = business.55 days = 10 } }
+				}
+			}
+			1 = {
+				custom_tooltip = {
+					text = tower_topples
+					hidden_tooltip = { long_character_event = { id = business.56 days = 10 } }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 NOT = { scaled_wealth = 2 } }
+		}
+	}
+	option = { # A reasonable effort
+		name = EVTOPTBbusiness54
+		scaled_wealth = -0.5
+		random_list = {
+			70 = {
+				modifier = { factor = 0.7 has_character_flag = tower_street_mason }
+				custom_tooltip = {
+					text = tower_stands
+					hidden_tooltip = { character_event = { id = business.55 days = 10 } }
+				}
+			}
+			30 = {
+				custom_tooltip = {
+					text = tower_topples
+					hidden_tooltip = { long_character_event = { id = business.56 days = 10 } }
+				}
+			}
+		}
+		ai_chance = { factor = 2 }
+	}
+	option = { # Leave it to fate
+		name = EVTOPTCbusiness54
+		random_list = {
+			50 = {
+				modifier = { factor = 0.7 has_character_flag = tower_street_mason }
+				custom_tooltip = {
+					text = tower_stands
+					hidden_tooltip = { character_event = { id = business.55 days = 10 } }
+				}
+			}
+			50 = {
+				custom_tooltip = {
+					text = tower_topples
+					hidden_tooltip = { long_character_event = { id = business.56 days = 10 } }
+				}
+			}
+		}
+		ai_chance = { factor = 1 }
+	}
+}
+
+# business.55 The tower stands, crooked
+# Three years later a famous visitor comes to see it (business.57).
+# Scope: the holder.
+character_event = {
+	id = business.55
+	desc = {
+		trigger = { event_target:tower_founder = { character = ROOT } }
+		text = EVTDESCbusiness55
+	}
+	desc = {
+		trigger = { NOT = { event_target:tower_founder = { character = ROOT } } }
+		text = EVTDESCbusiness55b
+	}
+	picture = GFX_evt_leaning_tower
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.54
+
+	option = {
+		name = EVTOPTAbusiness55
+		hidden_tooltip = { long_character_event = { id = business.57 days = 1095 } }
+	}
+}
+
+# business.56 The tower falls
+# Scope: the holder; event_target:leaning_tower_province is the tower.
+long_character_event = {
+	id = business.56
+	desc = EVTDESCbusiness56
+	picture = GFX_evt_bad_news
+	border = GFX_event_long_frame_economy
+
+	is_triggered_only = yes # business.54
+
+	option = {
+		name = EVTOPTAbusiness56
+		prestige = -50
+		event_target:leaning_tower_province = {
+			remove_province_modifier = leaning_tower_bad
+			add_province_modifier = { name = construction_accident duration = 365 }
+		}
+		hidden_tooltip = { character_event = { id = business.58 } }
+	}
+}
+
+# business.57 A visitor from afar
+# A famous foreign statesman wants to meet the genius behind the leaning
+# tower. The tower becomes a wonder that draws coin (leaning_tower). A
+# blamed mason is released, and a boy mason may be lured away with a
+# county of his own by a foreign ruler.
+# Scope: the holder; event_target:leaning_tower_province is the tower.
+long_character_event = {
+	id = business.57
+	desc = {
+		trigger = {
+			NOT = { has_character_flag = tower_blamed_mason }
+			NOT = { has_character_flag = tower_street_mason }
+			NOT = { event_target:stonemason = { has_character_flag = is_street_mason } }
+		}
+		text = EVTDESCbusiness57
+	}
+	desc = {
+		trigger = {
+			NOT = { has_character_flag = tower_blamed_mason }
+			OR = {
+				has_character_flag = tower_street_mason
+				event_target:stonemason = { has_character_flag = is_street_mason }
+			}
+		}
+		text = EVTDESCbusiness57b
+	}
+	desc = {
+		trigger = {
+			has_character_flag = tower_blamed_mason
+			NOT = { has_character_flag = tower_street_mason }
+			NOT = { event_target:stonemason = { has_character_flag = is_street_mason } }
+		}
+		text = EVTDESCbusiness57c
+	}
+	desc = {
+		trigger = {
+			has_character_flag = tower_blamed_mason
+			OR = {
+				has_character_flag = tower_street_mason
+				event_target:stonemason = { has_character_flag = is_street_mason }
+			}
+		}
+		text = EVTDESCbusiness57d
+	}
+	picture = GFX_evt_leaning_tower
+	border = GFX_event_long_frame_economy
+
+	is_triggered_only = yes # business.55
+
+	option = { # Fetch him from the dungeon
+		name = EVTOPTAbusiness57
+		trigger = {
+			has_character_flag = tower_blamed_mason
+			has_character_flag = is_tower_founder
+			any_courtier = {
+				event_target:stonemason = { character = PREV }
+				prisoner = yes
+				host = { character = ROOT }
+			}
+		}
+		event_target:stonemason = {
+			prisoner = no
+			prestige = 500
+		}
+		scaled_wealth = 0.5
+		business_tower_saved_effect = yes
+	}
+	option = { # Fetch him at once
+		name = EVTOPTBbusiness57
+		trigger = {
+			has_character_flag = tower_blamed_mason
+			has_character_flag = is_tower_founder
+			NOT = { has_character_flag = tower_street_mason }
+			any_courtier = {
+				event_target:stonemason = { character = PREV }
+			}
+		}
+		event_target:stonemason = {
+			if = {
+				limit = { prisoner = yes }
+				prisoner = no
+			}
+			prestige = 500
+		}
+		scaled_wealth = 0.5
+		business_tower_saved_effect = yes
+	}
+	option = { # He is away
+		name = EVTOPTCbusiness57
+		trigger = {
+			has_character_flag = tower_blamed_mason
+			has_character_flag = is_tower_founder
+			NOT = { has_character_flag = tower_street_mason }
+			NOT = {
+				any_courtier = {
+					event_target:stonemason = { character = PREV }
+				}
+			}
+		}
+		prestige = -50
+		business_tower_saved_effect = yes
+	}
+	option = { # It is I
+		name = EVTOPTDbusiness57
+		trigger = {
+			NOT = { has_character_flag = tower_blamed_mason }
+			has_character_flag = is_tower_founder
+		}
+		prestige = 250
+		business_tower_saved_effect = yes
+	}
+	option = { # Built before my time
+		name = EVTOPTEbusiness57
+		trigger = { NOT = { has_character_flag = is_tower_founder } }
+		business_tower_saved_effect = yes
+	}
+	option = { # Fetch the boy
+		name = EVTOPTFbusiness57
+		trigger = {
+			has_character_flag = tower_street_mason
+			any_courtier = {
+				event_target:stonemason = { character = PREV }
+			}
+		}
+		event_target:stonemason = {
+			if = {
+				limit = { prisoner = yes }
+				prisoner = no
+			}
+			prestige = 500
+			if = {
+				limit = { is_ruler = no }
+				random_independent_ruler = {
+					limit = {
+						ai = yes
+						demesne_size = 2
+						NOT = { character = ROOT }
+						NOT = {
+							ROOT = {
+								any_liege = { character = PREVPREV }
+							}
+						}
+					}
+					PREV = { set_defacto_liege = PREV }
+					random_demesne_title = {
+						limit = {
+							tier = COUNT
+							location = {
+								any_province_holding = {
+									NOT = { holding_type = nomad }
+								}
+							}
+						}
+						grant_title = PREVPREV
+					}
+				}
+			}
+		}
+		scaled_wealth = 0.5
+		business_tower_saved_effect = yes
+	}
+	option = { # The boy is away
+		name = EVTOPTGbusiness57
+		trigger = {
+			has_character_flag = tower_street_mason
+			NOT = {
+				any_courtier = {
+					event_target:stonemason = { character = PREV }
+				}
+			}
+		}
+		business_tower_saved_effect = yes
+	}
+}
+
+# business.58 Clean-up
+# Scope: the tower's builder or holder.
+character_event = {
+	id = business.58
+	hide_window = yes
+	is_triggered_only = yes # business.52, .56, business_tower_saved_effect
+
+	immediate = {
+		clr_character_flag = tower_street_mason
+		clr_character_flag = is_tower_founder
+		clr_character_flag = tower_blamed_mason
+	}
+}
+
+###############################################################################
+# The hedge maze
+###############################################################################
+
+# business.60 A garden gone wild
+# Scope: the ruler.
+character_event = {
+	id = business.60
+	desc = EVTDESCbusiness60
+	picture = GFX_evt_garden
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.1
+
+	option = { # A hedge maze
+		name = EVTOPTAbusiness60
+		set_character_flag = hedge_maze
+		hidden_tooltip = { character_event = { id = business.61 days = 7 } }
+		ai_chance = { factor = 1 }
+	}
+	option = { # No time
+		name = EVTOPTBbusiness60
+		ai_chance = { factor = 1 }
+	}
+}
+
+# business.61 The weeds
+# Scope: the ruler.
+character_event = {
+	id = business.61
+	desc = EVTDESCbusiness61
+	picture = GFX_evt_son_asking_father
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.60
+
+	option = { # By my own hand
+		name = EVTOPTAbusiness61
+		if = {
+			limit = { trait = slothful }
+			remove_trait = slothful
+		}
+		else = {
+			random = {
+				chance = 50
+				add_trait = diligent
+				hidden_tooltip = { character_event = { id = 38256 } } # Notify Diligent
+			}
+		}
+		hidden_tooltip = { character_event = { id = business.62 days = 28 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0.25 trait = slothful }
+		}
+	}
+	option = { # A helping hand
+		name = EVTOPTBbusiness61
+		trigger = {
+			any_courtier = {
+				is_adult = yes
+				prisoner = no
+				in_command = no
+				NOR = {
+					character = ROOT
+					is_friend = ROOT
+					is_rival = ROOT
+					trait = incapable
+					trait = infirm
+				}
+			}
+		}
+		random_courtier = {
+			limit = {
+				is_adult = yes
+				prisoner = no
+				in_command = no
+				NOR = {
+					character = ROOT
+					is_friend = ROOT
+					is_rival = ROOT
+					trait = incapable
+					trait = infirm
+				}
+			}
+			add_friend = ROOT
+		}
+		hidden_tooltip = { character_event = { id = business.62 days = 28 } }
+		ai_chance = { factor = 2 }
+	}
+	option = { # The servants
+		name = EVTOPTCbusiness61
+		trigger = { trait = slothful }
+		random = {
+			chance = 50
+			add_trait = cruel
+			hidden_tooltip = { character_event = { id = 38259 } } # Notify Cruel
+		}
+		hidden_tooltip = { character_event = { id = business.62 days = 28 } }
+		ai_chance = { factor = 1 }
+	}
+}
+
+# business.62 Statues for the dead ends
+# Of the family, of the gods and heroes of the faith (not for the faiths
+# that forbid images), or none.
+# Scope: the ruler.
+character_event = {
+	id = business.62
+	desc = EVTDESCbusiness62
+	picture = GFX_evt_castle_garden
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.61
+
+	option = { # The family
+		name = { trigger = { NOT = { religion_group = dwarf_gods_group } } text = EVTOPTAbusiness62 }
+		name = { trigger = { religion_group = dwarf_gods_group } text = EVTOPTAbusiness62_ancestors }
+		set_character_flag = maze_statues
+		if = {
+			limit = { NOT = { trait = proud } }
+			add_trait = proud
+		}
+		scaled_wealth = -0.6
+		custom_tooltip = {
+			text = EVTTOOLTIPbusiness62
+			hidden_tooltip = {
+				any_dynasty_member = {
+					opinion = { modifier = opinion_family_statues who = ROOT years = 150 }
+				}
+			}
+		}
+		hidden_tooltip = { character_event = { id = business.63 days = 28 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = proud }
+		}
+	}
+	option = { # The faith
+		name = EVTOPTBbusiness62
+		trigger = {
+			NOR = {
+				religion = ormazd
+				religion = kitabid
+			}
+		}
+		set_character_flag = maze_statues
+		scaled_wealth = -0.6
+		religion_head = {
+			opinion = { modifier = opinion_impressed who = ROOT years = 10 }
+		}
+		random_vassal = {
+			limit = {
+				is_priest = yes
+				NOT = { religion_head = { character = PREV } }
+			}
+			opinion = { modifier = opinion_impressed who = ROOT years = 10 }
+		}
+		hidden_tooltip = { character_event = { id = business.63 days = 28 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = zealous }
+		}
+	}
+	option = { # None
+		name = EVTOPTCbusiness62
+		prestige = -25
+		hidden_tooltip = { character_event = { id = business.63 days = 28 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+}
+
+# business.63 A fountain
+# Plain, or flowing with wine (with ale for a Dawi), or none.
+# Scope: the ruler.
+character_event = {
+	id = business.63
+	desc = EVTDESCbusiness63
+	picture = GFX_evt_castle_garden
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.62
+
+	option = { # A fountain
+		name = EVTOPTAbusiness63
+		scaled_wealth = -1
+		add_character_modifier = { name = maze_fountain duration = -1 }
+		hidden_tooltip = { character_event = { id = business.64 days = 28 } }
+		ai_chance = { factor = 2 }
+	}
+	option = { # Wine (or ale)
+		name = { trigger = { NOT = { religion_group = dwarf_gods_group } } text = EVTOPTBbusiness63 }
+		name = { trigger = { religion_group = dwarf_gods_group } text = EVTOPTBbusiness63_ale }
+		trigger = {
+			OR = {
+				trait = decadent
+				NOT = { religion_group = ormazd_gods_group }
+			}
+		}
+		scaled_wealth = -3
+		add_character_modifier = { name = maze_fountain_extravagant duration = -1 }
+		if = {
+			limit = { trait = temperate }
+			remove_trait = temperate
+		}
+		else_if = {
+			limit = { NOT = { trait = gluttonous } }
+			random = {
+				chance = 33
+				add_trait = gluttonous
+				hidden_tooltip = { character_event = { id = 38177 } } # Notify Gluttonous
+			}
+		}
+		hidden_tooltip = { character_event = { id = business.64 days = 28 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 NOT = { scaled_wealth = 3 } }
+			modifier = { factor = 3 trait = gluttonous }
+			modifier = { factor = 0.1 trait = temperate }
+		}
+	}
+	option = { # None
+		name = EVTOPTCbusiness63
+		hidden_tooltip = { character_event = { id = business.64 days = 28 } }
+		ai_chance = { factor = 1 }
+	}
+}
+
+# business.64 Flowers
+# Scope: the ruler.
+character_event = {
+	id = business.64
+	desc = EVTDESCbusiness64
+	picture = GFX_evt_castle_garden
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.63
+
+	option = { # Exotic blooms
+		name = EVTOPTAbusiness64
+		set_character_flag = maze_flowers
+		scaled_wealth = -0.3
+		hidden_tooltip = { character_event = { id = business.65 days = 28 } }
+	}
+	option = { # Local flowers
+		name = EVTOPTBbusiness64
+		hidden_tooltip = { character_event = { id = business.65 days = 28 } }
+	}
+}
+
+# business.65 A pavilion
+# Scope: the ruler.
+character_event = {
+	id = business.65
+	desc = EVTDESCbusiness65
+	picture = GFX_evt_castle_garden
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.64
+
+	option = { # Build it
+		name = EVTOPTAbusiness65
+		scaled_wealth = -0.5
+		add_character_modifier = { name = maze_pavilion duration = -1 }
+		hidden_tooltip = { character_event = { id = business.66 days = 28 } }
+	}
+	option = { # Too romantic
+		name = EVTOPTBbusiness65
+		hidden_tooltip = { character_event = { id = business.66 days = 28 } }
+	}
+}
+
+# business.66 The maze is finished
+# Three of the four extras make it a magnificent maze. The gardener's
+# calling, or a pastime.
+# Scope: the ruler.
+character_event = {
+	id = business.66
+	desc = { trigger = { has_character_flag = magnificent_maze } text = EVTDESCbusiness66 }
+	desc = { trigger = { NOT = { has_character_flag = magnificent_maze } } text = EVTDESCbusiness66b }
+	picture = GFX_evt_castle_garden
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.65
+
+	immediate = {
+		if = {
+			limit = {
+				calc_true_if = {
+					amount = 3
+					has_character_flag = maze_statues
+					has_character_flag = maze_flowers
+					has_character_modifier = maze_pavilion
+					OR = {
+						has_character_modifier = maze_fountain
+						has_character_modifier = maze_fountain_extravagant
+					}
+				}
+			}
+			set_character_flag = magnificent_maze
+		}
+		clr_character_flag = maze_flowers
+		clr_character_flag = maze_statues
+		clr_character_flag = hedge_maze
+	}
+
+	option = { # A gardener
+		name = EVTOPTAbusiness66
+		add_trait = gardener
+		remove_character_modifier = trader
+		if = {
+			limit = { has_character_flag = magnificent_maze }
+			add_character_modifier = { name = magnificent_maze duration = -1 }
+		}
+		clr_character_flag = magnificent_maze
+		set_character_flag = maze_end
+		ai_chance = { factor = 2 }
+	}
+	option = { # A pastime
+		name = EVTOPTBbusiness66
+		if = {
+			limit = { NOT = { has_character_modifier = aspiring_gardener } }
+			add_character_modifier = { name = aspiring_gardener duration = -1 }
+		}
+		if = {
+			limit = { has_character_flag = magnificent_maze }
+			add_character_modifier = { name = magnificent_maze duration = -1 }
+		}
+		clr_character_flag = magnificent_maze
+		set_character_flag = maze_end
+		ai_chance = { factor = 1 }
+	}
+}
+
+###############################################################################
+# Guild, coin, land and workshop
+###############################################################################
+
+# business.70 The carpenters' guild
+# Scope: the ruler; event_target:business_province is the town.
+long_character_event = {
+	id = business.70
+	desc = EVTDESCbusiness70
+	picture = GFX_evt_construction_site
+	border = GFX_event_long_frame_economy
+
+	is_triggered_only = yes # business.1
+
+	option = { # Support it
+		name = EVTOPTAbusiness70
+		event_target:business_province = {
+			add_province_modifier = { name = carpenters_guild duration = 3650 }
+			business_capital_prospers_effect = yes
+		}
+		hidden_tooltip = {
+			random = {
+				chance = 50
+				character_event = { id = business.80 }
+			}
+		}
+		ai_chance = { factor = 3 }
+	}
+	option = { # Outlaw it
+		name = EVTOPTBbusiness70
+		add_character_modifier = { name = despised_aristocrat duration = 3650 }
+		event_target:business_province = {
+			add_province_modifier = { name = outlawed_guild duration = 3650 }
+		}
+		hidden_tooltip = {
+			random = {
+				chance = 50
+				character_event = { id = business.80 }
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = arbitrary }
+		}
+	}
+}
+
+# business.71 New coin for the realm
+# True coin for glory, or debased coin for profit (which may be found out,
+# business.72). Once every two years.
+# Scope: the ruler.
+character_event = {
+	id = business.71
+	desc = EVTDESCbusiness71
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.1
+
+	immediate = {
+		add_character_modifier = { modifier = wol_debase_timer duration = 730 hidden = yes }
+	}
+
+	option = { # True coin
+		name = EVTOPTAbusiness71
+		trigger = { wealth = 100 }
+		wealth = -100
+		prestige = 100
+		hidden_tooltip = {
+			random = {
+				chance = 50
+				character_event = { id = business.80 days = 7 }
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = honest }
+			modifier = { factor = 2 trait = proud }
+		}
+	}
+	option = { # Debased coin
+		name = EVTOPTBbusiness71
+		wealth = 100
+		prestige = 100
+		if = {
+			limit = { NOT = { trait = greedy } }
+			add_trait = greedy
+		}
+		if = {
+			limit = { NOT = { trait = deceitful } }
+			random = {
+				chance = 25
+				add_trait = deceitful
+			}
+		}
+		hidden_tooltip = {
+			random = {
+				chance = 25
+				character_event = { id = business.72 days = 365 }
+			}
+			random = {
+				chance = 50
+				character_event = { id = business.80 days = 7 }
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = greedy }
+			modifier = { factor = 3 trait = deceitful }
+			modifier = { factor = 0.1 trait = honest }
+		}
+	}
+	option = { # No new coin
+		name = EVTOPTCbusiness71
+		ai_chance = { factor = 1 }
+	}
+}
+
+# business.72 The coin is found out
+# Scope: the ruler.
+character_event = {
+	id = business.72
+	desc = EVTDESCbusiness72
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.71
+
+	option = {
+		name = EVTOPTAbusiness72
+		prestige = -200
+	}
+}
+
+# business.73 A burgher wants land
+# Scope: the ruler; event_target:business_burgher is the buyer.
+character_event = {
+	id = business.73
+	desc = EVTDESCbusiness73
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.1
+
+	option = { # Sell
+		name = EVTOPTAbusiness73
+		wealth = 150
+		prestige = -25
+		event_target:business_burgher = { wealth = -150 }
+		capital_scope = {
+			add_province_modifier = { name = sold_off_land duration = 3650 }
+		}
+		hidden_tooltip = { character_event = { id = business.80 days = 7 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 NOT = { wealth = 0 } }
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBbusiness73
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = proud }
+		}
+	}
+}
+
+# business.74 A workshop to fund
+# Two years later it thrives (business.75) or goes under (business.76).
+# Scope: the ruler; event_target:business_province is the town.
+character_event = {
+	id = business.74
+	desc = EVTDESCbusiness74
+	picture = GFX_evt_construction_site
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.1
+
+	option = { # Invest
+		name = EVTOPTAbusiness74
+		trigger = { wealth = 50 }
+		wealth = -50
+		custom_tooltip = {
+			text = EVTTOOLTIPbusiness74
+			hidden_tooltip = {
+				random_list = {
+					65 = {
+						modifier = { factor = 1.3 stewardship = 12 }
+						character_event = { id = business.75 days = 730 }
+					}
+					35 = { character_event = { id = business.76 days = 730 } }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 0.25 trait = greedy }
+		}
+	}
+	option = { # No
+		name = EVTOPTBbusiness74
+		event_target:business_province = { clr_province_flag = workshop_construction }
+		ai_chance = { factor = 1 }
+	}
+}
+
+# business.75 The workshop thrives
+# Scope: the ruler; event_target:business_province is the town.
+character_event = {
+	id = business.75
+	desc = EVTDESCbusiness75
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.74
+
+	option = {
+		name = EVTOPTAbusiness75
+		wealth = 100
+		event_target:business_province = {
+			clr_province_flag = workshop_construction
+			add_province_modifier = { name = artisan_workshop duration = 3650 }
+			business_capital_prospers_effect = yes
+		}
+		hidden_tooltip = { character_event = { id = business.80 days = 7 } }
+	}
+}
+
+# business.76 The workshop goes under
+# Scope: the ruler; event_target:business_province is the town.
+character_event = {
+	id = business.76
+	desc = EVTDESCbusiness76
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.74
+
+	option = {
+		name = EVTOPTAbusiness76
+		event_target:business_province = { clr_province_flag = workshop_construction }
+	}
+}
+
+# business.80 A head for business
+# Scope: the ruler.
+character_event = {
+	id = business.80
+	desc = EVTDESCbusiness80
+	picture = GFX_evt_relaxed_ruler
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # business.70, .71, .73, .75
+
+	trigger = {
+		NOR = {
+			has_character_modifier = trader
+			trait = gardener
+			trait = architect
+		}
+	}
+
+	option = {
+		name = EVTOPTAbusiness80
+		business_gain_experience_effect = yes
+	}
+}

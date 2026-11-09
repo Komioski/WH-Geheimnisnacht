@@ -1,0 +1,1417 @@
+###############################################################################
+# Northern rites: the blot and the feasts of the north
+# Namespace: rites (was TOG.600 - TOG.699 in oldgods_blot_events.txt)
+# Faction: Norsca
+# Serves: the old Norscan gods, the reformed faith and Norscans of the Dark
+#   Gods (the blot); every feast host whose guests make scenes (the feast)
+#
+# The blot: once in nine winters a Norscan lord summons the vassals. Those of
+# the faith come; those of other faiths pay to be excused, or refuse and are
+# remembered for it. Beasts are slaughtered and their blood sprinkled on the
+# idols, then the prisoners are hanged one by one from the blood-tree, up to
+# four. Kin, the head of a faith, dwarfs, elves, greenskins, lizardmen and the
+# faithful of other gods each meet it their own way; the host may spare any of
+# them. With no prisoners, thralls are bought and hanged instead. A feast
+# follows, and a lord who made a true offering may keep the blood bowl
+# (once per life).
+#
+# The feast: up to four times in a feast one guest makes a scene: drunk,
+# gluttonous, mad or lustful in full view of the hall, or two guests find a
+# friend or a lover (and may be caught). The hall judges each by its own
+# vices. Shared with the Jarilo night of Kislev.
+#
+# The blot                             rites.1 - rites.15
+# The blot feast                       rites.20 - rites.21
+# Feast scenes                         rites.50 - rites.59
+# Housekeeping                         rites.90
+#
+# Fired from: the hold_blot decision in minor_decisions.txt (rites.1 and the
+#   safety rites.90). Shared triggers and effects are in
+#   WHG_old_gods_triggers.txt and WHG_old_gods_effects.txt; the blood bowl is
+#   in 41_artifacts_old_gods.txt.
+# Saved: event targets blot_victim, rites_feast_host, rites_feast_culprit,
+#   rites_feast_partner; flags holding_blot, rites_blot_guest, rites_blot_paid,
+#   rites_blot_victim, rites_victim_* (host), rites_feast_* and rites_scene_*
+#   (host and guests), took_blot_bowl (once per life); variables
+#   blot_offerings (hanged) and blot_fetched (brought out).
+###############################################################################
+
+namespace = rites
+
+###############################################################################
+# The blot
+###############################################################################
+
+# rites.1 The summons
+# The faithful vassals are summoned (rites.2), the others asked to pay
+# (rites.3). The rite begins in ten days (rites.5).
+# Scope: ROOT is the host. Fired from the hold_blot decision.
+character_event = {
+	id = rites.1
+	desc = EVTDESCrites1
+	picture = GFX_evt_viking_throneroom_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArites1
+		any_vassal = {
+			limit = {
+				rites_summonable_vassal_trigger = yes
+				rites_blot_faith_trigger = yes
+			}
+			character_event = { id = rites.2 tooltip = EVTTOOLTIPrites2 }
+		}
+		any_vassal = {
+			limit = {
+				rites_summonable_vassal_trigger = yes
+				NOT = { rites_blot_faith_trigger = yes }
+			}
+			character_event = { id = rites.3 tooltip = EVTTOOLTIPrites3 }
+		}
+		hidden_effect = { character_event = { id = rites.5 days = 10 } }
+	}
+}
+
+# rites.2 Summoned to the blot
+# Scope: ROOT is a vassal of the faith, FROM the host.
+character_event = {
+	id = rites.2
+	desc = EVTDESCrites2
+	picture = GFX_evt_viking_throneroom_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = { is_inaccessible_trigger = no }
+
+	option = {
+		name = EVTOPTArites2
+		set_character_flag = rites_blot_guest
+		set_character_flag = do_not_disturb
+		hidden_effect = { character_event = { id = rites.90 days = 50 } } # Safety
+	}
+}
+
+# rites.3 Pay to be excused
+# Paying sends 15 gold to the host; refusing angers the host and the guests.
+# Scope: ROOT is a vassal of another faith, FROM the host.
+character_event = {
+	id = rites.3
+	desc = EVTDESCrites3
+	picture = GFX_evt_viking_throneroom_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Pay
+		name = EVTOPTArites3
+		trigger = { wealth = 15 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 1.5 trait = content }
+			modifier = { factor = 0.5 trait = zealous }
+			modifier = { factor = 0.5 trait = proud }
+		}
+		wealth = -15
+		set_character_flag = rites_blot_paid
+		FROM = { character_event = { id = rites.4 tooltip = EVTTOOLTIPrites4a } }
+	}
+	option = { # Refuse
+		name = EVTOPTBrites3
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 1.5 trait = proud }
+			modifier = { factor = 0.5 trait = craven }
+		}
+		FROM = { character_event = { id = rites.4 tooltip = EVTTOOLTIPrites4b } }
+		tooltip = {
+			FROM = {
+				opinion = { modifier = opinion_refused_blot who = ROOT }
+			}
+		}
+	}
+}
+
+# rites.4 The answer from a vassal of another faith
+# Scope: ROOT is the host, FROM the vassal.
+character_event = {
+	id = rites.4
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_blot_paid } }
+		text = EVTDESCrites4_paid
+	}
+	desc = {
+		trigger = { FROM = { NOT = { has_character_flag = rites_blot_paid } } }
+		text = EVTDESCrites4_refused
+	}
+	picture = GFX_evt_viking_throneroom_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Paid
+		name = EVTOPTArites4
+		trigger = { FROM = { has_character_flag = rites_blot_paid } }
+		wealth = 15
+		FROM = {
+			show_scope_change = no
+			clr_character_flag = rites_blot_paid
+		}
+	}
+	option = { # Refused
+		name = EVTOPTBrites4
+		trigger = { FROM = { NOT = { has_character_flag = rites_blot_paid } } }
+		opinion = { modifier = opinion_refused_blot who = FROM }
+		hidden_effect = {
+			any_vassal = {
+				limit = { has_character_flag = rites_blot_guest }
+				opinion = { modifier = opinion_refused_blot who = FROM }
+			}
+		}
+	}
+}
+
+# rites.5 The blot begins
+# Beasts are slaughtered and their blood sprinkled on the idols. The host
+# then has the first prisoner fetched (rites.10); the guests watch.
+# Scope: ROOT is the host (flag holding_blot) or a guest, FROM the host.
+character_event = {
+	id = rites.5
+	desc = {
+		trigger = { has_character_flag = holding_blot }
+		text = EVTDESCrites5_host
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = holding_blot } }
+		text = EVTDESCrites5_guest
+	}
+	picture = GFX_evt_viking_throneroom_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Host
+		name = EVTOPTArites5
+		trigger = { has_character_flag = holding_blot }
+		custom_tooltip = { text = blot_begins }
+		set_variable = { which = blot_offerings value = 0 }
+		set_variable = { which = blot_fetched value = 0 }
+		hidden_effect = {
+			any_vassal = {
+				limit = { has_character_flag = rites_blot_guest }
+				character_event = { id = rites.5 }
+			}
+			character_event = { id = rites.10 days = 3 }
+		}
+		if = {
+			limit = { ai = no }
+			chronicle = {
+				entry = CHRONICLE_HELD_BLOT
+				picture = GFX_evt_viking_throneroom_oldgods
+			}
+		}
+	}
+	option = { # Guest
+		name = EVTOPTBrites5
+		trigger = { NOT = { has_character_flag = holding_blot } }
+	}
+}
+
+# rites.10 The next prisoner
+# Fetches the next prisoner from the host's dungeon (up to four, counted in
+# blot_fetched). With no prisoner at all (none hanged, none spared), thralls
+# are bought (rites.15); otherwise the feast begins (rites.20).
+# Scope: ROOT is the host.
+character_event = {
+	id = rites.10
+
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = holding_blot }
+
+	immediate = {
+		if = {
+			limit = {
+				NOT = { check_variable = { which = blot_fetched value = 4 } }
+				any_courtier = { rites_blot_victim_trigger = yes }
+			}
+			change_variable = { which = blot_fetched value = 1 }
+			random_courtier = {
+				limit = { rites_blot_victim_trigger = yes }
+				set_character_flag = rites_blot_victim
+				character_event = { id = rites.11 days = 3 }
+			}
+		}
+		else_if = {
+			limit = {
+				NOT = { check_variable = { which = blot_offerings value = 1 } }
+				NOT = { has_character_flag = rites_blot_spared_one }
+			}
+			character_event = { id = rites.15 days = 3 }
+		}
+		else = {
+			character_event = { id = rites.20 days = 5 }
+		}
+	}
+}
+
+# rites.11 Dragged to the blood-tree
+# Scope: ROOT is the prisoner, FROM the host.
+character_event = {
+	id = rites.11
+	desc = EVTDESCrites11
+	picture = GFX_evt_midwinter_blot_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArites11
+		hidden_effect = {
+			if = {
+				limit = {
+					prisoner = yes
+					host = { character = FROM }
+				}
+				FROM = { character_event = { id = rites.12 } }
+			}
+			else = {
+				clr_character_flag = rites_blot_victim
+				FROM = { character_event = { id = rites.10 } }
+			}
+		}
+	}
+}
+
+# rites.12 The offering
+# The host hangs the prisoner (rites_blot_offer_effect) or spares them
+# (rites_blot_spare_effect). Each kind of prisoner has its own words.
+# Scope: ROOT is the host, FROM the prisoner.
+character_event = {
+	id = rites.12
+	desc = {
+		trigger = { has_character_flag = rites_victim_brother }
+		text = EVTDESCrites12_brother
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_sister }
+		text = EVTDESCrites12_sister
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_father }
+		text = EVTDESCrites12_father
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_mother }
+		text = EVTDESCrites12_mother
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_son }
+		text = EVTDESCrites12_son
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_daughter }
+		text = EVTDESCrites12_daughter
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_spouse }
+		text = EVTDESCrites12_spouse
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_kinsman }
+		text = EVTDESCrites12_kinsman
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_head }
+		text = EVTDESCrites12_head
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_dwarf }
+		text = EVTDESCrites12_dwarf
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_elf }
+		text = EVTDESCrites12_elf
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_greenskin }
+		text = EVTDESCrites12_greenskin
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_lizardman }
+		text = EVTDESCrites12_lizardman
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_chaos }
+		text = EVTDESCrites12_chaos
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_old_world }
+		text = EVTDESCrites12_old_world
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_mood_piss }
+		text = EVTDESCrites12_piss
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_mood_run }
+		text = EVTDESCrites12_run
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_mood_calm }
+		text = EVTDESCrites12_calm
+	}
+	desc = {
+		trigger = { has_character_flag = rites_victim_mood_spit }
+		text = EVTDESCrites12_spit
+	}
+	picture = GFX_evt_midwinter_blot_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { save_event_target_as = blot_victim }
+		rites_blot_classify_victim_effect = yes
+	}
+
+	# Hang them
+	option = {
+		name = EVTOPTArites12_common
+		trigger = { has_character_flag = rites_victim_common }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_brother
+		trigger = { has_character_flag = rites_victim_brother }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_sister
+		trigger = { has_character_flag = rites_victim_sister }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_father
+		trigger = { has_character_flag = rites_victim_father }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_mother
+		trigger = { has_character_flag = rites_victim_mother }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_son
+		trigger = { has_character_flag = rites_victim_son }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_daughter
+		trigger = { has_character_flag = rites_victim_daughter }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_spouse
+		trigger = { has_character_flag = rites_victim_spouse }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_kinsman
+		trigger = { has_character_flag = rites_victim_kinsman }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_head
+		trigger = { has_character_flag = rites_victim_head }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_dwarf
+		trigger = { has_character_flag = rites_victim_dwarf }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_elf
+		trigger = { has_character_flag = rites_victim_elf }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_greenskin
+		trigger = { has_character_flag = rites_victim_greenskin }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_lizardman
+		trigger = { has_character_flag = rites_victim_lizardman }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_chaos
+		trigger = { has_character_flag = rites_victim_chaos }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+	option = {
+		name = EVTOPTArites12_old_world
+		trigger = { has_character_flag = rites_victim_old_world }
+		ai_chance = { factor = 100 }
+		rites_blot_offer_effect = yes
+	}
+
+	# Spare them
+	option = {
+		name = EVTOPTBrites12_brother
+		trigger = { has_character_flag = rites_victim_brother }
+		ai_chance = { factor = 20 }
+		rites_blot_spare_effect = yes
+	}
+	option = {
+		name = EVTOPTBrites12_sister
+		trigger = { has_character_flag = rites_victim_sister }
+		ai_chance = { factor = 20 }
+		rites_blot_spare_effect = yes
+	}
+	option = {
+		name = EVTOPTBrites12_father
+		trigger = { has_character_flag = rites_victim_father }
+		ai_chance = { factor = 20 }
+		rites_blot_spare_effect = yes
+	}
+	option = {
+		name = EVTOPTBrites12_mother
+		trigger = { has_character_flag = rites_victim_mother }
+		ai_chance = { factor = 20 }
+		rites_blot_spare_effect = yes
+	}
+	option = {
+		name = EVTOPTBrites12_son
+		trigger = { has_character_flag = rites_victim_son }
+		ai_chance = { factor = 30 }
+		rites_blot_spare_effect = yes
+	}
+	option = {
+		name = EVTOPTBrites12_daughter
+		trigger = { has_character_flag = rites_victim_daughter }
+		ai_chance = { factor = 30 }
+		rites_blot_spare_effect = yes
+	}
+	option = {
+		name = EVTOPTBrites12_spouse
+		trigger = { has_character_flag = rites_victim_spouse }
+		ai_chance = { factor = 20 }
+		rites_blot_spare_effect = yes
+	}
+	option = {
+		name = EVTOPTBrites12_kinsman
+		trigger = { has_character_flag = rites_victim_kinsman }
+		ai_chance = { factor = 10 }
+		rites_blot_spare_effect = yes
+	}
+	option = {
+		name = EVTOPTBrites12_other
+		trigger = { NOT = { has_character_flag = rites_victim_kin } }
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 0 religion_khorne_worshipper_trigger = yes }
+		}
+		rites_blot_spare_effect = yes
+	}
+}
+
+# rites.13 The guests watch
+# Each hanging (or the thralls) as the guests see it.
+# Scope: ROOT is a guest, FROM the host; event target blot_victim.
+character_event = {
+	id = rites.13
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_brother } }
+		text = EVTDESCrites13_brother
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_sister } }
+		text = EVTDESCrites13_sister
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_father } }
+		text = EVTDESCrites13_father
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_mother } }
+		text = EVTDESCrites13_mother
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_son } }
+		text = EVTDESCrites13_son
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_daughter } }
+		text = EVTDESCrites13_daughter
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_spouse } }
+		text = EVTDESCrites13_spouse
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_kinsman } }
+		text = EVTDESCrites13_kinsman
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_head } }
+		text = EVTDESCrites13_head
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_dwarf } }
+		text = EVTDESCrites13_dwarf
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_elf } }
+		text = EVTDESCrites13_elf
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_greenskin } }
+		text = EVTDESCrites13_greenskin
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_lizardman } }
+		text = EVTDESCrites13_lizardman
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_chaos } }
+		text = EVTDESCrites13_chaos
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_old_world } }
+		text = EVTDESCrites13_old_world
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_common } }
+		text = EVTDESCrites13_common
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = rites_victim_thralls } }
+		text = EVTDESCrites13_thralls
+	}
+	picture = GFX_evt_midwinter_blot_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArites13
+		trigger = { NOT = { FROM = { has_character_flag = rites_victim_thralls } } }
+	}
+	option = {
+		name = EVTOPTBrites13
+		trigger = { FROM = { has_character_flag = rites_victim_thralls } }
+	}
+}
+
+# rites.14 Spared
+# Scope: ROOT is the prisoner, FROM the host.
+character_event = {
+	id = rites.14
+	desc = EVTDESCrites14
+	picture = GFX_evt_midwinter_blot_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArites14
+		opinion = {
+			who = FROM
+			modifier = opinion_spared_at_blot
+			months = 24
+		}
+	}
+}
+
+# rites.15 Thralls for the tree
+# No prisoner fit to hang: thralls are bought for 30 gold and hanged in their
+# stead, a lesser offering.
+# Scope: ROOT is the host.
+character_event = {
+	id = rites.15
+	desc = EVTDESCrites15
+	picture = GFX_evt_midwinter_blot_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		rites_blot_clear_victim_flags_effect = yes
+		set_character_flag = rites_victim_thralls
+	}
+
+	option = {
+		name = EVTOPTArites15
+		wealth = -30
+		prestige = 25
+		piety = 25
+		hidden_effect = {
+			any_vassal = {
+				limit = { has_character_flag = rites_blot_guest }
+				character_event = { id = rites.13 }
+			}
+			character_event = { id = rites.20 days = 5 }
+		}
+	}
+}
+
+###############################################################################
+# The blot feast
+###############################################################################
+
+# rites.20 The feast begins
+# The host's guests think better of the host for a year (opinion_held_blot).
+# Up to four scenes in the hall (rites.50); the feast ends after 25 days
+# (rites.21).
+# Scope: ROOT is the host (flag holding_blot) or a guest, FROM the host.
+character_event = {
+	id = rites.20
+	desc = EVTDESCrites20
+	picture = GFX_evt_viking_throneroom_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Host
+		name = EVTOPTArites20
+		trigger = { has_character_flag = holding_blot }
+		rites_blot_clear_victim_flags_effect = yes
+		set_character_flag = rites_feast_host
+		custom_tooltip = { text = rites_feast_begins_tt }
+		hidden_effect = {
+			any_vassal = {
+				limit = { has_character_flag = rites_blot_guest }
+				opinion = { modifier = opinion_held_blot who = ROOT }
+				character_event = { id = rites.20 }
+			}
+			character_event = { id = rites.50 days = 3 }
+			character_event = { id = rites.50 days = 8 }
+			character_event = { id = rites.50 days = 13 }
+			character_event = { id = rites.50 days = 18 }
+			character_event = { id = rites.21 days = 25 }
+		}
+	}
+	option = { # Guest
+		name = EVTOPTBrites20
+		trigger = { NOT = { has_character_flag = holding_blot } }
+		set_character_flag = rites_feast_guest
+	}
+}
+
+# rites.21 The feast ends
+# Nine winters until the next blot (held_blot_timer); a year of the gods'
+# favour (held_blot_modifier). A host who hanged at least one prisoner may keep
+# the blood bowl (10%, once per life, none held).
+# Scope: ROOT is the host (flag holding_blot) or a guest, FROM the host.
+character_event = {
+	id = rites.21
+	desc = {
+		trigger = { has_character_flag = holding_blot }
+		text = EVTDESCrites21_host
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = holding_blot } }
+		text = EVTDESCrites21_guest
+	}
+	picture = GFX_evt_viking_throneroom_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArites21
+		if = {
+			limit = { has_character_flag = holding_blot }
+			add_character_modifier = {
+				name = held_blot_timer
+				duration = 3285
+				hidden = yes
+			}
+			add_character_modifier = {
+				name = held_blot_modifier
+				duration = 365
+			}
+			if = {
+				limit = {
+					check_variable = { which = blot_offerings value = 1 }
+					NOT = { has_character_flag = took_blot_bowl }
+					NOT = { any_artifact = { has_artifact_flag = blot_bowl } }
+				}
+				random = {
+					chance = 10
+					set_character_flag = took_blot_bowl
+					add_artifact = blot_bowl
+				}
+			}
+			hidden_effect = {
+				any_vassal = {
+					limit = { has_character_flag = rites_blot_guest }
+					character_event = { id = rites.21 }
+				}
+			}
+		}
+		rites_blot_clear_flags_effect = yes
+	}
+}
+
+###############################################################################
+# Feast scenes
+###############################################################################
+
+# rites.50 A scene in the hall
+# Picks one guest (or two) for a scene, at most one scene of each kind per
+# feast and one scene per guest; often nothing happens. The hall's reaction
+# is rites.59.
+# Scope: ROOT is the host (flag rites_feast_host).
+character_event = {
+	id = rites.50
+
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = rites_feast_host }
+
+	immediate = {
+		save_event_target_as = rites_feast_host
+		clr_character_flag = rites_scene_drunk
+		clr_character_flag = rites_scene_glutton
+		clr_character_flag = rites_scene_lunatic
+		clr_character_flag = rites_scene_lustful
+		clr_character_flag = rites_scene_lovers
+		clr_character_flag = rites_scene_caught
+		random_list = {
+			30 = {} # A quiet evening
+			10 = { # Drunk
+				modifier = {
+					factor = 0
+					OR = {
+						has_character_flag = rites_feast_drunk_done
+						NOT = {
+							any_vassal = {
+								rites_feast_guest_trigger = yes
+								NOT = { has_character_flag = rites_feast_did_scene }
+								trait = drunkard
+							}
+						}
+					}
+				}
+				set_character_flag = rites_feast_drunk_done
+				set_character_flag = rites_scene_drunk
+				random_vassal = {
+					limit = {
+						rites_feast_guest_trigger = yes
+						NOT = { has_character_flag = rites_feast_did_scene }
+						trait = drunkard
+					}
+					set_character_flag = rites_feast_did_scene
+					save_event_target_as = rites_feast_culprit
+					save_event_target_as = rites_feast_partner # No partner: the culprit stands in
+					character_event = { id = rites.51 }
+				}
+			}
+			10 = { # Glutton
+				modifier = {
+					factor = 0
+					OR = {
+						has_character_flag = rites_feast_glutton_done
+						NOT = {
+							any_vassal = {
+								rites_feast_guest_trigger = yes
+								NOT = { has_character_flag = rites_feast_did_scene }
+								trait = gluttonous
+							}
+						}
+						NOT = {
+							any_vassal = {
+								count = 2
+								rites_feast_guest_trigger = yes
+							}
+						}
+					}
+				}
+				set_character_flag = rites_feast_glutton_done
+				set_character_flag = rites_scene_glutton
+				random_vassal = {
+					limit = {
+						rites_feast_guest_trigger = yes
+						NOT = { has_character_flag = rites_feast_did_scene }
+						trait = gluttonous
+					}
+					set_character_flag = rites_feast_did_scene
+					save_event_target_as = rites_feast_culprit
+				}
+				random_vassal = {
+					limit = {
+						rites_feast_guest_trigger = yes
+						NOT = { character = event_target:rites_feast_culprit }
+					}
+					save_event_target_as = rites_feast_partner
+				}
+				event_target:rites_feast_culprit = { character_event = { id = rites.52 } }
+			}
+			10 = { # Lunatic
+				modifier = {
+					factor = 0
+					OR = {
+						has_character_flag = rites_feast_lunatic_done
+						NOT = {
+							any_vassal = {
+								rites_feast_guest_trigger = yes
+								NOT = { has_character_flag = rites_feast_did_scene }
+								is_lunatic_trigger = yes
+							}
+						}
+					}
+				}
+				set_character_flag = rites_feast_lunatic_done
+				set_character_flag = rites_scene_lunatic
+				random_vassal = {
+					limit = {
+						rites_feast_guest_trigger = yes
+						NOT = { has_character_flag = rites_feast_did_scene }
+						is_lunatic_trigger = yes
+					}
+					set_character_flag = rites_feast_did_scene
+					save_event_target_as = rites_feast_culprit
+					save_event_target_as = rites_feast_partner # No partner: the culprit stands in
+					character_event = { id = rites.54 }
+				}
+			}
+			10 = { # Lustful
+				modifier = {
+					factor = 0
+					OR = {
+						has_character_flag = rites_feast_lustful_done
+						NOT = {
+							any_vassal = {
+								rites_feast_guest_trigger = yes
+								NOT = { has_character_flag = rites_feast_did_scene }
+								trait = lustful
+							}
+						}
+					}
+				}
+				set_character_flag = rites_feast_lustful_done
+				set_character_flag = rites_scene_lustful
+				random_vassal = {
+					limit = {
+						rites_feast_guest_trigger = yes
+						NOT = { has_character_flag = rites_feast_did_scene }
+						trait = lustful
+					}
+					set_character_flag = rites_feast_did_scene
+					save_event_target_as = rites_feast_culprit
+					save_event_target_as = rites_feast_partner # No partner: the culprit stands in
+					character_event = { id = rites.55 }
+				}
+			}
+			10 = { # Friends
+				modifier = {
+					factor = 0
+					OR = {
+						has_character_flag = rites_feast_friends_done
+						NOT = {
+							any_vassal = {
+								rites_feast_guest_trigger = yes
+								NOT = { has_character_flag = rites_feast_did_scene }
+								ROOT = {
+									any_vassal = {
+										rites_feast_guest_trigger = yes
+										NOT = { has_character_flag = rites_feast_did_scene }
+										NOT = { character = PREVPREV }
+										opinion = { who = PREVPREV value = 20 }
+									}
+								}
+							}
+						}
+					}
+				}
+				set_character_flag = rites_feast_friends_done
+				random_vassal = {
+					limit = {
+						rites_feast_guest_trigger = yes
+						NOT = { has_character_flag = rites_feast_did_scene }
+						ROOT = {
+							any_vassal = {
+								rites_feast_guest_trigger = yes
+								NOT = { has_character_flag = rites_feast_did_scene }
+								NOT = { character = PREVPREV }
+								opinion = { who = PREVPREV value = 20 }
+							}
+						}
+					}
+					set_character_flag = rites_feast_did_scene
+					save_event_target_as = rites_feast_culprit
+				}
+				random_vassal = {
+					limit = {
+						rites_feast_guest_trigger = yes
+						NOT = { has_character_flag = rites_feast_did_scene }
+						opinion = { who = event_target:rites_feast_culprit value = 20 }
+					}
+					set_character_flag = rites_feast_did_scene
+					save_event_target_as = rites_feast_partner
+					opinion = { modifier = opinion_feast_friend who = event_target:rites_feast_culprit }
+					reverse_opinion = { modifier = opinion_feast_friend who = event_target:rites_feast_culprit }
+					character_event = { id = rites.56 }
+				}
+				event_target:rites_feast_culprit = { character_event = { id = rites.56 } }
+			}
+			10 = { # Lovers
+				modifier = {
+					factor = 0
+					OR = {
+						has_character_flag = rites_feast_lovers_done
+						NOT = {
+							any_vassal = {
+								rites_feast_lover_trigger = yes
+								ROOT = {
+									any_vassal = {
+										rites_feast_lover_trigger = yes
+										NOT = { character = PREVPREV }
+										opinion = { who = PREVPREV value = 0 }
+										OR = {
+											AND = {
+												is_female = yes
+												PREVPREV = { is_female = yes }
+											}
+											AND = {
+												is_female = no
+												PREVPREV = { is_female = no }
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+				set_character_flag = rites_feast_lovers_done
+				set_character_flag = rites_scene_lovers
+				random = {
+					chance = 50
+					set_character_flag = rites_scene_caught
+				}
+				random_vassal = {
+					limit = {
+						rites_feast_lover_trigger = yes
+						ROOT = {
+							any_vassal = {
+								rites_feast_lover_trigger = yes
+								NOT = { character = PREVPREV }
+								opinion = { who = PREVPREV value = 0 }
+								OR = {
+									AND = {
+										is_female = yes
+										PREVPREV = { is_female = yes }
+									}
+									AND = {
+										is_female = no
+										PREVPREV = { is_female = no }
+									}
+								}
+							}
+						}
+					}
+					set_character_flag = rites_feast_did_scene
+					save_event_target_as = rites_feast_culprit
+				}
+				random_vassal = {
+					limit = {
+						rites_feast_lover_trigger = yes
+						opinion = { who = event_target:rites_feast_culprit value = 0 }
+						OR = {
+							AND = {
+								is_female = yes
+								event_target:rites_feast_culprit = { is_female = yes }
+							}
+							AND = {
+								is_female = no
+								event_target:rites_feast_culprit = { is_female = no }
+							}
+						}
+					}
+					set_character_flag = rites_feast_did_scene
+					save_event_target_as = rites_feast_partner
+					character_event = { id = rites.57 }
+				}
+				event_target:rites_feast_culprit = { character_event = { id = rites.57 } }
+			}
+		}
+	}
+}
+
+# rites.51 Drunk
+# Scope: ROOT is the drunkard (rites_feast_culprit), FROM the host.
+character_event = {
+	id = rites.51
+	desc = EVTDESCrites51
+	picture = GFX_evt_drunk
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArites51
+		tooltip_info = drunkard
+		rites_feast_hall_sees_effect = yes
+	}
+}
+
+# rites.52 Gluttony
+# The glutton is sick over another guest (rites.53).
+# Scope: ROOT is the glutton (rites_feast_culprit), FROM the host.
+character_event = {
+	id = rites.52
+	desc = EVTDESCrites52
+	picture = GFX_evt_viking_throneroom_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArites52
+		tooltip_info = gluttonous
+		event_target:rites_feast_partner = {
+			character_event = { id = rites.53 tooltip = EVTTOOLTIPrites53 }
+		}
+		tooltip = {
+			event_target:rites_feast_partner = {
+				opinion = { modifier = opinion_vomit who = ROOT }
+			}
+		}
+		rites_feast_hall_sees_effect = yes
+	}
+}
+
+# rites.53 Sick in your lap
+# Scope: ROOT is the guest beside the glutton (rites_feast_partner), FROM the
+#   glutton.
+character_event = {
+	id = rites.53
+	desc = EVTDESCrites53
+	picture = GFX_evt_viking_throneroom_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArites53
+		opinion = { modifier = opinion_vomit who = FROM }
+	}
+}
+
+# rites.54 A fit of madness
+# Scope: ROOT is the lunatic (rites_feast_culprit), FROM the host.
+character_event = {
+	id = rites.54
+	desc = EVTDESCrites54
+	picture = GFX_evt_lunatic
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArites54
+		tooltip_info_custom = lunatic
+		rites_feast_hall_sees_effect = yes
+	}
+}
+
+# rites.55 Lust in the hall
+# A wedded guest's spouses who are not at the feast hear of it and are
+# furious; spouses at the feast react in rites.59.
+# Scope: ROOT is the lustful guest (rites_feast_culprit), FROM the host.
+character_event = {
+	id = rites.55
+	desc = EVTDESCrites55
+	picture = GFX_evt_brothel
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Unwed
+		name = EVTOPTArites55
+		trigger = { is_married = no }
+		tooltip_info = lustful
+		rites_feast_hall_sees_effect = yes
+	}
+	option = { # Wed
+		name = EVTOPTBrites55
+		trigger = { is_married = yes }
+		tooltip_info = lustful
+		rites_feast_hall_sees_effect = yes
+		any_spouse = {
+			limit = {
+				NOT = { has_character_flag = rites_feast_guest }
+				NOT = { has_character_flag = rites_feast_host }
+			}
+			opinion = {
+				modifier = opinion_mad_as_hell
+				who = ROOT
+				years = 1
+			}
+		}
+	}
+}
+
+# rites.56 A new friend
+# Seated side by side the whole feast, two guests find they have much in
+# common (opinion_feast_friend both ways, given by rites.50).
+# Scope: ROOT is either guest.
+character_event = {
+	id = rites.56
+	desc = {
+		trigger = { character = event_target:rites_feast_culprit }
+		text = EVTDESCrites56_culprit
+	}
+	desc = {
+		trigger = { NOT = { character = event_target:rites_feast_culprit } }
+		text = EVTDESCrites56_partner
+	}
+	picture = GFX_evt_viking_throneroom_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArites56
+		custom_tooltip = { text = rites_feast_friend_tt }
+	}
+}
+
+# rites.57 Lovers in the night air
+# Two guests become lovers. Half the time another guest stumbles on them and
+# tells the hall (rites.59).
+# Scope: ROOT is either lover.
+character_event = {
+	id = rites.57
+	desc = {
+		trigger = {
+			character = event_target:rites_feast_culprit
+			NOT = { event_target:rites_feast_host = { has_character_flag = rites_scene_caught } }
+		}
+		text = EVTDESCrites57_culprit
+	}
+	desc = {
+		trigger = {
+			NOT = { character = event_target:rites_feast_culprit }
+			NOT = { event_target:rites_feast_host = { has_character_flag = rites_scene_caught } }
+		}
+		text = EVTDESCrites57_partner
+	}
+	desc = {
+		trigger = {
+			character = event_target:rites_feast_culprit
+			event_target:rites_feast_host = { has_character_flag = rites_scene_caught }
+		}
+		text = EVTDESCrites57_culprit_caught
+	}
+	desc = {
+		trigger = {
+			NOT = { character = event_target:rites_feast_culprit }
+			event_target:rites_feast_host = { has_character_flag = rites_scene_caught }
+		}
+		text = EVTDESCrites57_partner_caught
+	}
+	picture = GFX_evt_viking_throneroom_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # Unseen
+		name = EVTOPTArites57
+		trigger = {
+			NOT = { event_target:rites_feast_host = { has_character_flag = rites_scene_caught } }
+		}
+		tooltip_info = homosexual
+		rites_feast_take_lover_effect = yes
+	}
+	option = { # Caught
+		name = EVTOPTBrites57
+		trigger = {
+			event_target:rites_feast_host = { has_character_flag = rites_scene_caught }
+		}
+		tooltip_info = homosexual
+		rites_feast_take_lover_effect = yes
+		if = {
+			limit = { character = event_target:rites_feast_culprit }
+			rites_feast_hall_sees_effect = yes
+		}
+		else = {
+			custom_tooltip = { text = rites_feast_hall_sees_tt }
+		}
+	}
+}
+
+# rites.59 The hall sees it
+# The other guests and the host judge a scene by their own vices: a drunkard
+# toasts a drunkard, a lunatic cheers a lunatic, the lustful laugh along, a
+# spouse is furious, and those like the lovers take their side.
+# Scope: ROOT is the host or a guest, FROM the culprit; event targets
+#   rites_feast_host, rites_feast_culprit, rites_feast_partner.
+character_event = {
+	id = rites.59
+	desc = {
+		trigger = { event_target:rites_feast_host = { has_character_flag = rites_scene_drunk } }
+		text = EVTDESCrites59_drunk
+	}
+	desc = {
+		trigger = { event_target:rites_feast_host = { has_character_flag = rites_scene_glutton } }
+		text = EVTDESCrites59_glutton
+	}
+	desc = {
+		trigger = { event_target:rites_feast_host = { has_character_flag = rites_scene_lunatic } }
+		text = EVTDESCrites59_lunatic
+	}
+	desc = {
+		trigger = { event_target:rites_feast_host = { has_character_flag = rites_scene_lustful } }
+		text = EVTDESCrites59_lustful
+	}
+	desc = {
+		trigger = { event_target:rites_feast_host = { has_character_flag = rites_scene_lovers } }
+		text = EVTDESCrites59_lovers
+	}
+	picture = GFX_evt_viking_throneroom_oldgods
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	# Drunk
+	option = {
+		name = EVTOPTArites59_drunk
+		trigger = {
+			event_target:rites_feast_host = { has_character_flag = rites_scene_drunk }
+			NOT = { trait = drunkard }
+		}
+		opinion = { modifier = opinion_feast_scandal who = FROM }
+	}
+	option = {
+		name = EVTOPTBrites59_drunk
+		trigger = {
+			event_target:rites_feast_host = { has_character_flag = rites_scene_drunk }
+			trait = drunkard
+		}
+		tooltip_info = drunkard
+		opinion = { modifier = opinion_drinking_buddy who = FROM }
+	}
+	# Glutton
+	option = {
+		name = EVTOPTArites59_glutton
+		trigger = { event_target:rites_feast_host = { has_character_flag = rites_scene_glutton } }
+		opinion = { modifier = opinion_feast_scandal who = FROM }
+	}
+	# Lunatic
+	option = {
+		name = EVTOPTArites59_lunatic
+		trigger = {
+			event_target:rites_feast_host = { has_character_flag = rites_scene_lunatic }
+			is_lunatic_trigger = no
+		}
+		opinion = { modifier = opinion_feast_scandal who = FROM }
+	}
+	option = {
+		name = EVTOPTBrites59_lunatic
+		trigger = {
+			event_target:rites_feast_host = { has_character_flag = rites_scene_lunatic }
+			is_lunatic_trigger = yes
+		}
+		tooltip_info_custom = lunatic
+		opinion = { modifier = opinion_feast_friend who = FROM }
+	}
+	# Lustful
+	option = {
+		name = EVTOPTArites59_lustful
+		trigger = {
+			event_target:rites_feast_host = { has_character_flag = rites_scene_lustful }
+			NOT = { trait = lustful }
+			NOT = { any_spouse = { character = FROM } }
+		}
+		opinion = { modifier = opinion_feast_scandal who = FROM }
+	}
+	option = {
+		name = EVTOPTBrites59_lustful
+		trigger = {
+			event_target:rites_feast_host = { has_character_flag = rites_scene_lustful }
+			trait = lustful
+			NOT = { any_spouse = { character = FROM } }
+		}
+		tooltip_info = lustful
+		opinion = { modifier = opinion_lustful_buddy who = FROM }
+	}
+	option = {
+		name = EVTOPTCrites59_lustful
+		trigger = {
+			event_target:rites_feast_host = { has_character_flag = rites_scene_lustful }
+			any_spouse = { character = FROM }
+		}
+		opinion = {
+			modifier = opinion_mad_as_hell
+			who = FROM
+			years = 1
+		}
+	}
+	# Lovers
+	option = {
+		name = EVTOPTArites59_lovers
+		trigger = {
+			event_target:rites_feast_host = { has_character_flag = rites_scene_lovers }
+			NOT = { trait = homosexual }
+		}
+		opinion = { modifier = opinion_feast_scandal who = event_target:rites_feast_culprit }
+		opinion = { modifier = opinion_feast_scandal who = event_target:rites_feast_partner }
+	}
+	option = {
+		name = EVTOPTBrites59_lovers
+		trigger = {
+			event_target:rites_feast_host = { has_character_flag = rites_scene_lovers }
+			trait = homosexual
+		}
+		tooltip_info = homosexual
+		opinion = { modifier = opinion_homosexual_sympathy who = event_target:rites_feast_culprit }
+		opinion = { modifier = opinion_homosexual_sympathy who = event_target:rites_feast_partner }
+	}
+}
+
+###############################################################################
+# Housekeeping
+###############################################################################
+
+# rites.90 Safety
+# Clears the blot and feast flags in case the chain was cut short (150 days
+# for the host from the decision, 50 for a guest).
+# Scope: the host or a guest.
+character_event = {
+	id = rites.90
+
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		rites_blot_clear_flags_effect = yes
+	}
+}

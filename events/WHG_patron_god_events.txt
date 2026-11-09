@@ -1,0 +1,1804 @@
+###############################################################################
+# Patron gods
+# Namespace: patron (was TOG.7100 - TOG.7528 in
+#   oldgods_ancestor_worship_events.txt)
+# Faction: Old World faiths
+# Serves: the dawi and Norse dawi (Grungni, Grimnir, Valaya, Thungni), the
+#   Ungol faith of the northern gods (Ursun, Dazh, Kalita, Tor) and the
+#   living Nehekharans (Ptra, Asaph, Phakth, Usirian)
+#
+# A lord picks one god of the pantheon as patron (the pick_main_deity
+# decision), and the believers of the same faith at court pick theirs. Every
+# few years the patron shows the lord a sign: a better hand at the god's
+# skill, a fellow worshipper as a friend, the god's own trial (Tor's storms,
+# Asaph's passion, the hearth blessings of Valaya, Ptra and Ursun,
+# Usirian's questions about death, and new signs of Grimnir, Grungni,
+# Thungni, Dazh, Kalita and Phakth), renown in the god's field, or once in a
+# life a monument raised to the god or to the house.
+#
+# Picking a patron                     patron.1 - patron.11
+# Skill and friendship                 patron.20 - patron.22
+# The god's trial                      patron.23 - patron.31, patron.37
+# Renown                               patron.32 - patron.36
+# Monument                             patron.40 - patron.43
+#
+# Fired from: the pick_main_deity decision in minor_decisions.txt
+#   (patron.10, which starts the sign loop patron.1 for a playable lord);
+#   on_character_convert_religion in 00_on_actions.txt (patron.2). The Baltic
+#   pantheon picker TOG.7400 - TOG.7404 and the Finnish hunting gods' TOG.7517
+#   had no caller and are dropped.
+# Saved: event targets patron_friend, patron_thunder_target, patron_lover,
+#   patron_death_child, patron_plotter, patron_plot_target,
+#   patron_monument_raiser; flags patron_signs_running, scared_of_thunder,
+#   asked_about_death, the *_tale flags, pagan_monument, monument_for_deity,
+#   monument_for_ancestors.
+###############################################################################
+
+namespace = patron
+
+###############################################################################
+# Picking a patron
+###############################################################################
+
+# patron.1 The patron's sign
+# Every three or four years the patron shows a playable follower a sign.
+# Ends when the follower no longer has a patron.
+character_event = {
+	id = patron.1
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	immediate = {
+		if = {
+			limit = { has_minor_deity_trigger = no }
+			clr_character_flag = patron_signs_running
+		}
+		else = {
+			random_list = {
+				20 = { # A better hand at the god's skill
+					modifier = { factor = 0 patron_skill_sign_trigger = no }
+					character_event = { id = patron.20 }
+				}
+				15 = { # A fellow worshipper
+					random_courtier_or_vassal = {
+						limit = {
+							ai = yes
+							NOR = {
+								is_friend = ROOT
+								is_lover = ROOT
+								is_rival = ROOT
+							}
+							patron_shares_root_god_trigger = yes
+						}
+						character_event = { id = patron.21 }
+					}
+				}
+				15 = { # The god's trial
+					patron_trial_effect = yes
+				}
+				20 = { # Renown in the god's field
+					patron_renown_effect = yes
+				}
+				50 = { # A monument, once in a life
+					modifier = {
+						factor = 0
+						has_character_flag = pagan_monument
+					}
+					job_treasurer = { character_event = { id = patron.40 } }
+				}
+				30 = { }
+			}
+			character_event = { id = patron.1 days = 1000 random = 400 }
+		}
+	}
+}
+
+# patron.2 A convert loses the patron of the old faith (but a dawi turning
+# from the ancestor gods to the Norse ancestor gods or back keeps it).
+character_event = {
+	id = patron.2
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	trigger = {
+		has_minor_deity_trigger = yes
+		NOR = {
+			AND = {
+				religion = ancestor_gods
+				FROM = { religion = norse_ancestor_gods }
+			}
+			AND = {
+				religion = norse_ancestor_gods
+				FROM = { religion = ancestor_gods }
+			}
+		}
+	}
+
+	immediate = {
+		patron_remove_god_effect = yes
+	}
+}
+
+# patron.10 Which god will you honour?
+# The believers of the same faith at court who have no patron pick theirs.
+character_event = {
+	id = patron.10
+	desc = {
+		trigger = {
+			OR = {
+				religion = ancestor_gods
+				religion = norse_ancestor_gods
+			}
+		}
+		text = EVTDESCpatron10_dawi
+		picture = GFX_evt_dwarf_patron_gods
+	}
+	desc = {
+		trigger = {
+			OR = {
+				religion = northern_gods
+				religion = northern_gods_reformed
+			}
+		}
+		text = EVTDESCpatron10_ungol
+		picture = GFX_evt_northern_gods_patron_gods
+	}
+	desc = {
+		trigger = {
+			religion = nehekharan_gods
+		}
+		text = EVTDESCpatron10_nehekhara
+		picture = GFX_evt_nehekharan_patron_gods
+	}
+	picture = GFX_evt_tribal_shrine
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { is_playable = yes }
+			any_courtier = {
+				limit = {
+					religion = ROOT
+					age = 16
+					is_playable = no
+					has_minor_deity_trigger = no
+				}
+				character_event = { id = patron.10 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTpatron10_grungni
+		trigger = {
+			OR = {
+				religion = ancestor_gods
+				religion = norse_ancestor_gods
+			}
+		}
+		add_character_modifier = {
+			name = follower_of_grungni
+			duration = -1
+		}
+		patron_start_signs_effect = yes
+		hidden_tooltip = { character_event = { id = patron.11 } }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2 has_education_stewardship_trigger = yes }
+			modifier = { factor = 2 trait = diligent }
+		}
+	}
+	option = {
+		name = EVTOPTpatron10_grimnir
+		trigger = {
+			OR = {
+				religion = ancestor_gods
+				religion = norse_ancestor_gods
+			}
+		}
+		add_character_modifier = {
+			name = follower_of_grimnir
+			duration = -1
+		}
+		patron_start_signs_effect = yes
+		hidden_tooltip = { character_event = { id = patron.11 } }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2 has_education_martial_trigger = yes }
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+	option = {
+		name = EVTOPTpatron10_valaya
+		trigger = {
+			OR = {
+				religion = ancestor_gods
+				religion = norse_ancestor_gods
+			}
+		}
+		add_character_modifier = {
+			name = follower_of_valaya
+			duration = -1
+		}
+		patron_start_signs_effect = yes
+		hidden_tooltip = { character_event = { id = patron.11 } }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2 has_education_diplomacy_trigger = yes }
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+	option = {
+		name = EVTOPTpatron10_thungni
+		trigger = {
+			OR = {
+				religion = ancestor_gods
+				religion = norse_ancestor_gods
+			}
+		}
+		add_character_modifier = {
+			name = follower_of_thungni
+			duration = -1
+		}
+		patron_start_signs_effect = yes
+		hidden_tooltip = { character_event = { id = patron.11 } }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2 has_education_learning_trigger = yes }
+			modifier = { factor = 2 is_learned_trigger = yes }
+		}
+	}
+	option = {
+		name = EVTOPTpatron10_ursun
+		trigger = {
+			OR = {
+				religion = northern_gods
+				religion = northern_gods_reformed
+			}
+		}
+		add_character_modifier = {
+			name = follower_of_ursun
+			duration = -1
+		}
+		patron_start_signs_effect = yes
+		hidden_tooltip = { character_event = { id = patron.11 } }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2 has_education_diplomacy_trigger = yes }
+			modifier = { factor = 2 is_benevolent_trigger = yes }
+		}
+	}
+	option = {
+		name = EVTOPTpatron10_dazh
+		trigger = {
+			OR = {
+				religion = northern_gods
+				religion = northern_gods_reformed
+			}
+		}
+		add_character_modifier = {
+			name = follower_of_dazh
+			duration = -1
+		}
+		patron_start_signs_effect = yes
+		hidden_tooltip = { character_event = { id = patron.11 } }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2 has_education_stewardship_trigger = yes }
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+	option = {
+		name = EVTOPTpatron10_kalita
+		trigger = {
+			OR = {
+				religion = northern_gods
+				religion = northern_gods_reformed
+			}
+		}
+		add_character_modifier = {
+			name = follower_of_kalita
+			duration = -1
+		}
+		patron_start_signs_effect = yes
+		hidden_tooltip = { character_event = { id = patron.11 } }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2 has_education_intrigue_trigger = yes }
+			modifier = { factor = 2 trait = deceitful }
+		}
+	}
+	option = {
+		name = EVTOPTpatron10_tor
+		trigger = {
+			OR = {
+				religion = northern_gods
+				religion = northern_gods_reformed
+			}
+		}
+		add_character_modifier = {
+			name = follower_of_tor
+			duration = -1
+		}
+		patron_start_signs_effect = yes
+		hidden_tooltip = { character_event = { id = patron.11 } }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2 has_education_martial_trigger = yes }
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+	option = {
+		name = EVTOPTpatron10_ptra
+		trigger = {
+			religion = nehekharan_gods
+		}
+		add_character_modifier = {
+			name = follower_of_ptra
+			duration = -1
+		}
+		patron_start_signs_effect = yes
+		hidden_tooltip = { character_event = { id = patron.11 } }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2 has_education_stewardship_trigger = yes }
+		}
+	}
+	option = {
+		name = EVTOPTpatron10_asaph
+		trigger = {
+			religion = nehekharan_gods
+		}
+		add_character_modifier = {
+			name = follower_of_asaph
+			duration = -1
+		}
+		patron_start_signs_effect = yes
+		hidden_tooltip = { character_event = { id = patron.11 } }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2 has_education_learning_trigger = yes }
+			modifier = { factor = 2 trait = lustful }
+		}
+	}
+	option = {
+		name = EVTOPTpatron10_phakth
+		trigger = {
+			religion = nehekharan_gods
+		}
+		add_character_modifier = {
+			name = follower_of_phakth
+			duration = -1
+		}
+		patron_start_signs_effect = yes
+		hidden_tooltip = { character_event = { id = patron.11 } }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2 has_education_martial_trigger = yes }
+			modifier = { factor = 2 trait = just }
+		}
+	}
+	option = {
+		name = EVTOPTpatron10_usirian
+		trigger = {
+			religion = nehekharan_gods
+		}
+		add_character_modifier = {
+			name = follower_of_usirian
+			duration = -1
+		}
+		patron_start_signs_effect = yes
+		hidden_tooltip = { character_event = { id = patron.11 } }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2 has_education_intrigue_trigger = yes }
+		}
+	}
+}
+
+# patron.11 The chosen god
+character_event = {
+	id = patron.11
+	desc = {
+		trigger = { has_character_modifier = follower_of_grungni }
+		text = EVTDESCpatron11_grungni
+		picture = GFX_evt_dwarf_patron_gods
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_grimnir }
+		text = EVTDESCpatron11_grimnir
+		picture = GFX_evt_dwarf_patron_gods
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_valaya }
+		text = EVTDESCpatron11_valaya
+		picture = GFX_evt_dwarf_patron_gods
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_thungni }
+		text = EVTDESCpatron11_thungni
+		picture = GFX_evt_dwarf_patron_gods
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_ursun }
+		text = EVTDESCpatron11_ursun
+		picture = GFX_evt_northern_gods_patron_gods
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_dazh }
+		text = EVTDESCpatron11_dazh
+		picture = GFX_evt_northern_gods_patron_gods
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_kalita }
+		text = EVTDESCpatron11_kalita
+		picture = GFX_evt_northern_gods_patron_gods
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_tor }
+		text = EVTDESCpatron11_tor
+		picture = GFX_evt_northern_gods_patron_gods
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_ptra }
+		text = EVTDESCpatron11_ptra
+		picture = GFX_evt_nehekharan_patron_gods
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_asaph }
+		text = EVTDESCpatron11_asaph
+		picture = GFX_evt_nehekharan_patron_gods
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_phakth }
+		text = EVTDESCpatron11_phakth
+		picture = GFX_evt_nehekharan_patron_gods
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_usirian }
+		text = EVTDESCpatron11_usirian
+		picture = GFX_evt_nehekharan_patron_gods
+	}
+	picture = GFX_evt_tribal_shrine
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTApatron11
+	}
+}
+
+###############################################################################
+# Skill and friendship
+###############################################################################
+
+# patron.20 Walking the god's path sharpens the follower's skill in the god's
+# field (only below 15).
+character_event = {
+	id = patron.20
+	desc = {
+		trigger = { has_character_modifier = follower_of_grungni }
+		text = EVTDESCpatron20_grungni
+		picture = GFX_evt_tribal_lands
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_grimnir }
+		text = EVTDESCpatron20_grimnir
+		picture = GFX_evt_viking_battle_oldgods
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_valaya }
+		text = EVTDESCpatron20_valaya
+		picture = GFX_evt_viking_throneroom_oldgods
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_thungni }
+		text = EVTDESCpatron20_thungni
+		picture = GFX_evt_tribal_shrine
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_ursun }
+		text = EVTDESCpatron20_ursun
+		picture = GFX_evt_family
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_dazh }
+		text = EVTDESCpatron20_dazh
+		picture = GFX_evt_tribal_lands
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_kalita }
+		text = EVTDESCpatron20_kalita
+		picture = GFX_evt_whispers
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_tor }
+		text = EVTDESCpatron20_tor
+		picture = GFX_evt_hunt
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_ptra }
+		text = EVTDESCpatron20_ptra
+		picture = GFX_evt_carriage
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_asaph }
+		text = EVTDESCpatron20_asaph
+		picture = GFX_evt_tribal_shrine
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_phakth }
+		text = EVTDESCpatron20_phakth
+		picture = GFX_evt_battle
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_usirian }
+		text = EVTDESCpatron20_usirian
+		picture = GFX_evt_whispers
+	}
+	picture = GFX_evt_tribal_shrine
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	option = {
+		name = EVTOPTApatron20
+		if = {
+			limit = {
+				OR = {
+					has_character_modifier = follower_of_valaya
+					has_character_modifier = follower_of_ursun
+				}
+			}
+			change_diplomacy = 1
+		}
+		else_if = {
+			limit = {
+				OR = {
+					has_character_modifier = follower_of_grimnir
+					has_character_modifier = follower_of_tor
+					has_character_modifier = follower_of_phakth
+				}
+			}
+			change_martial = 1
+		}
+		else_if = {
+			limit = {
+				OR = {
+					has_character_modifier = follower_of_grungni
+					has_character_modifier = follower_of_dazh
+					has_character_modifier = follower_of_ptra
+				}
+			}
+			change_stewardship = 1
+		}
+		else_if = {
+			limit = {
+				OR = {
+					has_character_modifier = follower_of_kalita
+					has_character_modifier = follower_of_usirian
+				}
+			}
+			change_intrigue = 1
+		}
+		else_if = {
+			limit = {
+				OR = {
+					has_character_modifier = follower_of_thungni
+					has_character_modifier = follower_of_asaph
+				}
+			}
+			change_learning = 1
+		}
+	}
+}
+
+# patron.21 A fellow worshipper (relay: the worshipper sends patron.22 to the
+# patron's follower, so FROM is the worshipper there).
+character_event = {
+	id = patron.21
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	immediate = {
+		FROM = { character_event = { id = patron.22 } }
+	}
+}
+
+# patron.22 Two followers of the same god find they have much in common.
+character_event = {
+	id = patron.22
+	desc = {
+		trigger = { has_character_modifier = follower_of_grungni }
+		text = EVTDESCpatron22_grungni
+		picture = GFX_evt_tribal_shrine
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_grimnir }
+		text = EVTDESCpatron22_grimnir
+		picture = GFX_evt_tribal_shrine
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_valaya }
+		text = EVTDESCpatron22_valaya
+		picture = GFX_evt_tribal_shrine
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_thungni }
+		text = EVTDESCpatron22_thungni
+		picture = GFX_evt_tribal_shrine
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_ursun }
+		text = EVTDESCpatron22_ursun
+		picture = GFX_evt_hunt
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_dazh }
+		text = EVTDESCpatron22_dazh
+		picture = GFX_evt_tribal_lands
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_kalita }
+		text = EVTDESCpatron22_kalita
+		picture = GFX_evt_whispers
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_tor }
+		text = EVTDESCpatron22_tor
+		picture = GFX_evt_hunt
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_ptra }
+		text = EVTDESCpatron22_ptra
+		picture = GFX_evt_tribal_lands
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_asaph }
+		text = EVTDESCpatron22_asaph
+		picture = GFX_evt_carriage
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_phakth }
+		text = EVTDESCpatron22_phakth
+		picture = GFX_evt_tribal_shrine
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_usirian }
+		text = EVTDESCpatron22_usirian
+		picture = GFX_evt_shadowy_cabal
+	}
+	picture = GFX_evt_tribal_shrine
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = { # Let's be friends
+		name = EVTOPTApatron22
+		custom_tooltip = { text = EVTOPTApatron22_tt }
+		add_friend = FROM
+	}
+	option = { # Back to prayer
+		name = EVTOPTBpatron22
+		piety = 50
+		ai_chance = { factor = 20 }
+	}
+}
+
+###############################################################################
+# The god's trial
+###############################################################################
+
+# patron.23 Tor's storm (relay: the frightened one sends patron.24 to the
+# follower of Tor, so FROM is the frightened one there).
+character_event = {
+	id = patron.23
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	immediate = {
+		set_character_flag = scared_of_thunder
+		FROM = { character_event = { id = patron.24 } }
+	}
+}
+
+# patron.24 A child, spouse or lover cowers from Tor's thunder.
+character_event = {
+	id = patron.24
+	desc = EVTDESCpatron24
+	picture = GFX_evt_comet
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = { # Run out into the storm
+		name = EVTOPTApatron24
+		custom_tooltip = { text = EVTOPTApatron24_tt }
+		piety = 50
+		random_list = {
+			60 = { }
+			25 = {
+				if = {
+					limit = { trait = brave }
+					prestige = 100
+				}
+				else = {
+					add_trait_brave_effect = yes
+				}
+				FROM = {
+					if = {
+						limit = {
+							has_dlc = "Zeus"
+							NOT = { age = 16 }
+						}
+						add_trait = willful
+					}
+					else = {
+						remove_trait_craven_effect = yes
+						add_trait_brave_effect = yes
+					}
+				}
+			}
+			15 = {
+				add_character_modifier = {
+					name = struck_by_lightning
+					duration = 120
+				}
+			}
+		}
+	}
+	option = { # Tell a story
+		name = EVTOPTBpatron24
+		custom_tooltip = { text = EVTOPTBpatron24_tt }
+		reverse_opinion = {
+			who = FROM
+			modifier = comforted_opinion
+			years = 5
+		}
+	}
+	option = { # Tough love
+		name = EVTOPTCpatron24
+		custom_tooltip = { text = EVTOPTCpatron24_tt }
+		reverse_opinion = {
+			who = FROM
+			modifier = tough_love_opinion
+			years = 5
+		}
+		random = {
+			chance = 25
+			add_trait_wroth_effect = yes
+		}
+		FROM = {
+			random_list = {
+				50 = {
+					if = {
+						limit = {
+							has_dlc = "Zeus"
+							NOT = { age = 16 }
+						}
+						add_trait = willful
+					}
+					else = {
+						remove_trait_craven_effect = yes
+						add_trait_brave_effect = yes
+					}
+				}
+				50 = {
+					if = {
+						limit = {
+							has_dlc = "Zeus"
+							NOT = { age = 16 }
+						}
+						if = {
+							limit = { NOT = { trait = timid } }
+							add_trait = timid
+						}
+					}
+					else = {
+						add_trait_craven_effect = yes
+					}
+				}
+			}
+		}
+	}
+}
+
+# patron.25 Asaph's passion (relay: the beloved sends patron.26 to the
+# follower of Asaph, so FROM is the beloved there).
+character_event = {
+	id = patron.25
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	immediate = {
+		FROM = { character_event = { id = patron.26 } }
+	}
+}
+
+# patron.26 Before Asaph's statue, eyes meet across the room.
+character_event = {
+	id = patron.26
+	desc = EVTDESCpatron26
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = { # A night in Asaph's name
+		name = EVTOPTApatron26
+		add_trait_lustful_effect = yes
+		piety = 50
+		hidden_tooltip = { unprotected_sex_effect = yes }
+	}
+	option = { # Something more
+		name = EVTOPTBpatron26
+		trigger = {
+			NOT = { is_lover = FROM }
+			is_no_females_race = no
+			FROM = { is_no_females_race = no }
+		}
+		add_lover = FROM
+		hidden_tooltip = {
+			unprotected_sex_effect = yes
+			if = {
+				limit = { trait = homosexual }
+				FROM = { add_trait = homosexual }
+			}
+		}
+	}
+	option = { # Look away
+		name = EVTOPTCpatron26
+		custom_tooltip = { text = EVTOPTCpatron26_tt }
+		ai_chance = { factor = 20 }
+	}
+}
+
+# patron.27 The hearth blessing (relay: the spouse sends patron.28 to the
+# follower, so FROM is the spouse there).
+character_event = {
+	id = patron.27
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	immediate = {
+		FROM = { character_event = { id = patron.28 } }
+	}
+}
+
+# patron.28 Living in the spirit of Valaya, Ptra or Ursun warms a marriage.
+character_event = {
+	id = patron.28
+	desc = {
+		trigger = { has_character_modifier = follower_of_valaya }
+		text = EVTDESCpatron28_valaya
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_ptra }
+		text = EVTDESCpatron28_ptra
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_ursun }
+		text = EVTDESCpatron28_ursun
+	}
+	picture = GFX_evt_family
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOR = {
+			has_character_modifier = zemynas_blessing
+			has_character_modifier = yemojas_blessing
+			has_character_modifier = akkas_blessing
+		}
+	}
+
+	option = { # All is well
+		name = EVTOPTApatron28
+		if = {
+			limit = { is_rival = FROM }
+			remove_rival = FROM
+		}
+		else_if = {
+			limit = {
+				NOT = { is_lover = FROM }
+				is_no_females_race = no
+				FROM = { is_no_females_race = no }
+			}
+			add_lover = FROM
+		}
+		if = {
+			limit = { has_character_modifier = follower_of_valaya }
+			add_character_modifier = {
+				name = zemynas_blessing
+				years = 5
+			}
+		}
+		else_if = {
+			limit = { has_character_modifier = follower_of_ptra }
+			add_character_modifier = {
+				name = yemojas_blessing
+				years = 5
+			}
+		}
+		else = {
+			add_character_modifier = {
+				name = akkas_blessing
+				years = 5
+			}
+		}
+		any_child = {
+			limit = {
+				liege = { character = ROOT }
+				is_child_of = FROM
+			}
+			opinion = {
+				who = ROOT
+				modifier = happy_parent_opinion
+				years = 5
+			}
+			hidden_tooltip = {
+				opinion = {
+					who = FROM
+					modifier = happy_parent_opinion
+					years = 5
+				}
+			}
+		}
+		hidden_tooltip = { unprotected_sex_effect = yes }
+	}
+	option = { # Cannot bring myself to touch them
+		name = EVTOPTBpatron28
+		random = {
+			chance = 50
+			add_trait_chaste_effect = yes
+		}
+		ai_chance = { factor = 10 }
+	}
+}
+
+# patron.29 A child asks about death (relay: the child sends the follower of
+# Usirian patron.30, or the follow-up patron.31 once a tale was told).
+character_event = {
+	id = patron.29
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	immediate = {
+		set_character_flag = asked_about_death
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = inspiring_tale
+					has_character_flag = dull_tale
+					has_character_flag = hardening_tale
+					has_character_flag = scary_tale
+				}
+			}
+			FROM = { character_event = { id = patron.31 } }
+		}
+		else = {
+			FROM = { character_event = { id = patron.30 } }
+		}
+	}
+}
+
+# patron.30 Why is the bird not flying any more?
+character_event = {
+	id = patron.30
+	desc = EVTDESCpatron30
+	picture = GFX_evt_child_play
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = { # A gentle tale of Usirian's realm
+		name = EVTOPTApatron30
+		custom_tooltip = { text = EVTOPTApatron30_tt }
+		random = {
+			chance = 25
+			add_trait_kind_effect = yes
+		}
+		random = {
+			chance = 50
+			remove_trait_cruel_effect = yes
+		}
+		FROM = {
+			random_list = {
+				60 = { set_character_flag = inspiring_tale }
+				40 = { set_character_flag = dull_tale }
+			}
+			character_event = { id = patron.29 days = 3 }
+		}
+	}
+	option = { # The honest truth of Usirian's judgement
+		name = EVTOPTBpatron30
+		custom_tooltip = { text = EVTOPTBpatron30_tt }
+		random = {
+			chance = 25
+			add_trait_cruel_effect = yes
+		}
+		random = {
+			chance = 50
+			remove_trait_kind_effect = yes
+		}
+		FROM = {
+			random_list = {
+				60 = { set_character_flag = hardening_tale }
+				40 = { set_character_flag = scary_tale }
+			}
+			character_event = { id = patron.29 days = 3 }
+		}
+	}
+	option = { # No time
+		name = EVTOPTCpatron30
+		ai_chance = { factor = 20 }
+	}
+}
+
+# patron.31 How the child took the tale.
+character_event = {
+	id = patron.31
+	desc = {
+		trigger = { FROM = { has_character_flag = inspiring_tale } }
+		text = EVTDESCpatron31_inspiring
+		picture = GFX_evt_child_reading
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = dull_tale } }
+		text = EVTDESCpatron31_dull
+		picture = GFX_evt_child_play
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = hardening_tale } }
+		text = EVTDESCpatron31_hardening
+		picture = GFX_evt_child_reading
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = scary_tale } }
+		text = EVTDESCpatron31_scary
+		picture = GFX_evt_child_bully
+	}
+	picture = GFX_evt_child_reading
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTApatron31_inspiring
+		trigger = { FROM = { has_character_flag = inspiring_tale } }
+		FROM = {
+			clr_character_flag = inspiring_tale
+			if = {
+				limit = {
+					has_dlc = "Zeus"
+					NOT = { trait = idolizer }
+				}
+				add_trait = idolizer
+			}
+			else_if = {
+				limit = {
+					NOT = { has_dlc = "Zeus" }
+					NOT = { trait = erudite }
+				}
+				add_trait = erudite
+			}
+			change_learning = 1
+		}
+	}
+	option = {
+		name = EVTOPTApatron31_dull
+		trigger = { FROM = { has_character_flag = dull_tale } }
+		FROM = {
+			clr_character_flag = dull_tale
+			if = {
+				limit = {
+					has_dlc = "Zeus"
+					NOT = { trait = indolent }
+				}
+				add_trait = indolent
+			}
+			else_if = {
+				limit = {
+					NOT = { has_dlc = "Zeus" }
+					NOT = { trait = slothful }
+					NOT = { trait = diligent }
+				}
+				add_trait = slothful
+			}
+			change_learning = -1
+		}
+	}
+	option = {
+		name = EVTOPTApatron31_hardening
+		trigger = { FROM = { has_character_flag = hardening_tale } }
+		FROM = {
+			clr_character_flag = hardening_tale
+			if = {
+				limit = {
+					has_dlc = "Zeus"
+					NOT = { trait = willful }
+				}
+				add_trait = willful
+			}
+			else_if = {
+				limit = {
+					NOT = { has_dlc = "Zeus" }
+					NOT = { trait = brave }
+					NOT = { trait = craven }
+				}
+				add_trait = brave
+			}
+			change_intrigue = 1
+		}
+	}
+	option = {
+		name = EVTOPTApatron31_scary
+		trigger = { FROM = { has_character_flag = scary_tale } }
+		FROM = {
+			clr_character_flag = scary_tale
+			if = {
+				limit = {
+					has_dlc = "Zeus"
+					NOT = { trait = timid }
+					NOT = { trait = rowdy }
+				}
+				add_trait = timid
+			}
+			else_if = {
+				limit = {
+					NOT = { has_dlc = "Zeus" }
+					NOT = { trait = brave }
+					NOT = { trait = craven }
+				}
+				add_trait = craven
+			}
+			change_intrigue = -1
+		}
+	}
+}
+
+# patron.37 A sign of Grimnir, Grungni, Thungni, Dazh, Kalita or Phakth.
+character_event = {
+	id = patron.37
+	desc = {
+		trigger = { has_character_modifier = follower_of_grimnir }
+		text = EVTDESCpatron37_grimnir
+		picture = GFX_evt_feast
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_grungni }
+		text = EVTDESCpatron37_grungni
+		picture = GFX_evt_tribal_lands
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_thungni }
+		text = EVTDESCpatron37_thungni
+		picture = GFX_evt_library
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_dazh }
+		text = EVTDESCpatron37_dazh
+		picture = GFX_evt_feast
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_kalita }
+		text = EVTDESCpatron37_kalita
+		picture = GFX_evt_market
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_phakth }
+		text = EVTDESCpatron37_phakth
+		picture = GFX_evt_council
+	}
+	picture = GFX_evt_tribal_shrine
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	# Grimnir: a Slayer seeks his doom
+	option = { # Drink to Grimnir with him
+		name = EVTOPTApatron37_grimnir
+		trigger = { has_character_modifier = follower_of_grimnir }
+		prestige = 50
+		random = {
+			chance = 20
+			add_trait_brave_effect = yes
+		}
+	}
+	option = { # Pay for his last feast
+		name = EVTOPTBpatron37_grimnir
+		trigger = { has_character_modifier = follower_of_grimnir }
+		wealth = -25
+		piety = 75
+		ai_chance = { factor = 50 }
+	}
+	# Grungni: a rich seam
+	option = { # Into the treasury
+		name = EVTOPTApatron37_grungni
+		trigger = { has_character_modifier = follower_of_grungni }
+		scaled_wealth = { value = 0.5 min = 30 }
+	}
+	option = { # Forge an offering to Grungni
+		name = EVTOPTBpatron37_grungni
+		trigger = { has_character_modifier = follower_of_grungni }
+		piety = 75
+		ai_chance = { factor = 50 }
+	}
+	# Thungni: a rune in a dream
+	option = { # Set it down
+		name = EVTOPTApatron37_thungni
+		trigger = { has_character_modifier = follower_of_thungni }
+		add_character_modifier = {
+			name = new_insights
+			years = 5
+		}
+	}
+	option = { # Keep it secret, as the runesmiths do
+		name = EVTOPTBpatron37_thungni
+		trigger = { has_character_modifier = follower_of_thungni }
+		piety = 50
+		prestige = 25
+		ai_chance = { factor = 50 }
+	}
+	# Dazh: the hearth-fire
+	option = { # Warm yourself at it
+		name = EVTOPTApatron37_dazh
+		trigger = { has_character_modifier = follower_of_dazh }
+		add_character_modifier = {
+			name = invigorated
+			years = 5
+		}
+	}
+	option = { # Open the hall to the cold and hungry
+		name = EVTOPTBpatron37_dazh
+		trigger = { has_character_modifier = follower_of_dazh }
+		scaled_wealth = { value = -0.5 min = -20 }
+		piety = 50
+		prestige = 50
+		ai_chance = { factor = 50 }
+	}
+	# Kalita: a merchant's bargain
+	option = { # Take the bargain
+		name = EVTOPTApatron37_kalita
+		trigger = { has_character_modifier = follower_of_kalita }
+		scaled_wealth = { value = 0.75 min = 40 }
+		random = {
+			chance = 15
+			add_trait_deceitful_effect = yes
+		}
+	}
+	option = { # Too good to be true
+		name = EVTOPTBpatron37_kalita
+		trigger = { has_character_modifier = follower_of_kalita }
+		piety = 25
+		ai_chance = { factor = 30 }
+	}
+	# Phakth: a dispute brought to judgement
+	option = { # Judge by the letter of the law
+		name = EVTOPTApatron37_phakth
+		trigger = { has_character_modifier = follower_of_phakth }
+		prestige = 50
+		random = {
+			chance = 15
+			if = {
+				limit = {
+					NOT = { trait = just }
+					NOT = { trait = arbitrary }
+				}
+				add_trait = just
+			}
+		}
+	}
+	option = { # Judge with mercy
+		name = EVTOPTBpatron37_phakth
+		trigger = { has_character_modifier = follower_of_phakth }
+		piety = 50
+		random = {
+			chance = 15
+			add_trait_kind_effect = yes
+		}
+		ai_chance = { factor = 50 }
+	}
+}
+
+###############################################################################
+# Renown
+###############################################################################
+
+# patron.32 Warriors flock to a follower of a war god.
+character_event = {
+	id = patron.32
+	desc = {
+		trigger = { has_character_modifier = follower_of_grimnir }
+		text = EVTDESCpatron32_grimnir
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_tor }
+		text = EVTDESCpatron32_tor
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_phakth }
+		text = EVTDESCpatron32_phakth
+		picture = GFX_evt_battle
+	}
+	picture = GFX_evt_viking_battle_oldgods
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	trigger = { is_landed = yes }
+
+	option = {
+		name = EVTOPTApatron32
+		capital_scope = {
+			add_province_modifier = {
+				name = inspired_warriors
+				years = 10
+			}
+		}
+	}
+}
+
+# patron.33 The follower becomes known as the Voice of Valaya or Ursun.
+character_event = {
+	id = patron.33
+	desc = {
+		trigger = { has_character_modifier = follower_of_valaya }
+		text = EVTDESCpatron33_valaya
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_ursun }
+		text = EVTDESCpatron33_ursun
+	}
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	option = {
+		name = EVTOPTApatron33
+		if = {
+			limit = { has_character_modifier = follower_of_valaya }
+			add_character_modifier = {
+				name = voice_of_dievas
+				years = 10
+			}
+		}
+		else = {
+			add_character_modifier = {
+				name = voice_of_akka
+				years = 10
+			}
+		}
+	}
+}
+
+# patron.34 A rich year in the capital: the land recovers or prospers, or is
+# blessed.
+character_event = {
+	id = patron.34
+	desc = {
+		trigger = { has_character_modifier = follower_of_grungni }
+		text = EVTDESCpatron34_grungni
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_dazh }
+		text = EVTDESCpatron34_dazh
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_ptra }
+		text = EVTDESCpatron34_ptra
+	}
+	picture = GFX_evt_tribal_lands
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	trigger = {
+		is_landed = yes
+		capital_scope = { NOT = { has_province_modifier = blessed_lands } }
+	}
+
+	option = {
+		name = EVTOPTApatron34
+		capital_scope = {
+			if = {
+				limit = { has_province_modifier = depopulated_1 }
+				remove_province_modifier = depopulated_1
+			}
+			else_if = {
+				limit = { has_province_modifier = depopulated_2 }
+				remove_province_modifier = depopulated_2
+				add_province_modifier = { name = depopulated_1 duration = -1 }
+			}
+			else_if = {
+				limit = { has_province_modifier = depopulated_3 }
+				remove_province_modifier = depopulated_3
+				add_province_modifier = { name = depopulated_2 duration = -1 }
+			}
+			else_if = {
+				limit = {
+					has_dlc = "Reapers"
+					NOT = { has_province_modifier = prosperity_modifier_3 }
+				}
+				increase_prosperity_effect = yes
+			}
+			else = {
+				add_province_modifier = {
+					name = blessed_lands
+					years = 10
+				}
+			}
+		}
+	}
+}
+
+# patron.35 Kalita or Usirian lets the follower overhear a plot.
+character_event = {
+	id = patron.35
+	desc = {
+		trigger = { has_character_modifier = follower_of_kalita event_target:patron_plot_target = { character = ROOT } }
+		text = EVTDESCpatron35_me_kalita
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_usirian event_target:patron_plot_target = { character = ROOT } }
+		text = EVTDESCpatron35_me_usirian
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_kalita NOT = { event_target:patron_plot_target = { character = ROOT } } }
+		text = EVTDESCpatron35_kalita
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_usirian NOT = { event_target:patron_plot_target = { character = ROOT } } }
+		text = EVTDESCpatron35_usirian
+	}
+	picture = GFX_evt_shadowy_cabal
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	trigger = {
+		any_realm_character = {
+			has_plot = yes
+			NOT = { plot_is_known_by = ROOT }
+		}
+	}
+
+	immediate = {
+		# The most pressing plot: against ROOT, then ROOT's kin, then a lord.
+		random_realm_character = {
+			limit = {
+				has_plot = yes
+				NOT = { plot_is_known_by = ROOT }
+			}
+			save_event_target_as = patron_plotter
+		}
+		random_realm_character = {
+			limit = {
+				has_plot = yes
+				NOT = { plot_is_known_by = ROOT }
+				is_landed = yes
+			}
+			save_event_target_as = patron_plotter
+		}
+		random_realm_character = {
+			limit = {
+				has_plot = yes
+				NOT = { plot_is_known_by = ROOT }
+				plot_target_char = { is_close_relative = ROOT }
+			}
+			save_event_target_as = patron_plotter
+		}
+		random_realm_character = {
+			limit = {
+				has_plot = yes
+				NOT = { plot_is_known_by = ROOT }
+				plot_target_char = { character = ROOT }
+			}
+			save_event_target_as = patron_plotter
+		}
+		event_target:patron_plotter = {
+			plot_target_char = { save_event_target_as = patron_plot_target }
+		}
+	}
+
+	option = {
+		name = {
+			trigger = { event_target:patron_plot_target = { character = ROOT } }
+			text = EVTOPTApatron35_me
+		}
+		name = {
+			trigger = {
+				NOT = { event_target:patron_plot_target = { character = ROOT } }
+				opinion = { who = event_target:patron_plot_target value = 20 }
+			}
+			text = EVTOPTApatron35_friend
+		}
+		name = {
+			trigger = {
+				NOT = { event_target:patron_plot_target = { character = ROOT } }
+				NOT = { opinion = { who = event_target:patron_plot_target value = 20 } }
+			}
+			text = EVTOPTApatron35
+		}
+		event_target:patron_plotter = { reveal_plot = yes }
+	}
+}
+
+# patron.36 Thungni or Asaph sends the follower insights to spread.
+character_event = {
+	id = patron.36
+	desc = {
+		trigger = { has_character_modifier = follower_of_thungni }
+		text = EVTDESCpatron36_thungni
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_asaph }
+		text = EVTDESCpatron36_asaph
+	}
+	picture = GFX_evt_library
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	option = {
+		name = EVTOPTApatron36
+		random_list = {
+			33 = { military_techpoints = 100 }
+			33 = { economy_techpoints = 100 }
+			33 = { culture_techpoints = 100 }
+		}
+	}
+}
+
+###############################################################################
+# Monument
+###############################################################################
+
+# patron.40 The steward proposes a monument (relay: the steward sends
+# patron.41 to the follower, so FROM is the steward there).
+character_event = {
+	id = patron.40
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	immediate = {
+		FROM = { character_event = { id = patron.41 } }
+	}
+}
+
+# patron.41 Raise a monument to the god, to the house, or not at all.
+character_event = {
+	id = patron.41
+	desc = {
+		trigger = { offering_dawi_trigger = yes }
+		text = EVTDESCpatron41_dawi
+	}
+	desc = {
+		trigger = { offering_dawi_trigger = no }
+		text = EVTDESCpatron41
+	}
+	picture = GFX_evt_irminsul_shrine
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes
+
+	trigger = { is_landed = yes }
+
+	option = { # To the god
+		name = {
+			trigger = { has_character_modifier = follower_of_grungni }
+			text = EVTOPTApatron41_grungni
+		}
+		name = {
+			trigger = { has_character_modifier = follower_of_grimnir }
+			text = EVTOPTApatron41_grimnir
+		}
+		name = {
+			trigger = { has_character_modifier = follower_of_valaya }
+			text = EVTOPTApatron41_valaya
+		}
+		name = {
+			trigger = { has_character_modifier = follower_of_thungni }
+			text = EVTOPTApatron41_thungni
+		}
+		name = {
+			trigger = { has_character_modifier = follower_of_ursun }
+			text = EVTOPTApatron41_ursun
+		}
+		name = {
+			trigger = { has_character_modifier = follower_of_dazh }
+			text = EVTOPTApatron41_dazh
+		}
+		name = {
+			trigger = { has_character_modifier = follower_of_kalita }
+			text = EVTOPTApatron41_kalita
+		}
+		name = {
+			trigger = { has_character_modifier = follower_of_tor }
+			text = EVTOPTApatron41_tor
+		}
+		name = {
+			trigger = { has_character_modifier = follower_of_ptra }
+			text = EVTOPTApatron41_ptra
+		}
+		name = {
+			trigger = { has_character_modifier = follower_of_asaph }
+			text = EVTOPTApatron41_asaph
+		}
+		name = {
+			trigger = { has_character_modifier = follower_of_phakth }
+			text = EVTOPTApatron41_phakth
+		}
+		name = {
+			trigger = { has_character_modifier = follower_of_usirian }
+			text = EVTOPTApatron41_usirian
+		}
+		custom_tooltip = { text = EVTOPTApatron41_tt }
+		scaled_wealth = { value = -0.25 min = -20 }
+		capital_scope = {
+			add_province_modifier = {
+				name = building_monument
+				years = 1
+			}
+		}
+		set_character_flag = pagan_monument
+		set_character_flag = monument_for_deity
+		hidden_tooltip = { character_event = { id = patron.42 days = 365 } }
+	}
+	option = { # To the house and the ancestors
+		name = EVTOPTBpatron41
+		custom_tooltip = { text = EVTOPTBpatron41_tt }
+		scaled_wealth = { value = -0.25 min = -20 }
+		capital_scope = {
+			add_province_modifier = {
+				name = building_monument
+				years = 1
+			}
+		}
+		set_character_flag = pagan_monument
+		set_character_flag = monument_for_ancestors
+		hidden_tooltip = { character_event = { id = patron.42 days = 365 } }
+	}
+	option = { # Not now
+		name = EVTOPTCpatron41
+		ai_chance = { factor = 20 }
+	}
+}
+
+# patron.42 The monument is finished. It stands while its raiser holds the
+# capital (patron.43).
+character_event = {
+	id = patron.42
+	desc = {
+		trigger = { has_character_flag = monument_for_ancestors }
+		text = EVTDESCpatron42_ancestors
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_grungni NOT = { has_character_flag = monument_for_ancestors } }
+		text = EVTDESCpatron42_grungni
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_grimnir NOT = { has_character_flag = monument_for_ancestors } }
+		text = EVTDESCpatron42_grimnir
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_valaya NOT = { has_character_flag = monument_for_ancestors } }
+		text = EVTDESCpatron42_valaya
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_thungni NOT = { has_character_flag = monument_for_ancestors } }
+		text = EVTDESCpatron42_thungni
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_ursun NOT = { has_character_flag = monument_for_ancestors } }
+		text = EVTDESCpatron42_ursun
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_dazh NOT = { has_character_flag = monument_for_ancestors } }
+		text = EVTDESCpatron42_dazh
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_kalita NOT = { has_character_flag = monument_for_ancestors } }
+		text = EVTDESCpatron42_kalita
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_tor NOT = { has_character_flag = monument_for_ancestors } }
+		text = EVTDESCpatron42_tor
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_ptra NOT = { has_character_flag = monument_for_ancestors } }
+		text = EVTDESCpatron42_ptra
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_asaph NOT = { has_character_flag = monument_for_ancestors } }
+		text = EVTDESCpatron42_asaph
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_phakth NOT = { has_character_flag = monument_for_ancestors } }
+		text = EVTDESCpatron42_phakth
+	}
+	desc = {
+		trigger = { has_character_modifier = follower_of_usirian NOT = { has_character_flag = monument_for_ancestors } }
+		text = EVTDESCpatron42_usirian
+	}
+	picture = GFX_evt_irminsul_shrine
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	option = {
+		name = EVTOPTApatron42
+		if = {
+			limit = { has_character_flag = monument_for_ancestors }
+			prestige = 250
+			clr_character_flag = monument_for_ancestors
+			capital_scope = {
+				remove_province_modifier = building_monument
+				add_province_modifier = {
+					name = ancestral_monument
+					duration = -1
+				}
+			}
+		}
+		else = {
+			piety = 250
+			clr_character_flag = monument_for_deity
+			capital_scope = {
+				remove_province_modifier = building_monument
+				add_province_modifier = {
+					name = holy_monument
+					duration = -1
+				}
+			}
+		}
+		save_event_target_as = patron_monument_raiser
+		capital_scope = { province_event = { id = patron.43 days = 365 } }
+	}
+}
+
+# patron.43 Once a year: the monument falls when its raiser no longer holds
+# the province.
+province_event = {
+	id = patron.43
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	trigger = {
+		OR = {
+			has_province_modifier = holy_monument
+			has_province_modifier = ancestral_monument
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { owner = { character = event_target:patron_monument_raiser } } }
+			remove_province_modifier = holy_monument
+			remove_province_modifier = ancestral_monument
+		}
+		else = {
+			province_event = { id = patron.43 days = 365 }
+		}
+	}
+}

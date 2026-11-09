@@ -75,6 +75,7 @@ The first line is the id and a short title. Then a plain-language summary of wha
 - Repeated trigger blocks become scripted triggers (`common/scripted_triggers/wh_<subject>_triggers.txt`).
 
 **Races and gender.**
+- Keep DLC fallbacks. Every DLC is recommended, but some players will miss one. Never drop a `has_dlc` / `lacks_dlc` check or a `NOT = { has_dlc = ... }` branch as dead. A DLC branch that has a fallback keeps it, and new content that leans on a DLC feature (hospitals, epidemics, societies, bloodlines, the Cathay offmap, focuses, council votes) gets a `has_dlc` check or a plain fallback. `add_symptom_effect` and the Reaper's Due `give_*_effect`s already fall back to `ill` on their own.
 - Never test `is_female = yes` for a woman's role (daughter, wife, mother, sister, lover, lady of the court) or a gendered text variant. Use `is_woman_trigger = yes` / `= no` (`common/scripted_triggers/wh_scripted_triggers.txt`). Orcs, goblins, lizardmen, Skaven, Fimir and Tomb Kings have no women as vanilla shows them; their engine-female characters are snotlings, breeders, Saurus or the Maergh, and `is_no_females_race` is the one place that lists them. Romance partners also need `is_no_females_race = no`, and every `add_lover` sits behind that check for both lovers. Snotlings, Saurus and Skaven breeders carry `cannot_marry`. Keep raw `is_female` only for race mechanics (racial traits, breeders, `set_gender`).
 - Faith and culture changes go through `faith_fits_race_of_prev_trigger` and `culture_fits_race_of_prev_trigger` (`WHG_race_triggers.txt`).
 

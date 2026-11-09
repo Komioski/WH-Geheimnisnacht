@@ -1,0 +1,680 @@
+###############################################################################
+# Raiding adventurers
+# Namespace: adventurer (was HL.100 - HL.200 in
+#   hl_raiding_adventurers_events.txt)
+# Faction: Generic
+# Serves: Norsca, the Kurgan and Hung of the hordes, the reavers of Stromfels
+#   and the corsairs of Araby
+#
+# A landless son of a noble house with nothing to inherit gathers a host and
+# goes raiding abroad. Every year he weighs his loot: rich enough, he seeks
+# land from a realm he has plundered, by bargain with a great lord (the
+# negotiation in adventurers_negotiation.txt) or by war on a small one, and
+# a lord who refused him a title may go home at war. A horde clan driven from
+# its pastures takes to raiding in the same way. Defeat, capture or a raid
+# called off ends it.
+#
+# The raider sets out                  adventurer.1 - adventurer.2
+# Seeking land                         adventurer.10 - adventurer.19
+# Buying land                          adventurer.20 - adventurer.21
+# The landless horde                   adventurer.30 - adventurer.31
+# The end of the raid                  adventurer.40 - adventurer.49
+#
+# Fired from: the raiding_adventurers list on on_five_year_pulse in
+#   wh_on_actions.txt (adventurer.1), the buy-land decision in
+#   HL_title_decisions.txt (adventurer.20), 00_on_actions.txt (on_new_holder*
+#   adventurer.40, on_battle_lost_owner adventurer.41,
+#   on_become_imprisoned_any_reason adventurer.42, on_ai_end_raid
+#   adventurer.43, on_unlanded adventurer.30) and the
+#   Cathay invasion in jd_chinese_invasion_events.txt (adventurer.12, .13,
+#   .49). Shared triggers and effects are in WHG_horse_lords_triggers.txt and
+#   WHG_horse_lords_effects.txt.
+###############################################################################
+
+namespace = adventurer
+
+###############################################################################
+# The raider sets out
+###############################################################################
+
+# adventurer.1 A host of one's own
+# Hidden. A landless son of a noble house of a raiding people, with nothing
+# to inherit and no claim for TOG.1200 to pursue, raises a host (3 to 12
+# bands, horse or foot, and a fleet for a seafarer) and sets out. The liege
+# is told (adventurer.2); the raider takes stock every three years
+# (adventurer.10).
+# Scope: the would-be raider.
+character_event = {
+	id = adventurer.1
+	hide_window = yes
+	is_triggered_only = yes # on_five_year_pulse (raiding_adventurers)
+
+	ai = yes
+	min_age = 16
+	max_age = 50
+	only_men = yes
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		has_dlc = "Horse Lords"
+		NOT = { has_game_rule = { name = adventurers value = none } }
+		is_ruler = no
+		NOR = {
+			is_witch_hunter_trigger = yes
+			is_hunter_culture_trigger = yes
+			trait = content
+			trait = craven
+			trait = decadent
+		}
+		is_allowed_to_loot = yes
+		adventurer_raider_people_trigger = yes
+		NOT = { any_heir_title = { always = yes } }
+		adventurer_tog_claimant_trigger = no
+		adventurer_noble_blood_trigger = yes
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = ambitious }
+		modifier = { factor = 5 has_character_flag = flag_denied_title }
+		modifier = { factor = 5 has_character_flag = demon_child_non_pagan }
+		modifier = { factor = 1.33 diplomacy = 12 }
+		modifier = { factor = 1.33 martial = 12 }
+		modifier = { factor = 1.33 combat_rating = 30 }
+		modifier = { factor = 1.33 trait = brave }
+		modifier = { factor = 1.18 trait = proud }
+		modifier = { factor = 0.33 trait = slothful }
+		modifier = { factor = 0.33 trait = humble }
+		modifier = { factor = 0.33 trait = kind }
+		modifier = { factor = 0.33 any_liege = { ai = no } }
+		modifier = {
+			factor = 0.04
+			has_game_rule = { name = adventurers value = rare }
+		}
+	}
+
+	immediate = {
+		end_inaccessibility_effect = yes
+		add_trait = adventurer
+		liege = {
+			primary_title = {
+				holder_scope = { save_event_target_as = previous_liege }
+			}
+			character_event = { id = adventurer.2 days = 1 }
+			capital_scope = {
+				save_event_target_as = target_province
+				ROOT = {
+					set_defacto_liege = ROOT
+					create_title = {
+						tier = DUKE
+						landless = yes
+						adventurer = yes
+						culture = ROOT
+						name = "CLAIMANT_ADVENTURE"
+						holder = ROOT
+						base_title = THIS
+					}
+					set_character_flag = raiding_adventurer1
+					set_character_flag = raiding_adventurer
+					if = {
+						limit = {
+							event_target:previous_liege = {
+								OR = {
+									government = nomadic_government
+									government = chaos_horde_government
+								}
+							}
+						}
+						adventurer_horse_host_effect = yes
+					}
+					else = {
+						adventurer_raid_host_effect = yes
+					}
+					create_random_soldier = {
+						random_traits = yes
+						dynasty = none
+						religion = ROOT
+						culture = ROOT
+						female = no
+						age = 30
+					}
+					new_character = {
+						character_event = { id = aiclean.31 } # Racial trait
+					}
+					create_random_soldier = {
+						random_traits = yes
+						dynasty = none
+						religion = ROOT
+						culture = ROOT
+						female = no
+						age = 25
+					}
+					new_character = {
+						character_event = { id = aiclean.31 } # Racial trait
+					}
+					if = {
+						limit = { is_seafarer = yes }
+						spawn_fleet = {
+							province = closest
+							owner = ROOT
+							disband_on_peace = yes
+							troops = {
+								galleys = { 110 110 }
+							}
+						}
+					}
+				}
+			}
+		}
+		character_event = { id = adventurer.10 days = 1095 }
+	}
+}
+
+# adventurer.2 A son goes raiding
+# Scope: the liege; FROM the raider.
+character_event = {
+	id = adventurer.2
+	desc = EVTDESCadventurer2
+	picture = GFX_evt_crusaders
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # adventurer.1
+
+	show_from_from = yes
+
+	option = {
+		name = EVTOPTAadventurer2
+	}
+}
+
+###############################################################################
+# Seeking land
+###############################################################################
+
+# adventurer.10 Taking stock
+# Hidden. Every year (first after three) the raider weighs the loot. Rich
+# enough (or five years out), with a looted realm in reach, he seeks land
+# (adventurer.11), goes home at war if he was once refused a title
+# (adventurer.13), or keeps raiding. After thirty years, one last try
+# (adventurer.19).
+# Scope: the raider.
+character_event = {
+	id = adventurer.10
+	hide_window = yes
+	is_triggered_only = yes # adventurer.1, .30, .44, itself
+
+	has_character_flag = raiding_adventurer
+
+	trigger = {
+		primary_title = { temporary = yes }
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				OR = {
+					wealth = 300
+					had_character_flag = { flag = raiding_adventurer days = 1825 }
+				}
+				any_independent_ruler = { adventurer_looted_ruler_trigger = yes }
+			}
+			random_list = {
+				50 = { # Seek land
+					modifier = { factor = 2 trait = cruel }
+					modifier = { factor = 2 trait = ambitious }
+					character_event = { id = adventurer.11 }
+				}
+				20 = { # Home, at war
+					modifier = { factor = 0 NOT = { has_character_flag = flag_denied_title } }
+					modifier = { factor = 2 trait = ambitious }
+					modifier = { factor = 3 trait = ambitious trait = arbitrary }
+					modifier = { factor = 2 trait = envious }
+					character_event = { id = adventurer.13 }
+				}
+				50 = { # Raid on
+					modifier = { factor = 0.5 had_character_flag = { flag = raiding_adventurer days = 2555 } }
+					modifier = { factor = 0.5 had_character_flag = { flag = raiding_adventurer days = 3285 } }
+					modifier = { factor = 0.5 had_character_flag = { flag = raiding_adventurer days = 4015 } }
+					modifier = { factor = 0 had_character_flag = { flag = raiding_adventurer days = 10950 } }
+					repeat_event = { id = adventurer.10 days = 365 }
+				}
+			}
+		}
+		else_if = {
+			limit = { had_character_flag = { flag = raiding_adventurer days = 10950 } }
+			character_event = { id = adventurer.19 }
+		}
+		else = {
+			repeat_event = { id = adventurer.10 days = 365 }
+		}
+	}
+}
+
+# adventurer.11 Land, by bargain or by war
+# Hidden. Picks a looted realm: a great lord with land to spare is offered
+# a bargain (ADV.1, with a check in 65 days whether the raid goes on,
+# adventurer.44); a small one is attacked for a duchy. If neither works the
+# adventure ends (adventurer.49).
+# Scope: the raider.
+character_event = {
+	id = adventurer.11
+	hide_window = yes
+	is_triggered_only = yes # adventurer.10
+
+	immediate = {
+		random_independent_ruler = {
+			limit = { adventurer_looted_ruler_trigger = yes }
+			if = {
+				limit = { adventurer_negotiation_partner_trigger = yes }
+				set_character_flag = negotiating_with_adventurer
+				character_event = { id = ADV.1 }
+				ROOT = {
+					set_character_flag = adventurer_next_step
+					character_event = { id = adventurer.44 days = 65 }
+				}
+			}
+			else_if = {
+				limit = { NOT = { higher_real_tier_than = DUKE } }
+				adventurer_declare_war_effect = yes
+			}
+		}
+		if = {
+			limit = { NOT = { has_character_flag = adventurer_next_step } }
+			clr_character_flag = raiding_adventurer
+			character_event = { id = adventurer.49 }
+		}
+		clr_character_flag = adventurer_next_step
+	}
+}
+
+# adventurer.12 Raiders want our land
+# Scope: the target ruler; FROM the raider.
+character_event = {
+	id = adventurer.12
+	desc = EVTDESCadventurer12
+	picture = GFX_evt_crusaders
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # adventurer_war_on_province_effect, adventurer.13, Cathay invasion
+
+	option = {
+		name = EVTOPTAadventurer12
+	}
+}
+
+# adventurer.13 Home, at war
+# Hidden. A raider once refused a title turns his host on the realm he came
+# from.
+# Scope: the raider.
+character_event = {
+	id = adventurer.13
+	hide_window = yes
+	is_triggered_only = yes # adventurer.10, Cathay invasion
+
+	immediate = {
+		event_target:target_province = {
+			owner = {
+				character_event = { id = adventurer.12 }
+				top_liege = {
+					ROOT = {
+						unsafe_war = {
+							target = PREV
+							casus_belli = duchy_adventure
+							thirdparty_title = PREVPREVPREV
+							tier = DUKE
+						}
+					}
+				}
+			}
+		}
+		any_army = {
+			set_can_toggle_looting = yes
+			set_looting = no
+		}
+		clr_character_flag = raiding_adventurer
+	}
+}
+
+# adventurer.19 One last try
+# Hidden. After thirty years of raiding, the same choice as adventurer.11
+# without a second chance: a bargain, a war, or the end.
+# Scope: the raider.
+character_event = {
+	id = adventurer.19
+	hide_window = yes
+	is_triggered_only = yes # adventurer.10
+
+	immediate = {
+		random_independent_ruler = {
+			limit = { adventurer_looted_ruler_trigger = yes }
+			if = {
+				limit = { adventurer_negotiation_partner_trigger = yes }
+				set_character_flag = negotiating_with_adventurer
+				character_event = { id = ADV.1 }
+				ROOT = { set_character_flag = adventurer_next_step }
+			}
+			else_if = {
+				limit = { NOT = { higher_real_tier_than = DUKE } }
+				adventurer_declare_war_effect = yes
+			}
+		}
+		if = {
+			limit = { NOT = { has_character_flag = adventurer_next_step } }
+			clr_character_flag = raiding_adventurer
+			character_event = { id = adventurer.49 }
+		}
+		clr_character_flag = adventurer_next_step
+	}
+}
+
+###############################################################################
+# Buying land
+###############################################################################
+
+# adventurer.20 Bounce
+# Hidden. Sends the offer to the ruler (adventurer.21).
+# Scope: the raider.
+character_event = {
+	id = adventurer.20
+	hide_window = yes
+	is_triggered_only = yes # HL_title_decisions.txt
+
+	immediate = {
+		event_target:target_ruler = { letter_event = { id = adventurer.21 } }
+	}
+}
+
+# adventurer.21 A rich raider's offer
+# Sell the raider a county for 150 gold (a duke or better takes him as a
+# vassal), or refuse (no offer for ten years).
+# Scope: the ruler; FROM the raider.
+letter_event = {
+	id = adventurer.21
+	desc = EVTDESCadventurer21
+
+	is_triggered_only = yes # adventurer.20
+
+	option = { # Sell
+		name = EVTOPTAadventurer21
+		event_target:target_title = { grant_title = FROM }
+		hidden_tooltip = {
+			FROM = {
+				wealth = -150
+				if = {
+					limit = {
+						ROOT = { primary_title = { higher_tier_than = COUNT } }
+					}
+					set_defacto_liege = ROOT
+				}
+			}
+		}
+		wealth = 150
+		ai_chance = { factor = 1 }
+	}
+	option = { # Refuse
+		name = EVTOPTBadventurer21
+		add_character_modifier = { name = raider_buy_land_timer duration = 3650 hidden = yes }
+		ai_chance = { factor = 0 }
+	}
+}
+
+###############################################################################
+# The landless horde
+###############################################################################
+
+# adventurer.30 Driven from the pastures
+# Hidden. A horde clan that loses its last land takes to raiding: its
+# overlord and its vassals part ways with it, the clan becomes a landless
+# host, and its manpower rides out as looting bands (adventurer.31).
+# Scope: the displaced clan chief.
+character_event = {
+	id = adventurer.30
+	hide_window = yes
+	is_triggered_only = yes # on_unlanded
+
+	trigger = {
+		has_game_started = yes
+		is_alive = yes
+		is_dying = no
+		is_nomadic = yes
+		prisoner = no
+		NOR = {
+			is_witch_hunter_trigger = yes
+			is_hunter_culture_trigger = yes
+			trait = incapable
+		}
+	}
+
+	immediate = {
+		clan_title = {
+			capital_scope = {
+				save_event_target_as = last_province
+				holder_scope = {
+					top_liege = {
+						reverse_opinion = { modifier = opinion_driven_from_my_lands who = ROOT months = 1200 }
+						reverse_opinion = { modifier = forbidden_raid_target who = ROOT months = 1200 }
+					}
+				}
+			}
+		}
+		liege = {
+			ROOT = {
+				any_vassal = { set_defacto_liege = PREVPREV }
+			}
+		}
+		if = {
+			limit = { independent = yes }
+			if = {
+				limit = { NOT = { any_vassal = { clan = yes } } }
+				any_vassal = { set_defacto_liege = THIS }
+			}
+			random_vassal = {
+				limit = { clan = yes }
+				primary_title = { gain_title = PREVPREV }
+			}
+		}
+		set_defacto_liege = THIS
+		clan_title = {
+			set_title_adventurer = { title = THIS status = yes }
+			set_title_landless = { title = THIS status = yes }
+			set_defacto_liege = THIS
+		}
+		set_character_flag = raiding_adventurer_nomad
+		set_character_flag = raiding_adventurer
+		any_army = {
+			set_can_toggle_looting = yes
+			set_looting = yes
+			set_can_toggle_looting = no
+		}
+		if = {
+			limit = { NOT = { unused_manpower = 250 } }
+			manpower = 250
+		}
+		character_event = { id = adventurer.31 }
+		character_event = { id = adventurer.10 days = 1095 }
+	}
+}
+
+# adventurer.31 The bands ride out
+# Hidden. Every 250 unused manpower becomes a band of 250 horse raiders at
+# the lost pastures; repeats until the manpower is spent.
+# Scope: the clan chief.
+character_event = {
+	id = adventurer.31
+	hide_window = yes
+	is_triggered_only = yes # adventurer.30, itself
+
+	trigger = {
+		unused_manpower = 250
+	}
+
+	immediate = {
+		spawn_unit = {
+			owner = ROOT
+			province = event_target:last_province
+			home = event_target:last_province
+			troops = {
+				light_cavalry = { 200 200 }
+				horse_archers = { 50 50 }
+			}
+			attrition = 1.0
+			is_looter = yes
+			can_toggle_looting = no
+			reinforces = yes
+			merge = yes
+		}
+		manpower = -250
+		repeat_event = { id = adventurer.31 }
+	}
+}
+
+###############################################################################
+# The end of the raid
+###############################################################################
+
+# adventurer.40 Landed at last
+# Hidden. A raider who gains a title stops looting.
+# Scope: the raider.
+character_event = {
+	id = adventurer.40
+	hide_window = yes
+	is_triggered_only = yes # on_new_holder, on_new_holder_inheritance, on_new_holder_usurpation
+
+	only_rulers = yes
+	has_character_flag = raiding_adventurer
+
+	immediate = {
+		clr_character_flag = raiding_adventurer
+		any_army = {
+			set_can_toggle_looting = yes
+			set_looting = no
+		}
+	}
+}
+
+# adventurer.41 Beaten
+# Hidden. A raider at peace with no regiments left is finished.
+# Scope: the raider.
+character_event = {
+	id = adventurer.41
+	hide_window = yes
+	is_triggered_only = yes # on_battle_lost_owner
+
+	only_rulers = yes
+	war = no
+	has_character_flag = raiding_adventurer
+
+	trigger = {
+		has_regiments = no
+	}
+
+	immediate = {
+		character_event = { id = adventurer.49 }
+	}
+}
+
+# adventurer.42 Captured
+# Hidden. A raider taken prisoner before any war is finished.
+# Scope: the raider.
+character_event = {
+	id = adventurer.42
+	hide_window = yes
+	is_triggered_only = yes # on_become_imprisoned_any_reason
+
+	war = no
+	has_character_flag = raiding_adventurer
+
+	immediate = {
+		character_event = { id = adventurer.49 }
+	}
+}
+
+# adventurer.43 The raid is called off
+# Hidden. An AI raider who stops raiding at peace is finished.
+# Scope: the raider.
+character_event = {
+	id = adventurer.43
+	hide_window = yes
+	is_triggered_only = yes # on_ai_end_raid
+
+	war = no
+	has_character_flag = raiding_adventurer
+
+	immediate = {
+		character_event = { id = adventurer.49 }
+	}
+}
+
+# adventurer.44 Back to raiding
+# Hidden. If the bargain came to nothing and the raider still holds his
+# host's title at peace, the raid goes on (adventurer.10).
+# Scope: the raider.
+character_event = {
+	id = adventurer.44
+	hide_window = yes
+	is_triggered_only = yes # adventurer.11
+
+	trigger = {
+		war = no
+		primary_title = {
+			temporary = yes
+			adventurer = yes
+		}
+	}
+
+	immediate = {
+		character_event = { id = adventurer.10 }
+	}
+}
+
+# adventurer.49 Clean-up
+# Hidden. The host disbands and its titles go; a free raider goes back to
+# his father, or his father's lord.
+# Scope: the raider.
+character_event = {
+	id = adventurer.49
+	hide_window = yes
+	is_triggered_only = yes # adventurer.11, .19, .41, .42, .43, Cathay invasion
+
+	immediate = {
+		clr_character_flag = raiding_adventurer
+		disband_event_forces = yes
+		clan_title = {
+			activate_title = { title = THIS status = no }
+			destroy_landed_title = THIS
+		}
+		primary_title = {
+			if = {
+				limit = {
+					OR = {
+						AND = {
+							tier = DUKE
+							adventurer = yes
+						}
+						tier = EMPEROR
+					}
+				}
+				activate_title = { title = THIS status = no }
+				destroy_landed_title = THIS
+			}
+		}
+		if = {
+			limit = {
+				prisoner = no
+				father = { is_alive = yes }
+			}
+			father = {
+				if = {
+					limit = { is_ruler = yes }
+					ROOT = { set_defacto_liege = PREV }
+				}
+				else = {
+					liege = {
+						ROOT = { set_defacto_liege = PREV }
+					}
+				}
+			}
+		}
+	}
+}

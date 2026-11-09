@@ -26,6 +26,9 @@
 # The drunkard                         carousing.45 - carousing.47
 # The game                             carousing.50 - carousing.53
 # The party is over                    carousing.60 - carousing.61
+# The night court (vampire)            carousing.65 - carousing.66
+# The feast of the dead (Tomb King)    carousing.67
+# The revel of the Neverborn (daemon)  carousing.69
 #
 # Fired from: the invite_to_party decision (carousing.1, carousing.10)
 #   and on_death in 00_on_actions.txt (carousing.61). Shared triggers are in
@@ -381,7 +384,9 @@ character_event = {
 # Hidden. Picks one happening by the traits of the host and guests:
 # the cannibal (a madman or a cannibal, and an AI at the table, 20), the
 # fling (both lustful, 25), a new friend (30), a brawl (35), the lunatic
-# (40), the drunkard (45) or the game (50).
+# (40), the drunkard (45) or the game (50). Unliving hosts often have their
+# own night instead: a vampire's night court (65), a Tomb King's feast of the
+# dead (67) or a daemon's revel (69).
 # Scope: ROOT is the host.
 character_event = {
 	id = carousing.16
@@ -397,6 +402,28 @@ character_event = {
 
 	immediate = {
 		random_list = {
+			40 = { # The night court (a vampire host)
+				trigger = {
+					is_vampire_trigger = yes
+					top_liege = {
+						any_realm_character = { carousing_living_prey_trigger = yes }
+					}
+				}
+				character_event = { id = carousing.65 }
+			}
+			40 = { # The feast of the dead (a Tomb King host)
+				trigger = { focus_tomb_king_trigger = yes }
+				character_event = { id = carousing.67 }
+			}
+			40 = { # The revel of the Neverborn (a daemon host)
+				trigger = {
+					focus_daemon_host_trigger = yes
+					top_liege = {
+						any_realm_character = { carousing_living_prey_trigger = yes }
+					}
+				}
+				character_event = { id = carousing.69 }
+			}
 			2 = { # The cannibal
 				trigger = {
 					OR = {
@@ -1421,7 +1448,8 @@ character_event = {
 # Host and guests go home: prestige, perhaps relief from stress or
 # depression, and a party timer. A host on the carousing focus becomes a
 # carouser, then a dedicated carouser, and may then turn hedonist or
-# socializer; a player who won at the board may become a gamer.
+# socializer (never hedonist for a Tomb King, nor for a daemon not of
+# Slaanesh); a player who won at the board may become a gamer.
 # Scope: ROOT is the host or a guest.
 character_event = {
 	id = carousing.60
@@ -1472,6 +1500,13 @@ character_event = {
 		name = EVTOPTBcarousing60
 		trigger = {
 			has_focus = focus_carousing
+			NOR = { # The dead feel no pleasure, and only Slaanesh's daemons revel for its own sake
+				focus_tomb_king_trigger = yes
+				AND = {
+					focus_daemon_host_trigger = yes
+					NOR = { trait = slaanesh_demon trait = prince_slaanesh }
+				}
+			}
 			NOT = { lifestyle_traits = 1 }
 			has_character_modifier = dedicated_carouser
 		}
@@ -1527,6 +1562,251 @@ character_event = {
 				}
 				clr_character_flag = do_not_disturb
 			}
+		}
+	}
+}
+
+###############################################################################
+# The unliving host
+###############################################################################
+
+# carousing.65 The night court
+# A vampire host and a living guest, flushed with wine, alone in an alcove.
+# A taste, a deep draught (the guest dies), or nothing. A hidden vampire
+# risks being seen (carousing.66).
+# Scope: ROOT is the host; event_target:carousing_prey the guest.
+character_event = {
+	id = carousing.65
+	desc = EVTDESCcarousing65
+	picture = GFX_evt_vampire_kiss
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # carousing.16
+
+	trigger = {
+		top_liege = {
+			any_realm_character = { carousing_living_prey_trigger = yes }
+		}
+	}
+
+	immediate = {
+		top_liege = {
+			random_realm_character = {
+				limit = { carousing_living_prey_trigger = yes }
+				save_event_target_as = carousing_prey
+			}
+		}
+	}
+
+	option = { # A taste, no more
+		name = EVTOPTAcarousing65
+		prestige = 10
+		if = {
+			limit = { trait = stressed }
+			random = { chance = 25 remove_trait = stressed }
+		}
+		event_target:carousing_prey = {
+			add_trait = wounded
+		}
+		if = {
+			limit = { is_vampire_visible_trigger = no }
+			random = {
+				chance = 10
+				prestige = -50
+				hidden_tooltip = { character_event = { id = carousing.66 } }
+			}
+		}
+		ai_chance = {
+			factor = 3
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+	option = { # Drink deep
+		name = EVTOPTBcarousing65
+		prestige = 25
+		if = {
+			limit = { trait = stressed }
+			random = { chance = 50 remove_trait = stressed }
+		}
+		event_target:carousing_prey = {
+			if = {
+				limit = { is_invincible_trigger = yes }
+				antideath_effect = yes
+			}
+			else = {
+				death = { death_reason = death_murder killer = ROOT }
+			}
+		}
+		if = {
+			limit = { is_vampire_visible_trigger = no }
+			random = {
+				chance = 40
+				prestige = -100
+				hidden_tooltip = { character_event = { id = carousing.66 } }
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 2 trait = wroth }
+			modifier = { factor = 0 trait = kind }
+			modifier = { factor = 0.25 is_vampire_visible_trigger = no }
+		}
+	}
+	option = { # Not here, not tonight
+		name = EVTOPTCcarousing65
+		random = {
+			chance = 20
+			add_trait = stressed
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 is_vampire_visible_trigger = no }
+		}
+	}
+}
+
+# carousing.66 Seen
+# Someone saw what the host did in the alcove.
+# Scope: ROOT is the host.
+character_event = {
+	id = carousing.66
+	desc = EVTDESCcarousing66
+	picture = GFX_evt_vampire_politics
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # carousing.65
+
+	option = { # They saw nothing
+		name = EVTOPTAcarousing66
+	}
+}
+
+# carousing.67 The feast of the dead
+# The dead do not eat. A Tomb King keeps the old rites of offering, lets the
+# living guests enjoy the food, or sets a skeleton behind every chair.
+# Scope: ROOT is the host.
+character_event = {
+	id = carousing.67
+	desc = EVTDESCcarousing67
+	picture = GFX_evt_khemri_king
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # carousing.16
+
+	option = { # The rites are kept
+		name = EVTOPTAcarousing67
+		piety = 25
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 2 trait = zealous }
+		}
+	}
+	option = { # Let the living feast
+		name = EVTOPTBcarousing67
+		prestige = 10
+		top_liege = {
+			any_realm_character = {
+				limit = {
+					carousing_at_party_trigger = yes
+					focus_unliving_trigger = no
+				}
+				opinion = { modifier = opinion_impressed who = ROOT years = 5 }
+			}
+		}
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 2 trait = charitable }
+		}
+	}
+	option = { # A skeleton behind every chair
+		name = EVTOPTCcarousing67
+		prestige = 30
+		top_liege = {
+			any_realm_character = {
+				limit = {
+					carousing_at_party_trigger = yes
+					focus_unliving_trigger = no
+				}
+				opinion = { modifier = opinion_afraid who = ROOT years = 5 }
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 2 trait = proud }
+		}
+	}
+}
+
+# carousing.69 The revel of the Neverborn
+# A daemon's feast leaves a mortal guest changed: let the Warp take their
+# mind, take their soul for the gods, or send them home whole to spread the
+# tale.
+# Scope: ROOT is the host; event_target:carousing_prey the guest.
+character_event = {
+	id = carousing.69
+	desc = EVTDESCcarousing69
+	picture = GFX_evt_daemons
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # carousing.16
+
+	trigger = {
+		top_liege = {
+			any_realm_character = { carousing_living_prey_trigger = yes }
+		}
+	}
+
+	immediate = {
+		top_liege = {
+			random_realm_character = {
+				limit = { carousing_living_prey_trigger = yes }
+				save_event_target_as = carousing_prey
+			}
+		}
+	}
+
+	option = { # Let the Warp take their mind
+		name = EVTOPTAcarousing69
+		prestige = 20
+		event_target:carousing_prey = {
+			random_list = {
+				50 = { add_trait = lunatic_1 }
+				50 = { add_trait = possessed }
+			}
+		}
+		ai_chance = { factor = 2 }
+	}
+	option = { # Take their soul
+		name = EVTOPTBcarousing69
+		prestige = 20
+		piety = 30
+		event_target:carousing_prey = {
+			if = {
+				limit = { is_invincible_trigger = yes }
+				antideath_effect = yes
+			}
+			else = {
+				death = { death_reason = death_murder killer = ROOT }
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 3 trait = khorne_demon }
+		}
+	}
+	option = { # Send them home whole
+		name = EVTOPTCcarousing69
+		prestige = 10
+		event_target:carousing_prey = {
+			opinion = { modifier = opinion_impressed who = ROOT years = 5 }
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = slaanesh_demon }
+			modifier = { factor = 2 trait = tzeentch_demon }
 		}
 	}
 }

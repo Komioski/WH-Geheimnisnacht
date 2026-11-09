@@ -7,6 +7,11 @@
 #   10-15    Land for a son or daughter (ze_ambition_decisions, on_actions)
 #   20-22    The change council position decision (ze_decisions)
 #   100      Gain any title ambition check (on_actions)
+#   200-215  Hooks: hidden events that mark an ambition's deed done
+#            (WHG_ambition_on_actions)
+#   300-399  Courtier ambitions: their requests to the ruler
+#   400-599  Story events tied to ambitions
+#   600-699  Builders: someone offers a temple, fort, hideout or hospital
 ###############################################################################
 
 namespace = ambition
@@ -1921,5 +1926,615 @@ character_event = {
 
 	immediate = {
 		set_character_flag = gain_any_title_ambition_success
+	}
+}
+
+
+###############################################################################
+# Hooks
+#
+# Hidden events on existing on_actions (common/on_actions/
+# WHG_ambition_on_actions.txt) that mark an ambition's deed done. Each trigger
+# only asks whether someone holds one of the ambitions, so they cost little.
+###############################################################################
+
+# ambition.200 A war is won by its attacker
+# Marks the war ambitions of the winner. Most are judged by the loser, since
+# the war's casus belli can no longer be read here.
+# Scope: ROOT is the defender (lost), FROM the attacker (won).
+character_event = {
+	id = ambition.200
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_ended_victory
+
+	trigger = {
+		FROM = {
+			OR = {
+				has_ambition = obj_take_more_land
+				has_ambition = obj_win_a_condotta
+				has_ambition = obj_win_a_war_of_conquest
+				has_ambition = obj_serve_the_great_plan
+				has_ambition = obj_conquer_for_myrmidia
+				has_ambition = obj_beat_da_umies
+				has_ambition = obj_walk_the_wild_hunt
+				has_ambition = obj_lead_the_tribes_south
+				has_ambition = obj_make_a_great_waaagh
+				has_ambition = obj_humble_a_rival_emperor
+				has_ambition = obj_avenge_the_sundering
+				has_ambition = obj_destroy_the_great_betrayers
+				has_ambition = obj_take_a_thousand_slaves
+			}
+		}
+	}
+
+	immediate = {
+		FROM = {
+			if = {
+				limit = {
+					has_ambition = obj_take_more_land
+					ROOT = { higher_tier_than = BARON }
+				}
+				set_character_flag = amb_land_taken
+			}
+			else_if = {
+				limit = {
+					has_ambition = obj_win_a_condotta
+					ROOT = { NOT = { culture_group = tilean_group } }
+				}
+				set_character_flag = amb_condotta
+			}
+			else_if = {
+				limit = {
+					has_ambition = obj_win_a_war_of_conquest
+					ROOT = { higher_tier_than = COUNT }
+				}
+				set_character_flag = amb_conquest_won
+			}
+			else_if = {
+				limit = {
+					has_ambition = obj_take_a_thousand_slaves
+					ROOT = { NOT = { culture_group = druchii_group } }
+				}
+				change_variable = { which = amb_slave_raids value = 1 }
+			}
+			else_if = {
+				limit = {
+					has_ambition = obj_make_a_great_waaagh
+					ROOT = { higher_tier_than = DUKE }
+				}
+				change_variable = { which = amb_waaagh_kingdoms value = 1 }
+			}
+			else_if = {
+				limit = {
+					has_ambition = obj_lead_the_tribes_south
+					ROOT = { capital_scope = { region = world_old_world_empire } }
+				}
+				set_character_flag = amb_tribes_south
+			}
+			else = {
+				ROOT = { save_event_target_as = amb_war_loser }
+				WHG_ambition_war_won_effect = yes
+			}
+		}
+	}
+}
+
+# ambition.201 A war is won by its defender
+# The defender holds: marks the defensive ambitions, and the "win a war
+# against" ambitions that a defence counts for too.
+# Scope: ROOT is the defender (won), FROM the attacker (lost).
+character_event = {
+	id = ambition.201
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_ended_defeat
+
+	trigger = {
+		OR = {
+			has_ambition = obj_drive_out_the_intruders
+			has_ambition = obj_hold_black_fire_pass
+			has_ambition = obj_serve_the_great_plan
+			has_ambition = obj_conquer_for_myrmidia
+			has_ambition = obj_beat_da_umies
+			has_ambition = obj_walk_the_wild_hunt
+			has_ambition = obj_humble_a_rival_emperor
+			has_ambition = obj_avenge_the_sundering
+			has_ambition = obj_destroy_the_great_betrayers
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { has_ambition = obj_drive_out_the_intruders }
+			set_character_flag = amb_intruders_driven
+		}
+		else_if = {
+			limit = { has_ambition = obj_hold_black_fire_pass }
+			set_character_flag = amb_pass_held
+		}
+		else = {
+			FROM = { save_event_target_as = amb_war_loser }
+			WHG_ambition_war_won_effect = yes
+		}
+	}
+}
+
+# ambition.202 A rival dies
+# Marks Crush a rival for every rival who held it.
+# Scope: ROOT is the dead character.
+character_event = {
+	id = ambition.202
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+
+	trigger = {
+		num_of_rivals = 1
+		any_rival = { has_ambition = obj_crush_a_rival }
+	}
+
+	immediate = {
+		any_rival = {
+			limit = { has_ambition = obj_crush_a_rival }
+			set_character_flag = amb_rival_crushed
+		}
+	}
+}
+
+# ambition.203 A battle is won
+# Marks the battle ambitions of the winning commander: any won battle, one
+# against Chaos or the beastmen, one outside the realm, one at sea.
+# Scope: ROOT is the winning commander, FROM the losing commander.
+character_event = {
+	id = ambition.203
+	hide_window = yes
+
+	is_triggered_only = yes # on_battle_won_leader
+
+	trigger = {
+		OR = {
+			has_ambition = obj_lead_others_in_battle
+			has_ambition = obj_ride_with_the_pulk
+			has_ambition = obj_hunt_beastmen
+			has_ambition = obj_shed_blood
+			has_ambition = obj_hire_out_the_tribe
+			has_ambition = obj_brave_the_sea_of_claws
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { has_ambition = obj_lead_others_in_battle }
+			set_character_flag = amb_led_battle
+		}
+		else_if = {
+			limit = { has_ambition = obj_shed_blood }
+			set_character_flag = amb_blood_shed
+		}
+		else_if = {
+			limit = {
+				has_ambition = obj_ride_with_the_pulk
+				FROM = { religion_group = chaos_gods_group }
+			}
+			set_character_flag = amb_pulk_battle_won
+		}
+		else_if = {
+			limit = {
+				has_ambition = obj_hunt_beastmen
+				FROM = { culture_group = beastman_group }
+			}
+			set_character_flag = amb_beastmen_hunted
+		}
+		else_if = {
+			limit = {
+				has_ambition = obj_hire_out_the_tribe
+				location = { NOT = { owner = { same_realm = ROOT } } }
+			}
+			change_variable = { which = amb_battles_abroad value = 1 }
+		}
+		else_if = {
+			limit = {
+				has_ambition = obj_brave_the_sea_of_claws
+				location = { is_land = no }
+			}
+			set_character_flag = amb_sea_battle
+		}
+	}
+}
+
+# ambition.204 A murder succeeds
+# Marks the plotting ambitions of the killer.
+# Scope: ROOT is the victim, FROM the killer.
+character_event = {
+	id = ambition.204
+	hide_window = yes
+
+	is_triggered_only = yes # on_assassination
+
+	trigger = {
+		FROM = {
+			OR = {
+				has_ambition = obj_sneak_a_good_stab
+				has_ambition = obj_kill_a_man_thing
+				has_ambition = obj_weave_the_great_scheme
+				has_ambition = obj_betray_a_rival_clan
+				has_ambition = obj_climb_over_others
+			}
+		}
+	}
+
+	immediate = {
+		FROM = {
+			if = {
+				limit = { has_ambition = obj_sneak_a_good_stab }
+				set_character_flag = amb_good_stab
+			}
+			else_if = {
+				limit = {
+					has_ambition = obj_kill_a_man_thing
+					ROOT = { higher_tier_than = DUKE }
+				}
+				set_character_flag = amb_man_thing_killed
+			}
+			else_if = {
+				limit = { has_ambition = obj_weave_the_great_scheme }
+				change_variable = { which = amb_schemes value = 1 }
+			}
+			else_if = {
+				limit = {
+					has_ambition = obj_betray_a_rival_clan
+					ROOT = {
+						trait = creature_skaven
+						is_ruler = yes
+					}
+				}
+				set_character_flag = amb_clan_betrayed
+			}
+			else_if = {
+				limit = {
+					has_ambition = obj_climb_over_others
+					ROOT = { trait = creature_skaven }
+				}
+				set_character_flag = amb_climbed
+			}
+		}
+	}
+}
+
+# ambition.205 A fort is finished
+# Scope: ROOT is the builder, FROM the province.
+character_event = {
+	id = ambition.205
+	hide_window = yes
+
+	is_triggered_only = yes # on_fort_construction_completed
+
+	trigger = { has_ambition = obj_raise_a_border_fort }
+
+	immediate = { set_character_flag = amb_fort_built }
+}
+
+# ambition.206 A hospital is finished
+# Scope: ROOT is the builder, FROM the province.
+character_event = {
+	id = ambition.206
+	hide_window = yes
+
+	is_triggered_only = yes # on_hospital_construction_completed
+
+	trigger = { has_ambition = obj_endow_a_hospital }
+
+	immediate = { set_character_flag = amb_hospital_built }
+}
+
+# ambition.207 A holding is finished
+# A temple for Build a temple; a castle or a city for Settle the wilds.
+# Scope: ROOT is the builder, FROM the new holding.
+character_event = {
+	id = ambition.207
+	hide_window = yes
+
+	is_triggered_only = yes # on_settlement_construction_completed
+
+	trigger = {
+		OR = {
+			has_ambition = obj_build_a_temple
+			has_ambition = obj_settle_the_wilds
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				has_ambition = obj_build_a_temple
+				FROM = { holding_type = temple }
+			}
+			set_character_flag = amb_temple_built
+		}
+		else_if = {
+			limit = {
+				has_ambition = obj_settle_the_wilds
+				FROM = {
+					OR = {
+						holding_type = castle
+						holding_type = city
+					}
+				}
+			}
+			set_character_flag = amb_wilds_settled
+		}
+	}
+}
+
+# ambition.208 A holding is looted
+# Marks the raiding ambitions of the looter: a Dawi hold, the Empire and
+# Bretonnia, a holding of men, a temple-city, the great cities of men.
+# Scope: ROOT is the looter, FROM the looted holding.
+character_event = {
+	id = ambition.208
+	hide_window = yes
+
+	is_triggered_only = yes # on_settlement_looted
+
+	trigger = {
+		OR = {
+			has_ambition = obj_loot_a_stunty_hold
+			has_ambition = obj_raid_the_southlands
+			has_ambition = obj_raze_the_cities_of_men
+			has_ambition = obj_find_a_temple_city
+			has_ambition = obj_bring_the_great_ascendancy
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				has_ambition = obj_loot_a_stunty_hold
+				FROM = { holder_scope = { culture_group = dwarf_group } }
+			}
+			set_character_flag = amb_stunty_looted
+		}
+		else_if = {
+			limit = {
+				has_ambition = obj_raid_the_southlands
+				FROM = {
+					location = {
+						OR = {
+							region = world_old_world_empire
+							region = world_old_world_bretonnia
+						}
+					}
+				}
+			}
+			change_variable = { which = amb_south_raids value = 1 }
+		}
+		else_if = {
+			limit = {
+				has_ambition = obj_raze_the_cities_of_men
+				FROM = { holder_scope = { is_living_human_trigger = yes } }
+			}
+			change_variable = { which = amb_men_razed value = 1 }
+		}
+		else_if = {
+			limit = {
+				has_ambition = obj_find_a_temple_city
+				FROM = { location = { any_province_holding = { has_building = ct_templecity_1 } } }
+			}
+			set_character_flag = amb_temple_city
+		}
+		else_if = {
+			limit = { has_ambition = obj_bring_the_great_ascendancy }
+			if = {
+				limit = { FROM = { de_jure_liege_or_above = c_altdorf } }
+				set_character_flag = amb_asc_altdorf
+			}
+			else_if = {
+				limit = { FROM = { de_jure_liege_or_above = c_couronne } }
+				set_character_flag = amb_asc_couronne
+			}
+			else_if = {
+				limit = { FROM = { de_jure_liege_or_above = c_kislev } }
+				set_character_flag = amb_asc_kislev
+			}
+			else_if = {
+				limit = { FROM = { de_jure_liege_or_above = c_middenheim } }
+				set_character_flag = amb_asc_middenheim
+			}
+			else_if = {
+				limit = { FROM = { de_jure_liege_or_above = c_nuln } }
+				set_character_flag = amb_asc_nuln
+			}
+		}
+	}
+}
+
+# ambition.209 A title is created
+# A duchy founded in the Border Princes.
+# Scope: ROOT is the creator, FROM the title.
+character_event = {
+	id = ambition.209
+	hide_window = yes
+
+	is_triggered_only = yes # on_create_title
+
+	trigger = {
+		has_ambition = obj_found_a_principality
+		FROM = { tier = DUKE }
+		capital_scope = { region = world_old_world_border_princes }
+	}
+
+	immediate = { set_character_flag = amb_principality }
+}
+
+# ambition.210 An outbreak starts
+# Brew a new plague counts an outbreak in the realm of a foe at war with the
+# holder; Spread the Grandfather's gift counts one in another realm that
+# borders the holder's or is at war with them.
+# Scope: ROOT is the province.
+province_event = {
+	id = ambition.210
+	hide_window = yes
+
+	is_triggered_only = yes # on_outbreak
+
+	trigger = { has_owner = yes }
+
+	immediate = {
+		owner = {
+			top_liege = { save_event_target_as = amb_outbreak_realm }
+		}
+		any_playable_ruler = {
+			limit = {
+				OR = {
+					has_ambition = obj_brew_a_new_plague
+					has_ambition = obj_spread_the_gift
+				}
+				NOT = { same_realm = event_target:amb_outbreak_realm }
+			}
+			save_event_target_as = amb_outbreak_witness
+			if = {
+				limit = {
+					has_ambition = obj_brew_a_new_plague
+					war_with = event_target:amb_outbreak_realm
+				}
+				set_character_flag = amb_plague_brewed
+			}
+			else_if = {
+				limit = {
+					has_ambition = obj_spread_the_gift
+					OR = {
+						war_with = event_target:amb_outbreak_realm
+						ROOT = {
+							any_neighbor_province = {
+								owner = { same_realm = event_target:amb_outbreak_witness }
+							}
+						}
+					}
+				}
+				change_variable = { which = amb_gifts value = 1 }
+			}
+		}
+	}
+}
+
+# ambition.211 A holy war is won
+# When the Lady's faithful win an Errantry War, every lord of the Lady who
+# held Win an Errantry War shares the glory.
+# Scope: FROM is the taker of the target title.
+character_event = {
+	id = ambition.211
+	hide_window = yes
+
+	is_triggered_only = yes # on_crusade_success
+
+	trigger = {
+		FROM = { religion = grail }
+	}
+
+	immediate = {
+		any_playable_ruler = {
+			limit = {
+				has_ambition = obj_win_an_errantry_war
+				religion = grail
+			}
+			set_character_flag = amb_errantry_won
+		}
+	}
+}
+
+# ambition.212 A holy war fails
+# A Black Crusade breaks: the defender may have held Break the Black Crusade,
+# and the lords of Praag and Erengrad who held Hold the bulwark kept them.
+# Scope: FROM is the head of the faith that called it; new_character the
+#   defender.
+character_event = {
+	id = ambition.212
+	hide_window = yes
+
+	is_triggered_only = yes # on_crusade_failure
+
+	trigger = {
+		FROM = { religion_group = chaos_gods_group }
+	}
+
+	immediate = {
+		new_character = {
+			if = {
+				limit = { has_ambition = obj_break_the_black_crusade }
+				set_character_flag = amb_crusade_broken
+			}
+		}
+		any_playable_ruler = {
+			limit = {
+				has_ambition = obj_hold_the_bulwark
+				OR = {
+					has_landed_title = c_praag
+					has_landed_title = c_erengrad
+				}
+			}
+			set_character_flag = amb_bulwark_held
+		}
+	}
+}
+
+# ambition.213 A murder is found out
+# The close kin of the victim may swear vengeance (Avenge my kin): they are
+# flagged and the killer saved as their persistent target amb_kin_killer.
+# Scope: ROOT is the victim, FROM the killer.
+character_event = {
+	id = ambition.213
+	hide_window = yes
+
+	is_triggered_only = yes # on_assassination_disc
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	immediate = {
+		any_close_relative = {
+			limit = {
+				ai = yes
+				is_adult = yes
+				NOT = { character = FROM }
+				NOT = { has_character_flag = amb_kin_murdered }
+			}
+			set_character_flag = amb_kin_murdered
+			save_persistent_event_target = { name = amb_kin_killer scope = FROM }
+		}
+	}
+}
+
+# ambition.215 Living with the Rot
+# Every half year while Embrace rot is held: the first time Nurgle's Rot is
+# found, Grandfather Nurgle visits (ambition.455); half a year and more
+# later, if the Rot is still there, the ambition is done. Losing the Rot
+# starts the year over.
+# Scope: ROOT is the holder.
+character_event = {
+	id = ambition.215
+	hide_window = yes
+
+	is_triggered_only = yes # obj_embrace_rot, and itself
+
+	trigger = { has_ambition = obj_embrace_rot }
+
+	immediate = {
+		if = {
+			limit = { trait = has_nurgles_rot }
+			if = {
+				limit = { has_character_flag = amb_rot_caught }
+				set_character_flag = amb_rot_embraced
+			}
+			else = {
+				set_character_flag = amb_rot_caught
+				character_event = { id = ambition.455 days = 7 random = 30 }
+			}
+		}
+		else = {
+			clr_character_flag = amb_rot_caught
+		}
+		character_event = { id = ambition.215 days = 365 }
 	}
 }

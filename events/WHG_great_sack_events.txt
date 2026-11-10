@@ -1,0 +1,215 @@
+###############################################################################
+# The sack of great cities
+# Namespace: greatsack (was 60100 - 60109 in vanilla mongol_events.txt, the
+#   Mongols sacking Kiev, Novgorod, Krakow, Aachen, Paris, London, Rome,
+#   Venice, Constantinople and Lisbon; commented out of the mod's on_actions)
+# Faction: Generic
+# Serves: Chaos hordes, greenskins, beastmen and the nomads of the steppe,
+#   and the realms they fall on
+#
+# When a horde storms the seat of a king or an emperor, the city is sacked.
+# The horde's lord plunders it or razes it, and the news runs ahead of the
+# smoke: the city's lord, that lord's lieges, and every player ruler of the
+# city's faiths hear that it has fallen. A sacked city pays little tax and
+# raises few men for ten years, and cannot be sacked again for fifty.
+#
+# The sack                             greatsack.1 - greatsack.3
+#
+# Fired from: on_siege_over_winner in wh_on_actions.txt (greatsack.1).
+#   Triggers in common/scripted_triggers/WHG_great_sack_triggers.txt, the
+#   province modifier in common/event_modifiers/WHG_great_sack_modifiers.txt.
+# Saved: province flag great_city_sacked (fifty years, cleared by
+#   greatsack.3); event targets great_sack_holding, great_sack_province.
+###############################################################################
+
+namespace = greatsack
+
+###############################################################################
+# The sack
+###############################################################################
+
+# greatsack.1 The city falls
+# The horde's lord sacks the seat of a king or an emperor: plunder it
+# (wealth) or raze it (prestige, more buildings burned, piety for a lord of
+# the Dark Gods). Either way two buildings burn and the city is sacked for
+# ten years. The city's lord, every liege above, and the player rulers of the
+# city's faith group hear of it (greatsack.2).
+# Scope: ROOT is the owner of the winning army, FROM the holding taken.
+narrative_event = {
+	id = greatsack.1
+	title = EVTNAMEgreatsack1
+	desc = {
+		trigger = { greatsack_chaos_trigger = yes }
+		text = EVTDESCgreatsack1_chaos
+	}
+	desc = {
+		trigger = { greatsack_greenskin_trigger = yes }
+		text = EVTDESCgreatsack1_greenskin
+	}
+	desc = {
+		trigger = { greatsack_beastman_trigger = yes }
+		text = EVTDESCgreatsack1_beastman
+	}
+	desc = {
+		trigger = { greatsack_nomad_trigger = yes }
+		text = EVTDESCgreatsack1_nomad
+	}
+	picture = GFX_evt_mongols_pillage_oldgods
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # on_siege_over_winner
+
+	trigger = {
+		greatsack_horde_trigger = yes
+		FROM = {
+			greatsack_great_city_trigger = yes
+			location = {
+				owner = {
+					top_liege = {
+						NOT = { character = ROOT }
+						ROOT = { NOT = { is_vassal_or_below = PREV } }
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		FROM = {
+			save_event_target_as = great_sack_holding
+			destroy_random_building = yes
+			destroy_random_building = yes
+			location = {
+				save_event_target_as = great_sack_province
+				set_province_flag = great_city_sacked
+				add_province_modifier = {
+					name = great_city_sacked
+					duration = 3650 # Ten years
+				}
+				province_event = { id = greatsack.3 days = 18250 }
+			}
+		}
+	}
+
+	option = { # Plunder it
+		name = EVTOPTAgreatsack1
+		wealth = 150
+		prestige = 50
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 0.5 greatsack_beastman_trigger = yes }
+		}
+	}
+	option = { # Raze it
+		name = EVTOPTBgreatsack1
+		prestige = 150
+		if = {
+			limit = { religion_group = chaos_gods_group }
+			piety = 50
+		}
+		event_target:great_sack_holding = {
+			destroy_random_building = yes
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = wroth }
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 3 greatsack_beastman_trigger = yes }
+		}
+	}
+
+	after = {
+		event_target:great_sack_province = {
+			owner = {
+				character_event = { id = greatsack.2 }
+				any_liege = {
+					character_event = { id = greatsack.2 }
+				}
+			}
+		}
+		any_independent_ruler = {
+			limit = {
+				ai = no
+				NOT = { character = ROOT }
+				event_target:great_sack_province = {
+					owner = {
+						NOT = { top_liege = { character = PREVPREVPREV } } # Heard it already
+						religion_group = PREVPREV
+					}
+				}
+			}
+			character_event = { id = greatsack.2 }
+		}
+	}
+}
+
+# greatsack.2 A great city has fallen
+# Scope: ROOT is the city's lord, a liege above or a player ruler of the
+#   city's faith group; FROM the horde's lord; event targets
+#   great_sack_holding, great_sack_province.
+narrative_event = {
+	id = greatsack.2
+	title = EVTNAMEgreatsack2
+	desc = {
+		trigger = { FROM = { greatsack_chaos_trigger = yes } }
+		text = EVTDESCgreatsack2_chaos
+	}
+	desc = {
+		trigger = { FROM = { greatsack_greenskin_trigger = yes } }
+		text = EVTDESCgreatsack2_greenskin
+	}
+	desc = {
+		trigger = { FROM = { greatsack_beastman_trigger = yes } }
+		text = EVTDESCgreatsack2_beastman
+	}
+	desc = {
+		trigger = { FROM = { greatsack_nomad_trigger = yes } }
+		text = EVTDESCgreatsack2_nomad
+	}
+	picture = GFX_evt_mongols_pillage_oldgods
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # greatsack.1
+
+	option = { # The city's lord or a liege: the shame of it
+		name = EVTOPTAgreatsack2
+		trigger = {
+			event_target:great_sack_province = {
+				owner = {
+					OR = {
+						character = ROOT
+						is_vassal_or_below = ROOT
+					}
+				}
+			}
+		}
+		prestige = -50
+	}
+	option = { # Everyone else
+		name = EVTOPTBgreatsack2
+		trigger = {
+			event_target:great_sack_province = {
+				owner = {
+					NOR = {
+						character = ROOT
+						is_vassal_or_below = ROOT
+					}
+				}
+			}
+		}
+	}
+}
+
+# greatsack.3 The city has risen from its ashes
+# Hidden. Fifty years on, the city can be sacked again.
+# Scope: ROOT is the province.
+province_event = {
+	id = greatsack.3
+	hide_window = yes
+	is_triggered_only = yes # greatsack.1
+
+	immediate = {
+		clr_province_flag = great_city_sacked
+	}
+}

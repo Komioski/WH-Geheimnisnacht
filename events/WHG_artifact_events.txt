@@ -1,0 +1,1703 @@
+###############################################################################
+# Lost treasures
+# Namespace: artifact (was MNM.9000 - 9035, MNM.9835 - 9841 and
+#   MNM.9899 - 9911 in mnm_artifacts_events.txt)
+# Faction: Generic
+# Serves: every ruler and his council: the relic hunt and the treasures
+#   taken when a capital is sacked
+#
+# A councillor brings word of a lost treasure: a common rumor of a hero's
+# remains, a rare one of a treasure of the ruler's faith, a great one of a
+# legend. The ruler sends a councillor after it, pays for the search out of
+# his taxes and is asked for diplomats, soldiers, stewards, spies, scholars
+# or gold along the way. The hunter's skill decides how fast he follows the
+# trail, and he may steal, blunder, find a better rumor or die on the road.
+# What he brings home belongs to the ruler's faith: Sigmar's swords, the
+# Lady's chalices, Clan Skryre's engines, the crowns of Nehekhara, the
+# daemon blades of the Dark Gods (artifact_hunt_treasure_effect). A
+# treasure held by anyone alive is never found twice; when nothing is left,
+# the trail ends at a hoard of gold. When a capital falls, the victor may
+# carry off a treasure of its lord or his court, or burn a forgery of one
+# of his own.
+#
+# The relic hunt: the rumor           artifact.1 - artifact.3
+# The relic hunt: the search          artifact.10 - artifact.31
+# Treasures of the sack               artifact.100 - artifact.104
+#
+# Callers: the yearly pulse (artifact.1), the decision search_for_artifact
+#   in decisions/mnm_society_decisions.txt (artifact.10), on_death,
+#   on_become_imprisoned_any_reason and the councillor jobs in
+#   common/job_titles/00_job_titles.txt (artifact.13), on_loot_settlement
+#   (artifact.100) and on_siege_over_winner (artifact.101). Triggers in
+#   common/scripted_triggers/WHG_artifact_triggers.txt, effects in
+#   common/scripted_effects/WHG_artifact_effects.txt, the hero's title of
+#   the relics in GetArtifactSource and GetArtifactSourceCap
+#   (localisation/customizable_localisation/00_customizable_localisation.txt).
+# Saved: event targets rumor_councillor, relic_ruler, relic_hunter,
+#   spy_target, spy_title, looter, target_location, target_title,
+#   original_item_owner; variables relic_score and artifact_raid_quality;
+#   flags relic_hunter,
+#   they_asked_for_your_help, artifact_rumor_heard, artifact_hunt_gold,
+#   artifact_hunt_lost_shown, looted_by_raiding_holding,
+#   artifact_raid_looting, artifact_raid_heathen_relic,
+#   looted_artifact_destroy_duplicate and the artifact flags
+#   looted_artifact_tooltip_1 and looted_artifact_tooltip_2.
+# Dropped: the 47 return events for the relics of the real world (the
+#   bones of Saint Peter, the Seal of Solomon, the Sampo and the rest, none
+#   of which exist in this mod) and the find tombola that sent them, the
+#   Seal of Solomon and Blessed Mantle pulses (MNM.9815, 9816), the smith
+#   chains MNM.9100 - 9138 (dead copies of ARMS.9100 - 9138 in
+#   wh_armoury_events.txt), the hidden "nothing found" branch that kept the
+#   AI from rumors (now a lower weight), and the seven return events for
+#   the hero's relics, merged into artifact.11. The four pings for a lost
+#   hunter (MNM.9030, 9033, 9034) are artifact.13, the progress letters
+#   (MNM.9031, 9035) artifact.30 and the five quality tiers of the sack
+#   (MNM.9902 - 9911) artifact.103 and artifact.104.
+###############################################################################
+
+namespace = artifact
+
+###############################################################################
+# Part 1: the relic hunt, the rumor
+###############################################################################
+
+# artifact.1 A rumor of treasure
+# Hidden. Once in a ruler's life a trusted councillor hears of a lost
+# treasure: a great rumor (one in ten), a rare one (three in ten) or a
+# common one. Counts and barons only hear of it when played.
+# Scope: a ruler.
+character_event = {
+	id = artifact.1
+	hide_window = yes
+	is_triggered_only = yes
+
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+	min_age = 16
+
+	trigger = {
+		has_dlc = "Mystics"
+		NOT = { has_character_flag = artifact_rumor_heard }
+		OR = {
+			ai = no
+			higher_tier_than = COUNT
+		}
+		is_landed = yes
+		mercenary = no
+		holy_order = no
+		artifact_hunt_rumor_trigger = no
+		any_courtier_or_vassal = { artifact_rumor_councillor_trigger = yes }
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 0.25 ai = yes }
+		modifier = { factor = 2 has_ambition = obj_create_treasury }
+		modifier = { factor = 1.5 trait = zealous }
+	}
+
+	immediate = {
+		set_character_flag = artifact_rumor_heard
+		save_event_target_as = relic_ruler
+		random_courtier_or_vassal = {
+			limit = { artifact_rumor_councillor_trigger = yes }
+			save_event_target_as = rumor_councillor
+		}
+		random_list = {
+			10 = {
+				modifier = { factor = 0.7 ai = yes }
+				add_character_modifier = { name = relic_rumor_major years = 20 }
+			}
+			30 = {
+				add_character_modifier = { name = relic_rumor_medium years = 20 }
+			}
+			60 = {
+				add_character_modifier = { name = relic_rumor_minor years = 10 }
+			}
+		}
+		set_variable = { which = relic_score value = 0 }
+		event_target:rumor_councillor = { character_event = { id = artifact.2 } }
+	}
+}
+
+# artifact.2 The councillor's whisper
+# Hidden. Hands the rumor from the councillor to his ruler.
+# Scope: ROOT is the councillor, event_target:relic_ruler the ruler.
+character_event = {
+	id = artifact.2
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		event_target:relic_ruler = { character_event = { id = artifact.3 } }
+	}
+}
+
+# artifact.3 The rumor
+# The councillor tells of the treasure. The ruler sends him after it at
+# once, or keeps the rumor and may send any councillor later
+# (search_for_artifact).
+# Scope: ROOT is the ruler, FROM the councillor.
+character_event = {
+	id = artifact.3
+	desc = {
+		trigger = { has_character_modifier = relic_rumor_major }
+		text = EVTDESCartifact3_major
+	}
+	desc = {
+		trigger = { has_character_modifier = relic_rumor_medium }
+		text = EVTDESCartifact3_medium
+	}
+	desc = {
+		trigger = { has_character_modifier = relic_rumor_minor }
+		text = EVTDESCartifact3_minor
+	}
+	picture = GFX_evt_treasure_chamber
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes
+
+	# Send the councillor at once
+	option = {
+		name = EVTOPTAartifact3
+		custom_tooltip = { text = EVTOPTAartifact3_TT }
+		custom_tooltip = { text = outcome_will_depend_on_froms_skill_tt }
+		artifact_hunt_pay_effect = yes
+		hidden_effect = {
+			FROM = { artifact_hunt_start_effect = yes }
+		}
+		opinion = { who = FROM modifier = opinion_grateful years = 15 }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 0 NOT = { wealth = 50 } }
+		}
+	}
+
+	# Keep the rumor for later
+	option = {
+		name = EVTOPTBartifact3
+		custom_tooltip = { text = EVTOPTBartifact3_TT }
+		opinion = { who = FROM modifier = opinion_grateful years = 10 }
+		ai_chance = { factor = 10 }
+	}
+}
+
+###############################################################################
+# Part 2: the relic hunt, the search
+###############################################################################
+
+# artifact.10 The search
+# Hidden. About every ten months the hunter follows the trail: by the road
+# of his office and his best skill he makes progress, asks for help, takes a
+# false lead or dies; or he asks for gold, blunders, or hears of a greater
+# treasure. When the trail is long enough he finds the treasure
+# (artifact.11). A hunter who can no longer search ends the hunt
+# (artifact.12).
+# Scope: ROOT is the hunter, event_target:relic_ruler his ruler.
+character_event = {
+	id = artifact.10
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { artifact_hunt_stopped_trigger = yes }
+			if = {
+				limit = { has_character_flag = relic_hunter }
+				event_target:relic_ruler = { character_event = { id = artifact.12 } }
+			}
+			else = {
+				artifact_hunt_clear_searcher_effect = yes
+			}
+		}
+		else_if = {
+			limit = { event_target:relic_ruler = { artifact_hunt_done_trigger = yes } }
+			event_target:relic_ruler = { character_event = { id = artifact.11 } }
+		}
+		else = {
+			event_target:relic_ruler = {
+				if = {
+					limit = { had_character_flag = { flag = they_asked_for_your_help days = 550 } }
+					clr_character_flag = they_asked_for_your_help
+				}
+			}
+			random_list = {
+				20 = { # The diplomatic way
+					modifier = { factor = 5 has_job_title = job_chancellor }
+					modifier = { factor = 3 diplomacy = 10 }
+					random_list = {
+						15 = { # On the trail
+							modifier = { factor = 1.5 has_job_title = job_chancellor }
+							modifier = { factor = 1.2 diplomacy = 8 }
+							modifier = { factor = 1.2 diplomacy = 10 }
+							modifier = { factor = 1.4 diplomacy = 12 }
+							modifier = { factor = 1.4 diplomacy = 15 }
+							modifier = { factor = 1.4 diplomacy = 18 }
+							modifier = { factor = 1.4 has_pleasant_personality_trigger = yes }
+							event_target:relic_ruler = { artifact_hunt_progress_effect = yes }
+						}
+						15 = { # Asks for help
+							modifier = { factor = 1.5 has_job_title = job_chancellor }
+							modifier = { factor = 1.4 diplomacy = 12 }
+							modifier = {
+								factor = 0
+								event_target:relic_ruler = {
+									OR = {
+										has_character_flag = they_asked_for_your_help
+										has_character_modifier = treasure_hunting_diplomats
+									}
+								}
+							}
+							event_target:relic_ruler = { character_event = { id = artifact.20 } }
+						}
+						1 = { # A false lead
+							modifier = { factor = 1.25 event_target:relic_ruler = { has_character_modifier = relic_rumor_medium } }
+							modifier = { factor = 1.5 event_target:relic_ruler = { has_character_modifier = relic_rumor_major } }
+							modifier = { factor = 1.5 NOT = { has_job_title = job_chancellor } }
+							modifier = { factor = 1.5 is_dumb_trigger = yes }
+							modifier = { factor = 2.5 NOT = { diplomacy = 8 } }
+							event_target:relic_ruler = { artifact_hunt_setback_effect = yes }
+						}
+						1 = { # A fatal accident
+							modifier = { factor = 1.5 NOT = { has_job_title = job_chancellor } }
+							modifier = { factor = 1.5 NOT = { diplomacy = 8 } }
+							event_target:relic_ruler = { character_event = { id = artifact.29 } }
+						}
+					}
+				}
+				20 = { # The soldier's way
+					modifier = { factor = 5 has_job_title = job_marshal }
+					modifier = { factor = 3 martial = 10 }
+					random_list = {
+						15 = { # On the trail
+							modifier = { factor = 1.5 has_job_title = job_marshal }
+							modifier = { factor = 1.2 martial = 8 }
+							modifier = { factor = 1.2 martial = 10 }
+							modifier = { factor = 1.4 martial = 12 }
+							modifier = { factor = 1.4 martial = 15 }
+							modifier = { factor = 1.4 martial = 18 }
+							modifier = { factor = 1.4 trait = brave }
+							modifier = { factor = 1.4 combat_rating = 20 }
+							event_target:relic_ruler = { artifact_hunt_progress_effect = yes }
+						}
+						15 = { # Asks for help
+							modifier = { factor = 1.5 has_job_title = job_marshal }
+							modifier = { factor = 1.4 martial = 12 }
+							modifier = {
+								factor = 0
+								event_target:relic_ruler = {
+									OR = {
+										has_character_flag = they_asked_for_your_help
+										has_character_modifier = treasure_hunting_soldiers
+									}
+								}
+							}
+							event_target:relic_ruler = { character_event = { id = artifact.21 } }
+						}
+						1 = { # A false lead
+							modifier = { factor = 1.25 event_target:relic_ruler = { has_character_modifier = relic_rumor_medium } }
+							modifier = { factor = 1.5 event_target:relic_ruler = { has_character_modifier = relic_rumor_major } }
+							modifier = { factor = 1.5 NOT = { has_job_title = job_marshal } }
+							modifier = { factor = 1.5 is_dumb_trigger = yes }
+							modifier = { factor = 2.5 NOT = { martial = 8 } }
+							event_target:relic_ruler = { artifact_hunt_setback_effect = yes }
+						}
+						1 = { # A fatal accident
+							modifier = { factor = 1.5 NOT = { has_job_title = job_marshal } }
+							modifier = { factor = 1.5 NOT = { martial = 8 } }
+							modifier = { factor = 1.5 NOT = { combat_rating = 0 } }
+							event_target:relic_ruler = { character_event = { id = artifact.29 } }
+						}
+					}
+				}
+				20 = { # The steward's way
+					modifier = { factor = 5 has_job_title = job_treasurer }
+					modifier = { factor = 3 stewardship = 10 }
+					random_list = {
+						15 = { # On the trail
+							modifier = { factor = 1.5 has_job_title = job_treasurer }
+							modifier = { factor = 1.2 stewardship = 8 }
+							modifier = { factor = 1.2 stewardship = 10 }
+							modifier = { factor = 1.4 stewardship = 12 }
+							modifier = { factor = 1.4 stewardship = 15 }
+							modifier = { factor = 1.4 stewardship = 18 }
+							modifier = { factor = 1.4 monthly_income = 3 }
+							event_target:relic_ruler = { artifact_hunt_progress_effect = yes }
+						}
+						15 = { # Asks for help
+							modifier = { factor = 1.5 has_job_title = job_treasurer }
+							modifier = { factor = 1.4 stewardship = 12 }
+							modifier = {
+								factor = 0
+								event_target:relic_ruler = {
+									OR = {
+										has_character_flag = they_asked_for_your_help
+										has_character_modifier = treasure_hunting_stewards
+									}
+								}
+							}
+							event_target:relic_ruler = { character_event = { id = artifact.22 } }
+						}
+						1 = { # A false lead
+							modifier = { factor = 1.25 event_target:relic_ruler = { has_character_modifier = relic_rumor_medium } }
+							modifier = { factor = 1.5 event_target:relic_ruler = { has_character_modifier = relic_rumor_major } }
+							modifier = { factor = 1.5 NOT = { has_job_title = job_treasurer } }
+							modifier = { factor = 1.5 is_dumb_trigger = yes }
+							modifier = { factor = 2.5 NOT = { stewardship = 8 } }
+							event_target:relic_ruler = { artifact_hunt_setback_effect = yes }
+						}
+						1 = { # A fatal accident
+							modifier = { factor = 1.5 NOT = { has_job_title = job_treasurer } }
+							modifier = { factor = 1.5 NOT = { stewardship = 8 } }
+							event_target:relic_ruler = { character_event = { id = artifact.29 } }
+						}
+					}
+				}
+				20 = { # The spy's way
+					modifier = { factor = 5 has_job_title = job_spymaster }
+					modifier = { factor = 3 intrigue = 10 }
+					random_list = {
+						15 = { # On the trail
+							modifier = { factor = 1.5 has_job_title = job_spymaster }
+							modifier = { factor = 1.2 intrigue = 8 }
+							modifier = { factor = 1.2 intrigue = 10 }
+							modifier = { factor = 1.4 intrigue = 12 }
+							modifier = { factor = 1.4 intrigue = 15 }
+							modifier = { factor = 1.4 intrigue = 18 }
+							modifier = { factor = 1.4 has_unpleasant_personality_trigger = yes }
+							event_target:relic_ruler = { artifact_hunt_progress_effect = yes }
+						}
+						15 = { # Asks for help
+							modifier = { factor = 1.5 has_job_title = job_spymaster }
+							modifier = { factor = 1.4 intrigue = 12 }
+							modifier = {
+								factor = 0
+								event_target:relic_ruler = {
+									OR = {
+										has_character_flag = they_asked_for_your_help
+										has_character_modifier = treasure_hunting_spies
+									}
+								}
+							}
+							event_target:relic_ruler = { character_event = { id = artifact.23 } }
+						}
+						1 = { # A false lead
+							modifier = { factor = 1.25 event_target:relic_ruler = { has_character_modifier = relic_rumor_medium } }
+							modifier = { factor = 1.5 event_target:relic_ruler = { has_character_modifier = relic_rumor_major } }
+							modifier = { factor = 1.5 NOT = { has_job_title = job_spymaster } }
+							modifier = { factor = 1.5 is_dumb_trigger = yes }
+							modifier = { factor = 2.5 NOT = { intrigue = 8 } }
+							event_target:relic_ruler = { artifact_hunt_setback_effect = yes }
+						}
+						1 = { # A fatal accident
+							modifier = { factor = 1.5 NOT = { has_job_title = job_spymaster } }
+							modifier = { factor = 1.5 NOT = { intrigue = 8 } }
+							event_target:relic_ruler = { character_event = { id = artifact.29 } }
+						}
+					}
+				}
+				20 = { # The scholar's way
+					modifier = { factor = 5 has_job_title = job_spiritual }
+					modifier = { factor = 3 learning = 10 }
+					random_list = {
+						15 = { # On the trail
+							modifier = { factor = 1.5 has_job_title = job_spiritual }
+							modifier = { factor = 1.2 learning = 8 }
+							modifier = { factor = 1.2 learning = 10 }
+							modifier = { factor = 1.4 learning = 12 }
+							modifier = { factor = 1.4 learning = 15 }
+							modifier = { factor = 1.4 learning = 18 }
+							modifier = { factor = 1.4 is_learned_trigger = yes }
+							event_target:relic_ruler = { artifact_hunt_progress_effect = yes }
+						}
+						15 = { # Asks for help
+							modifier = { factor = 1.5 has_job_title = job_spiritual }
+							modifier = { factor = 1.4 learning = 12 }
+							modifier = {
+								factor = 0
+								event_target:relic_ruler = {
+									OR = {
+										has_character_flag = they_asked_for_your_help
+										has_character_modifier = treasure_hunting_scholars
+									}
+								}
+							}
+							event_target:relic_ruler = { character_event = { id = artifact.24 } }
+						}
+						1 = { # A false lead
+							modifier = { factor = 1.25 event_target:relic_ruler = { has_character_modifier = relic_rumor_medium } }
+							modifier = { factor = 1.5 event_target:relic_ruler = { has_character_modifier = relic_rumor_major } }
+							modifier = { factor = 1.5 NOT = { has_job_title = job_spiritual } }
+							modifier = { factor = 1.5 is_dumb_trigger = yes }
+							modifier = { factor = 2.5 NOT = { learning = 8 } }
+							event_target:relic_ruler = { artifact_hunt_setback_effect = yes }
+						}
+						1 = { # A fatal accident
+							modifier = { factor = 1.5 NOT = { has_job_title = job_spiritual } }
+							modifier = { factor = 1.5 NOT = { learning = 8 } }
+							event_target:relic_ruler = { character_event = { id = artifact.29 } }
+						}
+					}
+				}
+				5 = { # Asks for more gold
+					modifier = {
+						factor = 2
+						OR = {
+							trait = greedy
+							trait = deceitful
+						}
+					}
+					modifier = { factor = 2 trait = slothful }
+					modifier = { factor = 2 is_rival = event_target:relic_ruler }
+					modifier = { factor = 0 event_target:relic_ruler = { NOT = { wealth = 10 } } }
+					event_target:relic_ruler = { character_event = { id = artifact.25 } }
+				}
+				15 = { # A blunder
+					modifier = { factor = 0.5 is_smart_trigger = yes }
+					modifier = { factor = 1.5 is_dumb_trigger = yes }
+					modifier = {
+						factor = 0
+						OR = {
+							event_target:relic_ruler = { NOT = { check_variable = { which = relic_score value = 0 } } }
+							reverse_has_opinion_modifier = { who = event_target:relic_ruler modifier = opinion_useless_moron }
+						}
+					}
+					event_target:relic_ruler = { character_event = { id = artifact.27 } }
+				}
+				5 = { # Word of a greater treasure
+					modifier = { factor = 3 is_smart_trigger = yes }
+					modifier = {
+						factor = 0
+						event_target:relic_ruler = {
+							OR = {
+								has_character_modifier = relic_rumor_major
+								check_variable = { which = relic_score value = 5 }
+							}
+						}
+					}
+					event_target:relic_ruler = { character_event = { id = artifact.28 } }
+				}
+				10 = { } # A quiet season
+			}
+			character_event = { id = artifact.10 days = 300 random = 80 }
+		}
+	}
+}
+
+# artifact.11 The treasure found
+# The hunter comes home with the treasure the rumor promised
+# (artifact_hunt_treasure_effect), or with gold when there was nothing left
+# to find, and the ruler rewards him. The hunt and the rumor end.
+# Scope: ROOT is the ruler, FROM the hunter.
+character_event = {
+	id = artifact.11
+	desc = {
+		trigger = { has_character_flag = artifact_hunt_gold }
+		text = EVTDESCartifact11_gold
+	}
+	desc = {
+		trigger = {
+			NOT = { has_character_flag = artifact_hunt_gold }
+			has_character_modifier = relic_rumor_major
+		}
+		text = EVTDESCartifact11_major
+	}
+	desc = {
+		trigger = {
+			NOT = { has_character_flag = artifact_hunt_gold }
+			has_character_modifier = relic_rumor_medium
+		}
+		text = EVTDESCartifact11_medium
+	}
+	desc = {
+		trigger = {
+			NOT = { has_character_flag = artifact_hunt_gold }
+			has_character_modifier = relic_rumor_minor
+		}
+		text = EVTDESCartifact11_minor
+	}
+	picture = GFX_evt_relic_box
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes
+
+	immediate = {
+		artifact_hunt_treasure_effect = yes
+	}
+
+	# It was his duty
+	option = {
+		name = {
+			trigger = { has_character_modifier = relic_rumor_major }
+			text = EVTOPTAartifact11_major
+		}
+		name = {
+			trigger = { has_character_modifier = relic_rumor_medium }
+			text = EVTOPTAartifact11_medium
+		}
+		name = {
+			trigger = { has_character_modifier = relic_rumor_minor }
+			text = EVTOPTAartifact11_minor
+		}
+		artifact_hunt_reward_duty_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 0.5 trait = charitable }
+		}
+	}
+
+	# Gold
+	option = {
+		name = {
+			trigger = { has_character_modifier = relic_rumor_major }
+			text = EVTOPTBartifact11_major
+		}
+		name = {
+			trigger = { has_character_modifier = relic_rumor_medium }
+			text = EVTOPTBartifact11_medium
+		}
+		name = {
+			trigger = { has_character_modifier = relic_rumor_minor }
+			text = EVTOPTBartifact11_minor
+		}
+		artifact_hunt_reward_money_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 trait = greedy }
+			modifier = { factor = 2 trait = charitable }
+		}
+	}
+
+	# A favor
+	option = {
+		name = {
+			trigger = { has_character_modifier = relic_rumor_major }
+			text = EVTOPTCartifact11_major
+		}
+		name = {
+			trigger = { has_character_modifier = relic_rumor_medium }
+			text = EVTOPTCartifact11_medium
+		}
+		name = {
+			trigger = { has_character_modifier = relic_rumor_minor }
+			text = EVTOPTCartifact11_minor
+		}
+		artifact_hunt_reward_favor_effect = yes
+		ai_chance = { factor = 1 }
+	}
+
+	# Praise before the court
+	option = {
+		trigger = { diplomacy = 15 }
+		name = {
+			trigger = { has_character_modifier = relic_rumor_major }
+			text = EVTOPTDartifact11_major
+		}
+		name = {
+			trigger = { has_character_modifier = relic_rumor_medium }
+			text = EVTOPTDartifact11_medium
+		}
+		name = {
+			trigger = { has_character_modifier = relic_rumor_minor }
+			text = EVTOPTDartifact11_minor
+		}
+		artifact_hunt_reward_praise_effect = yes
+		ai_chance = { factor = 2 }
+	}
+
+	after = {
+		artifact_hunt_clear_effect = yes
+	}
+}
+
+# artifact.12 The hunter is lost
+# The hunter died, was imprisoned, left the council or gave up. If the rumor
+# still holds another councillor may take up the trail; if it ran cold the
+# hunt is over.
+# Scope: ROOT is the ruler, FROM the hunter.
+character_event = {
+	id = artifact.12
+	desc = {
+		trigger = { artifact_hunt_rumor_trigger = no }
+		text = EVTDESCartifact12_cold
+	}
+	desc = {
+		trigger = { artifact_hunt_rumor_trigger = yes }
+		text = EVTDESCartifact12_lost
+	}
+	picture = GFX_evt_recieve_letter
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { has_character_flag = artifact_hunt_lost_shown }
+	}
+
+	immediate = {
+		set_character_flag = artifact_hunt_lost_shown
+		save_event_target_as = relic_ruler
+		FROM = { save_event_target_as = relic_hunter }
+	}
+
+	option = {
+		name = EVTOPTAartifact12
+		if = {
+			limit = { artifact_hunt_rumor_trigger = no }
+			artifact_hunt_clear_effect = yes
+		}
+		else = {
+			artifact_hunt_clear_searcher_effect = yes
+			custom_tooltip = { text = EVTOPTAartifact12_TT }
+		}
+		hidden_effect = {
+			if = {
+				limit = { NOT = { check_variable = { which = relic_score value = 0 } } }
+				set_variable = { which = relic_score value = 0 }
+			}
+			clr_character_flag = artifact_hunt_lost_shown
+		}
+	}
+}
+
+# artifact.13 A hunter lost
+# Hidden. The hunter died, was imprisoned or left the council: his liege
+# hears of it (artifact.12).
+# Scope: the hunter.
+character_event = {
+	id = artifact.13
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = relic_hunter
+	}
+
+	immediate = {
+		save_event_target_as = relic_hunter
+		liege = {
+			save_event_target_as = relic_ruler
+			character_event = { id = artifact.12 }
+		}
+	}
+}
+
+# artifact.20 Diplomats for the hunt
+# The hunter asks for envoys to buy and beg for news of the treasure. They
+# leave the court's own business undone for five years.
+# Scope: ROOT is the ruler, FROM the hunter.
+character_event = {
+	id = artifact.20
+	desc = EVTDESCartifact20
+	picture = GFX_evt_state_diplomacy
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = they_asked_for_your_help
+	}
+
+	option = {
+		name = EVTOPTAartifact20
+		custom_tooltip = { text = artifact_hunt_help_tt }
+		add_character_modifier = { name = treasure_hunting_diplomats years = 5 }
+		hidden_effect = { change_variable = { which = relic_score value = 5 } }
+		ai_chance = { factor = 1 }
+	}
+
+	option = {
+		name = EVTOPTBartifact20
+		custom_tooltip = { text = artifact_hunt_no_help_tt }
+		hidden_effect = { change_variable = { which = relic_score value = -1 } }
+		ai_chance = { factor = 1 }
+	}
+}
+
+# artifact.21 Soldiers for the hunt
+# The trail leads into wild lands; the hunter asks for an armed escort,
+# taken from the levies for five years.
+# Scope: ROOT is the ruler, FROM the hunter.
+character_event = {
+	id = artifact.21
+	desc = EVTDESCartifact21
+	picture = GFX_evt_bandits
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = they_asked_for_your_help
+	}
+
+	option = {
+		name = EVTOPTAartifact21
+		custom_tooltip = { text = artifact_hunt_help_tt }
+		add_character_modifier = { name = treasure_hunting_soldiers years = 5 }
+		hidden_effect = { change_variable = { which = relic_score value = 5 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0.1 war = yes }
+		}
+	}
+
+	option = {
+		name = EVTOPTBartifact20
+		custom_tooltip = { text = artifact_hunt_no_help_tt }
+		hidden_effect = { change_variable = { which = relic_score value = -1 } }
+		ai_chance = { factor = 1 }
+	}
+}
+
+# artifact.22 A decree for the hunt
+# The hunter asks for leave to search the burghers' cellars and warehouses,
+# which the towns will not soon forgive.
+# Scope: ROOT is the ruler, FROM the hunter.
+character_event = {
+	id = artifact.22
+	desc = EVTDESCartifact22
+	picture = GFX_evt_merchant_caravan
+	border = GFX_event_normal_frame_economy
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = they_asked_for_your_help
+	}
+
+	option = {
+		name = EVTOPTAartifact22
+		custom_tooltip = { text = artifact_hunt_help_tt }
+		add_character_modifier = { name = treasure_hunting_stewards years = 5 }
+		hidden_effect = { change_variable = { which = relic_score value = 5 } }
+		ai_chance = { factor = 1 }
+	}
+
+	option = {
+		name = EVTOPTBartifact22
+		custom_tooltip = { text = artifact_hunt_no_help_tt }
+		hidden_effect = { change_variable = { which = relic_score value = -1 } }
+		ai_chance = { factor = 1 }
+	}
+}
+
+# artifact.23 Spies for the hunt
+# A foreign lord knows where the treasure lies and will not say; the hunter
+# asks for the court's spies to learn it.
+# Scope: ROOT is the ruler, FROM the hunter.
+character_event = {
+	id = artifact.23
+	desc = EVTDESCartifact23
+	picture = GFX_evt_shady_meeting
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = they_asked_for_your_help
+		random_independent_ruler = {
+			limit = {
+				is_within_diplo_range = ROOT
+				NOT = { character = ROOT }
+			}
+			save_event_target_as = spy_target
+			random_vassal = {
+				limit = { higher_tier_than = BARON }
+				save_event_target_as = spy_target
+			}
+		}
+		if = {
+			limit = { NOT = { event_target:spy_target = { always = yes } } }
+			random_vassal = {
+				limit = { higher_tier_than = BARON }
+				save_event_target_as = spy_target
+			}
+		}
+		if = {
+			limit = { NOT = { event_target:spy_target = { always = yes } } }
+			FROM = { save_event_target_as = spy_target }
+		}
+		event_target:spy_target = { primary_title = { save_event_target_as = spy_title } }
+	}
+
+	option = {
+		name = EVTOPTAartifact23
+		custom_tooltip = { text = artifact_hunt_help_tt }
+		add_character_modifier = { name = treasure_hunting_spies years = 5 }
+		hidden_effect = { change_variable = { which = relic_score value = 5 } }
+		ai_chance = { factor = 1 }
+	}
+
+	option = {
+		name = EVTOPTBartifact20
+		custom_tooltip = { text = artifact_hunt_no_help_tt }
+		hidden_effect = { change_variable = { which = relic_score value = -1 } }
+		ai_chance = { factor = 1 }
+	}
+}
+
+# artifact.24 Scholars for the hunt
+# The hunter is buried in old scrolls and asks for the realm's learned men,
+# whose own studies wait five years.
+# Scope: ROOT is the ruler, FROM the hunter.
+character_event = {
+	id = artifact.24
+	desc = EVTDESCartifact24
+	picture = GFX_evt_gathering_of_minds
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = they_asked_for_your_help
+		primary_title = { save_event_target_as = primary_title }
+	}
+
+	option = {
+		name = EVTOPTAartifact24
+		custom_tooltip = { text = artifact_hunt_help_tt }
+		add_character_modifier = { name = treasure_hunting_scholars years = 5 }
+		hidden_effect = { change_variable = { which = relic_score value = 5 } }
+		ai_chance = { factor = 1 }
+	}
+
+	option = {
+		name = EVTOPTBartifact20
+		custom_tooltip = { text = artifact_hunt_no_help_tt }
+		hidden_effect = { change_variable = { which = relic_score value = -1 } }
+		ai_chance = { factor = 1 }
+	}
+}
+
+# artifact.25 More gold for the hunt
+# The hunter says the purse is empty. Gold speeds the search, unless the
+# hunter pockets it (artifact.26).
+# Scope: ROOT is the ruler, FROM the hunter.
+character_event = {
+	id = artifact.25
+	desc = EVTDESCartifact25
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_economy
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAartifact25
+		custom_tooltip = { text = artifact_hunt_help_tt }
+		scaled_wealth = { value = -0.5 min = -30 }
+		hidden_effect = {
+			random_list = {
+				80 = {
+					change_variable = { which = relic_score value = 3 }
+				}
+				10 = { # The hunter keeps the gold
+					modifier = {
+						factor = 0
+						event_target:relic_hunter = {
+							OR = {
+								ai = no
+								trait = honest
+								is_lover = ROOT
+							}
+						}
+					}
+					modifier = { factor = 1.5 event_target:relic_hunter = { trait = greedy } }
+					modifier = { factor = 1.5 event_target:relic_hunter = { trait = deceitful } }
+					modifier = { factor = 1.5 event_target:relic_hunter = { is_rival = ROOT } }
+					character_event = { id = artifact.26 days = 14 random = 14 }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0.25 trait = greedy }
+		}
+	}
+
+	option = {
+		name = EVTOPTBartifact25
+		custom_tooltip = { text = EVTOPTBartifact25_TT }
+		ai_chance = { factor = 1 }
+	}
+}
+
+# artifact.26 The light-fingered hunter
+# A spy finds that the hunter kept the gold. The ruler may hold it against
+# him, or forgive him for a harder search.
+# Scope: ROOT is the ruler, event_target:relic_hunter the hunter.
+character_event = {
+	id = artifact.26
+	desc = EVTDESCartifact26
+	picture = GFX_evt_whispers
+	border = GFX_event_normal_frame_economy
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:relic_hunter = {
+			is_alive = yes
+			has_character_flag = relic_hunter
+		}
+	}
+
+	option = {
+		name = EVTOPTAartifact26
+		opinion = { who = event_target:relic_hunter modifier = opinion_thief years = 10 }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = wroth }
+		}
+	}
+
+	option = {
+		name = EVTOPTBartifact26
+		custom_tooltip = { text = EVTOPTBartifact26_TT }
+		hidden_effect = { change_variable = { which = relic_score value = 3 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+}
+
+# artifact.27 The hunter blunders
+# Through the hunter's carelessness a guide dies and a map is lost; the
+# search falls back.
+# Scope: ROOT is the ruler, FROM the hunter.
+character_event = {
+	id = artifact.27
+	desc = EVTDESCartifact27
+	picture = GFX_evt_quarrel
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAartifact27
+		custom_tooltip = { text = EVTOPTAartifact27_TT }
+		opinion = { who = FROM modifier = opinion_useless_moron years = 10 }
+		hidden_effect = { change_variable = { which = relic_score value = -3 } }
+	}
+}
+
+# artifact.28 Word of a greater treasure
+# On the road the hunter hears of something rarer still. Following it raises
+# the rumor a step and keeps half the progress; the worry may stress the
+# ruler.
+# Scope: ROOT is the ruler, FROM the hunter.
+character_event = {
+	id = artifact.28
+	desc = EVTDESCartifact28
+	picture = GFX_evt_treasure_chamber
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAartifact28
+		custom_tooltip = { text = EVTOPTAartifact28_TT }
+		if = {
+			limit = { has_character_modifier = relic_rumor_medium }
+			remove_character_modifier = relic_rumor_medium
+			add_character_modifier = { name = relic_rumor_major years = 15 }
+			if = {
+				limit = { has_character_modifier = pays_for_artifact_hunt_medium }
+				remove_character_modifier = pays_for_artifact_hunt_medium
+				add_character_modifier = { name = pays_for_artifact_hunt_major duration = -1 }
+			}
+		}
+		else_if = {
+			limit = { has_character_modifier = relic_rumor_minor }
+			remove_character_modifier = relic_rumor_minor
+			add_character_modifier = { name = relic_rumor_medium years = 10 }
+			if = {
+				limit = { has_character_modifier = pays_for_artifact_hunt_minor }
+				remove_character_modifier = pays_for_artifact_hunt_minor
+				add_character_modifier = { name = pays_for_artifact_hunt_medium duration = -1 }
+			}
+		}
+		random = {
+			chance = 20
+			add_trait_stressed_effect = yes
+		}
+		hidden_effect = { multiply_variable = { which = relic_score value = 0.5 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = ambitious }
+			modifier = { factor = 0.5 trait = content }
+		}
+	}
+
+	option = {
+		name = EVTOPTBartifact28
+		ai_chance = { factor = 1 }
+	}
+}
+
+# artifact.29 Death on the road
+# The hunter dies in an accident on the trail. The hunt waits for a new
+# councillor (artifact.13 from on_death).
+# Scope: ROOT is the ruler, FROM the hunter.
+character_event = {
+	id = artifact.29
+	desc = EVTDESCartifact29
+	picture = GFX_evt_burning_house
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAartifact29
+		event_target:relic_hunter = { random_accident_death_effect = yes }
+	}
+}
+
+# artifact.30 News from the trail
+# A letter from the hunter: he is making progress, or he is close to the
+# end of the trail.
+# Scope: ROOT is the ruler, event_target:relic_hunter the hunter.
+character_event = {
+	id = artifact.30
+	desc = {
+		trigger = { artifact_hunt_done_trigger = no }
+		text = EVTDESCartifact30
+	}
+	desc = {
+		trigger = { artifact_hunt_done_trigger = yes }
+		text = EVTDESCartifact30_close
+	}
+	picture = GFX_evt_recieve_letter
+	border = GFX_event_normal_frame_religion
+	notification = yes
+	is_triggered_only = yes
+
+	option = {
+		name = EXCELLENT
+	}
+}
+
+# artifact.31 A false lead
+# A letter from the hunter: months lost on a wrong trail.
+# Scope: ROOT is the ruler, event_target:relic_hunter the hunter.
+character_event = {
+	id = artifact.31
+	desc = EVTDESCartifact31
+	picture = GFX_evt_recieve_letter
+	border = GFX_event_normal_frame_religion
+	notification = yes
+	is_triggered_only = yes
+
+	option = {
+		name = UNFORTUNATE
+	}
+}
+
+###############################################################################
+# Part 3: treasures of the sack
+###############################################################################
+
+# artifact.100 A capital plundered
+# Hidden. Raiders who loot a capital holding are far more likely to find its
+# lord's treasures than a besieger (artifact.102).
+# Scope: ROOT is the looter, FROM the looted holding.
+character_event = {
+	id = artifact.100
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			is_capital = yes
+			location = { is_capital = yes }
+		}
+	}
+
+	immediate = {
+		clr_character_flag = looted_by_raiding_holding
+		set_character_flag = looted_by_raiding_holding
+		repeat_event = { id = artifact.101 }
+	}
+}
+
+# artifact.101 A capital taken
+# Hidden. A victor who takes or loots the capital of a lord he does not
+# serve may find the treasures the lord and his court kept there
+# (artifact.102).
+# Scope: ROOT is the victor, FROM the holding.
+character_event = {
+	id = artifact.101
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		OR = {
+			has_dlc = "Mystics"
+			has_dlc = "Holy Fury"
+		}
+		FROM = {
+			is_capital = yes
+			location = { is_capital = yes }
+			holder_scope = {
+				NOR = {
+					character = ROOT
+					is_liege_or_above = ROOT
+				}
+			}
+		}
+	}
+
+	immediate = {
+		save_event_target_as = looter
+		FROM = {
+			save_event_target_as = target_title
+			location = { save_event_target_as = target_location }
+			holder_scope = {
+				if = {
+					limit = {
+						num_of_artifacts = 1
+						at_location = event_target:target_location
+					}
+					character_event = { id = artifact.102 }
+				}
+				any_courtier = {
+					limit = {
+						num_of_artifacts = 1
+						at_location = event_target:target_location
+						prisoner = no
+					}
+					character_event = { id = artifact.102 }
+				}
+			}
+		}
+	}
+}
+
+# artifact.102 The hidden treasures
+# Hidden. Rolls whether the victor finds one of this keeper's treasures, and
+# of what quality: the finer the treasure the rarer the find. Raiders,
+# warrior lodges, warbands and reaver bloodlines find more; a vault in the
+# keeper's realm hides more. One find per sack.
+# Scope: ROOT is the keeper of the treasures, FROM the victor.
+character_event = {
+	id = artifact.102
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			OR = {
+				NOT = { has_character_flag = artifact_raid_looting }
+				had_character_flag = { flag = artifact_raid_looting days = 30 }
+			}
+		}
+	}
+
+	immediate = {
+		save_event_target_as = original_item_owner
+		random_list = {
+			100 = {
+				modifier = {
+					factor = 0
+					NOT = {
+						any_artifact = {
+							quality == 1
+							NOT = { artifact_type_owned_by = FROM }
+						}
+					}
+				}
+				FROM = { set_variable = { which = artifact_raid_quality value = 1 } }
+			}
+			70 = {
+				modifier = {
+					factor = 0
+					NOT = {
+						any_artifact = {
+							quality == 2
+							NOT = { artifact_type_owned_by = FROM }
+						}
+					}
+				}
+				FROM = { set_variable = { which = artifact_raid_quality value = 2 } }
+			}
+			45 = {
+				modifier = { factor = 0 NOT = { any_artifact = { quality == 3 } } }
+				FROM = { set_variable = { which = artifact_raid_quality value = 3 } }
+			}
+			25 = {
+				modifier = { factor = 0 NOT = { any_artifact = { quality == 4 } } }
+				FROM = { set_variable = { which = artifact_raid_quality value = 4 } }
+			}
+			10 = {
+				modifier = { factor = 0 NOT = { any_artifact = { quality == 5 } } }
+				FROM = { set_variable = { which = artifact_raid_quality value = 5 } }
+			}
+			6000 = { # Nothing found
+				modifier = { # Raiders plunder every corner
+					factor = 0.2
+					FROM = {
+						has_character_flag = looted_by_raiding_holding
+						NOT = { had_character_flag = { flag = looted_by_raiding_holding days = 2 } }
+					}
+				}
+				modifier = { factor = 0.8 num_of_artifacts = 3 }
+				modifier = { factor = 0.8 num_of_artifacts = 4 }
+				modifier = { factor = 0.8 num_of_artifacts = 5 }
+				modifier = { factor = 0.8 num_of_artifacts = 6 }
+				modifier = { factor = 0.8 num_of_artifacts = 7 }
+				modifier = { factor = 0.8 num_of_artifacts = 8 }
+				modifier = { factor = 0.8 num_of_artifacts = 9 }
+				modifier = { factor = 0.8 num_of_artifacts = 10 }
+				modifier = { factor = 0.5 NOT = { any_artifact = { quality == 1 } } }
+				modifier = { factor = 0.65 NOT = { any_artifact = { quality == 2 } } }
+				modifier = { factor = 0.775 NOT = { any_artifact = { quality == 3 } } }
+				modifier = { factor = 0.875 NOT = { any_artifact = { quality == 4 } } }
+				modifier = { factor = 0.95 NOT = { any_artifact = { quality == 5 } } }
+				modifier = { # A vault in the keeper's realm
+					factor = 1.5
+					any_realm_wonder_upgrade = { has_wonder_upgrade_flag = artifact_protection }
+				}
+				modifier = { # Hardened raiders
+					factor = 0.5
+					FROM = {
+						OR = {
+							is_member_of_any_warband_trigger = yes
+							is_member_of_any_warrior_lodge_trigger = yes
+						}
+						society_rank > 1
+					}
+				}
+				modifier = {
+					factor = 0.5
+					FROM = { any_owned_bloodline = { has_bloodline_flag = bloodline_reaver } }
+				}
+				FROM = { set_variable = { which = artifact_raid_quality value = 0 } }
+			}
+		}
+		FROM = {
+			if = {
+				limit = { check_variable = { which = artifact_raid_quality value = 1 } }
+				clr_character_flag = artifact_raid_looting
+				set_character_flag = artifact_raid_looting
+				character_event = { id = artifact.103 }
+			}
+		}
+	}
+}
+
+# artifact.103 Treasure in the ruins
+# The victor's troops find a treasure the lord kept hidden. A lesser one he
+# simply takes; a great one he takes, or burns as a forgery if he already
+# owns one like it. A holy relic of another faith is a strange and
+# venerated thing to him.
+# Scope: ROOT is the victor, FROM the keeper of the treasure.
+character_event = {
+	id = artifact.103
+	desc = {
+		trigger = {
+			NOT = { check_variable = { which = artifact_raid_quality value = 3 } }
+			NOT = { has_character_flag = artifact_raid_heathen_relic }
+		}
+		text = EVTDESCartifact103_small
+	}
+	desc = {
+		trigger = {
+			NOT = { check_variable = { which = artifact_raid_quality value = 3 } }
+			has_character_flag = artifact_raid_heathen_relic
+		}
+		text = EVTDESCartifact103_small_heathen
+	}
+	desc = {
+		trigger = {
+			is_variable_equal = { which = artifact_raid_quality value = 3 }
+			NOT = { has_character_flag = looted_artifact_destroy_duplicate }
+			NOT = { has_character_flag = artifact_raid_heathen_relic }
+		}
+		text = EVTDESCartifact103_great
+	}
+	desc = {
+		trigger = {
+			is_variable_equal = { which = artifact_raid_quality value = 4 }
+			NOT = { has_character_flag = looted_artifact_destroy_duplicate }
+			NOT = { has_character_flag = artifact_raid_heathen_relic }
+		}
+		text = EVTDESCartifact103_great
+	}
+	desc = {
+		trigger = {
+			NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+			check_variable = { which = artifact_raid_quality value = 3 }
+			has_character_flag = looted_artifact_destroy_duplicate
+			NOT = { has_character_flag = artifact_raid_heathen_relic }
+		}
+		text = EVTDESCartifact103_great_forgery
+	}
+	desc = {
+		trigger = {
+			NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+			check_variable = { which = artifact_raid_quality value = 3 }
+			NOT = { has_character_flag = looted_artifact_destroy_duplicate }
+			has_character_flag = artifact_raid_heathen_relic
+		}
+		text = EVTDESCartifact103_great_heathen
+	}
+	desc = {
+		trigger = {
+			NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+			check_variable = { which = artifact_raid_quality value = 3 }
+			has_character_flag = looted_artifact_destroy_duplicate
+			has_character_flag = artifact_raid_heathen_relic
+		}
+		text = EVTDESCartifact103_great_heathen_burnt
+	}
+	desc = {
+		trigger = {
+			is_variable_equal = { which = artifact_raid_quality value = 5 }
+			NOT = { has_character_flag = looted_artifact_destroy_duplicate }
+			NOT = { has_character_flag = artifact_raid_heathen_relic }
+		}
+		text = EVTDESCartifact103_legend
+	}
+	desc = {
+		trigger = {
+			is_variable_equal = { which = artifact_raid_quality value = 5 }
+			has_character_flag = looted_artifact_destroy_duplicate
+			NOT = { has_character_flag = artifact_raid_heathen_relic }
+		}
+		text = EVTDESCartifact103_legend_forgery
+	}
+	desc = {
+		trigger = {
+			is_variable_equal = { which = artifact_raid_quality value = 5 }
+			NOT = { has_character_flag = looted_artifact_destroy_duplicate }
+			has_character_flag = artifact_raid_heathen_relic
+		}
+		text = EVTDESCartifact103_legend_heathen
+	}
+	desc = {
+		trigger = {
+			is_variable_equal = { which = artifact_raid_quality value = 5 }
+			has_character_flag = looted_artifact_destroy_duplicate
+			has_character_flag = artifact_raid_heathen_relic
+		}
+		text = EVTDESCartifact103_legend_heathen_burnt
+	}
+	picture = GFX_evt_relic_box
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	immediate = {
+		save_event_target_as = looter
+		FROM = { save_event_target_as = original_item_owner }
+		artifact_raid_take_effect = yes
+	}
+
+	# Take the treasure
+	option = {
+		trigger = {
+			NOT = { has_character_flag = looted_artifact_destroy_duplicate }
+		}
+		name = {
+			trigger = {
+				NOT = { check_variable = { which = artifact_raid_quality value = 3 } }
+				NOT = { has_character_flag = artifact_raid_heathen_relic }
+			}
+			text = EVTOPTAartifact103_small
+		}
+		name = {
+			trigger = {
+				NOT = { check_variable = { which = artifact_raid_quality value = 3 } }
+				has_character_flag = artifact_raid_heathen_relic
+			}
+			text = EVTOPTAartifact103_small_heathen
+		}
+		name = {
+			trigger = {
+				NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+				check_variable = { which = artifact_raid_quality value = 3 }
+				NOT = { has_character_flag = artifact_raid_heathen_relic }
+			}
+			text = EVTOPTAartifact103_great
+		}
+		name = {
+			trigger = {
+				NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+				check_variable = { which = artifact_raid_quality value = 3 }
+				has_character_flag = artifact_raid_heathen_relic
+			}
+			text = EVTOPTAartifact103_great_heathen
+		}
+		name = {
+			trigger = {
+				is_variable_equal = { which = artifact_raid_quality value = 5 }
+				NOT = { has_character_flag = artifact_raid_heathen_relic }
+			}
+			text = EVTOPTAartifact103_legend
+		}
+		name = {
+			trigger = {
+				is_variable_equal = { which = artifact_raid_quality value = 5 }
+				has_character_flag = artifact_raid_heathen_relic
+			}
+			text = EVTOPTAartifact103_legend_heathen
+		}
+		tooltip = {
+			random_artifact = {
+				show_scope_change = no
+				limit = { has_artifact_flag = looted_artifact_tooltip_1 }
+				transfer_artifact = { from = FROM to = ROOT }
+			}
+		}
+		hidden_effect = {
+			FROM = { character_event = { id = artifact.104 } }
+		}
+	}
+
+	# Burn the forgery
+	option = {
+		trigger = {
+			has_character_flag = looted_artifact_destroy_duplicate
+		}
+		name = {
+			trigger = {
+				NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+				NOT = { has_character_flag = artifact_raid_heathen_relic }
+			}
+			text = EVTOPTBartifact103_great
+		}
+		name = {
+			trigger = {
+				NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+				has_character_flag = artifact_raid_heathen_relic
+			}
+			text = EVTOPTBartifact103_great_heathen
+		}
+		name = {
+			trigger = {
+				is_variable_equal = { which = artifact_raid_quality value = 5 }
+				NOT = { has_character_flag = artifact_raid_heathen_relic }
+			}
+			text = EVTOPTBartifact103_legend
+		}
+		name = {
+			trigger = {
+				is_variable_equal = { which = artifact_raid_quality value = 5 }
+				has_character_flag = artifact_raid_heathen_relic
+			}
+			text = EVTOPTBartifact103_legend_heathen
+		}
+		tooltip = {
+			FROM = {
+				random_artifact = {
+					show_scope_change = no
+					limit = { has_artifact_flag = looted_artifact_tooltip_1 }
+					destroy_artifact = yes
+				}
+			}
+		}
+		hidden_effect = {
+			FROM = { character_event = { id = artifact.104 } }
+		}
+	}
+}
+
+# artifact.104 A treasure stolen
+# The lord or courtier hears that the victor carried off his treasure, or
+# burnt it as a forgery, and if a heathen did it, what blasphemy awaits it.
+# Scope: ROOT is the keeper of the treasure, FROM the victor.
+character_event = {
+	id = artifact.104
+	desc = {
+		trigger = {
+			FROM = { NOT = { check_variable = { which = artifact_raid_quality value = 3 } } }
+		}
+		text = EVTDESCartifact104_small
+	}
+	desc = {
+		trigger = {
+			FROM = {
+				NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+				check_variable = { which = artifact_raid_quality value = 3 }
+				NOT = { has_character_flag = looted_artifact_destroy_duplicate }
+				NOT = { has_character_flag = artifact_raid_heathen_relic }
+			}
+		}
+		text = EVTDESCartifact104_great
+	}
+	desc = {
+		trigger = {
+			FROM = {
+				NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+				check_variable = { which = artifact_raid_quality value = 3 }
+				has_character_flag = looted_artifact_destroy_duplicate
+				NOT = { has_character_flag = artifact_raid_heathen_relic }
+			}
+		}
+		text = EVTDESCartifact104_great_burnt
+	}
+	desc = {
+		trigger = {
+			FROM = {
+				NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+				check_variable = { which = artifact_raid_quality value = 3 }
+				NOT = { has_character_flag = looted_artifact_destroy_duplicate }
+				has_character_flag = artifact_raid_heathen_relic
+			}
+		}
+		text = EVTDESCartifact104_great_heathen
+	}
+	desc = {
+		trigger = {
+			FROM = {
+				NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+				check_variable = { which = artifact_raid_quality value = 3 }
+				has_character_flag = looted_artifact_destroy_duplicate
+				has_character_flag = artifact_raid_heathen_relic
+			}
+		}
+		text = EVTDESCartifact104_great_heathen_burnt
+	}
+	desc = {
+		trigger = {
+			FROM = {
+				is_variable_equal = { which = artifact_raid_quality value = 5 }
+				NOT = { has_character_flag = looted_artifact_destroy_duplicate }
+				NOT = { has_character_flag = artifact_raid_heathen_relic }
+			}
+		}
+		text = EVTDESCartifact104_legend
+	}
+	desc = {
+		trigger = {
+			FROM = {
+				is_variable_equal = { which = artifact_raid_quality value = 5 }
+				has_character_flag = looted_artifact_destroy_duplicate
+				NOT = { has_character_flag = artifact_raid_heathen_relic }
+			}
+		}
+		text = EVTDESCartifact104_legend_burnt
+	}
+	desc = {
+		trigger = {
+			FROM = {
+				is_variable_equal = { which = artifact_raid_quality value = 5 }
+				NOT = { has_character_flag = looted_artifact_destroy_duplicate }
+				has_character_flag = artifact_raid_heathen_relic
+			}
+		}
+		text = EVTDESCartifact104_legend_heathen
+	}
+	desc = {
+		trigger = {
+			FROM = {
+				is_variable_equal = { which = artifact_raid_quality value = 5 }
+				has_character_flag = looted_artifact_destroy_duplicate
+				has_character_flag = artifact_raid_heathen_relic
+			}
+		}
+		text = EVTDESCartifact104_legend_heathen_burnt
+	}
+	picture = GFX_evt_relic_box
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	# Carried off
+	option = {
+		trigger = {
+			FROM = { NOT = { has_character_flag = looted_artifact_destroy_duplicate } }
+		}
+		name = {
+			trigger = {
+				FROM = { NOT = { check_variable = { which = artifact_raid_quality value = 3 } } }
+			}
+			text = EVTOPTAartifact104_small
+		}
+		name = {
+			trigger = {
+				FROM = {
+					NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+					check_variable = { which = artifact_raid_quality value = 3 }
+					NOT = { has_character_flag = artifact_raid_heathen_relic }
+				}
+			}
+			text = EVTOPTAartifact104_great
+		}
+		name = {
+			trigger = {
+				FROM = {
+					NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+					check_variable = { which = artifact_raid_quality value = 3 }
+					has_character_flag = artifact_raid_heathen_relic
+				}
+			}
+			text = EVTOPTAartifact104_great_heathen
+		}
+		name = {
+			trigger = {
+				FROM = {
+					is_variable_equal = { which = artifact_raid_quality value = 5 }
+					NOT = { has_character_flag = artifact_raid_heathen_relic }
+				}
+			}
+			text = EVTOPTAartifact104_legend
+		}
+		name = {
+			trigger = {
+				FROM = {
+					is_variable_equal = { which = artifact_raid_quality value = 5 }
+					has_character_flag = artifact_raid_heathen_relic
+				}
+			}
+			text = EVTOPTAartifact104_legend_heathen
+		}
+		tooltip = {
+			FROM = {
+				random_artifact = {
+					show_scope_change = no
+					limit = { has_artifact_flag = looted_artifact_tooltip_2 }
+					transfer_artifact = { from = ROOT to = PREV }
+				}
+			}
+		}
+	}
+
+	# Burnt as a forgery
+	option = {
+		trigger = {
+			FROM = { has_character_flag = looted_artifact_destroy_duplicate }
+		}
+		name = {
+			trigger = {
+				FROM = {
+					NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+					NOT = { has_character_flag = artifact_raid_heathen_relic }
+				}
+			}
+			text = EVTOPTBartifact104_great
+		}
+		name = {
+			trigger = {
+				FROM = {
+					NOT = { is_variable_equal = { which = artifact_raid_quality value = 5 } }
+					has_character_flag = artifact_raid_heathen_relic
+				}
+			}
+			text = EVTOPTBartifact104_great_heathen
+		}
+		name = {
+			trigger = {
+				FROM = {
+					is_variable_equal = { which = artifact_raid_quality value = 5 }
+					NOT = { has_character_flag = artifact_raid_heathen_relic }
+				}
+			}
+			text = EVTOPTBartifact104_legend
+		}
+		name = {
+			trigger = {
+				FROM = {
+					is_variable_equal = { which = artifact_raid_quality value = 5 }
+					has_character_flag = artifact_raid_heathen_relic
+				}
+			}
+			text = EVTOPTBartifact104_legend_heathen
+		}
+		random_artifact = {
+			show_scope_change = no
+			limit = { has_artifact_flag = looted_artifact_tooltip_2 }
+			destroy_artifact = yes
+		}
+	}
+
+	after = {
+		artifact_raid_clear_effect = yes
+	}
+}

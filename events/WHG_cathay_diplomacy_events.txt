@@ -1,0 +1,801 @@
+###############################################################################
+# The Celestial Court
+# Namespace: celestial (was JD.10022, 10023 and JD.20000 - 20020 in
+#   jd_chinese_diplomacy_events)
+# Faction: Cathay & the East
+#
+# The Jade Viceroy of the West keeps the Dragon Emperor's dealings with the
+# realms beyond the Great Bastion. One of the Viceroy's councillors may come
+# to a lord's court: a diplomat to talk politics, a general to see the troops,
+# a treasurer to count taxes or make trade pacts, a priest of the Celestial
+# Dragon to teach or to debate. How the host greets the guest, in Grand
+# Cathay's tongue, in borrowed silks or in idle talk about the weather, wins or
+# loses the Emperor's grace. A guest who dies or is jailed on the visit leaves
+# an awkward letter to write.
+#
+# The councillor's visit                celestial.1 - celestial.20
+#
+# Callers: common/on_actions/00_on_actions.txt, the yearly random list
+# (celestial.1), on_death and on_imprisoned (celestial.18).
+# Grace effects and triggers: 00_scripted_effects.txt and
+# 00_scripted_triggers.txt (vanilla Jade Dragon). The councillor's parting
+# gift is JD.60004 in jd_artifact_events.txt.
+# Loc: localisation/00_WHG_cathay_diplomacy_events.csv
+###############################################################################
+
+namespace = celestial
+
+###############################################################################
+# The councillor's visit
+###############################################################################
+
+# celestial.1 A councillor sets out
+# Hidden. One of the Jade Viceroy's Cathayan councillors picks a reason to
+# visit a ruler at peace with the Viceroy: talks for the chancellor, the
+# troops or military study for the marshal, taxes or trade for the steward,
+# preaching or philosophy for the priest (the first of each pair for a
+# tributary). Likelier in a golden age, under an expansionist policy, with a
+# tributary and with more grace; rarer while Cathay suffers, and rare
+# without grace.
+# Scope: the host.
+character_event = {
+	id = celestial.1
+	hide_window = yes
+	is_triggered_only = yes # on_yearly_pulse random list
+
+	has_dlc = "Jade Dragon"
+	only_capable = yes
+	prisoner = no
+	war = no
+	min_age = 16
+
+	trigger = {
+		NOT = { has_character_flag = cathayan_governor_councilor_guest }
+		is_inaccessible_trigger = no
+		cathay_diplo_interaction_trigger = yes
+		offmap_cathay = {
+			NOR = { has_status = cathay_civil_war has_status = cathay_plague }
+			governor = {
+				is_landed = yes
+				NOT = { character = ROOT }
+				OR = {
+					job_chancellor = { celestial_councillor_trigger = yes }
+					job_marshal = { celestial_councillor_trigger = yes }
+					job_treasurer = { celestial_councillor_trigger = yes }
+					job_spiritual = { celestial_councillor_trigger = yes }
+				}
+			}
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 0.6 offmap_cathay = { has_status = cathay_unrest } }
+		modifier = {
+			factor = 0.3
+			offmap_cathay = {
+				OR = {
+					has_status = cathay_mongol_invasion
+					has_status = cathay_jurchen_invasion
+					has_status = cathay_famine
+					has_status = cathay_chaos_invasion
+					has_status = cathay_ogre_war
+					has_status = cathay_skaven_war
+				}
+			}
+		}
+		modifier = { factor = 1.5 offmap_cathay = { has_status = cathay_golden_age } }
+		modifier = { factor = 1.5 offmap_cathay = { has_policy = cathay_expansionist } }
+		modifier = { factor = 1.5 has_grace_medium_trigger = yes }
+		modifier = { factor = 1.5 has_grace_major_trigger = yes }
+		modifier = { factor = 0.1 has_grace_trivial_trigger = no }
+		modifier = {
+			factor = 1.5
+			is_tributary = { type = offmap suzerain = e_cathay_west_governor }
+		}
+	}
+
+	immediate = {
+		offmap_cathay = {
+			governor = {
+				save_event_target_as = target_governor
+				random_list = {
+					20 = {
+						trigger = { job_chancellor = { celestial_councillor_trigger = yes } }
+						job_chancellor = {
+							set_character_flag = cg_diplomatic_visit
+							character_event = { id = celestial.2 }
+						}
+					}
+					20 = {
+						trigger = { job_marshal = { celestial_councillor_trigger = yes } }
+						job_marshal = {
+							if = {
+								limit = {
+									ROOT = {
+										is_tributary = {
+											type = offmap
+											suzerain = event_target:target_governor
+										}
+									}
+								}
+								set_character_flag = cg_oversee_troops
+							}
+							else = { set_character_flag = cg_study_military }
+							character_event = { id = celestial.2 }
+						}
+					}
+					20 = {
+						trigger = { job_treasurer = { celestial_councillor_trigger = yes } }
+						job_treasurer = {
+							if = {
+								limit = {
+									ROOT = {
+										is_tributary = {
+											type = offmap
+											suzerain = event_target:target_governor
+										}
+									}
+								}
+								set_character_flag = cg_oversee_tax_collection
+							}
+							else = { set_character_flag = cg_trade }
+							character_event = { id = celestial.2 }
+						}
+					}
+					20 = {
+						trigger = { job_spiritual = { celestial_councillor_trigger = yes } }
+						job_spiritual = {
+							if = {
+								limit = {
+									ROOT = {
+										is_tributary = {
+											type = offmap
+											suzerain = event_target:target_governor
+										}
+									}
+								}
+								set_character_flag = cg_preaching
+							}
+							else = { set_character_flag = cg_study_theology }
+							character_event = { id = celestial.2 }
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# celestial.2 The councillor writes ahead
+# Hidden. Saves the guest and remembers the host, so that the guest's death
+# or jailing can be answered (celestial.18), and sends the host the letter
+# (celestial.3).
+# Scope: the councillor; FROM is the host.
+character_event = {
+	id = celestial.2
+	hide_window = yes
+	is_triggered_only = yes # celestial.1
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		save_event_target_as = cathayan_guest
+		save_persistent_event_target = { name = host_of_cathayan_diplomat scope = FROM }
+		FROM = { letter_event = { id = celestial.3 } }
+	}
+}
+
+# celestial.3 A letter from the Jade Viceroy's court
+# The councillor asks to visit. Welcoming the guest wins a little grace; the
+# visit comes in about two months (celestial.4), and the host is cleared for
+# new guests a while after (celestial.20). Turning the guest away costs much
+# grace and offends the councillor and the Viceroy.
+# Scope: the host; FROM is the councillor.
+letter_event = {
+	id = celestial.3
+	desc = {
+		trigger = { is_tributary = { type = offmap suzerain = event_target:target_governor } }
+		text = EVTDESCcelestial3_tributary
+	}
+	desc = {
+		trigger = {
+			NOT = { is_tributary = { type = offmap suzerain = event_target:target_governor } }
+		}
+		text = EVTDESCcelestial3
+	}
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes # celestial.2
+
+	has_dlc = "Jade Dragon"
+
+	option = { # Welcome
+		name = EVTOPTAcelestial3
+		sound_effect = china_grace_gain
+		custom_tooltip = { text = EVTOPTAcelestial3_tt }
+		add_grace_trivial_effect = yes
+		hidden_effect = {
+			set_character_flag = cathayan_governor_councilor_guest
+			event_target:cathayan_guest = {
+				character_event = { id = celestial.4 days = 50 random = 20 }
+			}
+			character_event = { id = celestial.20 days = 160 }
+		}
+		ai_chance = { factor = 90 }
+	}
+	option = { # Turn them away
+		name = EVTOPTBcelestial3
+		custom_tooltip = { text = EVTOPTBcelestial3_tt }
+		detract_grace_major_effect = yes
+		event_target:cathayan_guest = {
+			show_scope_change = no
+			opinion = { who = ROOT modifier = opinion_offended years = 15 }
+			liege = {
+				show_scope_change = no
+				opinion = { who = ROOT modifier = opinion_offended years = 15 }
+			}
+		}
+		hidden_effect = {
+			event_target:cathayan_guest = {
+				clear_persistent_event_target = host_of_cathayan_diplomat
+				celestial_clear_mission_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 trait = proud }
+			modifier = {
+				factor = 0
+				is_tributary = { type = offmap suzerain = event_target:target_governor }
+			}
+		}
+	}
+}
+
+# celestial.4 The visit
+# Hidden. The guest arrives. If the host's own councillor for the same
+# office is skilled, all goes well (celestial.5); otherwise the omen of
+# falling stars (celestial.6), the greeting in Grand Cathay's tongue
+# (celestial.7), the borrowed silks (celestial.12) or the talk about the
+# weather (celestial.13). The tongue and the silks need a host of another
+# culture than the guest.
+# Scope: the councillor; FROM is the host.
+character_event = {
+	id = celestial.4
+	hide_window = yes
+	is_triggered_only = yes # celestial.3
+
+	has_dlc = "Jade Dragon"
+	prisoner = no
+
+	trigger = {
+		offmap_cathay = { governor = { is_liege_of = ROOT } }
+		FROM = { is_alive = yes prisoner = no }
+	}
+
+	immediate = {
+		FROM = {
+			if = {
+				limit = { ROOT = { has_job_title = job_chancellor } }
+				job_chancellor = { save_event_target_as = corresponding_councilor }
+			}
+			else_if = {
+				limit = { ROOT = { has_job_title = job_marshal } }
+				job_marshal = { save_event_target_as = corresponding_councilor }
+			}
+			else_if = {
+				limit = { ROOT = { has_job_title = job_treasurer } }
+				job_treasurer = { save_event_target_as = corresponding_councilor }
+			}
+			else_if = {
+				limit = { ROOT = { has_job_title = job_spiritual } }
+				job_spiritual = { save_event_target_as = corresponding_councilor }
+			}
+			random_list = {
+				30 = { # All is well
+					trigger = { event_target:corresponding_councilor = { always = yes } }
+					modifier = {
+						factor = 0.5
+						event_target:corresponding_councilor = {
+							OR = {
+								AND = { has_job_title = job_chancellor NOT = { diplomacy = 8 } }
+								AND = { has_job_title = job_marshal NOT = { martial = 8 } }
+								AND = { has_job_title = job_treasurer NOT = { stewardship = 8 } }
+								AND = { has_job_title = job_spiritual NOT = { learning = 8 } }
+							}
+						}
+					}
+					modifier = {
+						factor = 1.5
+						event_target:corresponding_councilor = { culture_group = oriental_group }
+					}
+					character_event = { id = celestial.5 }
+				}
+				10 = { # Falling stars
+					character_event = { id = celestial.6 }
+				}
+				10 = { # The greeting
+					trigger = { NOT = { culture = ROOT } }
+					modifier = { factor = 1.3 is_learned_trigger = yes }
+					character_event = { id = celestial.7 }
+				}
+				10 = { # The borrowed silks
+					trigger = { NOT = { culture = ROOT } }
+					modifier = { factor = 1.3 is_dumb_trigger = yes }
+					modifier = { factor = 1.3 trait = greedy }
+					modifier = { factor = 1.3 trait = vain }
+					character_event = { id = celestial.12 }
+				}
+				10 = { # The weather
+					modifier = { factor = 1.3 is_smart_trigger = yes }
+					modifier = { factor = 1.3 trait = gregarious }
+					modifier = { factor = 1.5 trait = poet }
+					modifier = { factor = 1.3 trait = socializer }
+					character_event = { id = celestial.13 }
+				}
+			}
+		}
+		clear_persistent_event_target = host_of_cathayan_diplomat
+	}
+}
+
+# celestial.5 A visit well kept
+# The host's councillor prepared everything, and the guest goes home pleased
+# with a minor gain of grace. One time in ten the guest leaves a Cathayan
+# treasure (JD.60004), once per life and only if none is held.
+# Scope: the host; FROM is the councillor.
+character_event = {
+	id = celestial.5
+	desc = EVTDESCcelestial5
+	picture = GFX_evt_china_diplomatic_success
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.4
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAcelestial5
+		sound_effect = china_grace_gain
+		add_grace_minor_effect = yes
+		FROM = { show_portrait = yes }
+		hidden_effect = {
+			if = {
+				limit = { celestial_gift_allowed_trigger = yes }
+				random = {
+					chance = 10
+					set_character_flag = celestial_gift_received
+					character_event = { id = JD.60004 days = 1 }
+				}
+			}
+		}
+	}
+}
+
+# celestial.6 Falling stars
+# Shooting stars cross the sky as host and guest watch the moons, and the
+# guest leaves at once, sure the visit is cursed: a minor loss of grace. A
+# Cathayan host laughs it off with the guest.
+# Scope: the host; FROM is the councillor.
+character_event = {
+	id = celestial.6
+	desc = { trigger = { NOT = { culture = FROM } } text = EVTDESCcelestial6 }
+	desc = { trigger = { culture = FROM } text = EVTDESCcelestial6_cathayan }
+	picture = GFX_evt_comet
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # celestial.4
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAcelestial6
+		trigger = { NOT = { culture = FROM } }
+		custom_tooltip = { text = EVTOPTAcelestial6_tt }
+		detract_grace_minor_effect = yes
+		FROM = { show_portrait = yes }
+	}
+	option = {
+		name = EVTOPTBcelestial6
+		trigger = { culture = FROM }
+		FROM = {
+			show_portrait = yes
+			opinion = { who = ROOT modifier = opinion_impressed years = 5 }
+		}
+	}
+}
+
+# celestial.7 Words in the Emperor's tongue
+# The night before the audience, the host may spend all night learning the
+# greeting (a learned host succeeds more often and gains grace and a step
+# towards Multilingual, celestial.8; otherwise oversleeps, celestial.9), an
+# hour or two (celestial.10 or the stumble, celestial.11), or leave it to
+# the translator. A host who already speaks the tongue greets the guest
+# flawlessly.
+# Scope: the host; FROM is the councillor.
+character_event = {
+	id = celestial.7
+	desc = EVTDESCcelestial7
+	picture = GFX_evt_daughter_asking_father
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.4
+
+	has_dlc = "Jade Dragon"
+
+	option = { # All night
+		name = EVTOPTAcelestial7
+		trigger = { NOT = { has_character_modifier = multilingual } }
+		random_list = {
+			35 = { # Success
+				modifier = { factor = 1.15 learning = 12 }
+				modifier = { factor = 1.15 learning = 14 }
+				modifier = { factor = 1.15 learning = 16 }
+				modifier = { factor = 1.2 learning = 18 }
+				modifier = { factor = 1.2 learning = 20 }
+				modifier = { factor = 1.5 is_smart_trigger = yes }
+				modifier = { factor = 1.5 is_learned_trigger = yes }
+				modifier = { factor = 1.5 has_character_modifier = student_of_language }
+				custom_tooltip = { text = EVTOPTAcelestial7_success_tt }
+				if = {
+					limit = { has_character_modifier = student_of_language }
+					custom_tooltip = { text = multilingual_tt }
+				}
+				else = { custom_tooltip = { text = student_of_language_tt } }
+				tooltip = { add_grace_major_effect = yes }
+				hidden_effect = { character_event = { id = celestial.8 days = 3 } }
+			}
+			65 = { # Asleep in the library
+				modifier = { factor = 2 is_dumb_trigger = yes }
+				modifier = { factor = 1.5 NOT = { learning = 6 } }
+				custom_tooltip = { text = EVTOPTAcelestial7_failure_tt }
+				tooltip = { detract_grace_major_effect = yes }
+				hidden_effect = { character_event = { id = celestial.9 days = 3 } }
+			}
+		}
+		ai_chance = { factor = 20 modifier = { factor = 3 is_learned_trigger = yes } }
+	}
+	option = { # An hour or two
+		name = EVTOPTBcelestial7
+		trigger = { NOT = { has_character_modifier = multilingual } }
+		random_list = {
+			65 = { # Well said
+				modifier = { factor = 1.15 learning = 12 }
+				modifier = { factor = 1.15 learning = 14 }
+				modifier = { factor = 1.15 learning = 16 }
+				modifier = { factor = 1.2 learning = 18 }
+				modifier = { factor = 1.2 learning = 20 }
+				modifier = { factor = 1.5 is_smart_trigger = yes }
+				modifier = { factor = 1.5 is_learned_trigger = yes }
+				modifier = { factor = 1.5 has_character_modifier = student_of_language }
+				custom_tooltip = { text = EVTOPTBcelestial7_success_tt }
+				tooltip = { add_grace_medium_effect = yes }
+				hidden_effect = { character_event = { id = celestial.10 days = 3 } }
+			}
+			35 = { # A stumble
+				modifier = { factor = 2 is_dumb_trigger = yes }
+				modifier = { factor = 1.5 NOT = { learning = 6 } }
+				custom_tooltip = { text = EVTOPTBcelestial7_failure_tt }
+				tooltip = { detract_grace_minor_effect = yes }
+				hidden_effect = { character_event = { id = celestial.11 days = 3 } }
+			}
+		}
+		ai_chance = { factor = 40 }
+	}
+	option = { # Already fluent
+		name = EVTOPTCcelestial7
+		trigger = { has_character_modifier = multilingual }
+		sound_effect = china_grace_gain
+		tooltip_info = yes
+		custom_tooltip = { text = multilingual_option_available_tt }
+		custom_tooltip = { text = EVTOPTCcelestial7_tt }
+		add_grace_medium_effect = yes
+	}
+	option = { # The translator
+		name = EVTOPTDcelestial7
+		sound_effect = china_grace_gain
+		custom_tooltip = { text = EVTOPTDcelestial7_tt }
+		add_grace_minor_effect = yes
+		ai_chance = { factor = 40 }
+	}
+}
+
+# celestial.8 Flawless
+# The host learned the tongue and greeted the guest flawlessly: a major gain
+# of grace and Student of Language, or Multilingual for a former student.
+# Rarely (15%) the guest leaves a Cathayan treasure (JD.60004), once per
+# life and only if none is held.
+# Scope: the host; FROM is the host (celestial.7), FROMFROM the councillor.
+character_event = {
+	id = celestial.8
+	desc = EVTDESCcelestial8
+	picture = GFX_evt_chinese_bureaucrat
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # celestial.7
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		event_target:cathayan_guest = { is_alive = yes prisoner = no }
+	}
+
+	option = {
+		name = EVTOPTAcelestial8
+		sound_effect = china_grace_gain
+		custom_tooltip = { text = EVTOPTAcelestial8_tt }
+		if = {
+			limit = { has_character_modifier = student_of_language }
+			remove_character_modifier = student_of_language
+			add_character_modifier = { name = multilingual duration = -1 }
+		}
+		else_if = {
+			limit = { NOT = { has_character_modifier = multilingual } }
+			add_character_modifier = { name = student_of_language duration = -1 }
+		}
+		add_grace_major_effect = yes
+		hidden_effect = {
+			if = {
+				limit = { celestial_gift_allowed_trigger = yes }
+				random = {
+					chance = 15
+					set_character_flag = celestial_gift_received
+					character_event = { id = JD.60004 days = 1 }
+				}
+			}
+		}
+	}
+}
+
+# celestial.9 Asleep in the library
+# The host fell asleep over the phrasebook and missed the audience: a major
+# loss of grace.
+# Scope: the host; FROMFROM is the councillor.
+character_event = {
+	id = celestial.9
+	desc = EVTDESCcelestial9
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # celestial.7
+
+	has_dlc = "Jade Dragon"
+	hide_from = yes
+
+	trigger = {
+		event_target:cathayan_guest = { is_alive = yes prisoner = no }
+	}
+
+	option = {
+		name = EVTOPTAcelestial9
+		custom_tooltip = { text = EVTOPTAcelestial9_tt }
+		detract_grace_major_effect = yes
+	}
+}
+
+# celestial.10 Well said
+# A simple greeting, well enough spoken: a medium gain of grace, and one
+# time in ten a Cathayan treasure (JD.60004), once per life and only if none
+# is held.
+# Scope: the host; FROMFROM is the councillor.
+character_event = {
+	id = celestial.10
+	desc = EVTDESCcelestial10
+	picture = GFX_evt_chinese_bureaucrat
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # celestial.7
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		event_target:cathayan_guest = { is_alive = yes prisoner = no }
+	}
+
+	option = {
+		name = EVTOPTAcelestial10
+		sound_effect = china_grace_gain
+		custom_tooltip = { text = EVTOPTAcelestial10_tt }
+		add_grace_medium_effect = yes
+		hidden_effect = {
+			if = {
+				limit = { celestial_gift_allowed_trigger = yes }
+				random = {
+					chance = 10
+					set_character_flag = celestial_gift_received
+					character_event = { id = JD.60004 days = 1 }
+				}
+			}
+		}
+	}
+}
+
+# celestial.11 A stumble
+# The host forgot every other word: a minor loss of grace.
+# Scope: the host; FROMFROM is the councillor.
+character_event = {
+	id = celestial.11
+	desc = EVTDESCcelestial11
+	picture = GFX_evt_china_diplomatic_incident
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # celestial.7
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		event_target:cathayan_guest = { is_alive = yes prisoner = no }
+	}
+
+	option = {
+		name = EVTOPTAcelestial11
+		custom_tooltip = { text = EVTOPTAcelestial11_tt }
+		detract_grace_minor_effect = yes
+	}
+}
+
+# celestial.12 Borrowed silks
+# The host greeted the guest in Cathayan silks bought from a merchant, with
+# marks only the Dragon Emperor's family may wear: a minor loss of grace.
+# The host may punish the merchant (a little gold back, a little cruelty).
+# Scope: the host; FROM is the councillor.
+character_event = {
+	id = celestial.12
+	desc = EVTDESCcelestial12
+	picture = GFX_evt_china_diplomatic_incident
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.4
+
+	has_dlc = "Jade Dragon"
+
+	option = { # Find the merchant
+		name = EVTOPTAcelestial12
+		custom_tooltip = { text = EVTOPTAcelestial12_tt }
+		detract_grace_minor_effect = yes
+		wealth = 25
+		ai_chance = { factor = 50 modifier = { factor = 2 trait = wroth } }
+	}
+	option = { # Laugh at oneself
+		name = EVTOPTBcelestial12
+		trigger = { NOR = { trait = proud trait = vain } }
+		custom_tooltip = { text = EVTOPTAcelestial12_tt }
+		detract_grace_trivial_effect = yes
+		prestige = -10
+		ai_chance = { factor = 50 }
+	}
+}
+
+# celestial.13 Talk about the weather
+# Small talk in the garden about the clear sky is taken as a fine compliment
+# to the Dragon Emperor, the Son of Heaven: a medium gain of grace, and rarely
+# (15%) a Cathayan treasure (JD.60004), once per life and only if none is
+# held. A Cathayan host simply enjoys the talk.
+# Scope: the host; FROM is the councillor.
+character_event = {
+	id = celestial.13
+	desc = { trigger = { NOT = { culture = FROM } } text = EVTDESCcelestial13 }
+	desc = { trigger = { culture = FROM } text = EVTDESCcelestial13_cathayan }
+	picture = GFX_evt_garden
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.4
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = { is_alive = yes prisoner = no }
+	}
+
+	option = {
+		name = EVTOPTAcelestial13
+		sound_effect = china_grace_gain
+		custom_tooltip = { text = EVTOPTAcelestial13_tt }
+		add_grace_medium_effect = yes
+		hidden_effect = {
+			if = {
+				limit = { celestial_gift_allowed_trigger = yes }
+				random = {
+					chance = 15
+					set_character_flag = celestial_gift_received
+					character_event = { id = JD.60004 days = 1 }
+				}
+			}
+		}
+	}
+}
+
+# celestial.18 The guest is lost
+# Hidden. A councillor on a visit died or was jailed: the host hears of it
+# (celestial.19), unless the councillor died going home to Cathay, and is
+# cleared for new guests (celestial.20).
+# Scope: the councillor (dead or jailed).
+character_event = {
+	id = celestial.18
+	hide_window = yes
+	is_triggered_only = yes # on_death, on_imprisoned
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		persistent_event_target:host_of_cathayan_diplomat = { always = yes }
+	}
+
+	immediate = {
+		persistent_event_target:host_of_cathayan_diplomat = {
+			if = {
+				limit = {
+					has_character_flag = cathayan_governor_councilor_guest
+					ROOT = { death_in_cathay_trigger = no }
+				}
+				character_event = { id = celestial.19 }
+			}
+			else = { character_event = { id = celestial.20 } }
+		}
+	}
+}
+
+# celestial.19 An awkward letter
+# The host must tell the Jade Viceroy that the guest died, vanished or sits
+# in a cell. An apology with a gift (50 prestige and 15 gold, which go to
+# Cathay) or silence.
+# Scope: the host; FROM is the councillor.
+character_event = {
+	id = celestial.19
+	desc = {
+		trigger = { FROM = { is_alive = no death_no_trace_trigger = no } }
+		text = EVTDESCcelestial19_death
+	}
+	desc = {
+		trigger = { FROM = { is_alive = yes prisoner = yes } }
+		text = EVTDESCcelestial19_prison
+	}
+	desc = {
+		trigger = { FROM = { is_alive = no death_no_trace_trigger = yes } }
+		text = EVTDESCcelestial19_missing
+	}
+	picture = GFX_evt_chinese_bureaucrat
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.18
+
+	has_dlc = "Jade Dragon"
+
+	option = { # Write to the Viceroy
+		name = EVTOPTAcelestial19
+		prestige = -50
+		wealth = -15
+		add_offmap_currency = { offmap = offmap_cathay value = 15 }
+		offmap_cathay = { governor = { show_portrait = yes } }
+		ai_chance = { factor = 70 }
+	}
+	option = { # Say nothing
+		name = EVTOPTBcelestial19
+		ai_chance = { factor = 30 }
+	}
+
+	after = {
+		character_event = { id = celestial.20 days = 1 }
+	}
+}
+
+# celestial.20 Clean-up
+# Hidden. Clears the visit flags of the host and the guest, so that the host
+# can receive a new guest.
+# Scope: the host. The guest is event_target:cathayan_guest, FROM (from
+#   celestial.18) or FROMFROM (from celestial.19).
+character_event = {
+	id = celestial.20
+	hide_window = yes
+	is_triggered_only = yes # celestial.3, celestial.18, celestial.19
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		clr_character_flag = cathayan_governor_councilor_guest
+		event_target:cathayan_guest = { celestial_clear_mission_effect = yes }
+		FROM = { celestial_clear_mission_effect = yes } # The guest, from celestial.18
+		FROMFROM = { celestial_clear_mission_effect = yes } # The guest, from celestial.19
+	}
+}

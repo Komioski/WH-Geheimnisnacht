@@ -1,7 +1,7 @@
 ###############################################################################
 # The Celestial Court
-# Namespace: celestial (was JD.10022, 10023 and JD.20000 - 20020 in
-#   jd_chinese_diplomacy_events)
+# Namespace: celestial (was JD.10022, 10023, JD.20000 - 20020 and
+#   JD.30000 - 30012 in jd_chinese_diplomacy_events)
 # Faction: Cathay & the East
 #
 # The Jade Viceroy of the West keeps the Dragon Emperor's dealings with the
@@ -13,10 +13,17 @@
 # loses the Emperor's grace. A guest who dies or is jailed on the visit leaves
 # an awkward letter to write.
 #
+# Merchants who cheat Cathay's traders on the roads east bring a stern letter
+# from the Viceroy, and reining them in may anger the vassals whose cities pay
+# for it. A Cathayan who has lived at a lord's court may write home in praise
+# of the host, or storm off swearing the Emperor will hear of an insult.
+#
 # The councillor's visit                celestial.1 - celestial.20
+# Dishonest traders                     celestial.30 - celestial.34
+# A Cathayan guest's verdict            celestial.40 - celestial.42
 #
 # Callers: common/on_actions/00_on_actions.txt, the yearly random list
-# (celestial.1), on_death and on_imprisoned (celestial.18).
+# (celestial.1, .30, .40), on_death and on_imprisoned (celestial.18).
 # Grace effects and triggers: 00_scripted_effects.txt and
 # 00_scripted_triggers.txt (vanilla Jade Dragon). The councillor's parting
 # gift is JD.60004 in jd_artifact_events.txt.
@@ -797,5 +804,334 @@ character_event = {
 		event_target:cathayan_guest = { celestial_clear_mission_effect = yes }
 		FROM = { celestial_clear_mission_effect = yes } # The guest, from celestial.18
 		FROMFROM = { celestial_clear_mission_effect = yes } # The guest, from celestial.19
+	}
+}
+
+###############################################################################
+# Dishonest traders
+###############################################################################
+
+# celestial.30 Complaints from the caravans
+# Hidden. A ruler with a trade post on a road to Grand Cathay (the Ivory
+# Road, the Old Silk Road, the Khyprian Road or the Spice Route) and a vassal
+# with a city hears from the Jade Viceroy (celestial.31).
+# Scope: the ruler.
+character_event = {
+	id = celestial.30
+	hide_window = yes
+	is_triggered_only = yes # on_yearly_pulse random list
+
+	has_dlc = "Jade Dragon"
+	only_playable = yes
+
+	trigger = {
+		NOT = { offmap_cathay = { governor = { character = ROOT } } }
+		cathay_diplo_interaction_trigger = yes
+		any_demesne_province = { ivory_road_cathay_province_trigger = yes }
+		any_vassal = {
+			NOT = { tier = BARON }
+			any_realm_province = { celestial_reprimand_province_trigger = yes }
+		}
+	}
+
+	immediate = {
+		offmap_cathay = { governor = { character_event = { id = celestial.31 } } }
+	}
+}
+
+# celestial.31 The Viceroy writes
+# Hidden. Sends the letter (celestial.32) from the Viceroy.
+# Scope: the Jade Viceroy; FROM is the ruler.
+character_event = {
+	id = celestial.31
+	hide_window = yes
+	is_triggered_only = yes # celestial.30
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		FROM = { letter_event = { id = celestial.32 } }
+	}
+}
+
+# celestial.32 A stern letter
+# The Viceroy complains that the ruler's merchants cheat Cathay's traders.
+# Curbing the guilds in the capital and in the cities of two or three
+# vassals pleases Cathay most (150 grace), but costs city taxes for ten years
+# and may anger the vassals (celestial.33). Setting the spymaster on the worst
+# cheats pleases Cathay less (50) and taxes only the capital, and keeps the
+# spymaster busy for a while unless cunning. Ignoring it costs 150 grace.
+# Scope: the ruler; FROM is the Jade Viceroy.
+letter_event = {
+	id = celestial.32
+	desc = EVTDESCcelestial32
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes # celestial.31
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		job_spymaster = { save_event_target_as = target_spymaster }
+		random_vassal = {
+			limit = { celestial_reprimand_vassal_trigger = yes }
+			save_event_target_as = target_vassal_1
+		}
+		random_vassal = {
+			limit = {
+				celestial_reprimand_vassal_trigger = yes
+				NOT = { character = event_target:target_vassal_1 }
+			}
+			save_event_target_as = target_vassal_2
+		}
+		random_vassal = {
+			limit = {
+				celestial_reprimand_vassal_trigger = yes
+				NOR = {
+					character = event_target:target_vassal_1
+					character = event_target:target_vassal_2
+				}
+			}
+			save_event_target_as = target_vassal_3
+		}
+	}
+
+	option = { # Curb the guilds
+		name = EVTOPTAcelestial32
+		trigger = { event_target:target_vassal_2 = { always = yes } }
+		add_offmap_currency = { offmap = offmap_cathay value = 150 }
+		capital_scope = { add_province_modifier = { name = reprimanded_merchants duration = 3650 } }
+		event_target:target_vassal_1 = { celestial_reprimand_vassal_effect = yes }
+		event_target:target_vassal_2 = { celestial_reprimand_vassal_effect = yes }
+		event_target:target_vassal_3 = { celestial_reprimand_vassal_effect = yes }
+		ai_chance = {
+			factor = 40
+			modifier = {
+				factor = 2
+				is_tributary = { type = offmap suzerain = e_cathay_west_governor }
+			}
+			modifier = { factor = 1.5 trait = just }
+		}
+	}
+	option = { # The spymaster
+		name = EVTOPTBcelestial32
+		trigger = { event_target:target_spymaster = { always = yes } }
+		add_offmap_currency = { offmap = offmap_cathay value = 50 }
+		capital_scope = { add_province_modifier = { name = reprimanded_merchants duration = 3650 } }
+		event_target:target_spymaster = {
+			if = {
+				limit = { NOT = { intrigue = 5 } }
+				add_character_modifier = { name = dealing_with_dishonest_traders duration = 1460 }
+			}
+			else_if = {
+				limit = { NOT = { intrigue = 10 } }
+				add_character_modifier = { name = dealing_with_dishonest_traders duration = 365 }
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 event_target:target_spymaster = { intrigue = 10 } }
+		}
+	}
+	option = { # Not the crown's business
+		name = EVTOPTCcelestial32
+		add_offmap_currency = { offmap = offmap_cathay value = -150 }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 2 trait = proud }
+			modifier = {
+				factor = 0.25
+				is_tributary = { type = offmap suzerain = e_cathay_west_governor }
+			}
+		}
+	}
+}
+
+# celestial.33 The guilds of my cities
+# The vassal hears that the liege curbed the merchants of one of the
+# vassal's cities to please Cathay. A public protest wins a reputation for
+# standing up for the vassals' rights, angers the liege and tells the liege
+# (celestial.34); silence costs a little prestige.
+# Scope: the vassal; FROM is the liege.
+character_event = {
+	id = celestial.33
+	desc = EVTDESCcelestial33
+	picture = GFX_evt_monk
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.32
+
+	has_dlc = "Jade Dragon"
+
+	option = { # Protest
+		name = EVTOPTAcelestial33
+		add_character_modifier = { name = defending_vassal_rights days = 3650 }
+		FROM = {
+			opinion = { who = ROOT modifier = opinion_annoyed multiplier = 2 years = 5 }
+			character_event = { id = celestial.34 days = 14 }
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 trait = ambitious }
+			modifier = { factor = 3 trait = just }
+			modifier = { factor = 3 is_rival = FROM }
+		}
+	}
+	option = { # Keep quiet
+		name = EVTOPTBcelestial33
+		prestige = -25
+		ai_chance = { factor = 40 modifier = { factor = 2 trait = craven } }
+	}
+}
+
+# celestial.34 A vassal protests
+# The vassal's protest costs the liege prestige and sours the vassal.
+# Scope: the liege; FROM is the vassal.
+character_event = {
+	id = celestial.34
+	desc = EVTDESCcelestial34
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.33
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAcelestial34
+		prestige = -20
+		reverse_opinion = { who = FROM modifier = opinion_annoyed multiplier = 2 years = 5 }
+	}
+}
+
+###############################################################################
+# A Cathayan guest's verdict
+###############################################################################
+
+# celestial.40 A guest from the Celestial Court
+# Hidden. A courtier who came from Cathay to this court, and is neither an
+# escaped noble nor a refugee, gives a verdict on the stay, once: praise
+# (celestial.41) from a guest who does not dislike the host, likelier when
+# host and guest share virtues, vices, looks, wit, learning or pastimes;
+# scorn (celestial.42); or nothing.
+# Scope: the host.
+character_event = {
+	id = celestial.40
+	hide_window = yes
+	is_triggered_only = yes # on_yearly_pulse random list
+
+	has_dlc = "Jade Dragon"
+	only_playable = yes
+
+	trigger = {
+		is_adult = yes
+		NOT = { offmap_cathay = { governor = { character = ROOT } } }
+		NOT = { offmap_cathay = { has_policy = cathay_isolationist } }
+		any_courtier = { celestial_verdict_courtier_trigger = yes }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { celestial_verdict_courtier_trigger = yes }
+			set_character_flag = had_opinions_about_host_court
+			save_event_target_as = cathayan_courtier
+			random_list = {
+				10 = { # Praise
+					trigger = { opinion = { who = ROOT value = -30 } }
+					modifier = {
+						factor = 2
+						ROOT = {
+							calc_true_if = {
+								amount = 2
+								trait = honest
+								trait = gregarious
+								trait = trusting
+								trait = affectionate
+								trait = playful
+								trait = socializer
+								trait = charitable
+								trait = patient
+								trait = kind
+							}
+						}
+					}
+					modifier = { factor = 5 celestial_kindred_spirit_trigger = yes }
+					ROOT = { character_event = { id = celestial.41 } }
+				}
+				5 = { # Scorn
+					modifier = {
+						factor = 2
+						opinion = { who = ROOT value = -30 }
+						NOT = { opinion = { who = ROOT value = 0 } }
+					}
+					ROOT = { character_event = { id = celestial.42 } }
+				}
+				1 = { } # No verdict
+			}
+		}
+	}
+}
+
+# celestial.41 Talk until dawn
+# The guest writes home in praise of the host: 150 grace, or 100 grace,
+# prestige and perhaps pride for spreading the word.
+# Scope: the host.
+character_event = {
+	id = celestial.41
+	desc = EVTDESCcelestial41
+	picture = GFX_evt_chinese_bureaucrat
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.40
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAcelestial41
+		sound_effect = china_grace_gain
+		add_offmap_currency = { offmap = offmap_cathay value = 150 }
+		ai_chance = { factor = 70 }
+	}
+	option = {
+		name = EVTOPTBcelestial41
+		prestige = 50
+		add_offmap_currency = { offmap = offmap_cathay value = 100 }
+		random = { chance = 35 add_trait_proud_effect = yes }
+		ai_chance = { factor = 30 }
+	}
+}
+
+# celestial.42 A slip of the tongue
+# The guest storms off, swearing the Emperor will hear of an insult: 100
+# grace lost, or the guest is put under house arrest and the host becomes
+# arbitrary or cruel.
+# Scope: the host.
+character_event = {
+	id = celestial.42
+	desc = EVTDESCcelestial42
+	picture = GFX_evt_china_diplomatic_incident
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.40
+
+	has_dlc = "Jade Dragon"
+
+	option = { # Let it be
+		name = EVTOPTAcelestial42
+		add_offmap_currency = { offmap = offmap_cathay value = -100 }
+		ai_chance = { factor = 80 }
+	}
+	option = { # Arrest the guest
+		name = EVTOPTBcelestial42
+		event_target:cathayan_courtier = {
+			hidden_effect = { imprison = ROOT remove_character_modifier = the_dungeon }
+			add_character_modifier = { name = house_arrest duration = -1 }
+		}
+		random_list = {
+			60 = { add_trait = arbitrary hidden_effect = { character_event = { id = 38266 } } }
+			40 = { add_trait = cruel hidden_effect = { character_event = { id = 38259 } } }
+		}
+		ai_chance = { factor = 20 modifier = { factor = 3 trait = wroth } }
 	}
 }

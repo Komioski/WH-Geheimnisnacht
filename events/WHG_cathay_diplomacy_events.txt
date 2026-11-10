@@ -1,8 +1,8 @@
 ###############################################################################
 # The Celestial Court
 # Namespace: celestial (was JD.10022, 10023, JD.20000 - 20020 and
-#   JD.30000 - 30012, and the cut journey JD.10009 - 10021 and trade contest
-#   JD.40000 - 40011, in jd_chinese_diplomacy_events)
+#   JD.30000 - 30012, JD.70000 - 70009, and the cut journey JD.10009 -
+#   10021 and trade contest JD.40000 - 40011, in jd_chinese_diplomacy_events)
 # Faction: Cathay & the East
 #
 # The Jade Viceroy of the West keeps the Dragon Emperor's dealings with the
@@ -31,6 +31,11 @@
 # the most renown in five years. The winner gains an Imperial trade contract,
 # a Cathayan treasure or great grace; the others lose a little face.
 #
+# A noble whose family fell from the Dragon Emperor's favour may beg a lord
+# for asylum. Sheltering the fugitive risks the Viceroy's demand and the
+# Emperor's assassins; selling the fugitive out wins grace, unless the
+# fugitive is warned in time.
+#
 # Paradox cut the journey and the contest from Jade Dragon; Komi chose to
 # revive both.
 #
@@ -39,9 +44,10 @@
 # A Cathayan guest's verdict            celestial.40 - celestial.42
 # A journey to the Jade Viceroy         celestial.50 - celestial.63
 # The Emperor's trade contest           celestial.70 - celestial.82
+# A fugitive from the Celestial Court   celestial.85 - celestial.93
 #
 # Callers: common/on_actions/00_on_actions.txt, the yearly random list
-# (celestial.1, .30, .40, .50), on_death and on_imprisoned (celestial.18),
+# (celestial.1, .30, .40, .50, .85), on_death and on_imprisoned (celestial.18),
 # on_offmap_yearly_pulse (celestial.70), on_settlement_construction_start
 # (celestial.72) and on_settlement_construction_completed (celestial.73).
 # Grace effects and triggers: 00_scripted_effects.txt and
@@ -2397,5 +2403,346 @@ character_event = {
 
 	immediate = {
 		celestial_contest_clear_effect = yes
+	}
+}
+
+###############################################################################
+# A fugitive from the Celestial Court
+###############################################################################
+
+# celestial.85 A fugitive arrives
+# Hidden. Once in a lord's life, a Cathayan noble whose family was put to
+# death by the Dragon Emperor's order comes to the court seeking asylum
+# (celestial.86). Rare for AI lords.
+# Scope: the lord.
+character_event = {
+	id = celestial.85
+	hide_window = yes
+	is_triggered_only = yes # on_yearly_pulse random list
+
+	has_dlc = "Jade Dragon"
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+	min_age = 16
+
+	trigger = {
+		NOT = { offmap_cathay = { governor = { character = ROOT } } }
+		NOT = { has_character_flag = escaped_cathayan_noble }
+		is_inaccessible_trigger = no
+		cathay_diplo_interaction_trigger = yes
+		offmap_cathay = { NOR = { has_status = cathay_civil_war has_status = cathay_plague } }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 0.05 ai = yes }
+	}
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = cathayan_emperor } }
+		set_character_flag = escaped_cathayan_noble
+		create_character = {
+			random_traits = yes
+			dynasty = actually_culture
+			religion = draconite
+			culture = cathayan
+			historical = yes
+			trait = creature_human
+		}
+		new_character = {
+			set_character_flag = originated_from_cathayan_court
+			set_character_flag = no_court_invites
+			set_character_flag = ignore_refund
+			set_character_flag = is_escaped_cathayan_noble
+			save_event_target_as = escaped_cathayan_noble
+			character_event = { id = celestial.86 days = 1 }
+		}
+	}
+}
+
+# celestial.86 The fugitive asks
+# Hidden. Puts the plea to the lord (celestial.87) with the fugitive as
+# FROM.
+# Scope: the fugitive; FROM is the lord.
+character_event = {
+	id = celestial.86
+	hide_window = yes
+	is_triggered_only = yes # celestial.85
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		FROM = { character_event = { id = celestial.87 days = 1 } }
+	}
+}
+
+# celestial.87 A plea for asylum
+# The fugitive begs for refuge. Sheltering them earns gratitude, and either
+# the Viceroy finds out (celestial.88) or, in time, the fugitive moves on
+# with thanks (celestial.90). Sheltering them while secretly writing to the
+# Viceroy hands them over (celestial.91), unless someone warns them
+# (celestial.92). Or the lord sends them away.
+# Scope: the lord; FROM is the fugitive.
+character_event = {
+	id = celestial.87
+	desc = EVTDESCcelestial87
+	picture = GFX_evt_chinese_bureaucrat
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.86
+
+	has_dlc = "Jade Dragon"
+
+	option = { # Shelter
+		name = EVTOPTAcelestial87
+		custom_tooltip = { text = EVTOPTAcelestial87_tt }
+		event_target:escaped_cathayan_noble = {
+			opinion = { who = ROOT modifier = opinion_very_grateful years = 5 }
+		}
+		hidden_effect = {
+			random_list = {
+				50 = {
+					offmap_cathay = {
+						governor = { character_event = { id = celestial.88 days = 30 } }
+					}
+				}
+				50 = { character_event = { id = celestial.90 days = 100 } }
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 OR = { trait = kind trait = charitable } }
+		}
+	}
+	option = { # Shelter, and write to the Viceroy
+		name = EVTOPTBcelestial87
+		custom_tooltip = { text = EVTOPTBcelestial87_tt }
+		event_target:escaped_cathayan_noble = {
+			opinion = { who = ROOT modifier = opinion_very_grateful years = 5 }
+		}
+		hidden_effect = {
+			random_list = {
+				50 = { character_event = { id = celestial.91 days = 60 } }
+				50 = { character_event = { id = celestial.92 days = 60 } }
+			}
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 OR = { trait = deceitful trait = greedy } }
+			modifier = { factor = 0 trait = honest }
+		}
+	}
+	option = { # Send them away
+		name = EVTOPTCcelestial87
+		custom_tooltip = { text = EVTOPTCcelestial87_tt }
+		event_target:escaped_cathayan_noble = {
+			hidden_effect = { leave_court_and_die_effect = yes }
+		}
+		ai_chance = { factor = 30 modifier = { factor = 2 trait = craven } }
+	}
+}
+
+# celestial.88 The Viceroy hears of it
+# Hidden. Sends the Viceroy's demand (celestial.89).
+# Scope: the Jade Viceroy; FROM is the lord.
+character_event = {
+	id = celestial.88
+	hide_window = yes
+	is_triggered_only = yes # celestial.87
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		FROM = { letter_event = { id = celestial.89 days = 1 } }
+	}
+}
+
+# celestial.89 The Viceroy's demand
+# The Viceroy demands the fugitive. Giving them up hands them over
+# (celestial.91); refusing costs major grace, and the Emperor's assassins
+# may strike (celestial.93) or the fugitive moves on in time (celestial.90).
+# Scope: the lord; FROM is the Jade Viceroy.
+letter_event = {
+	id = celestial.89
+	desc = EVTDESCcelestial89
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes # celestial.88
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		event_target:escaped_cathayan_noble = { is_alive = yes is_landed = no }
+	}
+
+	option = { # Give them up
+		name = EVTOPTAcelestial89
+		custom_tooltip = { text = EVTOPTAcelestial89_tt }
+		character_event = { id = celestial.91 days = 60 }
+		ai_chance = {
+			factor = 50
+			modifier = {
+				factor = 2
+				is_tributary = { type = offmap suzerain = e_cathay_west_governor }
+			}
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBcelestial89
+		custom_tooltip = { text = EVTOPTBcelestial89_tt }
+		detract_grace_major_effect = yes
+		hidden_effect = {
+			random_list = {
+				50 = { character_event = { id = celestial.93 days = 60 } }
+				50 = { character_event = { id = celestial.90 days = 100 } }
+			}
+		}
+		ai_chance = { factor = 50 modifier = { factor = 2 OR = { trait = brave trait = proud } } }
+	}
+}
+
+# celestial.90 A grateful farewell
+# No one came for the fugitive, who moves on. Once per life, if the lord
+# holds no Cathayan treasure, the fugitive leaves an heirloom (a dragon
+# amulet, a silk shroud or a small figurine); otherwise a purse of gold.
+# Scope: the lord.
+character_event = {
+	id = celestial.90
+	desc = EVTDESCcelestial90
+	picture = GFX_evt_chinese_bureaucrat
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.87, celestial.89
+
+	has_dlc = "Jade Dragon"
+	hide_from = yes
+
+	trigger = {
+		event_target:escaped_cathayan_noble = {
+			is_alive = yes
+			prisoner = no
+			is_incapable = no
+			is_landed = no
+		}
+	}
+
+	option = {
+		name = EVTOPTAcelestial90
+		if = {
+			limit = { celestial_gift_allowed_trigger = yes }
+			set_character_flag = celestial_gift_received
+			if = {
+				limit = { NOT = { has_artifact = cathayan_dragon_amulet } }
+				add_artifact = cathayan_dragon_amulet
+			}
+			else_if = {
+				limit = { NOT = { has_artifact = silk_shroud } }
+				add_artifact = silk_shroud
+			}
+			else = {
+				add_artifact = cathayan_prev_emperor_sculpture
+				new_artifact = { set_name = "cathayan_figurine_name" }
+			}
+		}
+		else = { wealth = 100 }
+		event_target:escaped_cathayan_noble = { show_portrait = yes }
+		custom_tooltip = {
+			text = EVTOPTAcelestial90_tt
+			hidden_effect = {
+				event_target:escaped_cathayan_noble = { leave_court_and_die_effect = yes }
+			}
+		}
+	}
+}
+
+# celestial.91 Handed over
+# The Viceroy's guards take the fugitive east to be executed: medium grace.
+# Scope: the lord.
+character_event = {
+	id = celestial.91
+	desc = EVTDESCcelestial91
+	picture = GFX_evt_china_diplomatic_success
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.87, celestial.89
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		event_target:escaped_cathayan_noble = { is_alive = yes is_landed = no }
+	}
+
+	option = {
+		name = EVTOPTAcelestial91
+		sound_effect = china_grace_gain
+		add_grace_medium_effect = yes
+		event_target:escaped_cathayan_noble = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_executed_by_cathayan_emperor } }
+		}
+	}
+}
+
+# celestial.92 Warned
+# Someone warned the fugitive, who fled the night before the guards came:
+# minor grace lost.
+# Scope: the lord.
+character_event = {
+	id = celestial.92
+	desc = EVTDESCcelestial92
+	picture = GFX_evt_chinese_bureaucrat
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.87
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		event_target:escaped_cathayan_noble = { is_alive = yes is_landed = no }
+	}
+
+	immediate = {
+		event_target:escaped_cathayan_noble = { leave_court_and_die_effect = yes }
+	}
+
+	option = {
+		name = EVTOPTAcelestial92
+		detract_grace_minor_effect = yes
+	}
+}
+
+# celestial.93 A length of silk
+# The Emperor's assassins strangle the fugitive with a silk cord.
+# Scope: the lord.
+character_event = {
+	id = celestial.93
+	desc = EVTDESCcelestial93
+	picture = GFX_evt_shadow
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.89
+
+	has_dlc = "Jade Dragon"
+	hide_from = yes
+
+	trigger = {
+		event_target:escaped_cathayan_noble = { is_alive = yes is_landed = no }
+	}
+
+	immediate = {
+		event_target:escaped_cathayan_noble = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = {
+				death = {
+					death_reason = death_murder_unknown_strangle
+					killer = event_target:cathayan_emperor
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAcelestial93
 	}
 }

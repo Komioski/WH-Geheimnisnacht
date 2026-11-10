@@ -1,7 +1,8 @@
 ###############################################################################
 # The Celestial Court
 # Namespace: celestial (was JD.10022, 10023, JD.20000 - 20020 and
-#   JD.30000 - 30012 in jd_chinese_diplomacy_events)
+#   JD.30000 - 30012, and the cut journey JD.10009 - 10021, in
+#   jd_chinese_diplomacy_events)
 # Faction: Cathay & the East
 #
 # The Jade Viceroy of the West keeps the Dragon Emperor's dealings with the
@@ -18,12 +19,20 @@
 # for it. A Cathayan who has lived at a lord's court may write home in praise
 # of the host, or storm off swearing the Emperor will hear of an insult.
 #
+# A courtier may beg to travel to the Jade Viceroy's court at Taharq. The lord
+# can send the volunteer, a spouse, lover, friend or child instead, or no one.
+# Some months later the traveller comes home: with honour and perhaps a
+# Cathayan treasure, with stories, with a scowl, with a Cathayan lover, or
+# longing to go back east for good. (Paradox cut this chain from Jade Dragon;
+# Komi chose to revive it.)
+#
 # The councillor's visit                celestial.1 - celestial.20
 # Dishonest traders                     celestial.30 - celestial.34
 # A Cathayan guest's verdict            celestial.40 - celestial.42
+# A journey to the Jade Viceroy         celestial.50 - celestial.63
 #
 # Callers: common/on_actions/00_on_actions.txt, the yearly random list
-# (celestial.1, .30, .40), on_death and on_imprisoned (celestial.18).
+# (celestial.1, .30, .40, .50), on_death and on_imprisoned (celestial.18).
 # Grace effects and triggers: 00_scripted_effects.txt and
 # 00_scripted_triggers.txt (vanilla Jade Dragon). The councillor's parting
 # gift is JD.60004 in jd_artifact_events.txt.
@@ -1133,5 +1142,736 @@ character_event = {
 			40 = { add_trait = cruel hidden_effect = { character_event = { id = 38259 } } }
 		}
 		ai_chance = { factor = 20 modifier = { factor = 3 trait = wroth } }
+	}
+}
+
+###############################################################################
+# A journey to the Jade Viceroy
+###############################################################################
+
+# celestial.50 Wanderlust
+# Hidden. A playable lord at peace with Cathay, with at least two courtiers
+# who could travel (not eastern, unlanded, not the heir, not a commander),
+# hears one of them, preferably one Cathay likes, ask to go east
+# (celestial.51). Likelier while Cathay thrives, rarer while it suffers or
+# keeps to itself.
+# Scope: the lord.
+character_event = {
+	id = celestial.50
+	hide_window = yes
+	is_triggered_only = yes # on_yearly_pulse random list
+
+	has_dlc = "Jade Dragon"
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+	war = no
+	min_age = 13
+
+	trigger = {
+		mercenary = no
+		NOT = { offmap_cathay = { governor = { character = ROOT } } }
+		NOT = { has_character_flag = cathayan_governor_councilor_guest }
+		NOT = { has_character_flag = is_sending_someone_to_cathay }
+		is_inaccessible_trigger = no
+		cathay_diplo_interaction_trigger = yes
+		offmap_cathay = {
+			NOR = { has_status = cathay_civil_war has_status = cathay_plague }
+			governor = { is_landed = yes }
+		}
+		any_courtier = { count = 2 celestial_traveller_trigger = yes is_heir = no }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.5 cathay_is_fine_trigger = yes }
+		modifier = { factor = 0.5 cathay_is_suffering_trigger = yes }
+		modifier = { factor = 0.5 offmap_cathay = { has_policy = cathay_isolationist } }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { celestial_traveller_trigger = yes is_heir = no }
+			preferred_limit = { is_liked_by_cathay_trigger = yes }
+			save_event_target_as = adventurous_spirit
+			set_character_flag = wants_to_travel_0
+		}
+		event_target:adventurous_spirit = { character_event = { id = celestial.51 } }
+	}
+}
+
+# celestial.51 The courtier asks
+# Hidden. Puts the request to the lord (celestial.52) with the courtier as
+# FROM.
+# Scope: the courtier; FROM is the lord.
+character_event = {
+	id = celestial.51
+	hide_window = yes
+	is_triggered_only = yes # celestial.50
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		FROM = { character_event = { id = celestial.52 } }
+	}
+}
+
+# celestial.52 A journey east
+# The courtier begs to go to the Jade Viceroy's court for the lord's glory.
+# The lord may send the courtier, or someone else: a spouse, lover or friend
+# if one can go, else any courtier; a child who is not the heir, else any
+# courtier. Each shows whether Cathay likes the traveller. The traveller
+# leaves for the Viceroy's court for about a year and comes home
+# (celestial.53). Or the lord says no.
+# Scope: the lord; FROM is the courtier.
+character_event = {
+	id = celestial.52
+	desc = EVTDESCcelestial52
+	picture = GFX_evt_china_open
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.51
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		offmap_cathay = { governor = { save_event_target_as = the_protector_general } }
+		capital_scope = { save_event_target_as = original_court_province_target }
+		random_courtier = { # A companion: spouse, lover, friend or anyone
+			limit = { celestial_traveller_trigger = yes }
+			preferred_limit = { any_spouse = { character = ROOT } }
+			preferred_limit = { any_lover = { character = ROOT } }
+			preferred_limit = { is_friend = ROOT }
+			save_event_target_as = back_up_target_1
+			set_character_flag = wants_to_travel_1
+		}
+		random_courtier = { # Kin: a child who is not the heir, or anyone
+			limit = { celestial_traveller_trigger = yes }
+			preferred_limit = { is_child_of = ROOT is_heir = no }
+			save_event_target_as = back_up_target_2
+			set_character_flag = wants_to_travel_2
+		}
+		set_character_flag = is_sending_someone_to_cathay
+	}
+
+	option = { # Go, with my blessing
+		name = EVTOPTAcelestial52
+		custom_tooltip = { text = EVTOPTAcelestial52_tt }
+		event_target:adventurous_spirit = { celestial_send_traveller_effect = yes }
+		ai_chance = { factor = 40 }
+	}
+	option = { # The companion instead
+		name = EVTOPTBcelestial52
+		trigger = { event_target:back_up_target_1 = { always = yes } }
+		custom_tooltip = { text = EVTOPTBcelestial52_tt }
+		event_target:back_up_target_1 = {
+			celestial_send_traveller_effect = yes
+			save_event_target_as = adventurous_spirit
+		}
+		ai_chance = {
+			factor = 15
+			modifier = {
+				factor = 2
+				event_target:back_up_target_1 = { is_liked_by_cathay_trigger = yes }
+			}
+		}
+	}
+	option = { # The child instead
+		name = EVTOPTCcelestial52
+		trigger = { event_target:back_up_target_2 = { always = yes } }
+		custom_tooltip = { text = EVTOPTCcelestial52_tt }
+		event_target:back_up_target_2 = {
+			celestial_send_traveller_effect = yes
+			save_event_target_as = adventurous_spirit
+		}
+		ai_chance = {
+			factor = 15
+			modifier = {
+				factor = 2
+				event_target:back_up_target_2 = { is_liked_by_cathay_trigger = yes }
+			}
+		}
+	}
+	option = { # No
+		name = EVTOPTDcelestial52
+		custom_tooltip = { text = EVTOPTDcelestial52_tt }
+		clr_character_flag = is_sending_someone_to_cathay
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 offmap_cathay = { has_policy = cathay_isolationist } }
+		}
+	}
+
+	after = {
+		hidden_effect = {
+			any_courtier = {
+				clr_character_flag = wants_to_travel_0
+				clr_character_flag = wants_to_travel_1
+				clr_character_flag = wants_to_travel_2
+			}
+			if = {
+				limit = { has_character_flag = is_sending_someone_to_cathay }
+				event_target:adventurous_spirit = {
+					force_host = event_target:the_protector_general
+					character_event = { id = celestial.53 days = 200 random = 160 }
+				}
+				character_event = { id = celestial.62 days = 370 }
+				character_event = { id = celestial.63 days = 400 }
+			}
+		}
+	}
+}
+
+# celestial.53 Home from the East
+# Hidden. The traveller comes home to the lord, or, if the lord has died, to
+# whoever holds the lord's old capital, and that lord hears how it went:
+# - great (celestial.54) or good (celestial.55), likelier for a pleasant,
+#   diplomatic, well-liked traveller while Cathay thrives;
+# - so-so (celestial.56);
+# - bad (celestial.57) or terrible (celestial.58), likelier for a dull,
+#   clumsy or disliked traveller while Cathay suffers;
+# - a Cathayan lover (celestial.59), for an unattached traveller of a people
+#   with women;
+# - a longing to go back for good (celestial.61), for an unlanded traveller
+#   who is not the lord's spouse.
+# Scope: the traveller; FROM is the lord who sent them.
+character_event = {
+	id = celestial.53
+	hide_window = yes
+	is_triggered_only = yes # celestial.52
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		offmap_cathay = { governor = { save_event_target_as = the_protector_general } }
+		if = {
+			limit = { FROM = { is_alive = yes } }
+			force_host = FROM
+			FROM = { save_event_target_as = new_story_owner }
+		}
+		else = {
+			event_target:original_court_province_target = {
+				owner = {
+					save_event_target_as = new_story_owner
+					ROOT = { force_host = PREV move_character = PREV }
+				}
+			}
+		}
+		random_list = {
+			5 = { # Great
+				trigger = {
+					offmap_cathay = {
+						NOR = { has_status = cathay_civil_war has_status = cathay_plague }
+					}
+				}
+				modifier = { factor = 1.1 cathay_is_fine_trigger = yes }
+				modifier = { factor = 0.5 cathay_is_suffering_trigger = yes }
+				modifier = { factor = 1.1 has_pleasant_trait_trigger = yes }
+				modifier = { factor = 1.1 has_pleasant_personality_trigger = yes }
+				modifier = { factor = 1.1 diplomacy = 10 }
+				modifier = { factor = 1.1 diplomacy = 13 }
+				modifier = { factor = 1.1 diplomacy = 15 }
+				modifier = { factor = 1.1 diplomacy = 17 }
+				modifier = { factor = 1.1 diplomacy = 20 }
+				modifier = { factor = 1.1 stewardship = 10 }
+				modifier = { factor = 1.1 stewardship = 15 }
+				modifier = { factor = 1.1 stewardship = 20 }
+				modifier = { factor = 1.2 is_liked_by_cathay_trigger = yes }
+				modifier = { factor = 1.2 is_disliked_by_cathay_trigger = no }
+				event_target:new_story_owner = { character_event = { id = celestial.54 } }
+			}
+			10 = { # Good
+				trigger = {
+					offmap_cathay = {
+						NOR = { has_status = cathay_civil_war has_status = cathay_plague }
+					}
+				}
+				modifier = { factor = 1.5 cathay_is_fine_trigger = yes }
+				modifier = { factor = 0.5 cathay_is_suffering_trigger = yes }
+				modifier = { factor = 1.1 diplomacy = 10 }
+				modifier = { factor = 1.1 diplomacy = 15 }
+				modifier = { factor = 1.1 diplomacy = 20 }
+				modifier = { factor = 1.1 stewardship = 10 }
+				modifier = { factor = 1.1 is_liked_by_cathay_trigger = yes }
+				modifier = { factor = 1.1 is_disliked_by_cathay_trigger = no }
+				event_target:new_story_owner = { character_event = { id = celestial.55 } }
+			}
+			10 = { # So-so
+				event_target:new_story_owner = { character_event = { id = celestial.56 } }
+			}
+			10 = { # Bad
+				modifier = { factor = 1.5 cathay_is_suffering_trigger = yes }
+				modifier = { factor = 0.5 cathay_is_fine_trigger = yes }
+				modifier = { factor = 0.7 has_top_tier_education_trait_trigger = yes }
+				modifier = { factor = 1.1 is_liked_by_cathay_trigger = no }
+				modifier = { factor = 1.1 is_disliked_by_cathay_trigger = yes }
+				event_target:new_story_owner = { character_event = { id = celestial.57 } }
+			}
+			5 = { # Terrible
+				modifier = { factor = 1.5 cathay_is_suffering_trigger = yes }
+				modifier = { factor = 0.5 is_smart_trigger = yes }
+				modifier = { factor = 0.7 has_top_tier_education_trait_trigger = yes }
+				modifier = { factor = 1.1 is_dumb_trigger = yes }
+				modifier = { factor = 1.1 NOT = { diplomacy = 10 } }
+				modifier = { factor = 1.1 NOT = { diplomacy = 8 } }
+				modifier = { factor = 1.1 NOT = { diplomacy = 5 } }
+				modifier = { factor = 1.1 NOT = { diplomacy = 3 } }
+				modifier = { factor = 1.1 has_unattractive_trait_trigger = yes }
+				modifier = { factor = 1.1 is_unattractive_trigger = yes }
+				modifier = { factor = 1.1 is_liked_by_cathay_trigger = no }
+				modifier = { factor = 1.5 is_disliked_by_cathay_trigger = yes }
+				event_target:new_story_owner = { character_event = { id = celestial.58 } }
+			}
+			10 = { # A Cathayan lover
+				trigger = {
+					is_married = no
+					has_lover = no
+					is_no_females_race = no
+					NOT = { is_consort = event_target:new_story_owner }
+				}
+				modifier = { factor = 1.1 is_attractive_trigger = yes }
+				modifier = { factor = 1.1 has_attractive_trait_trigger = yes }
+				modifier = { factor = 1.1 is_liked_by_cathay_trigger = yes }
+				modifier = { factor = 0.9 is_liked_by_cathay_trigger = no }
+				modifier = { factor = 0.5 is_disliked_by_cathay_trigger = yes }
+				character_event = { id = celestial.59 }
+			}
+			10 = { # Wants to go back
+				trigger = {
+					is_landed = no
+					NOT = { any_spouse = { character = event_target:new_story_owner } }
+				}
+				modifier = { factor = 1.1 has_disease_trigger = no }
+				modifier = { factor = 1.2 is_liked_by_cathay_trigger = yes }
+				modifier = { factor = 0.9 is_liked_by_cathay_trigger = no }
+				modifier = { factor = 0.1 is_disliked_by_cathay_trigger = yes }
+				event_target:new_story_owner = { character_event = { id = celestial.61 } }
+			}
+		}
+	}
+}
+
+# celestial.54 Gifts from the East
+# The traveller comes home in triumph: medium grace and 25 gold for the lord,
+# pride and perhaps bravery for the traveller. Half the time, once per life
+# and only if the lord holds no Cathayan treasure, the Viceroy sent one along.
+# Scope: the lord; FROM is the traveller.
+character_event = {
+	id = celestial.54
+	desc = EVTDESCcelestial54
+	picture = GFX_evt_whispers
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.53
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		if = {
+			limit = { celestial_gift_allowed_trigger = yes }
+			random = {
+				chance = 50
+				set_character_flag = cathayan_traveler_artifact
+				set_character_flag = celestial_gift_received
+				celestial_viceroy_gift_effect = yes
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAcelestial54
+		sound_effect = china_grace_gain
+		custom_tooltip = { text = EVTOPTAcelestial54_tt }
+		FROM = {
+			add_trait_silently_proud_effect = yes
+			remove_trait_silently_humble_effect = yes
+			random = { chance = 50 add_trait_brave_effect = yes }
+			remove_character_modifier = out_traveling
+		}
+		wealth = 25
+		if = {
+			limit = { has_character_flag = cathayan_traveler_artifact }
+			tooltip = {
+				event_target:cathayan_artifact = {
+					show_scope_change = no
+					transfer_artifact = { from = FROM to = ROOT }
+				}
+			}
+			clr_character_flag = cathayan_traveler_artifact
+		}
+		add_grace_medium_effect = yes
+		clr_character_flag = is_sending_someone_to_cathay
+	}
+}
+
+# celestial.55 Tales from the East
+# The traveller brings coins and stories: minor grace, and perhaps patience.
+# Scope: the lord; FROM is the traveller.
+character_event = {
+	id = celestial.55
+	desc = EVTDESCcelestial55
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.53
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAcelestial55
+		sound_effect = china_grace_gain
+		custom_tooltip = { text = EVTOPTAcelestial55_tt }
+		add_grace_minor_effect = yes
+		FROM = {
+			random = { chance = 50 add_trait_patient_effect = yes }
+			remove_character_modifier = out_traveling
+		}
+		clr_character_flag = is_sending_someone_to_cathay
+	}
+}
+
+# celestial.56 A letter of greeting
+# A tired traveller, a sealed letter from the Viceroy: trivial grace.
+# Scope: the lord; FROM is the traveller.
+character_event = {
+	id = celestial.56
+	desc = EVTDESCcelestial56
+	picture = GFX_evt_recieve_letter
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.53
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAcelestial56
+		sound_effect = china_grace_gain
+		add_grace_trivial_effect = yes
+		FROM = { remove_character_modifier = out_traveling }
+		clr_character_flag = is_sending_someone_to_cathay
+	}
+}
+
+# celestial.57 A tirade
+# The traveller hated it: trivial grace lost, and perhaps a stressed
+# traveller.
+# Scope: the lord; FROM is the traveller.
+character_event = {
+	id = celestial.57
+	desc = EVTDESCcelestial57
+	picture = GFX_evt_quarrel
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.53
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAcelestial57
+		custom_tooltip = { text = EVTOPTAcelestial57_tt }
+		detract_grace_trivial_effect = yes
+		FROM = {
+			random = { chance = 50 add_trait = stressed }
+			remove_character_modifier = out_traveling
+		}
+		clr_character_flag = is_sending_someone_to_cathay
+	}
+}
+
+# celestial.58 A disgrace
+# The traveller shamed the lord at the Viceroy's court: minor grace lost, a
+# shy traveller, and perhaps a depressed one.
+# Scope: the lord; FROM is the traveller.
+character_event = {
+	id = celestial.58
+	desc = EVTDESCcelestial58
+	picture = GFX_evt_quarrel
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.53
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAcelestial58
+		custom_tooltip = { text = EVTOPTAcelestial58_tt }
+		detract_grace_minor_effect = yes
+		FROM = {
+			add_trait_silently_shy_effect = yes
+			remove_trait_silently_gregarious_effect = yes
+			random = { chance = 25 add_trait = depressed }
+			remove_character_modifier = out_traveling
+		}
+		clr_character_flag = is_sending_someone_to_cathay
+	}
+}
+
+# celestial.59 Someone from Taharq
+# Hidden. Creates the traveller's Cathayan lover, of the Viceroy's culture
+# and faith (a woman for a man, a man for a woman), makes them lovers and
+# gives the traveller the wish to marry; the lord meets the lover
+# (celestial.60).
+# Scope: the traveller.
+character_event = {
+	id = celestial.59
+	hide_window = yes
+	is_triggered_only = yes # celestial.53
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		if = {
+			limit = { is_woman_trigger = yes }
+			create_character = {
+				age = 25
+				dynasty = actually_culture
+				religion = event_target:the_protector_general
+				culture = event_target:the_protector_general
+				female = no
+				health = 6
+				random_traits = yes
+				historical = yes
+			}
+		}
+		else = {
+			create_character = {
+				age = 25
+				dynasty = actually_culture
+				religion = event_target:the_protector_general
+				culture = event_target:the_protector_general
+				female = yes
+				health = 6
+				random_traits = yes
+				historical = yes
+			}
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			save_event_target_as = new_found_lover
+			if = { limit = { is_no_females_race = no } add_lover = ROOT }
+		}
+		add_ambition = obj_get_married
+		event_target:new_story_owner = { character_event = { id = celestial.60 } }
+	}
+}
+
+# celestial.60 A guest from the East
+# The traveller brings home a Cathayan lover. The lord may welcome the lover
+# to court, or send the lover away, which the traveller will not forgive (a
+# stressed traveller turns depressed). Either way, medium grace.
+# Scope: the lord; FROM is the traveller.
+character_event = {
+	id = celestial.60
+	desc = EVTDESCcelestial60
+	picture = GFX_evt_scandal
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.59
+
+	has_dlc = "Jade Dragon"
+	hide_new = yes
+
+	option = { # Welcome
+		name = EVTOPTAcelestial60
+		sound_effect = china_grace_gain
+		custom_tooltip = { text = EVTOPTAcelestial60_tt }
+		event_target:new_found_lover = { move_character = ROOT set_character_flag = gets_to_stay }
+		FROM = { remove_character_modifier = out_traveling }
+		add_grace_medium_effect = yes
+		ai_chance = { factor = 70 }
+	}
+	option = { # No room for strangers
+		name = EVTOPTBcelestial60
+		sound_effect = china_grace_gain
+		custom_tooltip = { text = EVTOPTBcelestial60_tt }
+		FROM = {
+			remove_character_modifier = out_traveling
+			if = { limit = { trait = stressed } add_trait = depressed }
+		}
+		reverse_opinion = { who = FROM modifier = opinion_sent_my_lover_away years = 20 }
+		event_target:new_found_lover = {
+			set_character_flag = has_to_leave
+			hidden_effect = { leave_court_for_cathay_effect = yes }
+		}
+		add_grace_medium_effect = yes
+		ai_chance = { factor = 30 }
+	}
+
+	after = {
+		clr_character_flag = is_sending_someone_to_cathay
+	}
+}
+
+# celestial.61 The call of the East
+# The traveller wants to go back to Cathay for good. Letting them go (with
+# spouse and young children of their own) earns major grace; refusing
+# angers them, a diplomat can soften it, and a lord they love deeply can
+# plead with them to stay. Each refusal earns medium grace for the courtesy
+# shown at the Viceroy's court.
+# Scope: the lord; FROM is the traveller.
+character_event = {
+	id = celestial.61
+	desc = EVTDESCcelestial61
+	picture = GFX_evt_son_asking_father
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.53
+
+	has_dlc = "Jade Dragon"
+
+	option = { # Let them go
+		name = {
+			text = EVTOPTAcelestial61
+			trigger = {
+				NOR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+					is_dumb_trigger = yes
+					trait = poet
+					trait = kind
+				}
+			}
+		}
+		name = {
+			text = EVTOPTAcelestial61_lunatic
+			trigger = { OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } }
+		}
+		name = {
+			text = EVTOPTAcelestial61_imbecile
+			trigger = {
+				is_dumb_trigger = yes
+				NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+			}
+		}
+		name = {
+			text = EVTOPTAcelestial61_poet
+			trigger = {
+				OR = { trait = poet trait = kind }
+				NOR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+					is_dumb_trigger = yes
+				}
+			}
+		}
+		sound_effect = china_grace_gain
+		if = {
+			limit = {
+				FROM = {
+					OR = {
+						is_married = yes
+						any_child = { NOT = { is_child_of = ROOT } is_adult = no }
+					}
+				}
+			}
+			custom_tooltip = { text = EVTOPTAcelestial61_family_tt }
+		}
+		else = { custom_tooltip = { text = EVTOPTAcelestial61_solo_tt } }
+		FROM = {
+			hidden_effect = {
+				remove_character_modifier = out_traveling
+				any_spouse = {
+					limit = { NOT = { character = ROOT } }
+					leave_court_for_cathay_effect = yes
+				}
+				any_child = {
+					limit = { NOT = { is_child_of = ROOT } is_adult = no }
+					leave_court_for_cathay_effect = yes
+				}
+				leave_court_for_cathay_effect = yes
+			}
+		}
+		add_grace_major_effect = yes
+		if = {
+			limit = { FROM = { is_child_of = ROOT } }
+			set_character_flag = let_child_go_to_cathay
+		}
+		ai_chance = { factor = 30 modifier = { factor = 0.2 FROM = { is_child_of = ROOT } } }
+	}
+	option = { # Out of the question
+		name = EVTOPTBcelestial61
+		sound_effect = china_grace_gain
+		custom_tooltip = { text = EVTOPTBcelestial61_tt }
+		add_grace_medium_effect = yes
+		FROM = { remove_character_modifier = out_traveling }
+		reverse_opinion = { who = FROM modifier = opinion_angry years = 15 }
+		ai_chance = { factor = 30 }
+	}
+	option = { # Surely you don't mean it
+		name = EVTOPTCcelestial61
+		trigger = { diplomacy = 15 }
+		tooltip_info = diplomacy
+		custom_tooltip = { text = EVTOPTCcelestial61_tt }
+		add_grace_medium_effect = yes
+		FROM = { remove_character_modifier = out_traveling }
+		reverse_opinion = { who = FROM modifier = opinion_disgruntled years = 15 }
+		ai_chance = { factor = 50 }
+	}
+	option = { # Plead from the heart
+		name = EVTOPTDcelestial61
+		trigger = { reverse_opinion = { who = FROM value = 60 } }
+		tooltip_info = yes
+		custom_tooltip = { text = EVTOPTDcelestial61_tt }
+		sound_effect = china_grace_gain
+		add_grace_medium_effect = yes
+		FROM = { remove_character_modifier = out_traveling }
+		reverse_opinion = { who = FROM modifier = opinion_feels_appreciated years = 10 }
+		ai_chance = { factor = 50 }
+	}
+
+	after = {
+		clr_character_flag = is_sending_someone_to_cathay
+	}
+}
+
+# celestial.62 Word from Taharq
+# The traveller died abroad (not by leaving for Cathay or vanishing), and
+# the Viceroy sends condolences.
+# Scope: the lord who sent the traveller.
+character_event = {
+	id = celestial.62
+	desc = EVTDESCcelestial62
+	picture = GFX_evt_recieve_letter
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # celestial.52
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		has_character_flag = is_sending_someone_to_cathay
+		event_target:adventurous_spirit = {
+			is_alive = no
+			death_in_cathay_trigger = no
+			death_no_trace_trigger = no
+		}
+	}
+
+	option = {
+		name = EVTOPTAcelestial62
+		custom_tooltip = { text = EVTOPTAcelestial62_tt }
+		clr_character_flag = is_sending_someone_to_cathay
+	}
+}
+
+# celestial.63 Clean-up
+# Hidden. Clears the journey flag, whatever became of the traveller, so the
+# lord may send someone again.
+# Scope: the lord.
+character_event = {
+	id = celestial.63
+	hide_window = yes
+	is_triggered_only = yes # celestial.52
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		clr_character_flag = is_sending_someone_to_cathay
 	}
 }

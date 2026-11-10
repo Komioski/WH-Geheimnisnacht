@@ -23,9 +23,12 @@ PRE_TRIGGERS = set('''only_playable only_rulers only_independent only_men only_w
     culture_group has_dlc is_part_of_plot war is_married is_female ai has_character_flag
     has_global_flag is_patrician is_in_society has_job_title friends rivals lacks_dlc
     is_sick is_pregnant age has_flag is_night'''.split())
+# lacks_dlc counts as strong: the mod expects every DLC, so it fails for
+# nearly every player.
 STRONG_PRE = set('''only_playable only_rulers only_independent religion religion_group is_sick
     culture culture_group has_character_flag has_global_flag ai is_patrician
-    is_in_society has_job_title has_flag min_age_40_plus is_part_of_plot'''.split())
+    is_in_society has_job_title has_flag min_age_40_plus is_part_of_plot
+    lacks_dlc'''.split())
 # Hooks that fire for every character again and again. on_adolescence (once in
 # a lifetime) and on_startup (once per game load) are left out: a cheap trigger
 # there costs next to nothing.

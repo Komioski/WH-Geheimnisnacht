@@ -1,6 +1,8 @@
 ###############################################################################
 # Revolts
-# Namespace: revolt (was TOG.1000 - TOG.1191 in rebel_events_the_old_gods.txt)
+# Namespace: revolt (was TOG.1000 - TOG.1191 in rebel_events_the_old_gods.txt,
+#   HL.2000 - HL.2011 in rebel_events_horse_lords.txt and 80000 - 80062 in
+#   rebel_events.txt)
 # Faction: Generic
 # Serves: every realm
 #
@@ -12,23 +14,38 @@
 # county to their faith or culture and leave unrest behind, and the mob may
 # kill someone who lived there. The undead never rise and lizardmen are built
 # to obey; where greenskins, beastmen or the jungle already trouble a county,
-# that trouble comes instead of a revolt.
+# that trouble comes instead of a revolt. Under a nomad lord a lesser clan or
+# herd may rise to demand a place among the great ones, its chieftain often
+# sworn to a Dark God. Without The Old Gods the old rebel system runs
+# instead: rebels who hold a county burn it, fall on those who live there and
+# may hand it to another ruler.
 #
 # Peasants                             revolt.1 - revolt.5
 # Zealots of a heresy                  revolt.10 - revolt.14
 # A lost kingdom                       revolt.20 - revolt.24
 # The faithful of another faith        revolt.30 - revolt.34
-# The mob                              revolt.90 - revolt.91
+# Minor clans                          revolt.40 - revolt.44
+# The mob                              revolt.90 - revolt.94
+# Without The Old Gods                 revolt.100 - revolt.122
 #
 # Fired from: on_rebel_revolt (risings and reinforcements),
 #   on_siege_over_winner (county seats taken) and on_siege_over_loc_chars
-#   (revolt.90) in 00_on_actions.txt; revolt.1 also from WHG_chaos_cult_events,
+#   (revolt.90; revolt.92 from on_siege_over_winner) in 00_on_actions.txt;
+#   the old rebel system (revolt.100, revolt.110, revolt.120) runs on mean
+#   time to happen, behind
+#   lacks_dlc = "The Old Gods"; revolt.1 also from WHG_chaos_cult_events,
 #   WHG_chaos_horde_events, WHG_vampire_events and DR_misc_events (flag
 #   force_peasant_revolt). Shared triggers are in WHG_old_gods_triggers.txt.
 #   The scripted effects that raise the armies (spawn_*_army_effect,
-#   spawn_*_reinforcements_effect) are in 00_scripted_effects.txt.
+#   spawn_*_reinforcements_effect) are in 00_scripted_effects.txt; those of
+#   the minor clans (revolt_clan_*_effect) in WHG_old_gods_effects.txt.
 # Saved: flags heretic_revolter, religious_revolter (on the leaders, set by
-#   the effects), force_peasant_revolt (province, set by the callers).
+#   the effects), force_peasant_revolt (province, set by the callers);
+#   event targets minor_clan_revolt_leader, province_top_liege,
+#   revolt_burned_lord, revolt_burned_holding, revolt_defected_from; flags
+#   revolt_band_* (cleared by revolt_clan_bands_effect), revolt_caught_*
+#   (cleared by revolt.94 and revolt.110); global flag
+#   possible_province_defection (cleared by revolt.121).
 ###############################################################################
 
 namespace = revolt
@@ -1638,19 +1655,29 @@ character_event = {
 ###############################################################################
 
 # revolt.90 The mob breaks in
-# Rebels who take a holding may kill someone who lived there, though rarely
-# a woman or a child, and zealots and the faithful spare those of their own
-# faith. The victim's lieges hear of it (revolt.91).
+# Rebels who take a holding may fall on someone who lived there, though
+# rarely a woman or a child, and zealots and the faithful spare those of
+# their own faith. As in the old rebel system, half the victims are killed,
+# a quarter maimed and a quarter wounded (the invincible shrug it off). The
+# victim's lieges hear of it (revolt.91).
 # Scope: ROOT is the local character, FROM the holding taken, new_character
 #   the owner of the winning unit. From on_siege_over_loc_chars.
 character_event = {
 	id = revolt.90
 	desc = {
-		trigger = { is_invincible_trigger = no }
+		trigger = { has_character_flag = revolt_caught_killed }
 		text = EVTDESCrevolt90
 	}
 	desc = {
-		trigger = { is_invincible_trigger = yes }
+		trigger = { has_character_flag = revolt_caught_maimed }
+		text = EVTDESCrevolt90_maimed
+	}
+	desc = {
+		trigger = { has_character_flag = revolt_caught_wounded }
+		text = EVTDESCrevolt90_wounded
+	}
+	desc = {
+		trigger = { has_character_flag = revolt_caught_survived }
 		text = EVTDESCrevolt90_survive
 	}
 	picture = GFX_evt_beheading
@@ -1688,34 +1715,80 @@ character_event = {
 	immediate = {
 		if = {
 			limit = { is_invincible_trigger = yes }
-			antideath_effect = yes
+			set_character_flag = revolt_caught_survived
 		}
 		else = {
+			random_list = {
+				50 = { set_character_flag = revolt_caught_killed }
+				25 = {
+					trigger = { is_maimed_trigger = no }
+					set_character_flag = revolt_caught_maimed
+				}
+				25 = {
+					trigger = { NOT = { trait = wounded } }
+					set_character_flag = revolt_caught_wounded
+				}
+			}
 			any_liege = { # Inform the victim's lieges
 				character_event = { id = revolt.91 }
 			}
-			death = { death_reason = death_rabble }
 		}
 	}
 
 	option = {
 		name = {
-			trigger = { is_invincible_trigger = no }
+			trigger = { has_character_flag = revolt_caught_killed }
 			text = EVTOPTArevolt90
 		}
 		name = {
-			trigger = { is_invincible_trigger = yes }
+			trigger = { has_character_flag = revolt_caught_maimed }
+			text = EVTOPTArevolt90_maimed
+		}
+		name = {
+			trigger = { has_character_flag = revolt_caught_wounded }
+			text = EVTOPTArevolt90_wounded
+		}
+		name = {
+			trigger = { has_character_flag = revolt_caught_survived }
 			text = EVTOPTArevolt90_survive
+		}
+		if = {
+			limit = { has_character_flag = revolt_caught_killed }
+			death = { death_reason = death_rabble }
+		}
+		else_if = {
+			limit = { has_character_flag = revolt_caught_maimed }
+			add_maimed_trait_effect = yes
+		}
+		else_if = {
+			limit = { has_character_flag = revolt_caught_wounded }
+			add_trait = wounded
+		}
+		if = { # The lieges' notices read the flags, so they go a little later
+			limit = { NOT = { has_character_flag = revolt_caught_killed } }
+			hidden_tooltip = { character_event = { id = revolt.94 days = 3 } }
 		}
 	}
 }
 
-# revolt.91 Killed by the rebels
-# Scope: ROOT is a liege of the victim, FROM the victim, FROMFROM the holding.
+# revolt.91 Fallen to the rebels
+# Scope: ROOT is a liege of the victim, FROM the victim (flag
+#   revolt_caught_*), FROMFROM the holding.
 character_event = {
 	id = revolt.91
+	desc = {
+		trigger = { FROM = { has_character_flag = revolt_caught_killed } }
+		text = EVTDESCrevolt91
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = revolt_caught_maimed } }
+		text = EVTDESCrevolt91_maimed
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = revolt_caught_wounded } }
+		text = EVTDESCrevolt91_wounded
+	}
 	picture = GFX_evt_beheading
-	desc = EVTDESCrevolt91
 	border = GFX_event_normal_frame_war
 
 	is_triggered_only = yes
@@ -1726,5 +1799,771 @@ character_event = {
 
 	option = {
 		name = EVTOPTArevolt91
+	}
+}
+
+# revolt.94 Clean-up
+# Hidden. Clears the flags of revolt.90 once the lieges have heard.
+# Scope: ROOT is the survivor.
+character_event = {
+	id = revolt.94
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = revolt_caught_maimed
+		clr_character_flag = revolt_caught_wounded
+		clr_character_flag = revolt_caught_survived
+	}
+}
+
+# revolt.92 The rebels sack the holding
+# Hidden. A third of the time, rebels who take a holding with buildings
+# burn one, and its holder hears of it (revolt.93).
+# Scope: ROOT is the owner of the winning unit, FROM the holding taken.
+#   From on_siege_over_winner.
+character_event = {
+	id = revolt.92
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		rebel = yes
+		FROM = {
+			num_of_buildings = 1
+			has_holder = yes
+		}
+	}
+
+	immediate = {
+		random = {
+			chance = 33
+			FROM = {
+				save_event_target_as = revolt_burned_holding
+				holder_scope = {
+					character_event = { id = revolt.93 }
+				}
+			}
+		}
+	}
+}
+
+# revolt.93 My holding burns
+# Scope: ROOT is the holder, FROM the rebel; event_target:
+#   revolt_burned_holding the holding.
+character_event = {
+	id = revolt.93
+	desc = EVTDESCrevolt93
+	picture = GFX_evt_burning_house
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt100
+		event_target:revolt_burned_holding = {
+			destroy_random_building = yes
+		}
+	}
+}
+
+###############################################################################
+# Minor clans
+###############################################################################
+
+# revolt.40 A minor clan rises
+# Under a nomad lord (Horse Lords), a lesser clan of the lord's own people
+# rises in a county away from the capital, under a chieftain with two
+# kinsmen, and demands a place among the great clans: a temporary rebel
+# title and a war on the top liege. Where the clans follow the Dark Gods the
+# chieftain is sworn to one of them, now and then already a champion
+# (revolt_clan_leader_effect); a beastman herd rises on foot. Every liege of
+# the owner hears of it (revolt.41).
+# Scope: ROOT is the county. From on_rebel_revolt.
+province_event = {
+	id = revolt.40
+	desc = {
+		trigger = { NOT = { culture_group = beastman_group } }
+		text = EVTDESCrevolt40
+	}
+	desc = {
+		trigger = { culture_group = beastman_group }
+		text = EVTDESCrevolt40_herd
+	}
+	picture = GFX_evt_steppe_mercenaries
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "Horse Lords"
+
+		has_empty_holding = yes # Room for the clan's seat
+
+		owner = {
+			is_nomadic = yes
+			independent = yes
+			culture = ROOT
+			risks_minor_clan_rising = yes
+			in_revolt = no
+			capital_scope = {
+				NOT = { province = ROOT }
+			}
+		}
+
+		NOT = { # Not while a minor clan rising is under way
+			owner = {
+				top_liege = {
+					war = yes
+					any_war = {
+						defender = { character = PREV }
+						using_cb = cb_minor_clan_revolt
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		add_province_modifier = {
+			name = recent_county_uprising
+			duration = 1825 # Five years without another rising here
+		}
+
+		owner = {
+			top_liege = {
+				save_event_target_as = province_top_liege
+			}
+		}
+
+		revolt_clan_leader_effect = yes
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			create_title = {
+				tier = KING
+				landless = yes
+				temporary = yes
+				rebel = yes
+				culture = ROOT
+				name = "MINOR_CLAN_REVOLT"
+				holder = THIS
+				nomad = yes
+			}
+			set_appropriate_nomad_gov = yes
+
+			save_event_target_as = minor_clan_revolt_leader
+
+			wealth = 500
+			prestige = 500
+			population = 3000
+			manpower = 500
+
+			create_character = { # The chieftain's kinsmen
+				random_traits = yes
+				dynasty = none
+				religion = THIS
+				culture = THIS
+				female = no
+				age = 16
+				attributes = {
+					martial = 7
+				}
+				trait = barbarian_3
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Racial trait
+				dynasty = event_target:minor_clan_revolt_leader
+				set_father = event_target:minor_clan_revolt_leader
+			}
+			create_character = {
+				random_traits = yes
+				dynasty = none
+				religion = THIS
+				culture = THIS
+				female = no
+				age = 17
+				attributes = {
+					martial = 7
+				}
+				trait = barbarian_3
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Racial trait
+				dynasty = event_target:minor_clan_revolt_leader
+				set_father = event_target:minor_clan_revolt_leader
+			}
+
+			revolt_clan_bands_effect = yes
+
+			ROOT = { # War on the top liege
+				owner = {
+					top_liege = {
+						add_population_scaled = -0.1
+						reverse_war = {
+							target = event_target:minor_clan_revolt_leader
+							casus_belli = cb_minor_clan_revolt
+							thirdparty_title = ROOT # The county
+						}
+						reverse_opinion = {
+							who = event_target:minor_clan_revolt_leader
+							modifier = opinion_evil_tyrant
+						}
+					}
+				}
+			}
+		}
+
+		owner = {
+			any_liege = {
+				character_event = { id = revolt.41 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTArevolt40
+	}
+}
+
+# revolt.41 A minor clan has risen
+# Scope: ROOT is a liege of the owner, FROM the county.
+character_event = {
+	id = revolt.41
+	desc = {
+		trigger = { FROM = { NOT = { culture_group = beastman_group } } }
+		text = EVTDESCrevolt41
+	}
+	desc = {
+		trigger = { FROM = { culture_group = beastman_group } }
+		text = EVTDESCrevolt41_herd
+	}
+	picture = GFX_evt_steppe_mercenaries
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt40
+	}
+}
+
+# revolt.42 The clan takes a holding
+# Hidden. Two years of unrest in the county.
+# Scope: ROOT is the clan chieftain, FROM the holding taken. From
+#   on_siege_over_winner.
+character_event = {
+	id = revolt.42
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		rebel = yes
+		any_war = {
+			attacker = { character = ROOT }
+			using_cb = cb_minor_clan_revolt
+		}
+	}
+
+	immediate = {
+		FROM = {
+			location = {
+				if = {
+					limit = {
+						NOT = { has_province_modifier = peasant_unrest }
+					}
+					add_province_modifier = {
+						name = peasant_unrest
+						duration = 730
+					}
+				}
+			}
+		}
+	}
+}
+
+# revolt.43 More of the clan rise
+# Reinforces an ongoing minor clan rising: three more bands for the chieftain
+# (revolt_clan_bands_effect), raised like the first ones (on foot for a
+# herd). Every liege of the owner hears of it (revolt.44).
+# Scope: ROOT is the county. From on_rebel_revolt.
+province_event = {
+	id = revolt.43
+	desc = EVTDESCrevolt43
+	picture = GFX_evt_steppe_mercenaries
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "Horse Lords"
+
+		any_province_holding = {
+			NOT = { holding_type = nomad }
+		}
+
+		owner = { # A minor clan rising is under way
+			top_liege = {
+				war = yes
+				any_war = {
+					defender = { character = PREV }
+					using_cb = cb_minor_clan_revolt
+				}
+			}
+		}
+	}
+
+	immediate = {
+		add_province_modifier = {
+			name = recent_county_uprising
+			duration = 1825 # Five years without another rising here
+		}
+
+		owner = {
+			top_liege = {
+				save_event_target_as = province_top_liege
+				any_war = {
+					limit = {
+						defender = { character = PREV }
+						using_cb = cb_minor_clan_revolt
+					}
+					attacker = {
+						revolt_clan_bands_effect = yes
+					}
+				}
+			}
+		}
+
+		owner = {
+			any_liege = {
+				character_event = { id = revolt.44 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTArevolt40
+	}
+}
+
+# revolt.44 More of the clan have risen
+# Scope: ROOT is a liege of the owner, FROM the county.
+character_event = {
+	id = revolt.44
+	desc = EVTDESCrevolt44
+	picture = GFX_evt_steppe_mercenaries
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt40
+	}
+}
+
+###############################################################################
+# Without The Old Gods
+###############################################################################
+# The old rebel system, kept for players without The Old Gods: rebels who
+# hold a county burn buildings, fall on the lords and folk who live there,
+# and may hand a far-off county to another ruler.
+
+# revolt.100 The rebels burn the county
+# A lord of the county loses a building. The owner hears it here, a baron
+# by letter (revolt.101).
+# Scope: ROOT is the county, held by rebels.
+province_event = {
+	id = revolt.100
+	desc = EVTDESCrevolt100
+	picture = GFX_evt_burning_house
+
+	lacks_dlc = "The Old Gods"
+
+	trigger = {
+		num_of_settlements = 1
+		controlled_by = e_rebels # Early out
+		revolt_county_rebel_held_trigger = yes
+		any_province_lord = {
+			any_demesne_title = {
+				location = { province_id = ROOT }
+				tier = BARON
+				num_of_buildings = 1
+			}
+		}
+	}
+
+	mean_time_to_happen = {
+		months = 24
+	}
+
+	immediate = {
+		random_province_lord = {
+			limit = {
+				any_demesne_title = {
+					location = { province_id = ROOT }
+					tier = BARON
+					num_of_buildings = 1
+				}
+			}
+			save_event_target_as = revolt_burned_lord
+		}
+	}
+
+	option = {
+		name = {
+			trigger = { owner = { character = event_target:revolt_burned_lord } }
+			text = EVTOPTArevolt100
+		}
+		name = {
+			trigger = { NOT = { owner = { character = event_target:revolt_burned_lord } } }
+			text = EVTOPTBrevolt100
+		}
+		if = {
+			limit = { owner = { character = event_target:revolt_burned_lord } }
+			owner = {
+				random_demesne_title = {
+					limit = {
+						location = { province_id = ROOT }
+						tier = BARON
+						num_of_buildings = 1
+					}
+					destroy_random_building = yes
+				}
+			}
+		}
+		else = {
+			hidden_tooltip = {
+				event_target:revolt_burned_lord = {
+					character_event = { id = revolt.101 days = 1 }
+				}
+			}
+		}
+	}
+}
+
+# revolt.101 The rebels burn my holding
+# Scope: ROOT is the baron, FROM the county.
+character_event = {
+	id = revolt.101
+	desc = EVTDESCrevolt101
+	picture = GFX_evt_burning_house
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt100
+		random_demesne_title = {
+			limit = {
+				location = { province_id = FROM }
+				tier = BARON
+				num_of_buildings = 1
+			}
+			destroy_random_building = yes
+		}
+	}
+}
+
+# revolt.110 The rebels fall on me
+# A lord or anyone else who lives in a rebel-held county is caught by the
+# rebels: killed (half the time), maimed or wounded. The greater the lord,
+# the rarer it is (four years for a duke or above, three for a count, two
+# for a baron, ten for anyone else). The liege hears of it (revolt.111 -
+# revolt.113). Was four events (80005 - 80020).
+# Scope: ROOT is the character.
+character_event = {
+	id = revolt.110
+	desc = EVTDESCrevolt110
+	picture = GFX_evt_peasants
+
+	lacks_dlc = "The Old Gods"
+	prisoner = no
+
+	trigger = {
+		location = {
+			controlled_by = e_rebels # Early out
+			is_land = yes
+			revolt_county_rebel_held_trigger = yes
+		}
+		in_command = no
+		OR = {
+			is_ruler = no
+			age = 16
+		}
+		NOT = { has_global_flag = possible_province_defection }
+		is_inaccessible_trigger = no
+	}
+
+	mean_time_to_happen = {
+		months = 24
+		modifier = {
+			factor = 2
+			is_ruler = yes
+			primary_title = { higher_tier_than = COUNT }
+		}
+		modifier = {
+			factor = 1.5
+			is_ruler = yes
+			primary_title = { tier = COUNT }
+		}
+		modifier = {
+			factor = 5
+			is_ruler = no
+		}
+	}
+
+	immediate = {
+		random_list = {
+			50 = { set_character_flag = revolt_caught_killed }
+			25 = { set_character_flag = revolt_caught_maimed }
+			25 = { set_character_flag = revolt_caught_wounded }
+		}
+	}
+
+	option = { # Killed
+		name = EVTOPTArevolt110
+		trigger = { has_character_flag = revolt_caught_killed }
+		if = {
+			limit = {
+				OR = {
+					is_ruler = no
+					independent = no
+				}
+			}
+			hidden_tooltip = {
+				liege = { character_event = { id = revolt.111 days = 3 } }
+			}
+		}
+		if = {
+			limit = { is_invincible_trigger = yes }
+			antideath_effect = yes
+		}
+		else = {
+			death = { death_reason = death_rabble }
+		}
+	}
+	option = { # Maimed
+		name = EVTOPTBrevolt110
+		trigger = { has_character_flag = revolt_caught_maimed }
+		if = {
+			limit = {
+				OR = {
+					is_ruler = no
+					independent = no
+				}
+			}
+			hidden_tooltip = {
+				liege = { letter_event = { id = revolt.112 days = 3 } }
+			}
+		}
+		add_maimed_trait_effect = yes
+	}
+	option = { # Wounded
+		name = EVTOPTCrevolt110
+		trigger = { has_character_flag = revolt_caught_wounded }
+		if = {
+			limit = {
+				OR = {
+					is_ruler = no
+					independent = no
+				}
+			}
+			hidden_tooltip = {
+				liege = { letter_event = { id = revolt.113 days = 3 } }
+			}
+		}
+		add_trait = wounded
+	}
+
+	after = {
+		clr_character_flag = revolt_caught_killed
+		clr_character_flag = revolt_caught_maimed
+		clr_character_flag = revolt_caught_wounded
+	}
+}
+
+# revolt.111 Killed by the rebels
+# Scope: ROOT is the liege, FROM the victim.
+character_event = {
+	id = revolt.111
+	desc = EVTDESCrevolt111
+	picture = GFX_evt_death
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt111
+	}
+}
+
+# revolt.112 Maimed by the rebels
+# Scope: ROOT is the liege, FROM the victim.
+letter_event = {
+	id = revolt.112
+	desc = EVTDESCrevolt112
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt112
+	}
+}
+
+# revolt.113 Wounded by the rebels
+# Scope: ROOT is the liege, FROM the victim.
+letter_event = {
+	id = revolt.113
+	desc = EVTDESCrevolt113
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt113
+	}
+}
+
+# revolt.120 The rebels change sides
+# A rebel-held county cut off from the rest of its realm, inland, not its
+# owner's last county and not in a de jure duchy the realm holds, defects
+# to a neighbouring ruler (rebel_defection). One county at a time
+# (global flag possible_province_defection, cleared by revolt.121).
+# Scope: ROOT is the county.
+province_event = {
+	id = revolt.120
+	desc = EVTDESCrevolt120
+	picture = GFX_evt_peasants
+
+	lacks_dlc = "The Old Gods"
+
+	trigger = {
+		NOT = { has_global_flag = possible_province_defection }
+
+		num_of_settlements = 1
+		controlled_by = e_rebels
+		revolt_county_rebel_held_trigger = yes
+
+		owner = {
+			top_liege = { independent = yes } # Not in an independence war
+			OR = { # Not a player's last county
+				ai = yes
+				any_demesne_province = {
+					NOT = { province_id = ROOT }
+				}
+			}
+			top_liege = { # Not the only county of the realm
+				any_realm_province = {
+					NOT = { province_id = ROOT }
+				}
+			}
+		}
+
+		NOT = { # Cut off from the rest of the realm
+			any_neighbor_province = {
+				has_owner = yes
+				owner = {
+					top_liege = {
+						ROOT = {
+							owner = {
+								top_liege = {
+									character = PREVPREVPREV
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		any_neighbor_province = { # Not an island
+			has_owner = yes
+			is_land = yes
+		}
+		port = no
+		NOT = { # Not in a de jure duchy held within the realm
+			duchy = {
+				holder_scope = {
+					top_liege = {
+						ROOT = {
+							owner = {
+								top_liege = {
+									character = PREVPREVPREV
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	mean_time_to_happen = {
+		months = 1
+	}
+
+	immediate = {
+		set_global_flag = possible_province_defection
+		owner = { save_event_target_as = revolt_defected_from }
+	}
+
+	option = {
+		name = EVTOPTArevolt120
+		county = {
+			rebel_defection = yes
+		}
+		hidden_tooltip = {
+			province_event = { id = revolt.121 days = 3 }
+			clear_revolt = yes
+		}
+	}
+}
+
+# revolt.121 The rebels swear to a new ruler
+# The new owner hears it here; the old owner, the old liege and the old top
+# liege by notice (revolt.122).
+# Scope: ROOT is the county, FROM the county.
+province_event = {
+	id = revolt.121
+	desc = EVTDESCrevolt121
+	picture = GFX_evt_peasants
+
+	show_from_from = no
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt121
+		hidden_tooltip = {
+			event_target:revolt_defected_from = {
+				character_event = { id = revolt.122 days = 3 }
+				if = {
+					limit = { independent = no }
+					liege = { character_event = { id = revolt.122 days = 3 } }
+					if = {
+						limit = {
+							top_liege = {
+								NOT = { is_liege_of = PREV }
+							}
+						}
+						top_liege = { character_event = { id = revolt.122 days = 3 } }
+					}
+				}
+			}
+			clr_global_flag = possible_province_defection
+		}
+	}
+}
+
+# revolt.122 The rebels have changed sides
+# Scope: ROOT is the old owner or one of the old lieges, FROM and FROMFROM
+#   the county.
+character_event = {
+	id = revolt.122
+	desc = EVTDESCrevolt122
+	picture = GFX_evt_peasants
+
+	show_from_from = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt122
 	}
 }

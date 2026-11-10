@@ -48,6 +48,10 @@
 # trade office. A lord may also borrow from the caravan houses
 # (WHG_cathay_decisions.txt), who will want their gold back.
 #
+# A lord may travel to Wei-Jin to kowtow before the Dragon Emperor; the
+# road east and the days in Cathay hold their own scenes (see that part's
+# header).
+#
 # Paradox cut the journey and the contest from Jade Dragon; Komi chose to
 # revive both.
 #
@@ -60,6 +64,7 @@
 # Refugees from Cathay                 celestial.95 - celestial.98
 # A travelling scholar                 celestial.100 - celestial.101
 # The caravan houses                    celestial.105 - celestial.106
+# The kowtow (namespace kowtow)        kowtow.1 - kowtow.72
 #
 # Callers: common/on_actions/00_on_actions.txt, the yearly random list
 # (celestial.1, .30, .40, .50, .85, .95, .100, .105, .106), on_death and
@@ -3533,5 +3538,1771 @@ character_event = {
 		name = EVTOPTBcelestial106
 		economy_techpoints = -50
 		ai_chance = { factor = 10 }
+	}
+}
+
+###############################################################################
+# The kowtow
+# Namespace: kowtow (was JD.32000 - 32299 and JD.15000 - 15017, in
+#   jd_kowtow_events)
+#
+# A lord who wants the Dragon Emperor's grace may travel to Wei-Jin to
+# kowtow before the Celestial Throne (the offmap decision
+# cathayan_kow_tow_pilgrimage). The farther from Cathay, the more happens
+# on the road east: rain and grief, a lord's invitation (and perhaps a
+# poisoned cup), a band of hobgoblin raiders, ogre sell-swords or starving
+# deserters, homesick letters and a pedlar with a Cathayan treasure. In
+# Cathay the traveller may play the game of stones, join a temple rite,
+# discuss the Annals of the Jade Sages or haggle in the markets, and each
+# choice weighs on the Emperor's impression. At the audience the lord bows
+# before the Emperor himself, before his empty throne, or before only a
+# painting of him, and gains grace and the Emperor's favour at a price in
+# pride. War or a Cathay that closes its gates ends the journey.
+#
+# On the road east                       kowtow.1 - kowtow.45
+# In Grand Cathay                        kowtow.50 - kowtow.58
+# The audience                           kowtow.60
+# The journey cut short                  kowtow.70 - kowtow.72
+#
+# Callers: decisions/wh_orient_decisions.txt (kowtow.1),
+# on_offmap_policy_changed (kowtow.70) and on_war_started (kowtow.72) in
+# common/on_actions/00_on_actions.txt. Shared code is in the kowtow
+# sections of WHG_cathay_diplomacy_effects.txt and _triggers.txt.
+###############################################################################
+
+namespace = kowtow
+
+# kowtow.1 The journey east
+# The traveller takes leave and sets out for Grand Cathay.
+# Scope: the traveller.
+character_event = {
+	id = kowtow.1
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow1
+	picture = GFX_evt_china_open
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes # decision cathayan_kow_tow_pilgrimage
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAkowtow1
+		add_trait = kow_tow_travels
+		hidden_effect = { character_event = { id = kowtow.2 } }
+	}
+}
+
+# kowtow.2 Planning the road
+# Hidden. The farther the traveller's capital lies from the Gnoblar country
+# at Cathay's western edge, the more scenes the road east holds (one to
+# four).
+# Scope: the traveller.
+character_event = {
+	id = kowtow.2
+	hide_window = yes
+	is_triggered_only = yes # kowtow.1
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		save_event_target_as = kow_tow_traveler
+		set_variable = { which = kow_tow_emperor_impression_evaluation value = 0 }
+		capital_scope = {
+			if = {
+				limit = { distance = { where = 2137 value < 500 } }
+				ROOT = { set_variable = { which = cathay_kow_tow_travel_events value = 1 } }
+			}
+			else_if = {
+				limit = { distance = { where = 2137 value < 900 } }
+				ROOT = { set_variable = { which = cathay_kow_tow_travel_events value = 2 } }
+			}
+			else_if = {
+				limit = { distance = { where = 2137 value < 1500 } }
+				ROOT = { set_variable = { which = cathay_kow_tow_travel_events value = 3 } }
+			}
+			else = { ROOT = { set_variable = { which = cathay_kow_tow_travel_events value = 4 } } }
+		}
+		character_event = { id = kowtow.3 days = 110 random = 30 }
+	}
+}
+
+# kowtow.3 On the road
+# Hidden. Rolls the next road scene, each at most once per journey: rain
+# and grief, a lord's invitation (far from Cathay only), a band on the
+# road, homesickness or a pedlar. With no scenes left, or none that fits,
+# the traveller reaches Cathay (kowtow.50).
+# Scope: the traveller.
+character_event = {
+	id = kowtow.3
+	hide_window = yes
+	is_triggered_only = yes # kowtow.2, kowtow_return_to_road_effect
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		save_event_target_as = kow_tow_traveler
+		if = {
+			limit = { check_variable = { which = cathay_kow_tow_travel_events value = 1 } }
+			random_list = {
+				50 = {
+					trigger = {
+						NOT = { has_character_flag = kow_tow_heavy_rain }
+						OR = {
+							father_even_if_dead = { kowtow_mourned_trigger = yes }
+							mother_even_if_dead = { kowtow_mourned_trigger = yes }
+							any_sibling_even_if_dead = { kowtow_mourned_trigger = yes }
+						}
+					}
+					set_character_flag = kowtow_scene_sent
+					character_event = { id = kowtow.10 }
+				}
+				50 = {
+					trigger = {
+						NOT = { has_character_flag = kow_tow_invited_by_local_lord }
+						check_variable = { which = cathay_kow_tow_travel_events value = 2 }
+						any_playable_ruler = { kowtow_road_host_trigger = yes }
+					}
+					set_character_flag = kowtow_scene_sent
+					character_event = { id = kowtow.20 }
+				}
+				50 = {
+					trigger = { NOT = { has_character_flag = met_mercenaries } }
+					set_character_flag = kowtow_scene_sent
+					character_event = { id = kowtow.30 }
+				}
+				50 = {
+					trigger = {
+						NOT = { has_character_flag = missed_loved_one }
+						any_courtier_or_vassal = { kowtow_missed_one_trigger = yes }
+					}
+					set_character_flag = kowtow_scene_sent
+					character_event = { id = kowtow.40 }
+				}
+				50 = {
+					trigger = {
+						NOT = { has_character_flag = met_traveling_merchant }
+						NOT = { any_artifact = { count = 15 has_artifact_flag = cathayan } }
+					}
+					set_character_flag = kowtow_scene_sent
+					character_event = { id = kowtow.45 }
+				}
+			}
+		}
+		if = {
+			limit = { has_character_flag = kowtow_scene_sent }
+			clr_character_flag = kowtow_scene_sent
+		}
+		else_if = {
+			limit = { check_variable = { which = cathay_kow_tow_travel_events value = 1 } }
+			# Nothing fits: the rest of the road is long and dull
+			character_event = { id = kowtow.50 days = 150 random = 60 }
+		}
+		else = { character_event = { id = kowtow.50 days = 50 random = 30 } }
+	}
+}
+
+# kowtow.10 Rain on the road
+# Rain keeps the caravan in camp, and the traveller remembers a dead parent
+# or sibling: honour them (honouring the dead) or press on (carrying on).
+# Scope: the traveller.
+character_event = {
+	id = kowtow.10
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow10
+	picture = GFX_evt_carriage_default
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes # kowtow.3
+	hide_from = yes
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		set_character_flag = kow_tow_heavy_rain
+		hidden_effect = {
+			random_list = {
+				50 = {
+					trigger = { father_even_if_dead = { kowtow_mourned_trigger = yes } }
+					father_even_if_dead = { save_event_target_as = target_relative }
+				}
+				50 = {
+					trigger = { mother_even_if_dead = { kowtow_mourned_trigger = yes } }
+					mother_even_if_dead = { save_event_target_as = target_relative }
+				}
+				50 = {
+					trigger = { any_sibling_even_if_dead = { kowtow_mourned_trigger = yes } }
+					random_sibling_even_if_dead = {
+						limit = { kowtow_mourned_trigger = yes }
+						save_event_target_as = target_relative
+					}
+				}
+			}
+		}
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAkowtow10_young
+			trigger = { event_target:target_relative = { is_adult = no } }
+		}
+		name = {
+			text = EVTOPTAkowtow10_pious
+			trigger = { event_target:target_relative = { is_pious_trigger = yes } }
+		}
+		name = {
+			text = EVTOPTAkowtow10_genius
+			trigger = { event_target:target_relative = { trait = genius } }
+		}
+		name = {
+			text = EVTOPTAkowtow10_mystic
+			trigger = { event_target:target_relative = { trait = mystic } }
+		}
+		name = {
+			text = EVTOPTAkowtow10_brave
+			trigger = {
+				event_target:target_relative = {
+					OR = {
+						trait = brave
+						AND = {
+							NOT = { trait = craven }
+							OR = {
+								trait = holy_warrior
+								trait = unyielding_leader
+								trait = inspiring_leader
+								trait = experimenter
+							}
+						}
+					}
+				}
+			}
+		}
+		name = {
+			text = EVTOPTAkowtow10_charming
+			trigger = { event_target:target_relative = { is_attractive_trigger = yes } }
+		}
+		name = {
+			text = EVTOPTAkowtow10_just
+			trigger = { event_target:target_relative = { trait = just } }
+		}
+		name = {
+			text = EVTOPTAkowtow10_kind
+			trigger = { event_target:target_relative = { has_benevolent_trait_trigger = yes } }
+		}
+		name = {
+			text = EVTOPTAkowtow10_cruel
+			trigger = {
+				event_target:target_relative = {
+					OR = {
+						trait = cruel
+						trait = impaler
+						trait = greedy
+						trait = wroth
+						trait = deceitful
+						trait = lunatic_1
+						trait = lunatic_2
+						trait = lunatic_3
+						trait = possessed
+					}
+				}
+			}
+		}
+		name = {
+			text = EVTOPTAkowtow10_learned
+			trigger = { event_target:target_relative = { is_learned_trigger = yes } }
+		}
+		name = EVTOPTAkowtow10_good
+		event_target:target_relative = { show_portrait = yes }
+		custom_tooltip = { text = EVTOPTAkowtow10_tt }
+		add_character_modifier = { name = honoring_the_dead years = 5 }
+	}
+
+	option = {
+		name = EVTOPTBkowtow10
+		add_character_modifier = { name = carrying_on years = 2 }
+	}
+
+	after = {
+		kowtow_return_to_road_effect = yes
+	}
+}
+
+# kowtow.20 An invitation
+# A count or duke on the roads east invites the traveller to stay. A
+# schemer may use a rival's welcome to poison them (kowtow.23); otherwise
+# accept (kowtow.21) or keep to the tent.
+# Scope: the traveller.
+character_event = {
+	id = kowtow.20
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow20
+	picture = GFX_evt_courier
+	border = GFX_event_normal_frame_diplomacy
+	portrait = event_target:target_host
+	is_triggered_only = yes # kowtow.3
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		set_character_flag = kow_tow_invited_by_local_lord
+		random_playable_ruler = {
+			limit = { kowtow_road_host_trigger = yes }
+			preferred_limit = { is_rival = ROOT }
+			preferred_limit = { NOT = { num_of_friends = 3 } }
+			save_event_target_as = target_host
+		}
+	}
+
+	option = {
+		name = EVTOPTAkowtow20
+		trigger = { trait = schemer event_target:target_host = { is_rival = ROOT } }
+		tooltip_info = schemer
+		custom_tooltip = { text = EVTOPTAkowtow20_tt }
+		character_event = { id = kowtow.23 days = 7 random = 4 }
+		ai_chance = { factor = 10 }
+	}
+
+	option = {
+		name = {
+			text = EVTOPTBkowtow20
+			trigger = { NOT = { event_target:target_host = { is_rival = ROOT } } }
+		}
+		name = {
+			text = EVTOPTBkowtow20_rival
+			trigger = { event_target:target_host = { is_rival = ROOT } }
+		}
+		custom_tooltip = { text = EVTOPTBkowtow20_tt }
+		character_event = { id = kowtow.21 days = 7 random = 4 }
+		ai_chance = { factor = 70 }
+	}
+
+	option = {
+		name = EVTOPTCkowtow20
+		random_list = {
+			25 = { add_trait = content }
+			25 = { add_trait = shy }
+			50 = { }
+		}
+		kowtow_return_to_road_effect = yes
+		ai_chance = { factor = 20 }
+	}
+}
+
+# kowtow.21 The host's table
+# A pleasant stay; or a new friendship with the host; or a rival's poisoned
+# cup, which kills half the time and otherwise leaves the traveller in a
+# ditch (kowtow.22).
+# Scope: the traveller.
+character_event = {
+	id = kowtow.21
+	title = EVTTITLE_JD_KOWTOW
+	desc = {
+		text = EVTDESCkowtow21
+		trigger = {
+			NOR = { has_character_flag = possible_friendship has_character_flag = possible_murder }
+		}
+	}
+	desc = { text = EVTDESCkowtow21_friend trigger = { has_character_flag = possible_friendship } }
+	desc = { text = EVTDESCkowtow21_poison trigger = { has_character_flag = possible_murder } }
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_diplomacy
+	portrait = event_target:target_host
+	is_triggered_only = yes # kowtow.20
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		hidden_effect = {
+			random_list = {
+				50 = {
+					trigger = {
+						event_target:target_host = { NOR = { is_rival = ROOT is_friend = ROOT } }
+					}
+					set_character_flag = possible_friendship
+				}
+				25 = {
+					trigger = { event_target:target_host = { is_rival = ROOT } }
+					modifier = { factor = 8 event_target:target_host = { trait = deceitful } }
+					set_character_flag = possible_murder
+				}
+				50 = { }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAkowtow21
+		trigger = {
+			NOR = { has_character_flag = possible_friendship has_character_flag = possible_murder }
+		}
+		add_character_modifier = { name = good_nights_sleep months = 12 }
+		if = {
+			limit = { is_rival = event_target:target_host }
+			remove_rival = event_target:target_host
+		}
+	}
+
+	option = {
+		name = EVTOPTBkowtow21
+		trigger = { has_character_flag = possible_friendship }
+		add_character_modifier = { name = good_nights_sleep months = 5 }
+		add_friend = event_target:target_host
+		ai_chance = { factor = 70 }
+	}
+
+	option = {
+		name = EVTOPTCkowtow21
+		trigger = { has_character_flag = possible_friendship }
+		add_character_modifier = { name = good_nights_sleep months = 5 }
+		ai_chance = { factor = 30 }
+	}
+
+	option = {
+		name = EVTOPTDkowtow21
+		trigger = { has_character_flag = possible_murder }
+		random_list = {
+			50 = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = {
+					death = { death_reason = death_murder_poison killer = event_target:target_host }
+				}
+			}
+			50 = {
+				custom_tooltip = { text = EVTOPTDkowtow21_tt }
+				character_event = { id = kowtow.22 }
+			}
+		}
+	}
+
+	after = {
+		clr_character_flag = possible_murder
+		clr_character_flag = possible_friendship
+		if = { limit = { is_alive = yes } kowtow_return_to_road_effect = yes }
+	}
+}
+
+# kowtow.22 A warning in the ditch
+# The traveller survives the rival's poison with a warning and a sick
+# stomach (food poisoning with The Reaper's Due, else poisoned).
+# Scope: the traveller.
+character_event = {
+	id = kowtow.22
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow22
+	picture = GFX_evt_drunk
+	border = GFX_event_normal_frame_diplomacy
+	portrait = event_target:target_host
+	is_triggered_only = yes # kowtow.21
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	option = {
+		name = EVTOPTAkowtow22
+		if = {
+			limit = { has_dlc = "Reapers" }
+			give_food_poisoning_effect = yes
+			custom_tooltip = { text = EVTOPTAkowtow22_tt }
+		}
+		else = { add_character_modifier = { name = poisoned months = 6 } }
+	}
+}
+
+# kowtow.23 Fatal hospitality
+# The schemer's poison plot at a rival's table: the rival dies and the
+# schemer slips away (likelier with high intrigue); both die; or the plot is
+# found out and the schemer is cut down.
+# Scope: the traveller.
+narrative_event = {
+	id = kowtow.23
+	title = EVTTITLEkowtow23
+	desc = { text = EVTDESCkowtow23_escape trigger = { has_character_flag = successful_murder } }
+	desc = {
+		text = EVTDESCkowtow23_caught
+		trigger = { has_character_flag = successful_murder_but_caught }
+	}
+	desc = {
+		text = EVTDESCkowtow23_failed
+		trigger = {
+			NOR = {
+				has_character_flag = successful_murder
+				has_character_flag = successful_murder_but_caught
+			}
+		}
+	}
+	border = GFX_event_narrative_frame_intrigue
+	portrait = event_target:target_host
+	is_triggered_only = yes # kowtow.20
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		random_list = {
+			15 = {
+				modifier = { factor = 3 intrigue = 18 }
+				modifier = { factor = 2 trait = elusive_shadow }
+				set_character_flag = successful_murder
+			}
+			30 = { set_character_flag = successful_murder_but_caught }
+			30 = {
+				modifier = { factor = 0.6 intrigue = 16 }
+				modifier = { factor = 0.5 event_target:target_host = { trait = trusting } }
+				modifier = { factor = 3 event_target:target_host = { intrigue = 14 } }
+				modifier = { factor = 1.5 event_target:target_host = { trait = paranoid } }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAkowtow23
+		trigger = { has_character_flag = successful_murder }
+		event_target:target_host = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_murder_poison killer = ROOT } }
+		}
+		change_intrigue = 1
+	}
+
+	option = {
+		name = EVTOPTBkowtow23
+		trigger = { has_character_flag = successful_murder_but_caught }
+		event_target:target_host = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_murder_poison killer = ROOT } }
+		}
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = { death = { death_reason = death_murder killer = event_target:target_host } }
+	}
+
+	option = {
+		name = EVTOPTCkowtow23
+		trigger = {
+			NOR = {
+				has_character_flag = successful_murder
+				has_character_flag = successful_murder_but_caught
+			}
+		}
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = { death = { death_reason = death_murder killer = event_target:target_host } }
+	}
+
+	after = {
+		clr_character_flag = successful_murder
+		clr_character_flag = successful_murder_but_caught
+		if = { limit = { is_alive = yes } kowtow_return_to_road_effect = yes }
+	}
+}
+
+# kowtow.30 A band on the road
+# Hidden. Picks who the traveller meets by Cathay's state and makes their
+# captain (kowtow_road_captain_effect): hobgoblin raiders taking a toll
+# while Cathay is at war or in unrest (kowtow.31), ogre sell-swords offering
+# an escort in peace or unrest (kowtow.32), or starving Cathayan deserters
+# in famine or plague (kowtow.33).
+# Scope: the traveller.
+character_event = {
+	id = kowtow.30
+	hide_window = yes
+	is_triggered_only = yes # kowtow.3
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		set_character_flag = met_mercenaries
+		if = {
+			limit = {
+				offmap_cathay = { OR = { has_status = cathay_famine has_status = cathay_plague } }
+			}
+			set_character_flag = kowtow_band_starving
+		}
+		else_if = {
+			limit = {
+				offmap_cathay = {
+					OR = { has_status = cathay_stable has_status = cathay_golden_age }
+				}
+			}
+			set_character_flag = kowtow_band_escort
+		}
+		else_if = {
+			limit = { offmap_cathay = { has_status = cathay_unrest } }
+			random_list = {
+				50 = { set_character_flag = kowtow_band_escort }
+				50 = { set_character_flag = kowtow_band_toll }
+			}
+		}
+		else = { set_character_flag = kowtow_band_toll }
+		kowtow_road_captain_effect = yes
+		if = {
+			limit = { has_character_flag = kowtow_band_toll }
+			character_event = { id = kowtow.31 }
+		}
+		else_if = {
+			limit = { has_character_flag = kowtow_band_escort }
+			character_event = { id = kowtow.32 }
+		}
+		else = { character_event = { id = kowtow.33 } }
+		clr_character_flag = kowtow_band_toll
+		clr_character_flag = kowtow_band_escort
+		clr_character_flag = kowtow_band_starving
+	}
+}
+
+# kowtow.31 A toll at the bridge
+# Hobgoblin raiders demand a toll: pay, fight your way through (escape,
+# a maiming, or death, by strength and skill), or, for an impaler, spear
+# the chief.
+# Scope: the traveller.
+character_event = {
+	id = kowtow.31
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow31
+	picture = GFX_evt_china_diplomatic_success
+	border = GFX_event_normal_frame_diplomacy
+	portrait = event_target:other_ruler
+	is_triggered_only = yes # kowtow.30
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	option = {
+		name = EVTOPTAkowtow31
+		transfer_scaled_wealth = { to = event_target:other_ruler value = 0.25 min = 50 }
+		prestige = -100
+		custom_tooltip = { text = EVTOPTAkowtow31_tt }
+		ai_chance = { factor = 60 }
+	}
+
+	option = {
+		name = EVTOPTCkowtow31
+		trigger = { trait = impaler }
+		tooltip_info = impaler
+		custom_tooltip = { text = EVTOPTCkowtow31_tt }
+		event_target:other_ruler = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_murder_butchered killer = ROOT } }
+		}
+		ai_chance = { factor = 100 }
+	}
+
+	option = {
+		name = EVTOPTBkowtow31
+		random_list = {
+			50 = {
+				modifier = { factor = 2 is_strong_trigger = yes }
+				modifier = { factor = 2 event_target:other_ruler = { is_weak_trigger = yes } }
+				modifier = {
+					factor = 2
+					combat_rating_diff = { who = event_target:other_ruler value = 10 }
+				}
+				modifier = {
+					factor = 2
+					attribute_diff = {
+						character = event_target:other_ruler
+						attribute = martial
+						value = 3
+					}
+				}
+				custom_tooltip = { text = you_get_away_tt }
+			}
+			10 = {
+				modifier = { factor = 1.5 is_weak_trigger = yes }
+				hidden_effect = { add_maimed_trait_effect = yes }
+				custom_tooltip = { text = you_dont_get_away_tt }
+			}
+			5 = {
+				modifier = { factor = 2 is_weak_trigger = yes }
+				hidden_effect = {
+					if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+					else = {
+						death = { death_reason = death_duel killer = event_target:other_ruler }
+					}
+				}
+				custom_tooltip = { text = you_will_be_killed_in_a_duel_tt }
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.2 trait = craven }
+		}
+	}
+
+	after = {
+		kowtow_road_captain_leaves_effect = yes
+		if = { limit = { is_alive = yes } kowtow_return_to_road_effect = yes }
+	}
+}
+
+# kowtow.32 Ogres for hire
+# Ogre sell-swords mistake the traveller's caravan for the one that hired
+# them: hire them as bodyguards (hired body guards, three years) or send
+# them on.
+# Scope: the traveller.
+character_event = {
+	id = kowtow.32
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow32
+	picture = GFX_evt_china_rebel_general
+	border = GFX_event_normal_frame_diplomacy
+	portrait = event_target:other_ruler
+	is_triggered_only = yes # kowtow.30
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	option = {
+		name = EVTOPTAkowtow32
+		custom_tooltip = { text = EVTOPTAkowtow32_tt }
+		transfer_scaled_wealth = { to = event_target:other_ruler value = 0.5 min = 10 }
+		add_character_modifier = { name = hired_body_guards years = 3 }
+		ai_chance = { factor = 50 modifier = { factor = 0 NOT = { wealth = 50 } } }
+	}
+
+	option = {
+		name = EVTOPTBkowtow32
+		custom_tooltip = { text = EVTOPTBkowtow32_tt }
+		ai_chance = { factor = 50 }
+	}
+
+	after = {
+		kowtow_road_captain_leaves_effect = yes
+		kowtow_return_to_road_effect = yes
+	}
+}
+
+# kowtow.33 Starving deserters
+# Starving Cathayan soldiers bar the road: share the food (a friend, the
+# kind, charity), take their captain into service, or pass them by.
+# Scope: the traveller.
+character_event = {
+	id = kowtow.33
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow33
+	picture = GFX_evt_china_famine
+	border = GFX_event_normal_frame_diplomacy
+	portrait = event_target:other_ruler
+	is_triggered_only = yes # kowtow.30
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	option = {
+		name = EVTOPTAkowtow33
+		custom_tooltip = { text = EVTOPTAkowtow33_tt }
+		scaled_wealth = { value = -0.2 min = -25 }
+		add_friend = event_target:other_ruler
+		event_target:other_ruler = {
+			show_scope_change = no
+			hidden_effect = { set_character_flag = kowtow_captain_stays }
+		}
+		add_character_modifier = { name = the_kind years = 10 }
+		if = { limit = { trait = greedy } remove_trait = greedy }
+		else_if = { limit = { NOT = { trait = charitable } } add_trait = charitable }
+		ai_chance = { factor = 30 modifier = { factor = 3 has_benevolent_trait_trigger = yes } }
+	}
+
+	option = {
+		name = EVTOPTBkowtow33
+		custom_tooltip = { text = EVTOPTBkowtow33_tt }
+		scaled_wealth = { value = -0.05 min = -5 }
+		event_target:other_ruler = {
+			show_scope_change = no
+			hidden_effect = { set_character_flag = kowtow_captain_stays move_character = ROOT }
+		}
+		reverse_opinion = {
+			who = event_target:other_ruler
+			modifier = opinion_loyal_servant
+			years = 100
+		}
+		ai_chance = { factor = 40 }
+	}
+
+	option = {
+		name = EVTOPTCkowtow33
+		custom_tooltip = { text = EVTOPTCkowtow33_tt }
+		ai_chance = { factor = 30 modifier = { factor = 3 trait = greedy } }
+	}
+
+	after = {
+		kowtow_road_captain_leaves_effect = yes
+		kowtow_return_to_road_effect = yes
+	}
+}
+
+# kowtow.40 Homesick
+# The traveller misses someone at home (a lover, spouse, parent, child or
+# friend) and may pay a courier to carry a letter (kowtow.41).
+# Scope: the traveller.
+character_event = {
+	id = kowtow.40
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow40
+	picture = GFX_evt_carriage_default
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes # kowtow.3
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		set_character_flag = missed_loved_one
+		random_courtier_or_vassal = {
+			limit = { kowtow_missed_one_trigger = yes }
+			save_event_target_as = person_missed
+			if = { limit = { is_lover = ROOT } set_character_flag = kowtow_letter_lover }
+			else_if = {
+				limit = { any_spouse = { character = ROOT } }
+				set_character_flag = kowtow_letter_spouse
+			}
+			else_if = {
+				limit = { OR = { is_mother = ROOT is_father = ROOT } }
+				set_character_flag = kowtow_letter_parent
+			}
+			else_if = { limit = { is_child_of = ROOT } set_character_flag = kowtow_letter_child }
+			else = { set_character_flag = kowtow_letter_friend }
+		}
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAkowtow40
+			trigger = { event_target:person_missed = { has_character_flag = kowtow_letter_lover } }
+		}
+		name = {
+			text = EVTOPTBkowtow40
+			trigger = { event_target:person_missed = { has_character_flag = kowtow_letter_friend } }
+		}
+		name = {
+			text = EVTOPTCkowtow40
+			trigger = { event_target:person_missed = { has_character_flag = kowtow_letter_spouse } }
+		}
+		name = {
+			text = EVTOPTDkowtow40
+			trigger = { event_target:person_missed = { has_character_flag = kowtow_letter_parent } }
+		}
+		name = {
+			text = EVTOPTEkowtow40
+			trigger = { event_target:person_missed = { has_character_flag = kowtow_letter_child } }
+		}
+		custom_tooltip = { text = will_receive_a_letter }
+		scaled_wealth = { value = -0.1 min = -5 }
+		event_target:person_missed = { character_event = { id = kowtow.41 } }
+		ai_chance = { factor = 70 }
+	}
+
+	option = {
+		name = EVTOPTFkowtow40
+		event_target:person_missed = {
+			clr_character_flag = kowtow_letter_lover
+			clr_character_flag = kowtow_letter_spouse
+			clr_character_flag = kowtow_letter_parent
+			clr_character_flag = kowtow_letter_child
+			clr_character_flag = kowtow_letter_friend
+		}
+		ai_chance = { factor = 30 }
+	}
+
+	after = {
+		kowtow_return_to_road_effect = yes
+	}
+}
+
+# kowtow.41 A letter from the road
+# The one missed reads the traveller's letter (opinion: love letters, pen
+# pal or delighted parent). Also used by the witch hunter on the road.
+# Scope: the one missed; FROM is the traveller.
+character_event = {
+	id = kowtow.41
+	title = EVTTITLEkowtow41
+	desc = { text = EVTDESCkowtow41 trigger = { NOT = { is_child_of = FROM } } }
+	desc = { text = EVTDESCkowtow41_parent trigger = { is_child_of = FROM } }
+	picture = GFX_evt_recieve_letter
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes # kowtow.40, whunter.177
+
+	option = {
+		name = { text = EVTOPTAkowtow41 trigger = { NOT = { is_child_of = FROM } } }
+		name = { text = EVTOPTAkowtow41_parent trigger = { is_child_of = FROM } }
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = kowtow_letter_lover
+					has_character_flag = kowtow_letter_spouse
+				}
+			}
+			opinion = { who = FROM modifier = opinion_love_letters years = 15 }
+		}
+		else_if = {
+			limit = { has_character_flag = kowtow_letter_parent }
+			opinion = { who = FROM modifier = opinion_delighted_parent years = 15 }
+		}
+		else = { opinion = { who = FROM modifier = opinion_pen_pal years = 15 } }
+	}
+
+	after = {
+		clr_character_flag = kowtow_letter_lover
+		clr_character_flag = kowtow_letter_spouse
+		clr_character_flag = kowtow_letter_parent
+		clr_character_flag = kowtow_letter_child
+		clr_character_flag = kowtow_letter_friend
+	}
+}
+
+# kowtow.45 A pedlar on the road
+# A smooth-talking Cathayan pedlar offers a Cathayan treasure: buy it, take
+# the pedlar into service (kind), have the guards take it (deceitful), or
+# wave the pedlar off.
+# Scope: the traveller.
+character_event = {
+	id = kowtow.45
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow45
+	picture = GFX_evt_china_stable
+	border = GFX_event_normal_frame_diplomacy
+	portrait = event_target:cathayan_trader
+	is_triggered_only = yes # kowtow.3
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		set_character_flag = met_traveling_merchant
+		hidden_effect = {
+			offmap_cathay = {
+				governor = {
+					create_random_intriguer = {
+						age = 25
+						random_traits = yes
+						female = 50
+						dynasty = none
+						culture = cathayan
+						religion = draconite
+						trait = creature_human
+						attributes = { intrigue = 4 }
+					}
+					new_character = {
+						upgrade_education_effect = yes
+						save_event_target_as = cathayan_trader
+						add_cathayan_artifact_effect = yes
+					}
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAkowtow45
+		custom_tooltip = { text = EVTOPTAkowtow45_tt }
+		scaled_wealth = { value = -0.4 min = -150 }
+		hidden_effect = {
+			event_target:cathayan_trader = {
+				event_target:cathayan_artifact = { transfer_artifact = { from = PREV to = ROOT } }
+			}
+		}
+		ai_chance = { factor = 40 modifier = { factor = 0 NOT = { wealth = 150 } } }
+	}
+
+	option = {
+		name = EVTOPTBkowtow45
+		trigger = { trait = kind }
+		tooltip_info = kind
+		custom_tooltip = { text = EVTOPTBkowtow45_tt }
+		hidden_effect = {
+			event_target:cathayan_trader = {
+				any_artifact = { destroy_artifact = yes }
+				set_character_flag = kowtow_pedlar_stays
+				move_character = ROOT
+			}
+		}
+		ai_chance = { factor = 20 }
+	}
+
+	option = {
+		name = EVTOPTCkowtow45
+		trigger = { trait = deceitful }
+		tooltip_info = deceitful
+		custom_tooltip = { text = EVTOPTCkowtow45_tt }
+		custom_tooltip = { text = EVTOPTAkowtow45_tt }
+		hidden_effect = {
+			event_target:cathayan_trader = {
+				event_target:cathayan_artifact = { transfer_artifact = { from = PREV to = ROOT } }
+			}
+		}
+		event_target:cathayan_trader = {
+			show_scope_change = no
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_murder killer = ROOT } }
+		}
+		ai_chance = { factor = 10 }
+	}
+
+	option = {
+		name = EVTOPTDkowtow45
+		custom_tooltip = { text = EVTOPTDkowtow45_tt }
+		ai_chance = { factor = 30 }
+	}
+
+	after = {
+		hidden_effect = {
+			event_target:cathayan_trader = {
+				if = {
+					limit = { is_alive = yes NOT = { has_character_flag = kowtow_pedlar_stays } }
+					any_artifact = { destroy_artifact = yes }
+					if = {
+						limit = { is_invincible_trigger = no }
+						death = { death_reason = death_missing }
+					}
+				}
+				clr_character_flag = kowtow_pedlar_stays
+			}
+		}
+		kowtow_return_to_road_effect = yes
+	}
+}
+
+# kowtow.50 Into Grand Cathay
+# The caravan reaches Grand Cathay and takes the Imperial road to Wei-Jin.
+# Two scenes in Cathay follow (kowtow.51).
+# Scope: the traveller.
+character_event = {
+	id = kowtow.50
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow50
+	picture = GFX_evt_china_open
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes # kowtow.3
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	option = {
+		name = EVTOPTAkowtow50
+		custom_tooltip = { text = EVTOPTAkowtow50_tt }
+	}
+
+	after = {
+		hidden_effect = {
+			set_variable = { which = cathay_kow_tow_travel_events value = 2 }
+			character_event = { id = kowtow.51 days = 40 random = 25 }
+		}
+	}
+}
+
+# kowtow.51 In Wei-Jin
+# Hidden. Rolls the next scene in Cathay, each at most once: the game of
+# stones, a temple of the Celestial Dragons, the Annals of the Jade Sages
+# or the markets. With no scenes left, or none that fits, the audience
+# comes (kowtow.60).
+# Scope: the traveller.
+character_event = {
+	id = kowtow.51
+	hide_window = yes
+	is_triggered_only = yes # kowtow.50, kowtow_return_to_cathay_effect
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		save_event_target_as = kow_tow_traveler
+		if = {
+			limit = { check_variable = { which = cathay_kow_tow_travel_events value = 1 } }
+			random_list = {
+				50 = {
+					trigger = { NOT = { has_character_flag = kow_tow_visited_temple } }
+					set_character_flag = kowtow_scene_sent
+					character_event = { id = kowtow.56 }
+				}
+				50 = {
+					trigger = { NOT = { has_character_flag = kow_tow_played_go } }
+					modifier = { factor = 2 trait = gamer }
+					set_character_flag = kowtow_scene_sent
+					character_event = { id = kowtow.55 }
+				}
+				50 = {
+					trigger = { NOT = { has_character_flag = read_the_guanzi } }
+					set_character_flag = kowtow_scene_sent
+					character_event = { id = kowtow.57 }
+				}
+				50 = {
+					trigger = { NOT = { has_character_flag = visited_market } }
+					set_character_flag = kowtow_scene_sent
+					character_event = { id = kowtow.58 }
+				}
+			}
+		}
+		if = {
+			limit = { has_character_flag = kowtow_scene_sent }
+			clr_character_flag = kowtow_scene_sent
+		}
+		else = { character_event = { id = kowtow.60 days = 50 random = 30 } }
+	}
+}
+
+# kowtow.55 The game of stones
+# Courtiers play the game of black and white stones in a garden: a gamer
+# shows how it is done (gold, proud), anyone else tries their luck, or
+# enjoys the garden (patient or humble). Playing pleases the Emperor.
+# Scope: the traveller.
+character_event = {
+	id = kowtow.55
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow55
+	picture = GFX_evt_garden
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes # kowtow.51
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		set_character_flag = kow_tow_played_go
+	}
+
+	option = {
+		name = EVTOPTAkowtow55
+		trigger = { trait = gamer }
+		tooltip_info = gamer
+		wealth = 50
+		if = { limit = { NOT = { trait = proud } } add_trait = proud }
+		custom_tooltip = {
+			text = EVTTOOLTIP_JD_GOOD_INFLUENCE_ON_EMPEROR_EVALUATION
+			hidden_effect = {
+				change_variable = { which = kow_tow_emperor_impression_evaluation value = 2 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTBkowtow55
+		trigger = { NOT = { trait = gamer } }
+		random_list = {
+			65 = { wealth = 25 }
+			35 = { wealth = -10 }
+		}
+		custom_tooltip = {
+			text = EVTTOOLTIP_JD_GOOD_INFLUENCE_ON_EMPEROR_EVALUATION
+			hidden_effect = {
+				change_variable = { which = kow_tow_emperor_impression_evaluation value = 2 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTCkowtow55
+		random_list = {
+			50 = { add_trait = patient }
+			50 = { add_trait = humble }
+		}
+	}
+
+	after = {
+		kowtow_return_to_cathay_effect = yes
+	}
+}
+
+# kowtow.56 A temple of the Celestial Dragons
+# The traveller comes upon a rite to the Celestial Dragons: study it from
+# afar (sympathy for the eastern faiths), join in (a zealot of another faith
+# loses the zeal; pleases the Emperor), denounce it (piety; displeases the
+# Emperor), or study the temple's script (learning).
+# Scope: the traveller.
+character_event = {
+	id = kowtow.56
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow56
+	picture = GFX_evt_china_diplomatic_incident
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes # kowtow.51
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		set_character_flag = kow_tow_visited_temple
+	}
+
+	option = {
+		name = EVTOPTAkowtow56
+		trigger = {
+			NOR = {
+				trait = zealous
+				religion_group = oriental_gods_group
+				trait = sympathy_oriental_gods_group
+			}
+		}
+		add_trait = sympathy_oriental_gods_group
+	}
+
+	option = {
+		name = EVTOPTBkowtow56
+		if = {
+			limit = { trait = zealous NOT = { religion_group = oriental_gods_group } }
+			remove_trait = zealous
+		}
+		random = { chance = 30 add_trait = content }
+		custom_tooltip = {
+			text = EVTTOOLTIP_JD_GOOD_INFLUENCE_ON_EMPEROR_EVALUATION
+			hidden_effect = {
+				change_variable = { which = kow_tow_emperor_impression_evaluation value = 3 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTCkowtow56
+		trigger = { trait = zealous NOT = { religion_group = oriental_gods_group } }
+		piety = 30
+		custom_tooltip = {
+			text = EVTTOOLTIP_JD_BAD_INFLUENCE_ON_EMPEROR_EVALUATION
+			hidden_effect = {
+				subtract_variable = { which = kow_tow_emperor_impression_evaluation value = 5 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTDkowtow56
+		random = { chance = 15 change_learning = 1 }
+	}
+
+	after = {
+		kowtow_return_to_cathay_effect = yes
+	}
+}
+
+# kowtow.57 The Annals of the Jade Sages
+# Ministers offer to read the Annals of the Jade Sages with the traveller:
+# listen (pleases the Emperor), show off knowing them already (poet or
+# scholar; prestige), or ask for a tour of the palace (may gain
+# stewardship; displeases the Emperor).
+# Scope: the traveller.
+character_event = {
+	id = kowtow.57
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow57
+	picture = GFX_evt_chinese_bureaucrat
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes # kowtow.51
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		set_character_flag = read_the_guanzi
+	}
+
+	option = {
+		name = EVTOPTAkowtow57
+		custom_tooltip = { text = EVTOPTAkowtow57_tt }
+		custom_tooltip = {
+			text = EVTTOOLTIP_JD_GOOD_INFLUENCE_ON_EMPEROR_EVALUATION
+			hidden_effect = {
+				change_variable = { which = kow_tow_emperor_impression_evaluation value = 3 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTBkowtow57
+		trigger = { OR = { trait = poet trait = scholar } }
+		tooltip_info = scholar
+		custom_tooltip = { text = EVTOPTBkowtow57_tt }
+		if = { limit = { trait = scholar } prestige = 100 }
+		else = { prestige = 50 }
+		custom_tooltip = {
+			text = EVTTOOLTIP_JD_GOOD_INFLUENCE_ON_EMPEROR_EVALUATION
+			hidden_effect = {
+				change_variable = { which = kow_tow_emperor_impression_evaluation value = 3 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTCkowtow57
+		custom_tooltip = { text = EVTOPTCkowtow57_tt }
+		random = { chance = 30 change_stewardship = 1 }
+		custom_tooltip = {
+			text = EVTTOOLTIP_JD_BAD_INFLUENCE_ON_EMPEROR_EVALUATION
+			hidden_effect = {
+				subtract_variable = { which = kow_tow_emperor_impression_evaluation value = 5 }
+			}
+		}
+	}
+
+	after = {
+		kowtow_return_to_cathay_effect = yes
+	}
+}
+
+# kowtow.58 The markets of Wei-Jin
+# The traveller walks the markets: taste the food (may turn gluttonous;
+# pleases the Emperor), buy a Cathayan treasure (pleases the Emperor), have
+# it stolen (intrigue 15 or elusive shadow; displeases the Emperor), or go
+# back to the lodgings.
+# Scope: the traveller.
+character_event = {
+	id = kowtow.58
+	title = EVTTITLE_JD_KOWTOW
+	desc = EVTDESCkowtow58
+	picture = GFX_evt_china_stable
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes # kowtow.51
+	hide_from = yes
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		set_character_flag = visited_market
+		hidden_effect = {
+			offmap_cathay = {
+				governor = {
+					create_random_steward = {
+						age = 45
+						random_traits = yes
+						female = 50
+						dynasty = none
+						culture = cathayan
+						religion = draconite
+						trait = creature_human
+						attributes = { stewardship = 3 }
+						health = 10
+					}
+					new_character = {
+						save_event_target_as = cathayan_trader
+						give_nickname = nick_the_trader
+						add_cathayan_artifact_effect = yes
+					}
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAkowtow58
+		custom_tooltip = { text = EVTOPTAkowtow58_tt }
+		random = { chance = 50 add_trait_gluttonous_effect = yes }
+		custom_tooltip = {
+			text = EVTTOOLTIP_JD_GOOD_INFLUENCE_ON_EMPEROR_EVALUATION
+			hidden_effect = {
+				change_variable = { which = kow_tow_emperor_impression_evaluation value = 3 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTBkowtow58
+		trigger = { NOT = { any_artifact = { count = 13 has_artifact_flag = cathayan } } }
+		custom_tooltip = { text = EVTOPTBkowtow58_tt }
+		scaled_wealth = { value = -0.6 min = -200 }
+		hidden_effect = {
+			event_target:cathayan_trader = {
+				event_target:cathayan_artifact = { transfer_artifact = { from = PREV to = ROOT } }
+			}
+		}
+		custom_tooltip = {
+			text = EVTTOOLTIP_JD_GOOD_INFLUENCE_ON_EMPEROR_EVALUATION
+			hidden_effect = {
+				change_variable = { which = kow_tow_emperor_impression_evaluation value = 3 }
+			}
+		}
+		ai_chance = { factor = 1 modifier = { factor = 0 NOT = { wealth = 200 } } }
+	}
+
+	option = {
+		name = EVTOPTCkowtow58
+		trigger = { OR = { trait = elusive_shadow intrigue = 15 } }
+		tooltip_info = intrigue
+		custom_tooltip = { text = EVTOPTCkowtow58_tt }
+		hidden_effect = {
+			event_target:cathayan_trader = {
+				event_target:cathayan_artifact = { transfer_artifact = { from = PREV to = ROOT } }
+			}
+		}
+		custom_tooltip = {
+			text = EVTTOOLTIP_JD_BAD_INFLUENCE_ON_EMPEROR_EVALUATION
+			hidden_effect = {
+				subtract_variable = { which = kow_tow_emperor_impression_evaluation value = 3 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTDkowtow58
+	}
+
+	after = {
+		hidden_effect = {
+			event_target:cathayan_trader = {
+				any_artifact = { destroy_artifact = yes }
+				if = {
+					limit = { is_invincible_trigger = no }
+					death = { death_reason = death_missing }
+				}
+			}
+		}
+		kowtow_return_to_cathay_effect = yes
+	}
+}
+
+# kowtow.60 Before the Celestial Throne
+# The audience. The Emperor's impression adds half the traveller's
+# diplomacy, the rank (king +7, emperor +14) and Cathay's regard (+5 liked,
+# -5 disliked) to the scenes in Cathay, and sets the odds: the traveller
+# bows before a painting of the Emperor (kowtow 1), before the Emperor in
+# haste (kowtow 2) or receives the Emperor's touch (kowtow 3). Each kowtow
+# gives 100 grace and costs prestige by rank (kowtow_prestige_cost_effect).
+# After a painting, the traveller may storm out instead (the Asur still
+# lose half the price in pride).
+# Scope: the traveller.
+character_event = {
+	id = kowtow.60
+	title = EVTTITLE_JD_KOWTOW
+	desc = {
+		text = EVTDESCkowtow60_painting
+		picture = GFX_evt_chinese_bureaucrat
+		trigger = { has_character_flag = kow_tow_bad_outcome }
+	}
+	desc = {
+		text = EVTDESCkowtow60_haste
+		picture = GFX_evt_china_golden_age
+		trigger = { has_character_flag = kow_tow_okay_outcome }
+	}
+	desc = {
+		text = EVTDESCkowtow60_touch
+		picture = GFX_evt_china_golden_age
+		trigger = { has_character_flag = kow_tow_great_outcome }
+	}
+	picture = GFX_evt_china_golden_age
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes # kowtow.51
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		trait = kow_tow_travels
+	}
+
+	immediate = {
+		export_to_variable = { which = kow_tow_temp_calc value = diplomacy }
+		divide_variable = { which = kow_tow_temp_calc value = 2 }
+		change_variable = {
+			which = kow_tow_emperor_impression_evaluation
+			which = kow_tow_temp_calc
+		}
+		set_variable = { which = kow_tow_temp_calc value = 0 }
+		if = {
+			limit = { real_tier = KING }
+			change_variable = { which = kow_tow_emperor_impression_evaluation value = 7 }
+		}
+		else_if = {
+			limit = { real_tier = EMPEROR }
+			change_variable = { which = kow_tow_emperor_impression_evaluation value = 14 }
+		}
+		if = {
+			limit = { disliked_by_offmap = { type = offmap_cathay } }
+			subtract_variable = { which = kow_tow_emperor_impression_evaluation value = 5 }
+		}
+		else_if = {
+			limit = { liked_by_offmap = { type = offmap_cathay } }
+			change_variable = { which = kow_tow_emperor_impression_evaluation value = 5 }
+		}
+		random_list = {
+			45 = {
+				trigger = {
+					NOT = {
+						check_variable = {
+							which = kow_tow_emperor_impression_evaluation
+							value = 23
+						}
+					}
+				}
+				modifier = {
+					factor = 0.85
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 12 }
+				}
+				modifier = {
+					factor = 0.85
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 13 }
+				}
+				modifier = {
+					factor = 0.85
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 14 }
+				}
+				modifier = {
+					factor = 0.85
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 15 }
+				}
+				modifier = {
+					factor = 0.85
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 17 }
+				}
+				modifier = {
+					factor = 0.85
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 19 }
+				}
+				modifier = {
+					factor = 0.85
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 21 }
+				}
+				set_character_flag = kow_tow_bad_outcome
+			}
+			45 = { set_character_flag = kow_tow_okay_outcome }
+			10 = {
+				trigger = {
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 10 }
+				}
+				modifier = {
+					factor = 1.2
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 12 }
+				}
+				modifier = {
+					factor = 1.1
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 13 }
+				}
+				modifier = {
+					factor = 1.1
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 14 }
+				}
+				modifier = {
+					factor = 1.1
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 15 }
+				}
+				modifier = {
+					factor = 1.1
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 17 }
+				}
+				modifier = {
+					factor = 1.1
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 19 }
+				}
+				modifier = {
+					factor = 1.1
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 21 }
+				}
+				modifier = {
+					factor = 1.1
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 23 }
+				}
+				modifier = {
+					factor = 1.1
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 25 }
+				}
+				modifier = {
+					factor = 1.1
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 27 }
+				}
+				modifier = {
+					factor = 1.1
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 29 }
+				}
+				modifier = {
+					factor = 1.1
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 31 }
+				}
+				modifier = {
+					factor = 1.1
+					check_variable = { which = kow_tow_emperor_impression_evaluation value = 33 }
+				}
+				set_character_flag = kow_tow_great_outcome
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAkowtow60
+		trigger = { has_character_flag = kow_tow_bad_outcome }
+		add_trait = kow_tow_completed_tier_1
+		add_offmap_currency = { offmap = offmap_cathay value = 100 }
+		kowtow_prestige_cost_effect = yes
+		ai_chance = { factor = 70 }
+	}
+
+	option = {
+		name = EVTOPTBkowtow60
+		trigger = { has_character_flag = kow_tow_bad_outcome }
+		if = {
+			limit = { trait = creature_elf }
+			if = { limit = { is_republic = yes } prestige = -1250 }
+			else_if = { limit = { has_landed_title = e_ulthuan } prestige = -12500 }
+			else = { prestige = -2500 }
+		}
+		ai_chance = { factor = 30 modifier = { factor = 3 trait = proud } }
+	}
+
+	option = {
+		name = EVTOPTCkowtow60
+		trigger = { has_character_flag = kow_tow_okay_outcome }
+		add_trait = kow_tow_completed_tier_2
+		add_offmap_currency = { offmap = offmap_cathay value = 100 }
+		kowtow_prestige_cost_effect = yes
+	}
+
+	option = {
+		name = EVTOPTDkowtow60
+		trigger = { has_character_flag = kow_tow_great_outcome }
+		add_trait = kow_tow_completed_tier_3
+		add_offmap_currency = { offmap = offmap_cathay value = 100 }
+		kowtow_prestige_cost_effect = yes
+	}
+
+	after = {
+		clr_character_flag = kow_tow_bad_outcome
+		clr_character_flag = kow_tow_okay_outcome
+		clr_character_flag = kow_tow_great_outcome
+		kowtow_clean_up_effect = yes
+	}
+}
+
+# kowtow.70 Cathay closes its gates
+# Hidden. When Cathay turns isolationist, every lord on the way to kowtow
+# turns back (kowtow_abort_effect, kowtow.71).
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = kowtow.70
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_policy_changed
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = { has_policy = cathay_isolationist }
+	}
+
+	immediate = {
+		any_playable_ruler = {
+			limit = { trait = kow_tow_travels }
+			set_character_flag = kow_tow_abort_isolationist
+			kowtow_abort_effect = yes
+		}
+	}
+}
+
+# kowtow.71 The journey cut short
+# The traveller learns the journey to Cathay is over: war, or Cathay has
+# closed its gates. The lord may set out again later.
+# Scope: the traveller.
+character_event = {
+	id = kowtow.71
+	title = EVTTITLE_JD_KOWTOW
+	desc = { text = EVTDESCkowtow71_war trigger = { has_character_flag = kow_tow_abort_war } }
+	desc = {
+		text = EVTDESCkowtow71_closed
+		trigger = { has_character_flag = kow_tow_abort_isolationist }
+	}
+	desc = {
+		text = EVTDESCkowtow71
+		trigger = {
+			NOR = {
+				has_character_flag = kow_tow_abort_war
+				has_character_flag = kow_tow_abort_isolationist
+			}
+		}
+	}
+	picture = GFX_evt_china_isolationist
+	border = GFX_event_normal_frame_diplomacy
+	is_triggered_only = yes # kowtow_abort_effect
+	hide_from = yes
+
+	option = {
+		name = EVTOPTAkowtow71
+	}
+
+	after = {
+		clr_character_flag = kow_tow_abort_war
+		clr_character_flag = kow_tow_abort_isolationist
+	}
+}
+
+# kowtow.72 War calls the traveller home
+# Hidden. A lord on the way to kowtow who goes to war, or is attacked,
+# turns back (kowtow_abort_effect, kowtow.71).
+# Scope: the defender; FROM is the attacker.
+character_event = {
+	id = kowtow.72
+	hide_window = yes
+	is_triggered_only = yes # on_war_started
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		OR = { trait = kow_tow_travels FROM = { trait = kow_tow_travels } }
+	}
+
+	immediate = {
+		if = {
+			limit = { trait = kow_tow_travels }
+			set_character_flag = kow_tow_abort_war
+			kowtow_abort_effect = yes
+		}
+		FROM = {
+			if = {
+				limit = { trait = kow_tow_travels }
+				set_character_flag = kow_tow_abort_war
+				kowtow_abort_effect = yes
+			}
+		}
 	}
 }

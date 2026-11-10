@@ -1,0 +1,863 @@
+###############################################################################
+# The Dark Gods test their own
+# Namespaces: khorne (was khornesstr.0 - 4 and berserker.9 - 10 in
+#   m_Khorne.txt), nurgle (was fathernurgle.0 - 7 in m_Nurgle.txt),
+#   tzeentch (was fltzeentch.0 - 1 in m_Tzeentch.txt), darkprince (was
+#   slaaneshbless.4 - 6 in m_Slaanesh.txt)
+# Faction: Chaos
+# Serves: lords who worship one of the four Chaos gods
+#
+# Each of the Ruinous Powers tests the mortals who call on it. Khorne sends
+# a weakling three foes, each deadlier than the last, and demands their
+# skulls. Nurgle waits until a crippled lord has despaired of everything and
+# then offers his embrace. Tzeentch lights a slow mind with visions that may
+# raise it or burn it out. A daemonette at the court of a Slaaneshi lord who
+# wants to shed a virtue whispers how. Those of Khorne who fall in battle are
+# carried off to his halls by Valkia the Bloody.
+#
+# Khorne's trial                       khorne.1 - khorne.6
+# Khorne's halls                       khorne.20 - khorne.21
+# Nurgle's embrace                     nurgle.1 - nurgle.8
+# Tzeentch's visions                   tzeentch.1 - tzeentch.2
+# The daemonette's counsel             darkprince.1 - darkprince.2
+#
+# Callers: on_decade_pulse in wh_on_actions.txt (khorne.1, nurgle.1,
+#   tzeentch.1), on_death in wh_on_actions.txt (khorne.20), the ambition
+#   obj_slaanesh_shed_a_virtue in WHG_ambitions.txt (darkprince.1). Triggers
+#   in common/scripted_triggers/WHG_chaos_gods_triggers.txt, effects in
+#   common/scripted_effects/WHG_chaos_gods_effects.txt.
+# Saved: event targets khorne_trial_foe, combatant_1, combatant_2,
+#   darkprince_daemonette; variable khorne_trial (the round); flags
+#   tested_by_Khorne, failed_Khorne, touched_by_nurgle, nurgle_gave_craven,
+#   nurgle_gave_wroth, nurgle_gave_charitable, nurgle_gave_depressed,
+#   touched_by_tzeentch, failed_tzeentch_test, refused_tzeentch,
+#   tzeentch_eye_given (once per life), khorne_daemonblade_given (once per
+#   life), Pet_Daemonette_helped_ambition (cleared by the ambition).
+# Dropped: the Khornate berserker events berserker.0 - 8 (disabled vanilla
+#   berserker copies) live on in WHG_berserker_events.txt, which now serves
+#   the berserkers of Khorne as well; the hunt for a pet daemonette
+#   (slaaneshbless.0 - 3, commented out, with no decision left to start it):
+#   a sorcerer of Slaanesh already summons a daemonette with daemon.49.
+###############################################################################
+
+namespace = khorne
+namespace = nurgle
+namespace = tzeentch
+namespace = darkprince
+
+###############################################################################
+# Khorne's trial
+###############################################################################
+
+# khorne.1 The Blood God's contempt
+# A brave but feeble follower of Khorne is told to prove himself. Accepting
+# starts three rounds of single combat (khorne.2); refusing makes him weak.
+# Scope: ROOT is the follower. From on_decade_pulse.
+character_event = {
+	id = khorne.1
+	title = EVTTITLEkhorne_blood
+	desc = EVTDESCkhorne1
+	picture = GFX_evt_large_army
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_decade_pulse
+
+	only_playable = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		follower_of_khorne = yes
+		is_landed = yes
+		trait = brave
+		NOT = { martial = 8 }
+		is_demon_trigger = no
+		NOT = { trait = in_hiding }
+		NOT = { has_character_flag = tested_by_Khorne }
+		NOT = { has_character_flag = failed_Khorne }
+	}
+
+	option = {
+		name = EVTOPTAkhorne1 # Who dies first?
+		ai_chance = { factor = 80 }
+		set_variable = { which = khorne_trial value = 1 }
+		character_event = { id = khorne.2 days = 3 }
+	}
+	option = {
+		name = EVTOPTBkhorne1 # Sacrifice some cattle instead
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 0 trait = wroth }
+		}
+		add_trait = weak
+		piety = -25
+		set_character_flag = failed_Khorne
+	}
+}
+
+# khorne.2 A challenger
+# The foe of the round stands before the follower: a young warrior of his
+# own people, then a berserker of Khorne, then a Bloodletter. Fighting starts
+# a duel and the result is judged in 15 days (khorne.3). Turning away ends
+# the trial: the first time it makes him weak, later only costs piety.
+# Scope: ROOT is the follower.
+character_event = {
+	id = khorne.2
+	title = EVTTITLEkhorne_skulls
+	desc = {
+		trigger = { check_variable = { which = khorne_trial value = 1 } NOT = { check_variable = { which = khorne_trial value = 2 } } }
+		text = EVTDESCkhorne2_warrior
+	}
+	desc = {
+		trigger = { check_variable = { which = khorne_trial value = 2 } NOT = { check_variable = { which = khorne_trial value = 3 } } }
+		text = EVTDESCkhorne2_berserker
+	}
+	desc = {
+		trigger = { check_variable = { which = khorne_trial value = 3 } }
+		text = EVTDESCkhorne2_bloodletter
+	}
+	picture = GFX_evt_daemons
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # khorne.1, khorne.3, khorne.4
+
+	trigger = {
+		check_variable = { which = khorne_trial value = 1 }
+		prisoner = no
+		is_incapable = no
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAkhorne2_warrior # By Khorne, it will be done!
+			trigger = { NOT = { check_variable = { which = khorne_trial value = 2 } } }
+		}
+		name = {
+			text = EVTOPTAkhorne2_berserker # For the slaughter!
+			trigger = { check_variable = { which = khorne_trial value = 2 } NOT = { check_variable = { which = khorne_trial value = 3 } } }
+		}
+		name = {
+			text = EVTOPTAkhorne2_bloodletter # I am invincible!
+			trigger = { check_variable = { which = khorne_trial value = 3 } }
+		}
+		ai_chance = { factor = 90 }
+		custom_tooltip = { text = EVTTOOLTIPkhorne2 }
+		hidden_effect = {
+			save_event_target_as = combatant_1
+			khorne_trial_foe_effect = yes
+			event_target:khorne_trial_foe = {
+				save_event_target_as = combatant_2
+				character_event = { id = duel.1 }
+			}
+			character_event = { id = khorne.3 days = 15 }
+		}
+	}
+	option = {
+		name = {
+			text = EVTOPTBkhorne2_warrior # Sacrifice some cattle instead
+			trigger = { NOT = { check_variable = { which = khorne_trial value = 2 } } }
+		}
+		name = {
+			text = EVTOPTBkhorne2_later # I have already proven my worth
+			trigger = { check_variable = { which = khorne_trial value = 2 } }
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 check_variable = { which = khorne_trial value = 3 } }
+		}
+		if = {
+			limit = { NOT = { check_variable = { which = khorne_trial value = 2 } } }
+			add_trait = weak
+			set_character_flag = failed_Khorne
+		}
+		piety = -25
+		khorne_trial_end_effect = yes
+	}
+}
+
+# khorne.3 The duel is over (hidden)
+# A dead foe is a skull for Khorne: on to the next round, or the god's
+# blessing after the third (khorne.6). A beaten foe still breathes: the
+# follower may finish him (khorne.4). A foe left standing ends the trial
+# (khorne.5).
+# Scope: ROOT is the follower.
+character_event = {
+	id = khorne.3
+	hide_window = yes
+
+	is_triggered_only = yes # khorne.2
+
+	trigger = { is_alive = yes }
+
+	immediate = {
+		if = {
+			limit = { event_target:khorne_trial_foe = { is_alive = no } }
+			if = {
+				limit = { check_variable = { which = khorne_trial value = 3 } }
+				character_event = { id = khorne.6 }
+			}
+			else = {
+				change_variable = { which = khorne_trial value = 1 }
+				character_event = { id = khorne.2 days = 7 random = 14 }
+			}
+		}
+		else_if = {
+			limit = { event_target:khorne_trial_foe = { khorne_trial_foe_beaten_trigger = yes } }
+			character_event = { id = khorne.4 }
+		}
+		else = {
+			character_event = { id = khorne.5 }
+		}
+	}
+}
+
+# khorne.4 The foe lies bleeding
+# Taking the skull wins the round; sparing the foe ends the trial in shame.
+# The skull of a berserker may be kept.
+# Scope: ROOT is the follower.
+character_event = {
+	id = khorne.4
+	title = EVTTITLEkhorne_skulls
+	desc = EVTDESCkhorne4
+	picture = GFX_evt_daemons
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # khorne.3
+
+	option = {
+		name = EVTOPTAkhorne4 # Your skull is mine
+		ai_chance = { factor = 95 }
+		event_target:khorne_trial_foe = {
+			death = { death_reason = death_duel killer = ROOT }
+		}
+		if = {
+			limit = {
+				check_variable = { which = khorne_trial value = 2 }
+				NOT = { check_variable = { which = khorne_trial value = 3 } }
+				NOT = { has_artifact = enemy_skull }
+			}
+			random = {
+				chance = 50
+				add_artifact = enemy_skull
+			}
+		}
+		if = {
+			limit = { check_variable = { which = khorne_trial value = 3 } }
+			character_event = { id = khorne.6 }
+		}
+		else = {
+			change_variable = { which = khorne_trial value = 1 }
+			character_event = { id = khorne.2 days = 7 random = 14 }
+		}
+	}
+	option = {
+		name = EVTOPTBkhorne4 # Let him live
+		ai_chance = { factor = 5 }
+		piety = -50
+		khorne_trial_end_effect = yes
+	}
+}
+
+# khorne.5 Khorne turns away
+# The foe walked away from the duel. Khorne has no use for a fight without
+# a corpse; the trial is over.
+# Scope: ROOT is the follower.
+character_event = {
+	id = khorne.5
+	title = EVTTITLEkhorne_blood
+	desc = EVTDESCkhorne5
+	picture = GFX_evt_daemons
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # khorne.3
+
+	option = {
+		name = EVTOPTAkhorne5 # Next time I will not miss
+		piety = -10
+		khorne_trial_end_effect = yes
+	}
+}
+
+# khorne.6 The Blood God's blessing
+# The third skull is taken. The follower is made strong and marked by
+# Khorne; a lord without a daemon blade may, once in his life, find the
+# Bloodletter's blade left in the gore.
+# Scope: ROOT is the follower.
+character_event = {
+	id = khorne.6
+	title = EVTTITLEkhorne_blood
+	desc = EVTDESCkhorne6
+	picture = GFX_evt_khorne
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # khorne.3, khorne.4
+
+	option = {
+		name = EVTOPTAkhorne6 # My axe shall feast on the blood of my foes!
+		add_trait = strong
+		change_martial = 2
+		prestige = 100
+		piety = 100
+		if = {
+			limit = {
+				religion = khorne
+				NOR = {
+					trait = mark_khorne
+					trait = mark_chaos
+					trait = mark_nurgle
+					trait = mark_tzeentch
+					trait = mark_slaanesh
+				}
+			}
+			add_trait = mark_khorne
+		}
+		if = {
+			limit = {
+				NOT = { has_character_flag = khorne_daemonblade_given }
+				NOR = {
+					has_artifact = chaos_artifact_daemonblade
+					has_artifact = chaos_artifact_hellfire_sword
+				}
+			}
+			random = {
+				chance = 15
+				add_artifact = chaos_artifact_daemonblade
+				set_character_flag = khorne_daemonblade_given
+			}
+		}
+		khorne_trial_end_effect = yes
+	}
+}
+
+###############################################################################
+# Khorne's halls
+###############################################################################
+
+# khorne.20 A death worthy of Khorne (hidden)
+# Scope: ROOT is the dead player. From on_death.
+character_event = {
+	id = khorne.20
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+
+	ai = no
+
+	trigger = {
+		open_follower_of_khorne = yes
+		OR = {
+			death_reason = death_battle
+			death_reason = death_battle_duel
+			death_reason = death_duel
+		}
+	}
+
+	immediate = {
+		long_character_event = { id = khorne.21 }
+	}
+}
+
+# khorne.21 Valkia comes
+# Valkia the Bloody carries the dead warrior to Khorne's halls.
+# Scope: ROOT is the dead player.
+long_character_event = {
+	id = khorne.21
+	title = EVTTITLEkhorne21
+	desc = {
+		trigger = { is_woman_trigger = yes }
+		text = EVTDESCkhorne21_woman
+	}
+	desc = {
+		trigger = { is_woman_trigger = no }
+		text = EVTDESCkhorne21_man
+	}
+	picture = GFX_evt_khorne
+	border = GFX_event_long_frame_war
+
+	is_triggered_only = yes # khorne.20
+
+	option = {
+		name = EVTOPTAkhorne21 # I go to the great fields of slaughter!
+	}
+}
+
+###############################################################################
+# Nurgle's embrace
+###############################################################################
+
+# nurgle.1 Crippled
+# A crippled follower of Nurgle broods over his lot. Every month he falls
+# further (nurgle.2 - nurgle.5) until the Grandfather speaks (nurgle.6).
+# Scope: ROOT is the sufferer. From on_decade_pulse.
+character_event = {
+	id = nurgle.1
+	title = EVTTITLEnurgle1
+	desc = EVTDESCnurgle1
+	picture = GFX_evt_illness
+
+	is_triggered_only = yes # on_decade_pulse
+
+	only_playable = yes
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		follower_of_nurgle = yes
+		is_landed = yes
+		chaosgod_crippled_trigger = yes
+		is_nurgle_immune_race = no
+		is_demon_trigger = no
+		NOT = { has_character_flag = touched_by_nurgle }
+	}
+
+	immediate = {
+		set_character_flag = touched_by_nurgle
+	}
+
+	option = {
+		name = EVTOPTAnurgle1 # I will not let this beat me!
+		nurgle_despair_craven_effect = yes
+		hidden_effect = { character_event = { id = nurgle.2 days = 30 } }
+	}
+}
+
+# nurgle.2 Denial
+# Scope: ROOT is the sufferer.
+character_event = {
+	id = nurgle.2
+	title = EVTTITLEnurgle2
+	desc = EVTDESCnurgle2
+	picture = GFX_evt_illness
+
+	is_triggered_only = yes # nurgle.1
+
+	trigger = { is_alive = yes }
+
+	option = {
+		name = EVTOPTAnurgle2 # I can't die, not... like this...
+		add_trait = has_nurgles_rot
+		nurgle_blessing_check_effect = yes
+		hidden_effect = { character_event = { id = nurgle.3 days = 30 } }
+	}
+}
+
+# nurgle.3 Anger
+# Scope: ROOT is the sufferer.
+character_event = {
+	id = nurgle.3
+	title = EVTTITLEnurgle3
+	desc = EVTDESCnurgle3
+	picture = GFX_evt_illness
+
+	is_triggered_only = yes # nurgle.2
+
+	trigger = { is_alive = yes }
+
+	option = {
+		name = EVTOPTAnurgle3 # I was meant for so much more than this!
+		nurgle_despair_wroth_effect = yes
+		hidden_effect = { character_event = { id = nurgle.4 days = 30 } }
+	}
+}
+
+# nurgle.4 Bargaining
+# Scope: ROOT is the sufferer.
+character_event = {
+	id = nurgle.4
+	title = EVTTITLEnurgle4
+	desc = EVTDESCnurgle4
+	picture = GFX_evt_illness
+
+	is_triggered_only = yes # nurgle.3
+
+	trigger = { is_alive = yes }
+
+	option = {
+		name = EVTOPTAnurgle4 # Gods... do not forsake me...
+		nurgle_despair_charitable_effect = yes
+		hidden_effect = { character_event = { id = nurgle.5 days = 30 } }
+	}
+}
+
+# nurgle.5 Despair
+# Scope: ROOT is the sufferer.
+character_event = {
+	id = nurgle.5
+	title = EVTTITLEnurgle5
+	desc = EVTDESCnurgle5
+	picture = GFX_evt_illness
+
+	is_triggered_only = yes # nurgle.4
+
+	trigger = { is_alive = yes }
+
+	option = {
+		name = EVTOPTAnurgle5 # Not with a roar, but with a whimper...
+		nurgle_despair_depressed_effect = yes
+		hidden_effect = { character_event = { id = nurgle.6 days = 15 } }
+	}
+}
+
+# nurgle.6 The Grandfather speaks
+# Embracing Nurgle heals the body and lifts the despair (nurgle.7);
+# refusing him leaves the sufferer to his end, at peace (nurgle.8).
+# Scope: ROOT is the sufferer.
+character_event = {
+	id = nurgle.6
+	title = EVTTITLEnurgle6
+	desc = EVTDESCnurgle6
+	picture = GFX_evt_nurgle
+
+	is_triggered_only = yes # nurgle.5
+
+	trigger = { is_alive = yes }
+
+	option = {
+		name = EVTOPTAnurgle6 # Plaguefather... deliver me from this existence!
+		ai_chance = { factor = 90 }
+		remove_trait = maimed
+		remove_trait = incapable
+		remove_trait = one_legged
+		remove_trait = one_handed
+		remove_trait = blinded
+		remove_trait = mangled
+		remove_trait = severely_injured
+		nurgle_despair_lift_effect = yes
+		hidden_effect = { character_event = { id = nurgle.7 days = 3 } }
+	}
+	option = {
+		name = EVTOPTBnurgle6 # No, I am ready for this to end...
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0 religion = nurgle }
+		}
+		add_trait = content
+		piety = -100
+		hidden_effect = { character_event = { id = nurgle.8 days = 1 } }
+	}
+}
+
+# nurgle.7 Plaguelord
+# The Grandfather's gifts: his plagues, which no longer hurt, his mark on a
+# lord of his faith and new strength.
+# Scope: ROOT is the sufferer.
+character_event = {
+	id = nurgle.7
+	title = EVTTITLEnurgle7
+	desc = EVTDESCnurgle7
+	picture = GFX_evt_nurgle
+
+	is_triggered_only = yes # nurgle.6
+
+	option = {
+		name = EVTOPTAnurgle7 # I will bring you glory, my Lord
+		add_trait = has_typhoid_fever
+		add_trait = has_bubonic_plague
+		add_trait = has_small_pox
+		hidden_effect = {
+			if = {
+				limit = { is_disease_immune_race = yes }
+				remove_trait = has_typhoid_fever
+				remove_trait = has_bubonic_plague
+				remove_trait = has_small_pox
+			}
+		}
+		nurgle_blessing_check_effect = yes
+		health = 2
+		change_diplomacy = 2
+		change_stewardship = 3
+		change_martial = 1
+		piety = 150
+		if = {
+			limit = {
+				religion = nurgle
+				NOR = {
+					trait = mark_khorne
+					trait = mark_chaos
+					trait = mark_nurgle
+					trait = mark_tzeentch
+					trait = mark_slaanesh
+				}
+			}
+			add_trait = mark_nurgle
+		}
+	}
+}
+
+# nurgle.8 Acceptance
+# Scope: ROOT is the sufferer.
+character_event = {
+	id = nurgle.8
+	title = EVTTITLEnurgle8
+	desc = EVTDESCnurgle8
+	picture = GFX_evt_illness
+
+	is_triggered_only = yes # nurgle.6
+
+	option = {
+		name = EVTOPTAnurgle8 # I am prepared to meet my ancestors...
+		nurgle_despair_lift_effect = yes
+	}
+}
+
+###############################################################################
+# Tzeentch's visions
+###############################################################################
+
+# tzeentch.1 Inspiration
+# Tzeentch shows a slow-witted follower glimpses of the threads of fate.
+# Careful study makes him smart three times in four; reaching for everything
+# makes him brilliant a little more often than not. Failure leaves him dull,
+# or an imbecile and disfigured, and risks a mutation. Turning away makes
+# him craven and content.
+# Scope: ROOT is the dreamer. From on_decade_pulse.
+character_event = {
+	id = tzeentch.1
+	title = EVTTITLEtzeentch1
+	desc = EVTDESCtzeentch1
+	picture = GFX_evt_library
+
+	is_triggered_only = yes # on_decade_pulse
+
+	only_playable = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		follower_of_tzeentch = yes
+		is_landed = yes
+		tzeentch_dull_trigger = yes
+		is_demon_trigger = no
+		NOT = { trait = lore_dark_magic }
+		NOT = { trait = creature_beastman } # Beastmen get theirs on_birth
+		NOR = {
+			has_character_flag = touched_by_tzeentch
+			has_character_flag = failed_tzeentch_test
+			has_character_flag = refused_tzeentch
+		}
+	}
+
+	option = {
+		name = EVTOPTAtzeentch1 # I will carefully study these visions...
+		ai_chance = { factor = 60 }
+		random_list = {
+			75 = {
+				tzeentch_clear_dull_wits_effect = yes
+				add_trait = smart
+				change_learning = 1
+				change_intrigue = 1
+				set_character_flag = touched_by_tzeentch
+				hidden_effect = { character_event = { id = tzeentch.2 days = 3 } }
+			}
+			25 = {
+				add_trait = dumb
+				custom_tooltip = {
+					text = mutations_test_tt
+					mutation_toughness_test_effect = yes
+				}
+				set_character_flag = failed_tzeentch_test
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBtzeentch1 # I would risk everything to know the infinite!
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = ambitious }
+			modifier = { factor = 0.5 trait = content }
+		}
+		random_list = {
+			55 = {
+				tzeentch_clear_dull_wits_effect = yes
+				add_trait = brilliant
+				change_learning = 2
+				change_intrigue = 2
+				set_character_flag = touched_by_tzeentch
+				if = {
+					limit = {
+						NOT = { has_character_flag = tzeentch_eye_given }
+						NOT = { has_artifact = whispering_daemon_eye }
+					}
+					random = {
+						chance = 10
+						add_artifact = whispering_daemon_eye
+						set_character_flag = tzeentch_eye_given
+					}
+				}
+				hidden_effect = { character_event = { id = tzeentch.2 days = 3 } }
+			}
+			45 = {
+				tzeentch_lose_wits_effect = yes
+				add_trait = imbecile
+				if = {
+					limit = { NOT = { trait = disfigured } }
+					add_trait = disfigured
+				}
+				custom_tooltip = {
+					text = mutations_test_tt
+					mutation_toughness_test_effect = yes
+				}
+				set_character_flag = failed_tzeentch_test
+			}
+		}
+	}
+	option = {
+		name = EVTOPTCtzeentch1 # I fear the power of change...
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 trait = craven }
+		}
+		if = {
+			limit = { NOT = { trait = craven } }
+			add_trait = craven
+		}
+		if = {
+			limit = { NOT = { trait = content } }
+			add_trait = content
+		}
+		piety = -25
+		set_character_flag = refused_tzeentch
+	}
+}
+
+# tzeentch.2 Boon of Tzeentch
+# Scope: ROOT is the dreamer.
+character_event = {
+	id = tzeentch.2
+	title = EVTTITLEtzeentch2
+	desc = EVTDESCtzeentch2
+	picture = GFX_evt_tzeentch
+
+	is_triggered_only = yes # tzeentch.1
+
+	option = {
+		name = EVTOPTAtzeentch2 # I must adapt and grow...
+		change_learning = 2
+		piety = 50
+	}
+}
+
+###############################################################################
+# The daemonette's counsel
+###############################################################################
+
+# darkprince.1 The daemonette's counsel (hidden)
+# A lord who wants to shed a virtue for Slaanesh and keeps a daemonette
+# close hears her out (darkprince.2) once during the ambition. Without one,
+# he looks again in a year or two.
+# Scope: ROOT is the lord. From obj_slaanesh_shed_a_virtue.
+character_event = {
+	id = darkprince.1
+	hide_window = yes
+
+	is_triggered_only = yes # obj_slaanesh_shed_a_virtue, itself
+
+	trigger = {
+		has_ambition = obj_slaanesh_shed_a_virtue
+		NOT = { has_character_flag = Pet_Daemonette_helped_ambition }
+	}
+
+	immediate = {
+		clear_event_target = darkprince_daemonette
+		if = {
+			limit = {
+				prisoner = no
+				is_incapable = no
+				OR = {
+					any_spouse = { darkprince_daemonette_trigger = yes }
+					any_lover = { darkprince_daemonette_trigger = yes }
+					any_friend = { darkprince_daemonette_trigger = yes }
+					any_courtier = { darkprince_daemonette_trigger = yes }
+				}
+			}
+			random_spouse = {
+				limit = { darkprince_daemonette_trigger = yes }
+				save_event_target_as = darkprince_daemonette
+			}
+			if = {
+				limit = { NOT = { event_target:darkprince_daemonette = { always = yes } } }
+				random_lover = {
+					limit = { darkprince_daemonette_trigger = yes }
+					save_event_target_as = darkprince_daemonette
+				}
+			}
+			if = {
+				limit = { NOT = { event_target:darkprince_daemonette = { always = yes } } }
+				random_friend = {
+					limit = { darkprince_daemonette_trigger = yes }
+					save_event_target_as = darkprince_daemonette
+				}
+			}
+			if = {
+				limit = { NOT = { event_target:darkprince_daemonette = { always = yes } } }
+				random_courtier = {
+					limit = { darkprince_daemonette_trigger = yes }
+					save_event_target_as = darkprince_daemonette
+				}
+			}
+			set_character_flag = Pet_Daemonette_helped_ambition
+			character_event = { id = darkprince.2 }
+		}
+		else = {
+			character_event = { id = darkprince.1 days = 365 random = 365 }
+		}
+	}
+}
+
+# darkprince.2 Long sensual nights
+# Giving in sheds one of the virtues the ambition marked, more surely for a
+# zealous or ambitious lord or a clever daemonette. Refusing costs piety and
+# may make the lord diligent.
+# Scope: ROOT is the lord; darkprince_daemonette the daemonette.
+character_event = {
+	id = darkprince.2
+	desc = EVTDESCdarkprince2
+	picture = GFX_evt_slaanesh_tempt
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # darkprince.1
+
+	option = {
+		name = EVTOPTAdarkprince2 # I will need fresh slaves to practise on...
+		ai_chance = { factor = 85 }
+		random_list = {
+			25 = {
+				modifier = {
+					factor = 3
+					OR = {
+						trait = zealous
+						trait = ambitious
+						event_target:darkprince_daemonette = {
+							OR = {
+								trait = genius
+								trait = quick
+								intrigue = 20
+							}
+						}
+					}
+				}
+				WHG_ambition_shed_one_virtue_effect = yes
+				piety = 25
+			}
+			75 = {
+				custom_tooltip = { text = EVTTOOLTIPdarkprince2_fail }
+				piety = 10
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBdarkprince2 # Only fools and pawns drown in excess!
+		ai_chance = { factor = 15 }
+		prestige = -10
+		piety = -10
+		if = {
+			limit = { NOT = { trait = diligent } }
+			random = {
+				chance = 5
+				add_trait = diligent
+			}
+		}
+	}
+}

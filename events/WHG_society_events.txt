@@ -1,7 +1,9 @@
 ###############################################################################
 # The running of the societies
 # Namespace: society (was MNM.6661 - 6668, MNM.6991 - 6992 and
-#   MNM.10000 - 10045 in mnm_misc_events.txt)
+#   MNM.10000 - 10045 in mnm_misc_events.txt, and MNM.100 - 102, the
+#   letters of welcome of the Order of Mysteries and the societies of the
+#   road, in DR_societies_mnm_events.txt and mnm_hermetics_events.txt)
 # Faction: Generic
 # Serves: members of every society, and the AI lords who fill them
 #
@@ -19,13 +21,13 @@
 # Rivals and friends                   society.40 - society.45
 # Whispers and exposure                society.60 - society.65
 # Missions                             society.70 - society.81
-# Joining and leaving                  society.90 - society.91
+# Joining and leaving                  society.90 - society.94
 #
 # Callers: the rank-up decision in decisions/mnm_society_decisions.txt
 #   (society.1); on_five_year_pulse (society.30), on_death (society.80),
 #   on_society_bi_yearly_pulse (society.20, .40, .43),
 #   on_character_switch_society_interest (society.10, .91),
-#   on_character_ask_to_join_society (society.91),
+#   on_character_ask_to_join_society (society.91, .92),
 #   on_character_leave_society (society.90),
 #   on_character_kicked_from_society (society.21),
 #   on_character_stop_showing_interest (society.24), on_quest_success
@@ -39,11 +41,14 @@
 #   <society>_attempted_recruitment, being_recruited_by_<god>,
 #   being_recruited_by_the_cult_of_pleasure, ineligible_for_society_rivalry,
 #   ineligible_for_society_friendship, secret_societies_interference (on the
-#   liege), society_join_block.
+#   liege), society_join_block, society_join_verena, society_join_league,
+#   society_join_pirates, society_join_corsairs.
 # Dropped: MNM.10025, the save-game conversion of the vanilla secretly_pagan
 #   trait (already switched off in on_startup); the hidden bounce events
 #   MNM.10013 - 10017 became one (society.13); the AI join roll MNM.10031
-#   became society_ai_join_effect, fired straight from society.30.
+#   became society_ai_join_effect, fired straight from society.30. The
+#   letter of welcome of the vanilla Hermetic Society, which the mod does
+#   not have, and the break-chains of MNM.100.
 ###############################################################################
 
 namespace = society
@@ -1235,5 +1240,195 @@ character_event = {
 	option = {
 		name = EVTOPTBsociety91
 		clr_character_flag = society_join_block
+	}
+}
+
+# society.92 Asked to join a society of the road
+# Hidden. A ruler asks to join the Order of Mysteries, the League of
+# explorers, the pirates or the Druchii corsairs. Pirates and corsairs need
+# no leave and write straight back; otherwise a free member answers, an
+# officer before a grandmaster, and the grandmaster when everyone is in
+# chains.
+# Scope: ROOT is the one asking, FROM the society. From
+#   on_character_ask_to_join_society.
+character_event = {
+	id = society.92
+	hide_window = yes
+	is_triggered_only = yes # on_character_ask_to_join_society
+
+	trigger = {
+		FROM = {
+			OR = {
+				is_society = cult_of_verena
+				is_society = adventurers_the_league
+				is_society = adventurers_pirates
+				is_society = adventurers_druchii_corsairs
+			}
+			any_society_member = { always = yes }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			trigger_switch = {
+				on_trigger = is_society
+				cult_of_verena = { ROOT = { set_character_flag = society_join_verena } }
+				adventurers_the_league = { ROOT = { set_character_flag = society_join_league } }
+				adventurers_pirates = { ROOT = { set_character_flag = society_join_pirates } }
+				adventurers_druchii_corsairs = { ROOT = { set_character_flag = society_join_corsairs } }
+			}
+		}
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = society_join_pirates
+					has_character_flag = society_join_corsairs
+				}
+			}
+			letter_event = { id = society.94 }
+		}
+		else_if = {
+			limit = {
+				FROM = {
+					any_society_member = {
+						prisoner = no
+						NOT = { character = ROOT }
+					}
+				}
+			}
+			FROM = {
+				random_society_member = {
+					limit = {
+						prisoner = no
+						NOT = { character = ROOT }
+					}
+					preferred_limit = { society_rank == 3 }
+					preferred_limit = { society_rank == 4 }
+					preferred_limit = { society_rank == 2 }
+					character_event = { id = society.93 }
+				}
+			}
+		}
+		else = {
+			FROM = { leader = { character_event = { id = society.93 } } }
+		}
+	}
+}
+
+# society.93 The answer is written
+# Hidden. Bounces back to the one asking.
+# Scope: ROOT is the member who answers, FROM the one asking.
+character_event = {
+	id = society.93
+	hide_window = yes
+	is_triggered_only = yes # society.92
+
+	immediate = {
+		FROM = { letter_event = { id = society.94 } }
+	}
+}
+
+# society.94 The letter of welcome
+# The Order welcomes a new adept; the League asks a fee of 100 gold; the
+# pirates and corsairs, a green-skinned crew among them, need no one's leave.
+# Scope: ROOT is the one asking, FROM the member who answers (ROOT himself
+#   for pirates and corsairs).
+letter_event = {
+	id = society.94
+	desc = {
+		trigger = { has_character_flag = society_join_verena }
+		text = EVTDESCsociety94_verena
+	}
+	desc = {
+		trigger = { has_character_flag = society_join_league wealth = 100 }
+		text = EVTDESCsociety94_league
+	}
+	desc = {
+		trigger = { has_character_flag = society_join_league NOT = { wealth = 100 } }
+		text = EVTDESCsociety94_league_poor
+	}
+	desc = {
+		trigger = {
+			has_character_flag = society_join_pirates
+			government = freeboota_government
+		}
+		text = EVTDESCsociety94_freebooter
+	}
+	desc = {
+		trigger = {
+			has_character_flag = society_join_pirates
+			NOT = { government = freeboota_government }
+			culture_group = arabyan_group
+		}
+		text = EVTDESCsociety94_corsair
+	}
+	desc = {
+		trigger = {
+			has_character_flag = society_join_pirates
+			NOT = { government = freeboota_government }
+			NOT = { culture_group = arabyan_group }
+		}
+		text = EVTDESCsociety94_pirate
+	}
+	desc = {
+		trigger = { has_character_flag = society_join_corsairs }
+		text = EVTDESCsociety94_druchii
+	}
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes # society.92, society.93
+
+	immediate = {
+		set_character_flag = society_join_block
+	}
+
+	option = { # The Order
+		name = EVTOPTAsociety94
+		trigger = { has_character_flag = society_join_verena }
+		join_society = cult_of_verena
+	}
+	option = { # The League
+		name = EVTOPTBsociety94
+		trigger = {
+			has_character_flag = society_join_league
+			wealth = 100
+		}
+		wealth = -100
+		join_society = adventurers_the_league
+	}
+	option = { # To sea
+		name = EVTOPTCsociety94
+		trigger = {
+			OR = {
+				has_character_flag = society_join_pirates
+				has_character_flag = society_join_corsairs
+			}
+		}
+		if = {
+			limit = { has_character_flag = society_join_pirates }
+			join_society = adventurers_pirates
+		}
+		else = {
+			join_society = adventurers_druchii_corsairs
+		}
+	}
+	option = { # Not after all
+		name = EVTOPTDsociety94
+		if = {
+			limit = {
+				has_character_flag = society_join_league
+				NOT = { wealth = 100 }
+			}
+			custom_tooltip = { text = cant_afford_100_tt }
+		}
+		prestige = -10
+	}
+
+	after = {
+		clr_character_flag = society_join_block
+		clr_character_flag = society_join_verena
+		clr_character_flag = society_join_league
+		clr_character_flag = society_join_pirates
+		clr_character_flag = society_join_corsairs
 	}
 }

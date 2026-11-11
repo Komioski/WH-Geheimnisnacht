@@ -13,14 +13,26 @@
 # The Druchii have their own take on this (druchii.50 - druchii.51).
 #
 # Part 1: courtiers on patrol          court.1 - court.2
+# Life at court                        court.10 - court.19
+#   (was 73000 - 73009 in the vanilla court_events.txt)
+# A seat on the council                court.20 - court.27
+#   (was 73200 - 73245, five copies of one chain; without Conclave only)
 # Part 2: the hero knight               heroknight.1 - heroknight.8
 #   (namespace heroknight, was CM.2000 - CM.2030 in cm_various_events.txt)
 # Part 3: eunuchs of the court        eunuch.1 - eunuch.15
 #   (namespace eunuch, was LoR.800 - 805 and 885 - 890 in byzantine_events.txt)
 #
 # Fired from: on_bi_yearly_pulse random list in wh_on_actions.txt (1, 2);
-#   Part 2 has its own callers.
-# Saved: event targets court_hero, court_coward.
+#   on_yearly_pulse random_events in 00_on_actions.txt (10 - 19); the
+#   on_yearly_pulse list court_council_petition in wh_on_actions.txt (20).
+#   Parts 2 and 3 have their own callers.
+# Saved: event targets court_hero, court_coward, knocked_up_maid,
+#   grumpy_priest, court_petitioner, court_holder; character flags
+#   court_fashion_wife, court_petition_open, court_petition_<job>,
+#   asked_for_job.
+# Scripted effects: common/scripted_effects/wh_court_effects.txt
+# Custom loc: GetCourtPetitionJob in
+#   localisation/customizable_localisation/wh_court_customizable_localisation.txt
 # Loc: localisation/00_WHG_court_events.csv
 # Full list with callers: docs/events/event_database.csv
 ###############################################################################
@@ -185,6 +197,895 @@ character_event = {
 	}
 }
 
+
+###############################################################################
+# Life at court (was 73000 - 73009 in the vanilla court_events.txt)
+###############################################################################
+
+# court.10 The family chronicle
+# A famous writer offers to write the history of the ruler's house.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = court.10
+	desc = EVTDESCcourt10
+	picture = GFX_evt_monk
+	is_triggered_only = yes # on_yearly_pulse
+	only_playable = yes
+	prisoner = no
+	min_age = 16
+	trigger = {
+		NOR = { trait = proud trait = humble }
+	}
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = ambitious }
+		modifier = { factor = 0.1 trait = shy }
+		modifier = { factor = 0.6 court_unwell_trigger = yes }
+	}
+	option = { # Give him patronage
+		name = EVTOPTAcourt10
+		scaled_wealth = -0.2
+		prestige = 25
+		random = {
+			chance = 15
+			add_trait = proud
+			hidden_effect = { character_event = { id = 38261 } } # Notify Proud
+		}
+		ai_chance = { factor = 60 }
+	}
+	option = { # Ignore him
+		name = EVTOPTBcourt10
+		custom_tooltip = {
+			text = ALL_DYNASTY_MEMBERS_MINUS_5
+			hidden_effect = {
+				any_dynasty_member = {
+					limit = { NOT = { character = ROOT } }
+					opinion = { who = ROOT modifier = disrespects_dynasty months = 120 }
+				}
+			}
+		}
+		random = {
+			chance = 15
+			add_trait = humble
+			hidden_effect = { character_event = { id = 38260 } } # Notify Humble
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+}
+
+# court.11 The poetry-reading wife
+# A young wife takes a passion for romances. Feed it, ignore it, or burn
+# the books as the work of the Dark Gods (Old World and Araby faiths).
+# Scope: ROOT is the husband.
+character_event = {
+	id = court.11
+	desc = EVTDESCcourt11
+	picture = GFX_evt_courtiers_talking
+	is_triggered_only = yes # on_yearly_pulse
+	only_playable = yes
+	only_men = yes
+	prisoner = no
+	min_age = 16
+	is_married = yes
+	trigger = {
+		spouse = {
+			is_woman_trigger = yes
+			is_abroad = no
+			prisoner = no
+			NOT = { age = 21 }
+			NOT = { demesne_size = 1 }
+			fertility = 0.15
+		}
+	}
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 4 spouse = { is_pregnant = yes } }
+		modifier = { factor = 2 spouse = { trait = poet } }
+		modifier = { factor = 1.5 trait = gregarious }
+	}
+	option = { # More books for her
+		name = EVTOPTAcourt11
+		wealth = -10
+		spouse = {
+			fertility = 0.1
+			if = {
+				limit = { NOT = { trait = lustful } }
+				random = { chance = 50 add_trait = lustful }
+			}
+			opinion = { who = ROOT modifier = spouse_encouraged months = 12 }
+		}
+		ai_chance = { factor = 50 }
+	}
+	option = { # Her pastime, not mine
+		name = EVTOPTBcourt11
+		piety = 5
+		spouse = {
+			opinion = { who = ROOT modifier = spouse_ignores_me months = 12 }
+		}
+		ai_chance = { factor = 40 }
+	}
+	option = { # Burn them
+		name = EVTOPTCcourt11
+		trigger = {
+			OR = {
+				religion_group = old_world_group
+				religion_group = ormazd_gods_group
+			}
+		}
+		spouse = {
+			fertility = -0.1
+			if = {
+				limit = {
+					NOR = {
+						religion_group = ormazd_gods_group
+						trait = chaste
+					}
+				}
+				add_trait = chaste
+			}
+		}
+		piety = 10
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0 NOT = { trait = zealous } }
+		}
+	}
+}
+
+# court.12 A miracle play
+# The temples want to stage a miracle play for a local saint.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = court.12
+	desc = EVTDESCcourt12
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes # on_yearly_pulse
+	only_playable = yes
+	prisoner = no
+	min_age = 16
+	religion_group = old_world_group
+	trigger = {
+		in_command = no
+		any_vassal = {
+			tier = BARON
+			is_theocracy = yes
+			NOT = { has_opinion_modifier = { who = ROOT modifier = ignores_local_saints } }
+		}
+	}
+	immediate = {
+		random_vassal = {
+			limit = {
+				tier = BARON
+				is_theocracy = yes
+				NOT = { has_opinion_modifier = { who = ROOT modifier = ignores_local_saints } }
+			}
+			save_event_target_as = grumpy_priest
+		}
+	}
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 0.1 trait = cynical }
+		modifier = { factor = 2 trait = zealous }
+	}
+	option = { # For the glory of the gods
+		name = EVTOPTAcourt12
+		scaled_wealth = -0.2
+		piety = 10
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = zealous }
+		}
+	}
+	option = { # The temple pays for it
+		name = EVTOPTBcourt12
+		event_target:grumpy_priest = {
+			show_scope_change = no
+			opinion = { who = ROOT modifier = ignores_local_saints years = 2 }
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+}
+
+# court.13 The peasants' carnival
+# A count's peasants ask him to pay for a great carnival.
+# Scope: ROOT is the count.
+character_event = {
+	id = court.13
+	desc = EVTDESCcourt13
+	picture = GFX_evt_emissary
+	is_triggered_only = yes # on_yearly_pulse
+	only_playable = yes
+	prisoner = no
+	min_age = 16
+	religion_group = old_world_group
+	trigger = {
+		in_command = no
+		tier = COUNT
+		wealth = 50
+	}
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.5 trait = kind }
+	}
+	option = { # We can afford it
+		name = EVTOPTAcourt13
+		wealth = -25
+		if = {
+			limit = { trait = greedy }
+			prestige = -5
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.3 trait = greedy }
+		}
+	}
+	option = { # They are just peasants
+		name = EVTOPTBcourt13
+		random_demesne_province = {
+			add_province_modifier = { name = peasants_scorned duration = 120 }
+		}
+		if = {
+			limit = { trait = just }
+			remove_trait = just
+		}
+		ai_chance = { factor = 50 }
+	}
+}
+
+# court.14 A portrait of the late father
+# A painter offers to paint the ruler's late father, who was a great lord.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = court.14
+	desc = EVTDESCcourt14
+	picture = GFX_evt_monk
+	is_triggered_only = yes # on_yearly_pulse
+	only_playable = yes
+	prisoner = no
+	min_age = 16
+	trigger = {
+		in_command = no
+		father_even_if_dead = {
+			is_alive = no
+			primary_title = { higher_tier_than = COUNT }
+		}
+	}
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = ambitious }
+		modifier = { factor = 0.1 trait = shy }
+	}
+	option = { # For the great hall
+		name = EVTOPTAcourt14
+		scaled_wealth = -0.15
+		prestige = 25
+		ai_chance = { factor = 60 }
+	}
+	option = { # A waste of money
+		name = EVTOPTBcourt14
+		any_dynasty_member = {
+			limit = { NOT = { character = ROOT } }
+			opinion = { who = ROOT modifier = disrespects_dynasty months = 120 }
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+}
+
+# court.15 The fashion of the court
+# Luxury clothes are all the rage: set the fashion at court, or keep the
+# taxes for better things. Also comes when the ruler opens the purse for
+# a bored wife (court.17), flag court_fashion_wife.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = court.15
+	desc = EVTDESCcourt15
+	picture = GFX_evt_courtiers_talking
+	is_triggered_only = yes # on_yearly_pulse, court.17
+	only_playable = yes
+	prisoner = no
+	min_age = 16
+	trigger = {
+		OR = {
+			has_character_flag = court_fashion_wife
+			AND = {
+				in_command = no
+				OR = {
+					trait = fair
+					trait = ugly
+				}
+				NOR = { trait = humble trait = uncouth }
+			}
+		}
+	}
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = proud trait = fair }
+		modifier = { factor = 2 trait = groomed }
+		modifier = { factor = 0.6 court_unwell_trigger = yes }
+	}
+	immediate = {
+		clr_character_flag = court_fashion_wife
+	}
+	option = { # Set the fashion
+		name = EVTOPTAcourt15
+		if = {
+			limit = { has_fair_trait_trigger = yes }
+			random = {
+				chance = 10
+				add_trait = proud
+				hidden_effect = { character_event = { id = 38261 } } # Notify Proud
+			}
+		}
+		scaled_wealth = -0.2
+		prestige = 5
+		piety = -5
+		any_courtier = {
+			wealth = -5
+			prestige = 5
+			piety = -5
+		}
+		ai_chance = { factor = 50 }
+	}
+	option = { # Better ways to spend the taxes
+		name = EVTOPTBcourt15
+		piety = 5
+		prestige = 10
+		random = {
+			chance = 15
+			add_trait = humble
+			hidden_effect = { character_event = { id = 38260 } } # Notify Humble
+		}
+		ai_chance = { factor = 50 }
+	}
+}
+
+# court.16 The son and the maid
+# An unwed son has got a servant girl with child.
+# Scope: ROOT is the father.
+character_event = {
+	id = court.16
+	desc = EVTDESCcourt16
+	picture = GFX_evt_pregnancy
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	only_playable = yes
+	only_men = yes
+	prisoner = no
+	min_age = 16
+	trigger = {
+		any_child = { court_randy_son_trigger = yes }
+	}
+	immediate = {
+		random_child = {
+			limit = { court_randy_son_trigger = yes }
+			save_event_target_as = knocked_up_maid
+		}
+	}
+	option = { # That's my boy
+		name = EVTOPTAcourt16
+		trigger = { NOR = { trait = chaste trait = celibate } }
+		piety = -10
+		event_target:knocked_up_maid = {
+			opinion = { modifier = approves_of_my_behaviour who = ROOT years = 2 }
+			if = {
+				limit = { NOT = { trait = lustful } }
+				random = { chance = 50 add_trait = lustful }
+			}
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 trait = lustful }
+		}
+	}
+	option = { # He takes the child in
+		name = EVTOPTBcourt16
+		piety = 10
+		event_target:knocked_up_maid = {
+			opinion = { modifier = resentful_of_my_behaviour who = ROOT years = 2 }
+			create_character = {
+				age = 0
+				trait = bastard
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Set the racial trait
+				set_father = PREV
+				dynasty = father
+			}
+			prestige = -5
+		}
+		ai_chance = { factor = 30 }
+	}
+	option = { # A beating
+		name = EVTOPTCcourt16
+		pacifists_lose_piety_effect = yes
+		event_target:knocked_up_maid = {
+			opinion = { modifier = resentful_of_my_behaviour who = ROOT years = 2 }
+			random_list = {
+				50 = { add_trait = wroth }
+				50 = { add_trait = ambitious }
+			}
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = wroth }
+		}
+	}
+	option = { # Off to the temple to atone
+		name = EVTOPTDcourt16
+		trigger = {
+			OR = {
+				religion_group = old_world_group
+				religion_group = ormazd_gods_group
+			}
+		}
+		event_target:knocked_up_maid = {
+			if = {
+				limit = { religion_group = old_world_group NOT = { trait = chaste } }
+				random = { chance = 50 add_trait = chaste }
+			}
+			piety = -10
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = zealous }
+		}
+	}
+}
+
+# court.17 The bored wife
+# A wife wants the latest fashion. Open the purse (the fashion at court,
+# court.15), take her to the temple, or keep the money.
+# Scope: ROOT is the husband.
+character_event = {
+	id = court.17
+	desc = EVTDESCcourt17
+	picture = GFX_evt_daughter_asking_father
+	is_triggered_only = yes # on_yearly_pulse
+	only_playable = yes
+	only_men = yes
+	prisoner = no
+	min_age = 16
+	trigger = {
+		in_command = no
+		NOR = { trait = zealous trait = charitable }
+		spouse = {
+			is_woman_trigger = yes
+			is_abroad = no
+			prisoner = no
+			NOR = { trait = shy trait = zealous trait = uncouth }
+			NOT = { demesne_size = 1 }
+			opinion = { who = ROOT value = 10 }
+		}
+	}
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.25 spouse = { trait = stressed } }
+		modifier = { factor = 2 spouse = { trait = greedy } }
+		modifier = { factor = 1.5 spouse = { has_fair_trait_trigger = yes } }
+		modifier = { factor = 2.5 spouse = { trait = ugly } }
+	}
+	option = { # My money is your money
+		name = EVTOPTAcourt17
+		trigger = { NOT = { trait = greedy } }
+		spouse = {
+			if = {
+				limit = { trait = stressed }
+				remove_trait = stressed
+			}
+		}
+		random = { chance = 50 add_trait = charitable }
+		set_character_flag = court_fashion_wife
+		character_event = { id = court.15 days = 10 tooltip = EVTTOOLTIPcourt15 }
+		ai_chance = { factor = 40 }
+	}
+	option = { # To the temple instead
+		name = EVTOPTBcourt17
+		trigger = { religion_group = old_world_group }
+		if = {
+			limit = { trait = cynical }
+			prestige = -5
+		}
+		random = { chance = 50 add_trait = zealous }
+		spouse = { random = { chance = 50 add_trait = zealous } }
+		ai_chance = { factor = 30 }
+	}
+	option = { # My money stays mine
+		name = EVTOPTCcourt17
+		if = {
+			limit = { NOT = { trait = greedy } }
+			random = { chance = 50 add_trait = greedy }
+		}
+		spouse = {
+			opinion = { who = ROOT modifier = not_feeling_apreciated years = 2 }
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 trait = greedy }
+		}
+	}
+}
+
+# court.18 A famous herald
+# A herald of renown offers his service (a diplomat joins the court).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = court.18
+	desc = EVTDESCcourt18
+	picture = GFX_evt_emissary
+	is_triggered_only = yes # on_yearly_pulse
+	only_playable = yes
+	ai = no
+	prisoner = no
+	min_age = 16
+	trigger = {
+		is_landed = yes
+		capital_scope = { TECH_NOBLE_CUSTOMS = 4 }
+	}
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 0.05 trait = shy }
+		modifier = { factor = 1.25 trait = gregarious }
+	}
+	option = { # Hire him
+		name = EVTOPTAcourt18
+		create_random_diplomat = {
+			random_traits = yes
+			dynasty = random
+			female = no
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Set the racial trait
+		}
+		scaled_wealth = -0.1
+	}
+	option = { # Not interested
+		name = EVTOPTBcourt18
+		prestige = -5
+	}
+}
+
+# court.19 A noble from the enemy court
+# At war with a ruler of the same culture, a destitute noble of the enemy
+# court asks for shelter; he brings a claim on one of the enemy's lands.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = court.19
+	desc = EVTDESCcourt19
+	picture = GFX_evt_emissary
+	is_triggered_only = yes # on_yearly_pulse
+	only_playable = yes
+	prisoner = no
+	min_age = 16
+	war = yes
+	trigger = {
+		any_current_enemy = { culture = ROOT }
+	}
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.5 trait = kind }
+		modifier = { factor = 0.2 trait = cruel }
+		modifier = { factor = 0.2 trait = arbitrary }
+		modifier = { factor = 0.6 court_unwell_trigger = yes }
+	}
+	option = { # Welcome him
+		name = EVTOPTAcourt19
+		scaled_wealth = -0.2
+		create_random_soldier = {
+			random_traits = yes
+			dynasty = random
+			female = no
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Set the racial trait
+			ROOT = {
+				random_current_enemy = {
+					limit = { culture = ROOT }
+					random_demesne_title = {
+						limit = {
+							OR = {
+								AND = { tier = BARON is_capital = no }
+								tier = COUNT
+							}
+						}
+						add_claim = PREVPREVPREV
+					}
+				}
+			}
+		}
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+	option = { # One night only
+		name = EVTOPTBcourt19
+		piety = 15
+		ai_chance = { factor = 40 }
+	}
+}
+
+###############################################################################
+# A seat on the council (was 73200 - 73245 in the vanilla court_events.txt,
+# five copies of one chain, one for each seat)
+# Without Conclave only: Conclave has its own council politics.
+###############################################################################
+
+# court.20 A courtier wants a seat
+# Hidden. Once a year a ruler's courtier who is better at a council job
+# than the one who holds it may ask for the seat (court.21). Was an MTTH
+# event on every unlanded character in the world.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = court.20
+	hide_window = yes
+	is_triggered_only = yes # on_yearly_pulse court_council_petition list
+	only_playable = yes
+	lacks_dlc = "Zeus"
+	trigger = {
+		NOT = { has_character_flag = court_petition_open }
+		any_courtier = { court_petitioner_trigger = yes }
+	}
+	immediate = {
+		random_courtier = {
+			limit = { court_petitioner_trigger = yes }
+			preferred_limit = { trait = ambitious }
+			save_event_target_as = court_petitioner
+		}
+		event_target:court_petitioner = {
+			random_list = {
+				20 = {
+					trigger = { court_petition_marshal_trigger = yes }
+					ROOT = {
+						set_character_flag = court_petition_open
+						set_character_flag = court_petition_marshal
+						job_marshal = { save_event_target_as = court_holder }
+					}
+					character_event = { id = court.21 }
+				}
+				20 = {
+					trigger = { court_petition_spymaster_trigger = yes }
+					ROOT = {
+						set_character_flag = court_petition_open
+						set_character_flag = court_petition_spymaster
+						job_spymaster = { save_event_target_as = court_holder }
+					}
+					character_event = { id = court.21 }
+				}
+				20 = {
+					trigger = { court_petition_treasurer_trigger = yes }
+					ROOT = {
+						set_character_flag = court_petition_open
+						set_character_flag = court_petition_treasurer
+						job_treasurer = { save_event_target_as = court_holder }
+					}
+					character_event = { id = court.21 }
+				}
+				20 = {
+					trigger = { court_petition_chancellor_trigger = yes }
+					ROOT = {
+						set_character_flag = court_petition_open
+						set_character_flag = court_petition_chancellor
+						job_chancellor = { save_event_target_as = court_holder }
+					}
+					character_event = { id = court.21 }
+				}
+				20 = {
+					trigger = { court_petition_spiritual_trigger = yes }
+					ROOT = {
+						set_character_flag = court_petition_open
+						set_character_flag = court_petition_spiritual
+						job_spiritual = { save_event_target_as = court_holder }
+					}
+					character_event = { id = court.21 }
+				}
+			}
+		}
+	}
+}
+
+# court.21 I would do better
+# The courtier petitions the liege (court.22).
+# Scope: ROOT is the courtier, FROM the ruler.
+character_event = {
+	id = court.21
+	desc = EVTDESCcourt21
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes # court.20
+	option = {
+		name = EVTOPTAcourt21
+		set_character_flag = asked_for_job
+		FROM = { letter_event = { id = court.22 tooltip = EVTTOOLTIPcourt22 } }
+	}
+}
+
+# court.22 A petition for the seat
+# Appoint the petitioner, give the holder a chance (court.23; the
+# petitioner asks again in four to six months, court.24), or refuse.
+# Scope: ROOT is the ruler, FROM the courtier.
+letter_event = {
+	id = court.22
+	desc = EVTDESCcourt22
+	border = GFX_event_letter_frame_war
+	is_triggered_only = yes # court.21
+	option = { # Appoint the petitioner
+		name = EVTOPTAcourt22
+		court_petition_appoint_effect = yes
+		ai_chance = { factor = 40 }
+	}
+	option = { # Give the holder a chance
+		name = EVTOPTBcourt22
+		trigger = {
+			event_target:court_holder = {
+				NOR = { trait = stressed trait = depressed }
+			}
+		}
+		event_target:court_holder = { letter_event = { id = court.23 tooltip = EVTTOOLTIPcourt23 } }
+		FROM = { character_event = { id = court.24 days = 128 random = 63 } }
+		character_event = { id = court.27 days = 220 } # Closes the petition if it lapsed
+		ai_chance = { factor = 40 }
+	}
+	option = { # Refuse
+		name = EVTOPTCcourt22
+		court_petition_refuse_effect = yes
+		ai_chance = { factor = 20 }
+	}
+}
+
+# court.23 My seat is in doubt
+# Scope: ROOT is the holder, FROM the ruler.
+letter_event = {
+	id = court.23
+	desc = EVTDESCcourt23
+	border = GFX_event_letter_frame_war
+	is_triggered_only = yes # court.22
+	option = { # I must prove myself
+		name = EVTOPTAcourt23
+		random_list = {
+			50 = { }
+			30 = {
+				if = {
+					limit = { FROM = { has_character_flag = court_petition_marshal } }
+					change_martial = 1
+				}
+				else_if = {
+					limit = { FROM = { has_character_flag = court_petition_spymaster } }
+					change_intrigue = 1
+				}
+				else_if = {
+					limit = { FROM = { has_character_flag = court_petition_treasurer } }
+					change_stewardship = 1
+				}
+				else_if = {
+					limit = { FROM = { has_character_flag = court_petition_chancellor } }
+					change_diplomacy = 1
+				}
+				else_if = {
+					limit = { FROM = { has_character_flag = court_petition_spiritual } }
+					change_learning = 1
+				}
+			}
+			20 = {
+				add_trait = stressed
+				hidden_effect = { character_event = { id = 38282 } } # Notify Stressed
+			}
+		}
+	}
+	option = { # What can I do?
+		name = EVTOPTBcourt23
+		trigger = { NOR = { trait = ambitious trait = proud } }
+		prestige = -5
+	}
+}
+
+# court.24 I ask again
+# The petitioner, still better than the holder, asks again (court.25).
+# Otherwise the petition lapses.
+# Scope: ROOT is the courtier, FROM the ruler.
+character_event = {
+	id = court.24
+	desc = EVTDESCcourt24
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes # court.22, months later
+	prisoner = no
+	capable_only = yes
+	trigger = {
+		has_character_flag = asked_for_job
+		is_councillor = no
+		liege = { character = FROM }
+		FROM = {
+			OR = {
+				AND = {
+					has_character_flag = court_petition_marshal
+					job_marshal = { character = event_target:court_holder NOT = { martial = ROOT } }
+				}
+				AND = {
+					has_character_flag = court_petition_spymaster
+					job_spymaster = { character = event_target:court_holder NOT = { intrigue = ROOT } }
+				}
+				AND = {
+					has_character_flag = court_petition_treasurer
+					job_treasurer = { character = event_target:court_holder NOT = { stewardship = ROOT } }
+				}
+				AND = {
+					has_character_flag = court_petition_chancellor
+					job_chancellor = { character = event_target:court_holder NOT = { diplomacy = ROOT } }
+				}
+				AND = {
+					has_character_flag = court_petition_spiritual
+					job_spiritual = { character = event_target:court_holder NOT = { learning = ROOT } }
+				}
+			}
+		}
+	}
+	option = {
+		name = EVTOPTAcourt24
+		FROM = { letter_event = { id = court.25 tooltip = EVTTOOLTIPcourt22 } }
+	}
+}
+
+# court.25 The petition again
+# Scope: ROOT is the ruler, FROM the courtier.
+letter_event = {
+	id = court.25
+	desc = EVTDESCcourt25
+	border = GFX_event_letter_frame_war
+	is_triggered_only = yes # court.24
+	option = { # Appoint the petitioner
+		name = EVTOPTAcourt22
+		court_petition_appoint_effect = yes
+		ai_chance = { factor = 60 }
+	}
+	option = { # Refuse
+		name = EVTOPTCcourt22
+		court_petition_refuse_effect = yes
+		ai_chance = { factor = 40 }
+	}
+}
+
+# court.26 The seat is mine
+# Scope: ROOT is the new councillor, FROM the ruler.
+letter_event = {
+	id = court.26
+	desc = EVTDESCcourt26
+	border = GFX_event_letter_frame_war
+	is_triggered_only = yes # court_petition_appoint_effect
+	option = {
+		name = EVTOPTAcourt26
+		prestige = 5
+	}
+}
+
+# court.27 The petition lapses
+# Hidden. Closes a petition the courtier did not repeat (court.24 failed:
+# the courtier left, got another seat, or the holder changed).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = court.27
+	hide_window = yes
+	is_triggered_only = yes # court.22, months later
+	trigger = { has_character_flag = court_petition_open }
+	immediate = {
+		event_target:court_petitioner = {
+			if = {
+				limit = { has_character_flag = asked_for_job is_councillor = no }
+				clr_character_flag = asked_for_job
+			}
+		}
+		court_petition_clear_effect = yes
+	}
+}
 
 ###############################################################################
 # Part 2: The hero knight (namespace heroknight)

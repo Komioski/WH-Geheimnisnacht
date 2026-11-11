@@ -15,12 +15,20 @@
 #   prison.33-38     Poetry readings
 #   prison.50        A kinsman in prison defects to the jailer
 #   prison.60-64     Blinding and castration notices (was LoR.830-834)
+#   prison.70-74     A prisoner asks for better quarters
+#   prison.75-80     The urge to torture a prisoner
+#   prison.81-82     A captured enemy commander, kept or sacrificed
+#   prison.85-86     A vassal petitions the liege to free a friend
 #
 # Fired by decisions/rip_torture_decisions.txt, the recruit_prisoner
 # decision in rip_various_decisions.txt and the vassal_blinding_decision and
-# vassal_castrate_decision in vassal_decisions.txt (60-64).
+# vassal_castrate_decision in vassal_decisions.txt (60-64). prison.70, 75
+# and 85 are on yearly lists in wh_on_actions; prison.81 is fired by the
+# battle events (WHG_battle_events).
 # Was events/rip_torture_events.txt (RIP.15001-15008 = prison.1-8,
-# RIP.20001-20028 = prison.11-38) and RIP.29700 in rip_flavor_events.txt.
+# RIP.20001-20028 = prison.11-38), RIP.29700 in rip_flavor_events.txt and
+# 50005 - 50026 in the vanilla imprisoned_events.txt (prison.70-86).
+# Scripted: WHG_prison_triggers.txt, WHG_prison_effects.txt.
 # Loc: localisation/00_WHG_prison_events.csv
 ###############################################################################
 
@@ -1090,5 +1098,566 @@ character_event = {
 	is_triggered_only = yes # decision vassal_castrate_decision, for a prisoner under 16
 	option = {
 		name = EVTOPTAprison64
+	}
+}
+
+###############################################################################
+# Life in the dungeon (prison.70 - prison.86)
+# Was 50005 - 50026 in the vanilla imprisoned_events.txt.
+#   prison.70-74   A prisoner asks for better quarters: house arrest, the
+#                  oubliette or release for a favour
+#   prison.75-80   The urge to torture: the rack, wounds, a hand, death,
+#                  or the Brazen Bull of Zharr-Naggrund
+#   prison.81-82   A captured commander: kept, or sacrificed (warbands,
+#                  lodges and the servants of Khorne)
+#   prison.85-86   A vassal petitions the liege to free a friend
+###############################################################################
+
+# prison.70 Better quarters
+# Yearly list prison_requests, weight 170 (was MTTH 12 months).
+# Scope: ROOT is an imprisoned ruler.
+character_event = {
+	id = prison.70
+	desc = EVTDESCprison70
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_yearly_pulse, list prison_requests
+
+	min_age = 14
+	capable_only = yes
+	only_rulers = yes
+	prisoner = yes
+
+	trigger = {
+		host = { war = no }
+		NOT = { has_character_modifier = zun_judgement }
+		NOT = { has_character_modifier = the_oubliette }
+		NOT = { has_character_modifier = house_arrest }
+		NOT = { has_character_flag = asked_for_better_prison }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = gregarious }
+		modifier = { factor = 0.5 trait = content }
+	}
+
+	option = { # Ask
+		name = EVTOPTAprison70
+		set_character_flag = asked_for_better_prison
+		hidden_tooltip = { host = { character_event = { id = prison.71 days = 2 } } }
+	}
+	option = { # I deserve this
+		name = EVTOPTBprison70
+		set_character_flag = asked_for_better_prison
+	}
+}
+
+# prison.71 The jailer answers
+# Scope: ROOT is the host; FROM is the prisoner.
+character_event = {
+	id = prison.71
+	desc = EVTDESCprison71
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # prison.70
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	option = { # Denied
+		name = EVTOPTAprison71
+		trigger = { FROM = { prisoner = yes } }
+		ai_chance = { factor = 34 }
+		FROM = { lose_weight_medium_effect = yes weight_trait_check_effect = yes }
+		reverse_opinion = { who = FROM modifier = opinion_angry months = 12 }
+	}
+	option = { # House arrest
+		name = EVTOPTBprison71
+		trigger = { FROM = { prisoner = yes } }
+		ai_chance = {
+			factor = 33
+			modifier = { factor = 0 trait = paranoid }
+			modifier = { factor = 0 trait = wroth }
+			modifier = { factor = 5 trait = kind }
+		}
+		tooltip = {
+			FROM = {
+				add_character_modifier = { name = house_arrest duration = -1 }
+				opinion = { who = ROOT modifier = opinion_grateful months = 12 }
+			}
+		}
+		hidden_tooltip = { FROM = { character_event = { id = prison.72 } } }
+	}
+	option = { # The oubliette
+		name = EVTOPTCprison71
+		trigger = { FROM = { prisoner = yes } }
+		ai_chance = {
+			factor = 33
+			modifier = { factor = 0 trait = kind }
+			modifier = { factor = 2 trait = envious }
+			modifier = { factor = 5 trait = paranoid }
+			modifier = { factor = 5 trait = cruel }
+			modifier = { factor = 5 trait = wroth }
+		}
+		FROM = { lose_weight_medium_effect = yes weight_trait_check_effect = yes }
+		tooltip = {
+			FROM = {
+				add_character_modifier = { name = the_oubliette duration = -1 }
+				opinion = { who = ROOT modifier = opinion_hate months = 12 }
+			}
+		}
+		hidden_tooltip = { FROM = { character_event = { id = prison.73 } } }
+	}
+	option = { # Already out
+		name = EVTOPTDprison71
+		trigger = { FROM = { prisoner = no } }
+	}
+	option = { # Release for a favour
+		name = EVTOPTEprison71
+		trigger = { has_dlc = "Zeus" NOT = { holds_favor_on = FROM } FROM = { prisoner = yes } }
+		tooltip = {
+			add_favor = FROM
+			FROM = {
+				prisoner = no
+				opinion = { modifier = opinion_merciful who = ROOT months = 30 }
+			}
+		}
+		hidden_tooltip = { FROM = { character_event = { id = prison.74 } } }
+	}
+}
+
+# prison.72 House arrest
+# Scope: ROOT is the prisoner; FROM is the host.
+character_event = {
+	id = prison.72
+	desc = EVTDESCprison72
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # prison.71
+
+	option = {
+		name = EVTOPTAprison72
+		clr_character_flag = asked_for_better_prison
+		hidden_tooltip = { prison_clear_cell_effect = yes }
+		if = {
+			limit = { prisoner = yes }
+			add_character_modifier = { name = house_arrest duration = -1 }
+			character_event = { id = childhood.229 } # loses the pet rat
+		}
+		opinion = { who = FROM modifier = opinion_grateful months = 12 }
+	}
+}
+
+# prison.73 The oubliette
+# Scope: ROOT is the prisoner; FROM is the host.
+character_event = {
+	id = prison.73
+	desc = EVTDESCprison73
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # prison.71
+
+	option = {
+		name = EVTOPTAprison73
+		clr_character_flag = asked_for_better_prison
+		hidden_tooltip = { prison_clear_cell_effect = yes }
+		if = {
+			limit = { prisoner = yes }
+			add_character_modifier = { name = the_oubliette duration = -1 }
+		}
+		opinion = { who = FROM modifier = opinion_hate months = 12 }
+	}
+}
+
+# prison.74 Released for a favour
+# Scope: ROOT is the prisoner; FROM is the host.
+character_event = {
+	id = prison.74
+	desc = EVTDESCprison74
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # prison.71
+
+	option = {
+		name = EVTOPTAprison74
+		clr_character_flag = asked_for_better_prison
+		hidden_tooltip = { prison_clear_cell_effect = yes }
+		reverse_add_favor = FROM
+		prisoner = no
+		opinion = { modifier = opinion_released_prisoner who = FROM months = 30 }
+	}
+}
+
+# prison.75 The urge to torture
+# Yearly list prison_cruelty, weight 5 (was MTTH 240 months): a cruel,
+# envious, wrathful, mad or paranoid ruler eyes the prisoners.
+# Scope: ROOT is the host.
+character_event = {
+	id = prison.75
+	desc = EVTDESCprison75
+	picture = GFX_evt_torture
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_yearly_pulse, list prison_cruelty
+
+	min_age = 14
+	only_playable = yes
+	prisoner = no
+	capable_only = yes
+
+	trigger = {
+		NOT = { trait = kind }
+		NOT = { trait = just }
+		OR = {
+			trait = envious
+			trait = wroth
+			trait = arbitrary
+			trait = lunatic_1
+			trait = lunatic_2
+			trait = lunatic_3
+			trait = possessed
+			trait = paranoid
+			trait = impaler
+			trait = cruel
+		}
+		any_courtier = { prison_torture_victim_trigger = yes }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 4 trait = impaler }
+		modifier = { factor = 2 trait = possessed }
+		modifier = { factor = 2 trait = cruel }
+		modifier = { factor = 1.33 trait = paranoid }
+		modifier = { factor = 0.33 trait = slothful }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { prison_torture_victim_trigger = yes }
+			save_event_target_as = prison_victim
+		}
+	}
+
+	option = { # Resist the urge
+		name = EVTOPTAprison75
+		trigger = { NOT = { has_character_flag = demon_child_non_pagan } }
+		piety = 10
+	}
+	option = { # Oil the rack
+		name = EVTOPTBprison75
+		if = { limit = { NOT = { religion = shallyan } } piety = -10 }
+		pacifists_lose_piety_effect = yes
+		event_target:prison_victim = {
+			random_list = {
+				30 = { character_event = { id = prison.76 tooltip = EVTTOOLTIPprison76 } }
+				30 = { character_event = { id = prison.77 tooltip = EVTTOOLTIPprison77 } }
+				30 = { character_event = { id = prison.78 tooltip = EVTTOOLTIPprison78 } }
+				10 = { character_event = { id = prison.79 tooltip = EVTTOOLTIPprison79 } }
+			}
+		}
+	}
+	option = { # The Brazen Bull
+		name = EVTOPTCprison75
+		trigger = {
+			has_dlc = "Holy Fury"
+			NOT = { has_global_flag = flag_phalaris_bloodline }
+			NOT = { has_dynasty_flag = flag_phalaris_event }
+			culture_group = dwarf_chaos_group
+			is_female = no
+			is_alternate_start = no
+			independent = yes
+			primary_title = { title = k_zharrduk }
+			completely_controls = d_zharr_naggrund
+			capital_scope = { de_jure_liege = d_zharr_naggrund }
+			OR = {
+				trait = lunatic_1
+				trait = lunatic_2
+				trait = lunatic_3
+				trait = possessed
+				trait = impaler
+				trait = cruel
+			}
+			OR = { learning = 15 has_character_modifier = brazen_bull }
+		}
+		tooltip_info = learning
+		pacifists_lose_piety_effect = yes
+		event_target:prison_victim = {
+			character_event = { id = bloodline.1 tooltip = EVTTOOLTIPprison79 }
+		}
+	}
+}
+
+# prison.76 Tortured
+# Scope: ROOT is the prisoner; FROM is the torturer.
+character_event = {
+	id = prison.76
+	desc = EVTDESCprison76
+	picture = GFX_evt_torture
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # prison.75
+
+	option = {
+		name = EVTOPTAprison76
+		lose_weight_small_effect = yes
+		weight_trait_check_effect = yes
+		add_character_modifier = { name = tortured duration = 60 }
+	}
+}
+
+# prison.77 Wounded on the rack
+# Scope: ROOT is the prisoner; FROM is the torturer.
+character_event = {
+	id = prison.77
+	desc = EVTDESCprison77
+	picture = GFX_evt_torture
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # prison.75
+
+	option = {
+		name = EVTOPTAprison77
+		add_trait = wounded
+	}
+}
+
+# prison.78 A crushed hand
+# Scope: ROOT is the prisoner; FROM is the torturer.
+character_event = {
+	id = prison.78
+	desc = EVTDESCprison78
+	picture = GFX_evt_torture
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # prison.75
+
+	option = {
+		name = EVTOPTAprison78
+		maim_hand_effect = yes
+	}
+}
+
+# prison.79 Dead on the rack
+# Scope: ROOT is the prisoner; FROM is the torturer.
+character_event = {
+	id = prison.79
+	desc = EVTDESCprison79
+	picture = GFX_evt_death
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # prison.75
+
+	option = {
+		name = EVTOPTAprison79
+		if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+		else = {
+			hidden_tooltip = { FROM = { character_event = { id = prison.80 } } }
+			death = { death_reason = death_dungeon killer = FROM }
+		}
+	}
+}
+
+# prison.80 The prisoner died
+# Scope: ROOT is the torturer; FROM is the dead prisoner.
+character_event = {
+	id = prison.80
+	desc = EVTDESCprison80
+	picture = GFX_evt_death
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # prison.79
+
+	option = {
+		name = EVTOPTAprison80
+		prestige = -10
+	}
+}
+
+# prison.81 An enemy commander is captured
+# Fired by the battle events (WHG_battle_events) for the captor's liege.
+# Warband and lodge members (Holy Fury) and the servants of Khorne may
+# sacrifice the captive.
+# Scope: ROOT is the captor's liege; captured_commander is the prisoner.
+character_event = {
+	id = prison.81
+	title = captured_in_battle
+	desc = EVTDESCprison81
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	portrait = event_target:captured_commander
+
+	is_triggered_only = yes # WHG_battle_events
+
+	immediate = {
+		event_target:captured_commander = { save_event_target_as = kinslayer_target }
+	}
+
+	option = { # A sacrifice to the gods
+		name = EVTOPTCprison81
+		tooltip_info_custom = available_due_to_warband
+		trigger = {
+			OR = {
+				follower_of_khorne = yes
+				AND = {
+					has_dlc = "Holy Fury"
+					OR = {
+						is_member_of_any_warband_trigger = yes
+						is_member_of_any_warrior_lodge_trigger = yes
+					}
+				}
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 event_target:captured_commander = { is_rival = ROOT } }
+			modifier = { factor = 0.01 trait = kind }
+			modifier = { factor = 1.5 is_evil_trigger = yes }
+			modifier = { factor = 3 follower_of_khorne = yes }
+		}
+		custom_tooltip = { text = EVTOPTCprison81_TT }
+		if = {
+			limit = { event_target:captured_commander = { prisoner = yes } }
+			add_kinslayer_trait_effect = yes
+			prison_sacrifice_effect = yes
+			if = {
+				limit = { follower_of_khorne = yes }
+				add_offmap_currency = { offmap = khorne_warp value = 75 }
+			}
+		}
+	}
+	option = { # Perfect
+		name = EVTOPTAprison81
+		trigger = { event_target:captured_commander = { NOT = { is_rival = ROOT } } }
+		ai_chance = { factor = 10 }
+	}
+	option = { # My rival, no less
+		name = EVTOPTBprison81
+		trigger = { event_target:captured_commander = { is_rival = ROOT } }
+		ai_chance = { factor = 10 }
+	}
+}
+
+# prison.82 Sacrificed
+# Scope: ROOT is the captive; FROM is the captor's liege.
+character_event = {
+	id = prison.82
+	title = sacrificed_in_battle
+	desc = EVTDESCprison82
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # prison_sacrifice_effect
+
+	immediate = {
+		if = {
+			limit = { multiplayer = yes } # no waiting in multiplayer
+			death = { death_reason = death_sacrificed killer = FROM }
+		}
+	}
+
+	option = {
+		name = { text = EVTOPTAprison82 trigger = { NOT = { same_society_as = FROM } } }
+		name = { text = EVTOPTBprison82 trigger = { same_society_as = FROM } }
+		tooltip = {
+			FROM = {
+				show_scope_change = no
+				add_character_modifier = {
+					name = sacrificed_prisoner
+					duration = 1000
+					stacking = yes
+				}
+			}
+		}
+		if = {
+			limit = { multiplayer = no }
+			death = { death_reason = death_sacrificed killer = FROM }
+		}
+	}
+}
+
+# prison.85 A friend in the liege's dungeon
+# Yearly list prison_petitions, weight 30 (was MTTH 50 months).
+# Scope: ROOT is a vassal whose friend sits in the liege's dungeon.
+character_event = {
+	id = prison.85
+	desc = EVTDESCprison85
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # on_yearly_pulse, list prison_petitions
+
+	only_playable = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = no
+	in_command = no
+
+	trigger = {
+		is_abroad = no
+		independent = no
+		liege = {
+			NOT = { character = ROOT }
+			any_realm_lord = { prison_petition_friend_trigger = yes }
+		}
+	}
+
+	immediate = {
+		liege = {
+			random_realm_lord = {
+				limit = { prison_petition_friend_trigger = yes }
+				save_event_target_as = petition_prisoner
+			}
+		}
+	}
+
+	option = { # Petition the liege
+		name = EVTOPTAprison85
+		event_target:petition_prisoner = {
+			add_character_modifier = {
+				name = petition_release_prisoner_timer
+				years = 5
+				hidden = yes
+			}
+		}
+		liege = { character_event = { id = prison.86 tooltip = EVTTOOLTIPprison86 } }
+	}
+	option = { # Stay out of it
+		name = EVTOPTBprison85
+		event_target:petition_prisoner = {
+			opinion = { modifier = opinion_disgruntled who = ROOT years = 5 }
+		}
+	}
+}
+
+# prison.86 The liege answers the petition
+# Scope: ROOT is the liege; FROM the petitioner; petition_prisoner the
+# prisoner.
+character_event = {
+	id = prison.86
+	desc = EVTDESCprison86
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # prison.85
+
+	option = { # Release
+		name = EVTOPTAprison86
+		prestige = -50
+		event_target:petition_prisoner = { prisoner = no }
+		any_vassal = {
+			limit = { prisoner = no }
+			opinion = { modifier = opinion_released_prisoner who = ROOT months = 30 }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBprison86
+		any_vassal = { opinion = { modifier = opinion_not_release_prisoner who = ROOT years = 5 } }
 	}
 }

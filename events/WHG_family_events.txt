@@ -19,6 +19,8 @@
 # The children's friendship            family.60 - family.61
 # Part 2: Bastards (namespace bastard), see its header
 #                                      bastard.1 - bastard.81
+# Part 3: Courtly romance (namespace romance), see its header
+#                                      romance.1 - romance.11
 #
 # Fired from: on_focus_pulse in 00_on_actions.txt (family.10, 20, 30, 40,
 #   50, 60). Shared triggers and effects are in WHG_focus_triggers.txt and
@@ -1948,5 +1950,498 @@ character_event = {
 				}
 			}
 		}
+	}
+}
+
+###############################################################################
+# Part 3: Courtly romance (namespace romance)
+# Faction: Generic
+# Serves: rulers and courtiers of every race that loves before it breeds;
+#   Slaanesh's faithful and the Cult of Pleasure take pride in it
+# (was 449 - 457 in the vanilla birth_events.txt)
+#
+# A courtier catches the liege's eye: the liege may make a move, and the
+# courtier may welcome the night visit, turn it aside or scream for the
+# guards. Two courtiers of the same court may also fall into bed together.
+# Either may bring a child (romance_conception_effect). The vanilla events
+# sent the advance to every fitting courtier at once; now one is picked.
+#
+# The liege and the courtier        romance.1 - romance.7
+# Two courtiers                     romance.10 - romance.11
+#
+# Callers: romance.1 and romance.10 from the yearly romance_at_court list
+#   (wh_on_actions; were MTTH 120 and 4000 months); romance.5 and 6 also
+#   from the rumours in rumours_events.txt.
+# Saved: modifier lustful_affair_timer (four years for the liege, six for a
+#   courtier). Triggers in wh_romance_triggers.txt, effects in
+#   wh_romance_effects.txt.
+###############################################################################
+
+namespace = romance
+
+# romance.1 A courtier catches the eye
+# Hidden. Picks a courtier who might welcome the liege's attention and sends
+# them romance.2. Seducers, hedonists, the lustful and the fair find love
+# more often; the shy, the ugly, the chaste and those with many lovers less.
+# Scope: a landed adult ruler. Fired by the yearly romance_at_court list.
+character_event = {
+	id = romance.1
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		is_playable = yes
+		is_landed = yes
+		age = 16
+		NOT = { age = 66 }
+		prisoner = no
+		is_pregnant = no
+		has_regent = no
+		romance_barred_trigger = no
+		NOT = { trait = disfigured }
+		NOT = { has_character_modifier = lustful_affair_timer }
+		NOT = { spouse = { is_lover = ROOT } }
+		OR = {
+			is_female = no
+			NOT = { age = 40 }
+		}
+		OR = {
+			is_married = no
+			NOT = { trait = chaste }
+		}
+		NOT = { num_of_lovers = 5 }
+		any_courtier = { romance_liege_admirer_trigger = yes }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 has_focus = focus_seduction }
+		modifier = { factor = 0.67 num_of_lovers = 1 }
+		modifier = { factor = 0.5 num_of_lovers = 2 }
+		modifier = { factor = 0.25 num_of_lovers = 3 }
+		modifier = { factor = 0.2 num_of_lovers = 4 }
+		modifier = { factor = 0.25 religion_group = ormazd_gods_group }
+		modifier = { factor = 3 trait = homosexual } # Fewer partners to choose from
+		modifier = { factor = 0.5 spouse = { NOT = { age = 30 } } }
+		modifier = { factor = 2 spouse = { age = 45 } }
+		modifier = { factor = 2 trait = hedonist }
+		modifier = { factor = 2 trait = lustful }
+		modifier = { factor = 2 has_fair_trait_trigger = yes }
+		modifier = { factor = 0.5 trait = shy }
+		modifier = { factor = 0.5 has_ugly_trait_trigger = yes }
+		modifier = { factor = 0.1 trait = chaste }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { romance_liege_admirer_trigger = yes }
+			score_value = { # The more interesting courtiers come first
+				value = 10
+				interesting_courtier_selection_score = yes
+			}
+			character_event = { id = romance.2 }
+		}
+	}
+}
+
+# romance.2 The liege's eye
+# The courtier notices the liege's look and may encourage it. Only a player
+# may turn it aside.
+# Scope: the courtier. FROM is the liege.
+character_event = {
+	id = romance.2
+	desc = EVTDESCromance2
+	picture = GFX_evt_lovers
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAromance2 # Encourage
+		FROM = {
+			add_character_modifier = {
+				name = lustful_affair_timer
+				duration = 1460
+				hidden = yes
+			}
+			character_event = { id = romance.3 days = 7 tooltip = EVTTOOLTIPromance3 }
+		}
+	}
+	option = {
+		name = EVTOPTBromance2 # Avoid them
+		trigger = { ai = no }
+		piety = 5
+	}
+}
+
+# romance.3 Making a move
+# The liege may go to the courtier's chamber (romance.4). The faithful of
+# Slaanesh and Atharti and the Cult of Pleasure win favour for it; others
+# lose a little piety. Chaos worshippers are mocked for turning it down.
+# Scope: the liege. FROM is the courtier.
+character_event = {
+	id = romance.3
+	desc = EVTDESCromance3
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAromance3 # Make a move
+		ai_chance = { factor = 90 }
+		FROM = {
+			show_scope_change = no
+			character_event = { id = romance.4 days = 7 tooltip = EVTTOOLTIPromance4 }
+		}
+		if = {
+			limit = { romance_pleasure_faith_trigger = yes }
+			piety = 50
+		}
+		else = {
+			piety = -25
+		}
+	}
+	option = {
+		name = EVTOPTBromance3 # Not appropriate
+		trigger = {
+			NOT = { trait = lustful }
+			NOT = { trait = hedonist }
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 10 trait = chaste }
+			modifier = { factor = 2 trait = shy }
+			modifier = { factor = 0.5 trait = trusting }
+			modifier = { factor = 0.01 has_focus = focus_seduction }
+		}
+		if = {
+			limit = { romance_pleasure_faith_trigger = yes }
+			piety = -10
+		}
+		else_if = {
+			limit = { religion_group = chaos_gods_group }
+			piety = -5
+		}
+		else = {
+			piety = 5
+		}
+	}
+	option = {
+		name = EVTOPTCromance3 # Not my type
+		trigger = {
+			ai = no
+			OR = {
+				trait = lustful
+				trait = hedonist
+			}
+		}
+		prestige = -5
+	}
+}
+
+# romance.4 The door creaks open
+# The courtier welcomes the liege (they become lovers and may conceive),
+# talks them out of it, or screams for the guards.
+# Scope: the courtier. FROM is the liege.
+character_event = {
+	id = romance.4
+	desc = EVTDESCromance4
+	picture = GFX_evt_lovers
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		FROM = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAromance4 # What took you so long?
+		ai_chance = { factor = 90 }
+		if = {
+			limit = {
+				is_no_females_race = no
+				FROM = { is_no_females_race = no }
+			}
+			add_lover = FROM
+		}
+		FROM = { character_event = { id = romance.5 tooltip = EVTTOOLTIPromance5 } }
+		romance_conception_effect = yes
+	}
+	option = {
+		name = EVTOPTBromance4 # Dissuade
+		trigger = {
+			NOT = { trait = lustful }
+			NOT = { trait = hedonist }
+		}
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 10 trait = chaste }
+			modifier = {
+				factor = 2
+				is_female = yes
+				FROM = { is_female = no }
+			}
+			modifier = { factor = 2 trait = shy }
+			modifier = { factor = 0.5 trait = trusting }
+			modifier = {
+				factor = 0.1
+				liege = {
+					OR = {
+						trait = seducer
+						trait = seductress
+					}
+				}
+			}
+		}
+		FROM = { character_event = { id = romance.6 tooltip = EVTTOOLTIPromance6 } }
+	}
+	option = {
+		name = EVTOPTCromance4 # Scream for help
+		trigger = {
+			is_female = yes
+			FROM = { is_female = no }
+			NOT = { trait = lustful }
+			NOT = { trait = hedonist }
+		}
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 10 trait = chaste }
+			modifier = { factor = 2 trait = shy }
+			modifier = { factor = 0.5 trait = trusting }
+			modifier = {
+				factor = 0.01
+				liege = {
+					OR = {
+						trait = seducer
+						trait = seductress
+					}
+				}
+			}
+		}
+		FROM = { character_event = { id = romance.7 tooltip = EVTTOOLTIPromance7 } }
+	}
+}
+
+# romance.5 A good tumble
+# Scope: the liege, or a rumour's lover. FROM is the lover.
+character_event = {
+	id = romance.5
+	desc = EVTDESCromance5
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAromance5
+	}
+}
+
+# romance.6 Spurned
+# Scope: the one who made the advance. FROM turned it aside.
+character_event = {
+	id = romance.6
+	desc = EVTDESCromance6
+	picture = GFX_evt_quarrel
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAromance6
+		opinion = { who = FROM modifier = opinion_spurned years = 5 }
+	}
+}
+
+# romance.7 Shamed before the guards
+# Scope: the liege. FROM screamed for help.
+character_event = {
+	id = romance.7
+	desc = EVTDESCromance7
+	picture = GFX_evt_quarrel
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAromance7
+		opinion = { who = FROM modifier = opinion_embarrassed years = 5 }
+	}
+}
+
+# romance.10 Two courtiers
+# Hidden. A courtier of a player's or a king's court tries their luck with
+# another courtier (romance.11). The young, the lustful and the neglected
+# stray more often; harems and the liege's own wives and concubines are
+# watched.
+# Scope: an unlanded adult courtier. Fired by the yearly romance_at_court
+#   list.
+character_event = {
+	id = romance.10
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		is_ruler = no
+		is_marriage_adult = yes
+		NOT = { age = 66 }
+		prisoner = no
+		has_lover = no
+		is_pregnant = no
+		is_ill = no
+		NOT = { trait = chaste }
+		romance_barred_trigger = no
+		is_inaccessible_trigger = no
+		OR = {
+			is_female = no
+			NOT = { age = 40 }
+		}
+		liege = {
+			OR = {
+				ai = no
+				higher_tier_than = DUKE
+			}
+		}
+		romance_would_stray_trigger = yes
+		liege = { any_courtier = { romance_courtier_match_trigger = yes } }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 spouse = { is_ruler = yes } }
+		modifier = { factor = 2 spouse = { has_lover = yes } }
+		modifier = {
+			factor = 2
+			NOT = { age = 30 }
+			spouse = { age = 50 }
+		}
+		modifier = { factor = 3 trait = homosexual } # Fewer partners to choose from
+		modifier = { factor = 3 trait = lustful }
+		modifier = { factor = 2 trait = hedonist }
+		modifier = { factor = 1.33 NOT = { age = 20 } }
+		modifier = {
+			factor = 0.5
+			is_female = yes
+			age = 30
+		}
+		modifier = { # Harems are well guarded
+			factor = 0.33
+			is_female = yes
+			is_married = yes
+			has_polygamy = yes
+		}
+		modifier = { # The liege's own wives and concubines are watched, unless seduction is their calling
+			factor = 0.33
+			is_female = yes
+			NOT = { has_focus = focus_seduction }
+			liege = {
+				OR = {
+					is_consort = ROOT
+					any_spouse = { character = ROOT }
+				}
+			}
+		}
+	}
+
+	immediate = {
+		liege = {
+			random_courtier = {
+				limit = { romance_courtier_match_trigger = yes }
+				score_value = { # The more interesting courtiers come first
+					value = 10
+					interesting_courtier_selection_score = yes
+				}
+				character_event = { id = romance.11 }
+			}
+		}
+	}
+}
+
+# romance.11 An advance between courtiers
+# Hidden. The other courtier takes the advance (they become lovers and may
+# conceive) or turns it down. The ascetic and the chaste refuse, the
+# handsome refuse the plain, and the liege's women are watched.
+# Scope: the courtier who is approached. FROM made the advance.
+character_event = {
+	id = romance.11
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		prisoner = no
+		NOT = { trait = incapable }
+		FROM = { is_alive = yes }
+	}
+
+	option = { # Gladly
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 3 trait = lustful }
+			modifier = { factor = 2 trait = hedonist }
+		}
+		if = {
+			limit = {
+				is_no_females_race = no
+				FROM = { is_no_females_race = no }
+			}
+			add_lover = FROM
+		}
+		add_character_modifier = {
+			name = lustful_affair_timer
+			duration = 2190
+			hidden = yes
+		}
+		romance_conception_effect = yes
+	}
+	option = { # No way
+		ai_chance = {
+			factor = 10
+			modifier = {
+				factor = 50
+				OR = {
+					is_ascetic_trigger = yes
+					trait = chaste
+				}
+			}
+			modifier = { # A fine catch turns down a poor one
+				factor = 30
+				romance_poor_catch_trigger = no
+				FROM = {
+					OR = {
+						has_ugly_trait_trigger = yes
+						trait = dwarf
+						trait = imbecile
+					}
+					NOT = { trait = seducer }
+					NOT = { trait = seductress }
+				}
+			}
+			modifier = {
+				factor = 100
+				romance_poor_catch_trigger = no
+				FROM = {
+					trait = inbred
+					NOT = { trait = seducer }
+					NOT = { trait = seductress }
+				}
+			}
+			modifier = { # The liege's wives and concubines are watched
+				factor = 60
+				is_female = yes
+				has_polygamy = no
+				NOT = { has_focus = focus_seduction }
+				liege = {
+					OR = {
+						is_consort = ROOT
+						any_spouse = { character = ROOT }
+					}
+				}
+			}
+			modifier = { # Harems are especially well guarded
+				factor = 200
+				is_female = yes
+				is_married = yes
+				has_polygamy = yes
+			}
+		}
+		reverse_opinion = { who = FROM modifier = opinion_spurned years = 5 }
 	}
 }

@@ -11,6 +11,8 @@
 #                                   REP.300 - 608 in republic_trade_events.txt)
 # Part 3: merchant powers of the    communard.1 - 7, pigbarter.1 - 23 (was
 #         south                     wh_merchant_power_events.txt)
+# Part 4: the rise of the           mleague.1 - 30 (was REP.39 - 70 in
+#         Marienburg League         wh_republic_events.txt)
 ###############################################################################
 
 ###############################################################################
@@ -4354,5 +4356,304 @@ narrative_event = {
 
 	option = {
 		name = EVTOPTApigbarter11
+	}
+}
+
+###############################################################################
+# Part 4: The rise of the Marienburg League (namespace mleague)
+# Faction: Generic
+# Serves: the ruler of Westerland and the merchant houses of the northern
+#   coast of the Empire
+#
+# Adapted from vanilla "The Rise of the Hansa". A week into the game the
+# Westerland guilds ask their ruler to charter a merchant league in a
+# northern port city. If permitted, a new merchant republic, the Marienburg
+# League (k_marienburg_league), forms there under Westerland's top liege,
+# takes the nearby trade posts and sets up its patrician houses, who buy
+# up trade posts along the coast.
+#
+#   mleague.1 - 3      The guilds seek a charter (hidden)
+#   mleague.5          Permit the Marienburg League?
+#   mleague.10 - 21    The League is founded, and the news
+#   mleague.25 - 30    Its patrician houses take trade posts, and the old
+#                      owners hear of it
+#
+# Was REP.39 - 70 in wh_republic_events.txt.
+# Dropped: a check on a variable (global_marienburg_expansion) that was
+#   written on a character and read with a malformed check_variable; the
+#   hansa_formed flag already keeps the chain to one run. The unfinished
+#   republic election campaign (REP.80 - 90, switched off, built on an
+#   effect CK2 does not have) and its republic_election_event_tombola_
+#   effect.
+# Callers: on_startup (1) in common/on_actions/wh_on_actions.txt.
+# Saved: global flags marienburg_league_checked, hansa_formed.
+# Loc: localisation/00_WHG_republic_events.csv; the tooltips
+#   permit_hansa_tooltip and deny_hansa_tooltip keep their keys.
+###############################################################################
+
+namespace = mleague
+
+# Start the Marienburg League chain (setup)
+# Fired from on_startup (players only, also on load), so a global flag keeps
+# it to one run per game.
+character_event = {
+	id = mleague.1
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { has_global_flag = marienburg_league_checked }
+	}
+
+	immediate = {
+		set_global_flag = marienburg_league_checked
+		if = {
+			limit = { e_westerland = { has_holder = yes } }
+			e_westerland = { holder_scope = { character_event = { id = mleague.2 days = 7 } } }
+		}
+		else_if = {
+			limit = { k_westerland = { has_holder = yes } }
+			k_westerland = { holder_scope = { character_event = { id = mleague.2 days = 7 } } }
+		}
+	}
+}
+
+# Guilds seek a charter (setup)
+# Westerland is itself a merchant republic, so the petitioner is one of its
+# patrician houses, a vassal republic or failing that any vassal with a city.
+character_event = {
+	id = mleague.2
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		OR = { has_landed_title = e_westerland has_landed_title = k_westerland }
+		independent = yes
+		religion_group = old_world_group
+		NOT = { has_global_flag = hansa_formed }
+		any_vassal = {
+			OR = {
+				is_patrician = yes
+				is_merchant_republic = yes
+				any_demesne_title = { holding_type = city }
+			}
+		}
+	}
+
+	immediate = {
+		random_realm_title = {
+			limit = {
+				tier = baron
+				holding_type = city
+				location = {
+					port = yes
+					OR = {
+						region = world_old_world_empire_north
+						region = world_old_world_empire_wasteland
+					}
+				}
+				county = { NOT = { holder = ROOT } }
+				owner = { NOR = { character = ROOT is_patrician = yes is_merchant_republic = yes } }
+			}
+			save_event_target_as = RepublicanCity
+		}
+		if = {
+			limit = { event_target:RepublicanCity = { always = yes } }
+			if = {
+				limit = { any_vassal = { is_patrician = yes } }
+				random_vassal = {
+					limit = { is_patrician = yes }
+					save_event_target_as = RepublicanLeader
+				}
+			}
+			else_if = {
+				limit = { any_vassal = { is_merchant_republic = yes } }
+				random_vassal = {
+					limit = { is_merchant_republic = yes }
+					save_event_target_as = RepublicanLeader
+				}
+			}
+			else = {
+				random_vassal = {
+					limit = { any_demesne_title = { holding_type = city } }
+					save_event_target_as = RepublicanLeader
+				}
+			}
+			event_target:RepublicanLeader = { character_event = { id = mleague.3 } }
+		}
+	}
+}
+
+# Guilds send their petition to the ruler (setup)
+character_event = {
+	id = mleague.3
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { character_event = { id = mleague.5 } }
+	}
+}
+
+# Permit the Marienburg League?
+character_event = {
+	id = mleague.5
+	desc = EVTDESCmleague5
+	picture = GFX_evt_busy_trading_dock_republic
+	border = GFX_event_normal_frame_intrigue
+
+	hide_from = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmleague5
+		ai_chance = { factor = 100 }
+		hidden_tooltip = { FROM = { character_event = { id = mleague.10 } } }
+		event_target:RepublicanCity = {
+			county = {
+				holder_scope = {
+					if = {
+						limit = { NOT = { character = ROOT } }
+						opinion = { modifier = opinion_unhappy who = ROOT years = 4 }
+					}
+				}
+			}
+		}
+		FROM = { opinion = { modifier = opinion_happy who = ROOT years = 4 } }
+		custom_tooltip = { text = permit_hansa_tooltip }
+		set_global_flag = hansa_formed
+	}
+	option = {
+		name = EVTOPTBmleague5
+		FROM = { opinion = { modifier = opinion_unhappy who = ROOT years = 4 } }
+		custom_tooltip = { text = deny_hansa_tooltip }
+		set_global_flag = hansa_formed
+	}
+}
+
+# The Marienburg League is founded
+character_event = {
+	id = mleague.10
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:RepublicanCity = { always = yes }
+	}
+
+	immediate = {
+		create_character = {
+			random_traits = yes
+			dynasty = random
+			religion = ROOT
+			culture = westerlander
+			female = no
+			age = 35
+		}
+		new_character = {
+			event_target:RepublicanCity = { grant_title = PREV }
+			event_target:RepublicanCity = { county = { grant_title = PREVPREV } }
+			k_marienburg_league = { grant_title = PREV }
+			set_government_type = merchant_republic_government
+			FROM = { top_liege = { set_defacto_vassal = PREVPREV } }
+			character_event = { id = mleague.20 }
+		}
+	}
+}
+
+# The Rise of the Marienburg League (setup)
+character_event = {
+	id = mleague.20
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		narrative_event = { id = mleague.21 }
+		character_event = { id = mleague.25 days = 6 }
+		wealth = 1000
+		location = {
+			if = { limit = { has_trade_post = yes } seize_trade_post = ROOT }
+			any_neighbor_province = { limit = { has_trade_post = yes } seize_trade_post = ROOT }
+		}
+	}
+}
+
+# The Rise of the Marienburg League
+narrative_event = {
+	id = mleague.21
+	title = EVTNAMEmleague21
+	desc = EVTDESCmleague21
+	major = yes
+	picture = GFX_evt_busy_trading_dock_republic
+
+	is_triggered_only = yes
+
+	major_trigger = { ai = no }
+
+	option = {
+		name = EVTOPTAmleague21
+		trigger = { NOR = { is_merchant_republic = yes is_patrician = yes } }
+	}
+	option = {
+		name = EVTOPTBmleague21
+		trigger = { OR = { is_merchant_republic = yes is_patrician = yes } }
+	}
+}
+
+# Set up the league's patrician houses (setup)
+character_event = {
+	id = mleague.25
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		any_vassal = { limit = { is_patrician = yes } character_event = { id = mleague.26 } }
+	}
+}
+
+# A patrician house claims trade posts on the northern coast (setup)
+# Replaces vanilla REP.66 - 69, which used fixed provinces of the real world.
+character_event = {
+	id = mleague.26
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		wealth = 1000
+		random_province = {
+			limit = {
+				has_trade_post = yes
+				port = yes
+				OR = {
+					region = world_old_world_empire_north
+					region = world_old_world_empire_wasteland
+				}
+				trade_post_owner = { NOR = { character = ROOT same_realm = ROOT } }
+			}
+			trade_post_owner = { character_event = { id = mleague.30 } }
+			seize_trade_post = ROOT
+		}
+	}
+}
+
+# Former trade post owner informed
+# Replaces vanilla REP.70 - 77, one per fixed province.
+character_event = {
+	id = mleague.30
+	desc = EVTDESCmleague30
+	picture = GFX_evt_trade_post_republic
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmleague30
 	}
 }

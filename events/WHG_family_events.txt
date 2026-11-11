@@ -17,6 +17,8 @@
 # Children                             family.40 - family.42
 # Reconciling kin                      family.50 - family.59
 # The children's friendship            family.60 - family.61
+# Part 2: Bastards (namespace bastard), see its header
+#                                      bastard.1 - bastard.81
 #
 # Fired from: on_focus_pulse in 00_on_actions.txt (family.10, 20, 30, 40,
 #   50, 60). Shared triggers and effects are in WHG_focus_triggers.txt and
@@ -964,6 +966,986 @@ character_event = {
 					reverse_personal_opinion = { who = event_target:target_second value = 50 }
 				}
 				add_friend = event_target:target_second
+			}
+		}
+	}
+}
+
+###############################################################################
+# Part 2: Bastards (namespace bastard)
+# Faction: Generic
+# Serves: every race with women, and the bastards they bear
+# (was 76000 - 76041 in the vanilla bastard_events.txt)
+#
+# An unwed lord is tempted by a young woman of the court; an unwed daughter
+# hides a child; a spymaster offers to rid the court of a bastard; bastard
+# sons and daughters ask to be made legitimate, are teased by the trueborn
+# children and ask their guardian what the word means. A Slaaneshi lord
+# sees no sin in the night's pleasures.
+#
+# The temptation                    bastard.1
+# The unwed daughter's child        bastard.10 - bastard.14
+# Rid the court of a bastard        bastard.20
+# A bastard asks to be legitimised  bastard.30
+# The bastard's petition            bastard.40 - bastard.42
+# The unwed mother                  bastard.50 - bastard.53
+# A dream is born                   bastard.60
+# Teased by the trueborn            bastard.70
+# What is a bastard?                bastard.80 - bastard.81
+#
+# Callers: on_yearly_pulse random_events in 00_on_actions.txt (1, 10, 20,
+#   30, 40, 50, 60, 70, 80); the rest are follow-ups in this part.
+# Saved: event targets daughter_with_bastard, bastard_child; character
+#   flags raising_bastard, asked_about_bastard, ruler_wants_me_dead,
+#   father_didnt_legitimise, father_legitimise.
+# Shared triggers: bastard_daughter_trigger, bastard_petitioner_trigger
+#   in common/scripted_triggers/wh_bastard_triggers.txt
+###############################################################################
+
+namespace = bastard
+
+# bastard.1 The temptation
+# A young unwed lord is tempted by a young woman of his court. A Slaaneshi
+# lord gains piety for giving in and loses it for refusing.
+# Scope: ROOT is the lord.
+character_event = {
+	id = bastard.1
+	desc = EVTDESCbastard1
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	min_age = 16
+	max_age = 25
+	only_men = yes
+	only_rulers = yes
+	capable_only = yes
+	prisoner = no
+	is_married = no
+	trigger = {
+		is_no_females_race = no
+		NOR = {
+			trait = chaste
+			trait = celibate
+			trait = homosexual
+			trait = eunuch
+			has_lover = yes
+		}
+		fertility = 0.6
+		any_courtier = {
+			is_woman_trigger = yes
+			age = 16
+			NOT = { age = 30 }
+			is_married = no
+		}
+	}
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = lustful }
+		modifier = { factor = 2 trait = gregarious }
+		modifier = { factor = 2 religion = slaanesh }
+		modifier = { factor = 0.5 trait = shy }
+	}
+	option = { # Give in
+		name = EVTOPTAbastard1
+		if = {
+			limit = { religion = slaanesh }
+			piety = 10
+		}
+		else = {
+			piety = -10
+		}
+		if = {
+			limit = { NOT = { trait = lustful } }
+			random = {
+				chance = 50
+				add_trait = lustful
+				hidden_effect = { character_event = { id = 38272 } } # Notify Lustful
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 3 trait = lustful }
+			modifier = { factor = 3 religion = slaanesh }
+			modifier = { factor = 0.3 trait = zealous }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBbastard1
+		trigger = { NOT = { religion = slaanesh } }
+		random = {
+			chance = 25
+			add_trait = chaste
+			hidden_effect = { character_event = { id = 38274 } } # Notify Chaste
+		}
+		piety = 5
+		ai_chance = { factor = 50 }
+	}
+	option = { # A Slaaneshi who refuses offends the Prince
+		name = EVTOPTCbastard1
+		trigger = { religion = slaanesh }
+		piety = -10
+		ai_chance = { factor = 5 }
+	}
+}
+
+# bastard.10 The unwed daughter's child
+# A ruler's unwed daughter hid her pregnancy and now shows her child.
+# Hush it up through the spymaster (bastard.11), raise the child, or
+# punish her and give the child away.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = bastard.10
+	desc = EVTDESCbastard10
+	picture = GFX_evt_pregnancy
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	only_playable = yes
+	capable_only = yes
+	trigger = {
+		any_child = { bastard_daughter_trigger = yes }
+		job_spymaster = { is_alive = yes }
+	}
+	immediate = {
+		random_child = {
+			limit = { bastard_daughter_trigger = yes }
+			save_event_target_as = daughter_with_bastard
+		}
+	}
+	option = { # Hush it up
+		name = EVTOPTAbastard10
+		character_event = { id = bastard.11 tooltip = EVTTOOLTIPbastard11 }
+		ai_chance = { factor = 40 }
+	}
+	option = { # Raise the child
+		name = EVTOPTBbastard10
+		event_target:daughter_with_bastard = {
+			create_character = {
+				age = 0
+				trait = bastard
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Set the racial trait
+				set_mother = PREV
+			}
+			opinion = { modifier = opinion_grateful who = ROOT years = 5 }
+		}
+		prestige = -100
+		if = {
+			limit = { NOT = { trait = kind } }
+			random = {
+				chance = 25
+				add_trait = kind
+				hidden_effect = { character_event = { id = 38268 } } # Notify Kind
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+	option = { # Punish her
+		name = EVTOPTCbastard10
+		event_target:daughter_with_bastard = {
+			opinion = { modifier = opinion_betrayed who = ROOT years = 20 }
+			if = {
+				limit = {
+					NOR = { religion = ormazd religion = kitabid religion = slaanesh trait = chaste }
+				}
+				add_trait = chaste
+			}
+			health = -1
+		}
+		if = {
+			limit = { NOT = { trait = cruel } }
+			random = {
+				chance = 25
+				add_trait = cruel
+				hidden_effect = { character_event = { id = 38259 } } # Notify Cruel
+			}
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 0 trait = kind }
+		}
+	}
+}
+
+# bastard.11 The spymaster's advice
+# Scope: ROOT is the ruler.
+character_event = {
+	id = bastard.11
+	desc = EVTDESCbastard11
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.10
+	option = { # Hide her, then get rid of the child
+		name = EVTOPTAbastard11
+		scaled_wealth = -0.33
+		random = {
+			chance = 33
+			add_trait = deceitful
+			hidden_effect = { character_event = { id = 38255 } } # Notify Deceitful
+		}
+		random = {
+			chance = 10
+			event_target:daughter_with_bastard = { save_event_target_as = kinslayer_target }
+			add_kinslayer_trait_effect = yes
+		}
+	}
+	option = { # Slay the father, take the child away
+		name = EVTOPTBbastard11
+		scaled_wealth = -0.2
+		piety = -10
+		if = {
+			limit = { NOT = { trait = arbitrary } }
+			random = {
+				chance = 33
+				add_trait = arbitrary
+				hidden_effect = { character_event = { id = 38266 } } # Notify Arbitrary
+			}
+		}
+	}
+	option = { # Just deal with it
+		name = EVTOPTCbastard11
+		if = {
+			limit = { NOT = { trait = trusting } }
+			random = { chance = 33 add_trait = trusting }
+		}
+		job_spymaster = {
+			character_event = { id = bastard.12 tooltip = EVTTOOLTIPbastard12 }
+		}
+	}
+}
+
+# bastard.12 The spymaster's task
+# The spymaster deals with it quietly (and sometimes fails, bastard.13) or
+# lets mother and child live (bastard.14).
+# Scope: ROOT is the spymaster, FROM the ruler.
+character_event = {
+	id = bastard.12
+	desc = EVTDESCbastard12
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.11
+	option = { # Part of the job
+		name = EVTOPTAbastard12
+		prestige = 50
+		if = {
+			limit = { NOT = { intrigue = 12 } }
+			random = {
+				chance = 15
+				FROM = { character_event = { id = bastard.13 tooltip = EVTTOOLTIPbastard13 } }
+			}
+		}
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 0.2 trait = kind }
+		}
+	}
+	option = { # Spare them
+		name = EVTOPTBbastard12
+		change_intrigue = 1
+		event_target:daughter_with_bastard = {
+			create_character = {
+				age = 0
+				trait = bastard
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Set the racial trait
+				set_mother = PREV
+			}
+			opinion = { modifier = opinion_saved_me_and_child who = ROOT years = 5 }
+		}
+		FROM = { character_event = { id = bastard.14 tooltip = EVTTOOLTIPbastard14 } }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 3 trait = kind }
+		}
+	}
+}
+
+# bastard.13 The spymaster botched it
+# Scope: ROOT is the ruler, FROM the spymaster.
+character_event = {
+	id = bastard.13
+	desc = EVTDESCbastard13
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.12
+	option = { # Imprison the spymaster
+		name = EVTOPTAbastard13
+		FROM = { imprison = ROOT }
+		ai_chance = { factor = 30 }
+	}
+	option = { # Own up
+		name = EVTOPTBbastard13
+		prestige = -20
+		if = {
+			limit = { NOT = { trait = honest } }
+			random = { chance = 33 add_trait = honest }
+		}
+		ai_chance = { factor = 30 }
+	}
+	option = { # Pardon everyone
+		name = EVTOPTCbastard13
+		event_target:daughter_with_bastard = {
+			create_character = {
+				age = 0
+				trait = bastard
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Set the racial trait
+				set_mother = PREV
+			}
+		}
+		ai_chance = { factor = 40 }
+	}
+}
+
+# bastard.14 The spymaster let them live
+# Scope: ROOT is the ruler, FROM the spymaster.
+character_event = {
+	id = bastard.14
+	desc = EVTDESCbastard14
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.12
+	option = {
+		name = EVTOPTAbastard14
+		prestige = -5
+	}
+}
+
+# bastard.20 Rid the court of a bastard
+# The spymaster offers to arrange an accident for a young bastard of the
+# ruler. Killing one's own child makes a kinslayer.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = bastard.20
+	desc = EVTDESCbastard20
+	picture = GFX_evt_beheading
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	only_rulers = yes
+	capable_only = yes
+	trigger = {
+		job_spymaster = { NOT = { trait = bastard } }
+		any_child = {
+			trait = bastard
+			NOT = { age = 16 }
+		}
+	}
+	immediate = {
+		random_child = {
+			limit = {
+				trait = bastard
+				NOT = { age = 16 }
+			}
+			save_event_target_as = bastard_child
+		}
+	}
+	option = { # Go ahead
+		name = EVTOPTAbastard20
+		event_target:bastard_child = {
+			set_character_flag = ruler_wants_me_dead
+			random = {
+				chance = 15
+				clr_character_flag = ruler_wants_me_dead
+				if = {
+					limit = { is_invincible_trigger = yes }
+					antideath_effect = yes
+				}
+				else = {
+					ROOT = {
+						event_target:bastard_child = { save_event_target_as = kinslayer_target }
+						add_kinslayer_trait_effect = yes
+					}
+					death = { death_reason = death_murder_fall killer = ROOT }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 100 num_of_children = 5 }
+			modifier = { factor = 0.1 NOT = { num_of_children = 5 } }
+			modifier = { factor = 0 trait = kind }
+		}
+	}
+	option = { # Leave the child be
+		name = EVTOPTBbastard20
+		if = {
+			limit = { NOT = { trait = honest } }
+			random = { chance = 33 add_trait = honest }
+		}
+		ai_chance = { factor = 10 }
+	}
+}
+
+# bastard.30 A bastard asks to be legitimised
+# A grown bastard son or daughter at court asks the parent ruler to make
+# them legitimate.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = bastard.30
+	desc = EVTDESCbastard30
+	picture = GFX_evt_son_asking_father
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	only_rulers = yes
+	capable_only = yes
+	war = no
+	trigger = {
+		in_command = no
+		any_child = { bastard_petitioner_trigger = yes }
+	}
+	immediate = {
+		random_child = {
+			limit = { bastard_petitioner_trigger = yes }
+			save_event_target_as = bastard_child
+		}
+	}
+	option = { # Not a chance
+		name = EVTOPTAbastard30
+		event_target:bastard_child = {
+			opinion = { modifier = denounced_child who = ROOT years = 5 }
+			random = {
+				chance = 33
+				add_trait = wroth
+				hidden_effect = { character_event = { id = 38254 } } # Notify Wroth
+			}
+		}
+		ai_chance = { factor = 30 }
+	}
+	option = { # Not yet
+		name = EVTOPTBbastard30
+		event_target:bastard_child = {
+			random = {
+				chance = 33
+				add_trait = stressed
+				hidden_effect = { character_event = { id = 38282 } } # Notify Stressed
+			}
+		}
+		ai_chance = { factor = 40 }
+	}
+	option = { # Welcome
+		name = EVTOPTCbastard30
+		event_target:bastard_child = {
+			remove_trait = bastard
+			add_trait = legit_bastard
+			opinion = { modifier = opinion_glad who = ROOT years = 5 }
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 trait = kind }
+			modifier = { factor = 2 NOT = { num_of_children = 3 } }
+		}
+	}
+}
+
+# bastard.40 The bastard's petition
+# A grown bastard thinks of asking the father to be included in the
+# succession (bastard.41).
+# Scope: ROOT is the bastard.
+character_event = {
+	id = bastard.40
+	desc = EVTDESCbastard40
+	picture = GFX_evt_son_asking_father
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	trigger = {
+		trait = bastard
+		NOR = {
+			trait = lustful
+			trait = gluttonous
+			trait = greedy
+			trait = slothful
+			trait = envious
+			trait = wroth
+			trait = proud
+			trait = content
+		}
+		father = {
+			war = no
+			in_command = no
+			is_ruler = yes
+			is_liege_of = ROOT
+			opinion = { who = ROOT value = 30 }
+			at_location = ROOT
+		}
+	}
+	option = { # Ask now
+		name = EVTOPTAbastard40
+		father = { character_event = { id = bastard.41 tooltip = EVTTOOLTIPbastard41 } }
+		ai_chance = { factor = 70 }
+	}
+	option = { # Why bother?
+		name = EVTOPTBbastard40
+		piety = 10
+		add_trait = content
+		ai_chance = { factor = 30 }
+	}
+}
+
+# bastard.41 The father is asked
+# Scope: ROOT is the father, FROM the bastard.
+character_event = {
+	id = bastard.41
+	desc = EVTDESCbastard41
+	picture = GFX_evt_son_asking_father
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.40
+	option = { # Unthinkable
+		name = EVTOPTAbastard41
+		FROM = {
+			hidden_effect = {
+				set_character_flag = father_didnt_legitimise
+				character_event = { id = bastard.42 }
+			}
+			opinion = { modifier = denounced_child who = ROOT years = 5 }
+			random = {
+				chance = 33
+				add_trait = wroth
+				hidden_effect = { character_event = { id = 38254 days = 2 } } # Notify Wroth
+			}
+		}
+		ai_chance = { factor = 50 }
+	}
+	option = { # A worthy heir
+		name = EVTOPTBbastard41
+		FROM = {
+			hidden_effect = {
+				set_character_flag = father_legitimise
+				character_event = { id = bastard.42 }
+			}
+			remove_trait = bastard
+			add_trait = legit_bastard
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 opinion = { who = FROM value = 60 } }
+		}
+	}
+}
+
+# bastard.42 The father's answer
+# Scope: ROOT is the bastard, FROM the father.
+character_event = {
+	id = bastard.42
+	desc = EVTDESCbastard42
+	picture = GFX_evt_son_asking_father
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.41
+	option = {
+		name = EVTOPTAbastard42
+		trigger = { has_character_flag = father_didnt_legitimise }
+		clr_character_flag = father_didnt_legitimise
+		opinion = { modifier = denounced_child who = FROM years = 5 }
+	}
+	option = {
+		name = EVTOPTBbastard42
+		trigger = { has_character_flag = father_legitimise }
+		clr_character_flag = father_legitimise
+		opinion = { modifier = opinion_glad who = FROM years = 5 }
+	}
+}
+
+# bastard.50 The unwed mother
+# An unwed mother raising a bastard whose father is away may ask her own
+# father, her liege, for help (bastard.51).
+# Scope: ROOT is the mother.
+character_event = {
+	id = bastard.50
+	desc = EVTDESCbastard50
+	picture = GFX_evt_birth
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	min_age = 16
+	only_women = yes
+	is_married = no
+	trigger = {
+		is_woman_trigger = yes
+		NOT = { has_character_flag = raising_bastard }
+		father = {
+			is_ruler = yes
+			is_liege_of = ROOT
+		}
+		any_child = {
+			age = 5
+			NOT = { age = 16 }
+			trait = bastard
+			father = { is_abroad = yes }
+		}
+	}
+	option = { # Ask my father
+		name = EVTOPTAbastard50
+		set_character_flag = raising_bastard
+		father = { character_event = { id = bastard.51 tooltip = EVTTOOLTIPbastard51 } }
+		ai_chance = { factor = 60 }
+	}
+	option = { # Toil on
+		name = EVTOPTBbastard50
+		set_character_flag = raising_bastard
+		add_trait = stressed
+		ai_chance = { factor = 40 }
+	}
+}
+
+# bastard.51 The daughter asks for help
+# The ruler refuses and blames the daughter, the child, or the child's
+# father (bastard.52, or the father's father, bastard.53).
+# Scope: ROOT is the ruler, FROM the daughter.
+character_event = {
+	id = bastard.51
+	desc = EVTDESCbastard51
+	picture = GFX_evt_daughter_asking_father
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.50
+	option = { # Blame my daughter
+		name = EVTOPTAbastard51
+		prestige = -20
+		FROM = {
+			prestige = -10
+			opinion = { modifier = opinion_crestfallen who = ROOT years = 5 }
+		}
+		ai_chance = { factor = 30 }
+	}
+	option = { # Blame the child
+		name = EVTOPTBbastard51
+		prestige = -20
+		FROM = {
+			random_child = {
+				limit = { trait = bastard }
+				prestige = -10
+				opinion = { modifier = opinion_crestfallen who = ROOT years = 5 }
+			}
+		}
+		ai_chance = { factor = 20 }
+	}
+	option = { # Blame the father
+		name = EVTOPTCbastard51
+		prestige = -20
+		FROM = {
+			random_child = {
+				limit = { trait = bastard }
+				father = {
+					opinion = { modifier = opinion_angry who = ROOT years = 5 }
+					if = {
+						limit = { is_ruler = yes }
+						character_event = { id = bastard.52 tooltip = EVTTOOLTIPbastard52 }
+					}
+					else_if = {
+						limit = { father = { is_ruler = yes } }
+						father = { character_event = { id = bastard.53 tooltip = EVTTOOLTIPbastard53 } }
+					}
+				}
+			}
+		}
+		ai_chance = { factor = 50 }
+	}
+}
+
+# bastard.52 The father is blamed
+# Scope: ROOT is the child's father, FROM the mother's father.
+character_event = {
+	id = bastard.52
+	desc = EVTDESCbastard52
+	picture = GFX_evt_birth
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.51
+	option = { # I am guilty
+		name = EVTOPTAbastard52
+		piety = 10
+		prestige = -25
+		opinion = { modifier = opinion_angry who = FROM years = 5 }
+	}
+	option = { # Not my affair
+		name = EVTOPTBbastard52
+		piety = -5
+		opinion = { modifier = opinion_angry who = FROM years = 5 }
+	}
+}
+
+# bastard.53 The grandfather is blamed
+# Was sent to the child's father though it names his father; now it goes
+# to the grandfather.
+# Scope: ROOT is the child's grandfather, FROM the mother's father.
+character_event = {
+	id = bastard.53
+	desc = EVTDESCbastard53
+	picture = GFX_evt_birth
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.51
+	option = { # I will take care of it
+		name = EVTOPTAbastard53
+		piety = 10
+		prestige = -25
+		opinion = { modifier = opinion_angry who = FROM years = 5 }
+	}
+	option = { # Not my affair, nor my son's
+		name = EVTOPTBbastard53
+		piety = -5
+		opinion = { modifier = opinion_angry who = FROM years = 5 }
+	}
+}
+
+# bastard.60 A dream is born
+# A gifted grown bastard dreams of more than the world will give him.
+# Scope: ROOT is the bastard.
+character_event = {
+	id = bastard.60
+	desc = EVTDESCbastard60
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	min_age = 16
+	capable_only = yes
+	trigger = {
+		trait = bastard
+		NOT = { trait = ambitious }
+		OR = {
+			diplomacy = 6
+			learning = 6
+			intrigue = 6
+			stewardship = 6
+			martial = 6
+		}
+	}
+	option = {
+		name = EVTOPTAbastard60
+		add_trait = ambitious
+	}
+}
+
+# bastard.70 Teased by the trueborn
+# A young bastard is teased by the trueborn children at court.
+# Without Conclave only (Conclave has its own childhood events).
+# Scope: ROOT is the child.
+character_event = {
+	id = bastard.70
+	desc = EVTDESCbastard70
+	picture = GFX_evt_child_bully
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	min_age = 6
+	max_age = 16
+	lacks_dlc = "Conclave"
+	trigger = {
+		trait = bastard
+		father = {
+			is_ruler = yes
+			is_liege_of = ROOT
+			any_child = {
+				age = 6
+				NOT = { age = 16 }
+				NOT = { trait = bastard }
+			}
+		}
+	}
+	option = { # Fight back
+		name = EVTOPTAbastard70
+		any_courtier = {
+			limit = {
+				age = 6
+				NOT = { age = 16 }
+			}
+			opinion = { modifier = opinion_despised_fighting_bastard who = ROOT years = 2 }
+		}
+		random = {
+			chance = 30
+			add_trait = wroth
+			hidden_effect = { character_event = { id = 38254 } } # Notify Wroth
+		}
+		random = {
+			chance = 10
+			change_martial = 1
+		}
+	}
+	option = { # Hide
+		name = EVTOPTBbastard70
+		random_list = {
+			50 = {
+				add_trait = craven
+				hidden_effect = { character_event = { id = 38257 } } # Notify Craven
+			}
+			40 = { change_learning = 1 }
+			10 = {
+				any_courtier = {
+					limit = {
+						age = 6
+						NOT = { age = 16 }
+					}
+					opinion = { modifier = opinion_despised_hiding_bastard who = ROOT years = 2 }
+				}
+			}
+		}
+	}
+	option = { # Make friends
+		name = EVTOPTCbastard70
+		random_list = {
+			50 = { change_diplomacy = 1 }
+			30 = {
+				add_trait = shy
+				hidden_effect = { character_event = { id = 38263 } } # Notify Shy
+			}
+			20 = {
+				any_courtier = {
+					limit = {
+						age = 6
+						NOT = { age = 16 }
+					}
+					opinion = { modifier = despised_bastard who = ROOT years = 2 }
+				}
+			}
+		}
+	}
+	option = { # Get even in secret
+		name = EVTOPTDbastard70
+		random_list = {
+			50 = { change_intrigue = 1 }
+			30 = {
+				any_courtier = {
+					limit = {
+						age = 6
+						NOT = { age = 16 }
+					}
+					opinion = { modifier = despised_bastard who = ROOT years = 2 }
+				}
+			}
+			20 = {
+				add_trait = deceitful
+				hidden_effect = { character_event = { id = 38255 } } # Notify Deceitful
+			}
+		}
+	}
+}
+
+# bastard.80 What is a bastard?
+# Without Conclave only.
+# Scope: ROOT is the child.
+character_event = {
+	id = bastard.80
+	desc = EVTDESCbastard80
+	picture = GFX_evt_guardian
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	min_age = 11
+	max_age = 15
+	lacks_dlc = "Conclave"
+	trigger = {
+		trait = bastard
+		has_guardian = yes
+		NOT = { has_character_flag = asked_about_bastard }
+	}
+	option = {
+		name = EVTOPTAbastard80
+		set_character_flag = asked_about_bastard
+		guardian = { character_event = { id = bastard.81 tooltip = EVTTOOLTIPbastard81 } }
+	}
+}
+
+# bastard.81 The guardian is asked
+# Ormazd and Kitabid guardians speak of the parent's sin; Slaaneshi
+# guardians see none.
+# Scope: ROOT is the guardian, FROM the child.
+character_event = {
+	id = bastard.81
+	desc = EVTDESCbastard81
+	picture = GFX_evt_guardian
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.80
+	option = { # An abomination
+		name = EVTOPTAbastard81
+		trigger = { NOR = { religion = ormazd religion = kitabid religion = slaanesh } }
+		FROM = {
+			random_list = {
+				80 = {
+					add_trait = chaste
+					hidden_effect = {
+						character_event = { id = 38274 } # Notify Chaste
+						ROOT = { character_event = { id = 38174 } } # Notify child is Chaste
+					}
+				}
+				20 = {
+					add_trait = zealous
+					hidden_effect = {
+						character_event = { id = 38269 } # Notify Zealous
+						ROOT = { character_event = { id = 38169 } } # Notify child is Zealous
+					}
+				}
+			}
+		}
+	}
+	option = { # You will inherit nothing
+		name = EVTOPTBbastard81
+		FROM = {
+			random_list = {
+				80 = {
+					add_trait = humble
+					hidden_effect = {
+						character_event = { id = 38260 } # Notify Humble
+						ROOT = { character_event = { id = 38160 } } # Notify child is Humble
+					}
+				}
+				20 = {
+					add_trait = shy
+					hidden_effect = {
+						character_event = { id = 38263 } # Notify Shy
+						ROOT = { character_event = { id = 38163 } } # Notify child is Shy
+					}
+				}
+			}
+		}
+	}
+	option = { # Make your own way
+		name = EVTOPTCbastard81
+		FROM = {
+			random_list = {
+				80 = {
+					add_trait = ambitious
+					hidden_effect = {
+						character_event = { id = 38278 } # Notify Ambitious
+						ROOT = { character_event = { id = 38178 } } # Notify child is Ambitious
+					}
+				}
+				20 = {
+					add_trait = proud
+					hidden_effect = {
+						character_event = { id = 38261 } # Notify Proud
+						ROOT = { character_event = { id = 38161 } } # Notify child is Proud
+					}
+				}
+			}
+		}
+	}
+	option = { # Your parent sinned
+		name = EVTOPTDbastard81
+		trigger = { OR = { religion = ormazd religion = kitabid } }
+		FROM = {
+			random = {
+				chance = 20
+				add_trait = zealous
+				hidden_effect = {
+					character_event = { id = 38269 } # Notify Zealous
+					ROOT = { character_event = { id = 38169 } } # Notify child is Zealous
+				}
+			}
+		}
+	}
+	option = { # Pleasure made you
+		name = EVTOPTEbastard81
+		trigger = { religion = slaanesh }
+		FROM = {
+			random = {
+				chance = 20
+				add_trait = proud
+				hidden_effect = {
+					character_event = { id = 38261 } # Notify Proud
+					ROOT = { character_event = { id = 38161 } } # Notify child is Proud
+				}
 			}
 		}
 	}

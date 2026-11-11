@@ -31,6 +31,10 @@
 #   (the tombola lock, now cleared after 30 days at the latest), has_PTSD,
 #   denied_duelist_trait,
 #   denied_strategist_trait, commanders_have_died_for_me.
+#
+# Also in this file (each part keeps its own header and namespace):
+#   Part 2: Comrades and rivals on campaign (namespace campaign, was
+#   6900 - 6921 in campaign_events.txt)
 ###############################################################################
 
 namespace = battle
@@ -5835,5 +5839,209 @@ character_event = {
 	immediate = {
 		log = "BATTLE EVENTS: Commanders dead for ME (during my lifetime): [Root.my_commander_deaths_in_battle.GetValue] individual characters."
 		log = "BATTLE EVENTS: Commanders dead, in TOTAL: [global_deaths_in_battle.GetValue] individual characters."
+	}
+}
+
+
+###############################################################################
+# Part 2: Comrades and rivals on campaign (namespace campaign)
+# Faction: Generic
+# Serves: vassal commanders of every race who fight side by side
+# (was 6900 - 6921 in the vanilla campaign_events.txt)
+#
+# Two vassals of the same liege who share a won battle may become comrades,
+# or one may drag the other out of the press and earn a friend for life.
+# After a win or a loss two vassals may fall out over who did what.
+# The vanilla mean-time-to-happen checks now roll on the battle itself.
+#
+# Brothers in arms              campaign.1 - campaign.2
+# A life saved                  campaign.10 - campaign.11
+# A rival in the camp           campaign.20 - campaign.21
+#
+# Callers: on_battle_won_leader campaign_bonds list and on_battle_lost_leader
+#   campaign_blame list (wh_on_actions.txt).
+# Saved: event target campaign_comrade.
+###############################################################################
+
+namespace = campaign
+
+# campaign.1 Brothers in arms
+# A vassal commander warms to another vassal of the same liege who fought
+# beside them. Both get the campaign friend opinion (campaign.2).
+# Scope: ROOT is the winning leader, event_target:campaign_comrade the other.
+character_event = {
+	id = campaign.1
+	desc = EVTDESCcampaign1
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_battle_won_leader campaign_bonds list
+	only_rulers = yes
+	only_capable = yes
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		independent = no
+		NOT = { trait = shy }
+		liege = { any_vassal = { campaign_comrade_trigger = yes NOT = { trait = shy } } }
+	}
+
+	immediate = {
+		liege = {
+			random_vassal = {
+				limit = { campaign_comrade_trigger = yes NOT = { trait = shy } }
+				save_event_target_as = campaign_comrade
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAcampaign1
+		event_target:campaign_comrade = {
+			opinion = { modifier = campaign_friend who = ROOT years = 10 }
+			hidden_effect = { character_event = { id = campaign.2 days = 1 } }
+		}
+	}
+}
+
+# campaign.2 Brothers in arms (the other side)
+# Scope: ROOT is the comrade, FROM the leader.
+character_event = {
+	id = campaign.2
+	desc = EVTDESCcampaign2
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # campaign.1
+
+	option = {
+		name = EVTOPTAcampaign2
+		reverse_opinion = { modifier = campaign_friend who = FROM years = 10 }
+	}
+}
+
+# campaign.10 A life saved
+# The leader sees a fellow vassal go down in the press and drags them out,
+# taking a wound. The rescued one becomes a friend and owes a favour
+# (campaign.11).
+# Scope: ROOT is the winning leader, event_target:campaign_comrade the rescued.
+character_event = {
+	id = campaign.10
+	desc = EVTDESCcampaign10
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_battle_won_leader campaign_bonds list
+	only_rulers = yes
+	only_capable = yes
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		independent = no
+		NOT = { trait = craven }
+		NOT = { health_traits = 1 }
+		liege = { any_vassal = { campaign_comrade_trigger = yes NOT = { health_traits = 1 } } }
+	}
+
+	immediate = {
+		liege = {
+			random_vassal = {
+				limit = { campaign_comrade_trigger = yes NOT = { health_traits = 1 } }
+				save_event_target_as = campaign_comrade
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAcampaign10
+		add_trait_wounded_effect = yes
+		event_target:campaign_comrade = {
+			prestige = 5
+			add_friend = ROOT
+			if = {
+				limit = { has_dlc = "Zeus" }
+				reverse_add_favor = ROOT
+			}
+			hidden_effect = { character_event = { id = campaign.11 days = 1 } }
+		}
+	}
+}
+
+# campaign.11 Saved by a comrade
+# Scope: ROOT is the rescued, FROM the leader.
+character_event = {
+	id = campaign.11
+	desc = EVTDESCcampaign11
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # campaign.10
+
+	option = {
+		name = EVTOPTAcampaign11
+		tooltip = {
+			add_friend = FROM
+			if = {
+				limit = { has_dlc = "Zeus" }
+				reverse_add_favor = FROM
+			}
+		}
+	}
+}
+
+# campaign.20 A rival in the camp
+# Two vassals of the same liege fall out over the battle: who held, who ran,
+# who takes the glory. Both get the campaign rival opinion (campaign.21).
+# Scope: ROOT is the leader, event_target:campaign_comrade the other.
+character_event = {
+	id = campaign.20
+	desc = EVTDESCcampaign20
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # campaign_bonds and campaign_blame lists
+	only_rulers = yes
+	only_capable = yes
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		independent = no
+		liege = { any_vassal = { campaign_comrade_trigger = yes } }
+	}
+
+	immediate = {
+		liege = {
+			random_vassal = {
+				limit = { campaign_comrade_trigger = yes }
+				save_event_target_as = campaign_comrade
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAcampaign20
+		event_target:campaign_comrade = {
+			opinion = { modifier = campaign_rival who = ROOT years = 5 }
+			hidden_effect = { character_event = { id = campaign.21 days = 1 } }
+		}
+	}
+}
+
+# campaign.21 A rival in the camp (the other side)
+# Scope: ROOT is the other vassal, FROM the leader.
+character_event = {
+	id = campaign.21
+	desc = EVTDESCcampaign21
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # campaign.20
+
+	option = {
+		name = EVTOPTAcampaign21
+		reverse_opinion = { modifier = campaign_rival who = FROM years = 5 }
 	}
 }

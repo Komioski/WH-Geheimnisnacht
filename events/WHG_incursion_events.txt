@@ -1,27 +1,51 @@
-###########################################
-#                                         #
-# Daemonic Incursions                     #
-#                                         #
-###########################################
-
-# Built on the Jade Dragon invasion tombola (cathayinv.1). While the
-# winds of magic blow strong, the Chaos realms of the warp can tear open a
-# rift inside a mortal realm and pour daemons into realspace.
+###############################################################################
+# Daemonic incursions and the warp tides
+# Namespace: incursion (was daemonic_incursion in daemonic_incursion_events.txt)
+# Faction: Chaos
+# Serves: the Chaos realms of the warp (offmap powers khorne_warp,
+#   nurgle_warp, slaanesh_warp, tzeentch_warp, undivided_warp and the
+#   Brayherd, brayherd_warp), and every mortal realm they prey on
 #
-# daemonic_incursion.1 runs from on_offmap_yearly_pulse (ROOT = the realm's
-# governor, FROM = the offmap power). The war uses the daemonic_incursion CB,
-# whose end blocks banish the host and move the doom counter.
+# While the winds of magic blow strong, the Chaos realms of the warp can
+# tear open a rift inside a mortal realm and pour daemons into realspace.
+# How often follows the warp tides: each realm can rise to ascendancy, be
+# invaded by a rival power or, at the end of days, unite under Undivided.
+# The Brayherd follows Undivided and raises warherds out of the deep
+# forests. Built on the Jade Dragon invasion tombola (cathayinv.1).
 #
-# The odds follow the warp realms' statuses ("warp tides"), which
-# daemonic_incursion.10 moves each year: an ascendant realm sends more hosts,
-# a realm under attack in the warp sends fewer. daemonic_incursion.30 does the
-# same for the Brayherd, raising warherds out of the deep forests.
+# Rifts in the veil                    incursion.1 - incursion.4
+# Warp tides                           incursion.10 - incursion.12
+# Beastmen incursions                  incursion.30
+#
+# Callers: incursion.1, 10 and 30 from on_offmap_yearly_pulse, incursion.11
+#   from on_offmap_status_changed (00_on_actions.txt). The war uses the
+#   daemonic_incursion CB (daemonic_incursion_cb_types.txt), whose end
+#   blocks banish the host and move the doom counter. Game rule
+#   daemonic_incursions turns the rifts off.
+# Saved: character flag daemonic_incursion_leader and modifier
+#   daemonic_incursion_timer (25 years, on the victim); offmap flags
+#   warp_tide_check (tmp), warp_tide_turned and no_status_news. Effects in
+#   wh_incursion_effects.txt, triggers in wh_event_chain_triggers.txt and
+#   the warp_ triggers. The doom counter shows the tides
+#   (09_customizable_localisation_doom_counter.txt).
+# Loc: localisation/00_WHG_incursion_events.csv
+###############################################################################
 
-namespace = daemonic_incursion
+namespace = incursion
 
-# Incursion tombola (hidden)
+###############################################################################
+# Rifts in the veil
+###############################################################################
+
+# incursion.1 The veil thins
+# Hidden. Once a year each Chaos realm of the warp may open a rift: about
+# one time in sixteen at medium doom, more at high doom, and more again
+# when the realm is ascendant, the powers stand united or the realm's own
+# policy looks to the mortal world. A realm at war in the warp sends fewer.
+# Scope: ROOT is the warp realm's governor. FROM: the warp realm. Fired by
+#   on_offmap_yearly_pulse (00_on_actions.txt).
 character_event = {
-	id = daemonic_incursion.1
+	id = incursion.1
 	hide_window = yes
 
 	is_triggered_only = yes
@@ -74,7 +98,7 @@ character_event = {
 					factor = 0.5
 					FROM = { has_policy = warp_focused_warp }
 				}
-				# Warp tides (see daemonic_incursion.10)
+				# Warp tides (see incursion.10)
 				modifier = { # This realm is ascendant
 					factor = 3
 					FROM = { has_status = warp_ascendant }
@@ -134,7 +158,7 @@ character_event = {
 						undivided_warp = { has_status = warp_tzeentch_invasion }
 					}
 				}
-				character_event = { id = daemonic_incursion.2 }
+				character_event = { id = incursion.2 }
 			}
 			90 = { # The veil holds this year
 			}
@@ -142,9 +166,14 @@ character_event = {
 	}
 }
 
-# A rift opens (hidden): pick a victim, open the rift, declare war
+# incursion.2 A rift opens
+# Hidden. Picks a mortal realm of five counties or more (Araby, and the
+# lands of the undead and greenskins, are spared most often), opens a rift
+# in one of its provinces, spawns a host that grows with the doom and
+# declares the daemonic_incursion war. Players nearby hear of it.
+# Scope: ROOT is the warp realm's governor (incursion.1).
 character_event = {
-	id = daemonic_incursion.2
+	id = incursion.2
 	hide_window = yes
 
 	is_triggered_only = yes
@@ -195,95 +224,96 @@ character_event = {
 		}
 		clr_character_flag = incursion_wants_usual_prey
 		clr_character_flag = incursion_spares_araby
-		if = {
-			limit = { NOT = { event_target:incursion_target = { always = yes } } }
-			break = yes
-		}
+		if = { # A victim was found
+			limit = { event_target:incursion_target = { always = yes } }
 
-		event_target:incursion_target = {
-			add_character_modifier = {
-				name = daemonic_incursion_timer
-				years = 25
-				hidden = yes
-			}
-			random_realm_province = {
-				limit = { is_land = yes }
-				save_event_target_as = incursion_rift
-			}
-		}
-
-		set_character_flag = daemonic_incursion_leader
-		save_event_target_as = incursion_leader
-
-		# The host grows with the winds of magic
-		if = {
-			limit = { is_doom_very_high_trigger = yes }
-			spawn_unit = {
-				province = event_target:incursion_rift
-				owner = ROOT
-				earmark = daemonic_incursion_host
-				cannot_inherit = yes
-				attrition = 0
-				reinforces = no
-				troops = {
-					daemonic_host = { 6000 6000 }
-					daemonic_host = { 4000 4000 }
-					daemonic_host = { 4000 4000 }
+			event_target:incursion_target = {
+				add_character_modifier = {
+					name = daemonic_incursion_timer
+					years = 25
+					hidden = yes
+				}
+				random_realm_province = {
+					limit = { is_land = yes }
+					save_event_target_as = incursion_rift
 				}
 			}
-		}
-		else_if = {
-			limit = { is_doom_high_trigger = yes }
-			spawn_unit = {
-				province = event_target:incursion_rift
-				owner = ROOT
-				earmark = daemonic_incursion_host
-				cannot_inherit = yes
-				attrition = 0
-				reinforces = no
-				troops = {
-					daemonic_host = { 4500 4500 }
-					daemonic_host = { 3000 3000 }
-					daemonic_host = { 3000 3000 }
+
+			set_character_flag = daemonic_incursion_leader
+			save_event_target_as = incursion_leader
+
+			# The host grows with the winds of magic
+			if = {
+				limit = { is_doom_very_high_trigger = yes }
+				spawn_unit = {
+					province = event_target:incursion_rift
+					owner = ROOT
+					earmark = daemonic_incursion_host
+					cannot_inherit = yes
+					attrition = 0
+					reinforces = no
+					troops = {
+						daemonic_host = { 6000 6000 }
+						daemonic_host = { 4000 4000 }
+						daemonic_host = { 4000 4000 }
+					}
 				}
 			}
-		}
-		else = {
-			spawn_unit = {
-				province = event_target:incursion_rift
-				owner = ROOT
-				earmark = daemonic_incursion_host
-				cannot_inherit = yes
-				attrition = 0
-				reinforces = no
-				troops = {
-					daemonic_host = { 2500 2500 }
-					daemonic_host = { 1500 1500 }
-					daemonic_host = { 1500 1500 }
+			else_if = {
+				limit = { is_doom_high_trigger = yes }
+				spawn_unit = {
+					province = event_target:incursion_rift
+					owner = ROOT
+					earmark = daemonic_incursion_host
+					cannot_inherit = yes
+					attrition = 0
+					reinforces = no
+					troops = {
+						daemonic_host = { 4500 4500 }
+						daemonic_host = { 3000 3000 }
+						daemonic_host = { 3000 3000 }
+					}
 				}
 			}
-		}
-
-		war = {
-			target = event_target:incursion_target
-			casus_belli = daemonic_incursion
-		}
-		add_doom_progress_minor_effect = yes
-
-		event_target:incursion_target = { character_event = { id = daemonic_incursion.3 } }
-		any_player = {
-			limit = {
-				NOT = { character = event_target:incursion_target }
-				is_within_diplo_range = event_target:incursion_target
+			else = {
+				spawn_unit = {
+					province = event_target:incursion_rift
+					owner = ROOT
+					earmark = daemonic_incursion_host
+					cannot_inherit = yes
+					attrition = 0
+					reinforces = no
+					troops = {
+						daemonic_host = { 2500 2500 }
+						daemonic_host = { 1500 1500 }
+						daemonic_host = { 1500 1500 }
+					}
+				}
 			}
-			narrative_event = { id = daemonic_incursion.4 days = 1 }
+
+			war = {
+				target = event_target:incursion_target
+				casus_belli = daemonic_incursion
+			}
+			add_doom_progress_minor_effect = yes
+
+			event_target:incursion_target = { character_event = { id = incursion.3 } }
+			any_player = {
+				limit = {
+					NOT = { character = event_target:incursion_target }
+					is_within_diplo_range = event_target:incursion_target
+				}
+				narrative_event = { id = incursion.4 days = 1 }
+			}
 		}
 	}
 }
 
-# The victim: the sky tears open
+# incursion.3 The sky tears open
+# The victim sees the host pour out of the rift, in the voice of its god.
+# Scope: ROOT is the victim. FROM: the warp realm's governor (incursion.2).
 character_event = {
-	id = daemonic_incursion.3
+	id = incursion.3
 	desc = {
 		trigger = { FROM = { religion = khorne } }
 		text = EVTDESC_daemonic_incursion_3_khorne
@@ -320,17 +350,14 @@ character_event = {
 
 	option = {
 		name = EVTOPTA_daemonic_incursion_3
-		trigger = { NOT = { religion_group = chaos_gods_group } }
-	}
-	option = {
-		name = EVTOPTB_daemonic_incursion_3
-		trigger = { religion_group = chaos_gods_group }
 	}
 }
 
-# News for nearby rulers
+# incursion.4 A rift opens nearby
+# News for the players near the victim.
+# Scope: ROOT is a player. Fired by incursion.2.
 narrative_event = {
-	id = daemonic_incursion.4
+	id = incursion.4
 	title = EVTNAME_daemonic_incursion_4
 	desc = EVTDESC_daemonic_incursion_4
 	picture = GFX_evt_daemons
@@ -343,22 +370,22 @@ narrative_event = {
 	}
 }
 
-###########################################
+###############################################################################
 # Warp tides
-###########################################
+###############################################################################
 
-# The Chaos realms' statuses shift (hidden)
-# Fired from on_offmap_yearly_pulse, but each realm is only read every 5 years.
-# ROOT = governor, FROM = offmap.
-# At low and medium doom every realm settles back to (and stays) stable.
-# At high doom and above: stable realms can become ascendant (one at a time) or be invaded by a rival
-# power; ascendant and invaded realms settle back to stable after a while.
-# At very high doom the Realm of Undivided can unite all four powers.
-# The Brayherd is a beastman branch of Undivided and follows it: read every
-# year, it turns united while Undivided is ascendant or united, and stable
-# otherwise. It ignores the doom gate and the 5-year cadence of its own.
+# incursion.10 The warp tides turn
+# Hidden. Each realm is read every five years (the Brayherd every year).
+# At low and medium doom every realm settles back to stable. At high doom
+# and above a stable realm may rise to ascendancy (one at a time) or be
+# invaded by a rival power, and ascendant or invaded realms settle back
+# after a while; at very high doom Undivided may unite all four powers.
+# The Brayherd, the beastman branch of Undivided, gathers while Undivided
+# is ascendant or united and scatters otherwise.
+# Scope: ROOT is the warp realm's governor. FROM: the warp realm. Fired by
+#   on_offmap_yearly_pulse (00_on_actions.txt).
 character_event = {
-	id = daemonic_incursion.10
+	id = incursion.10
 	hide_window = yes
 
 	is_triggered_only = yes
@@ -395,8 +422,7 @@ character_event = {
 				}
 				if = {
 					limit = { NOT = { has_status = warp_stable } }
-					clr_offmap_flag = warp_tide_turned
-					set_offmap_flag = warp_tide_turned
+					warp_tide_turned_effect = yes
 					set_status = warp_stable
 				}
 			}
@@ -427,8 +453,7 @@ character_event = {
 									factor = 3
 									is_doom_very_high_trigger = yes
 								}
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_ascendant
 							}
 							6 = { # A rival power invades
@@ -442,8 +467,7 @@ character_event = {
 											factor = 3
 											nurgle_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_nurgle_invasion
 									}
 									10 = {
@@ -451,8 +475,7 @@ character_event = {
 											factor = 3
 											slaanesh_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_slaanesh_invasion
 									}
 									10 = {
@@ -460,8 +483,7 @@ character_event = {
 											factor = 3
 											tzeentch_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_tzeentch_invasion
 									}
 								}
@@ -480,8 +502,7 @@ character_event = {
 						}
 						random_list = {
 							20 = { # The tide ebbs
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_stable
 							}
 							8 = { # The other powers band together against it
@@ -491,8 +512,7 @@ character_event = {
 											factor = 3
 											nurgle_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_nurgle_invasion
 									}
 									10 = {
@@ -500,8 +520,7 @@ character_event = {
 											factor = 3
 											slaanesh_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_slaanesh_invasion
 									}
 									10 = {
@@ -509,8 +528,7 @@ character_event = {
 											factor = 3
 											tzeentch_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_tzeentch_invasion
 									}
 								}
@@ -533,8 +551,7 @@ character_event = {
 						}
 						random_list = {
 							35 = { # The invaders are thrown back
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_stable
 							}
 							65 = { }
@@ -566,8 +583,7 @@ character_event = {
 									factor = 3
 									is_doom_very_high_trigger = yes
 								}
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_ascendant
 							}
 							6 = { # A rival power invades
@@ -581,8 +597,7 @@ character_event = {
 											factor = 3
 											khorne_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_khorne_invasion
 									}
 									10 = {
@@ -590,8 +605,7 @@ character_event = {
 											factor = 3
 											slaanesh_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_slaanesh_invasion
 									}
 									10 = {
@@ -599,8 +613,7 @@ character_event = {
 											factor = 3
 											tzeentch_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_tzeentch_invasion
 									}
 								}
@@ -619,8 +632,7 @@ character_event = {
 						}
 						random_list = {
 							20 = { # The tide ebbs
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_stable
 							}
 							8 = { # The other powers band together against it
@@ -630,8 +642,7 @@ character_event = {
 											factor = 3
 											khorne_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_khorne_invasion
 									}
 									10 = {
@@ -639,8 +650,7 @@ character_event = {
 											factor = 3
 											slaanesh_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_slaanesh_invasion
 									}
 									10 = {
@@ -648,8 +658,7 @@ character_event = {
 											factor = 3
 											tzeentch_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_tzeentch_invasion
 									}
 								}
@@ -672,8 +681,7 @@ character_event = {
 						}
 						random_list = {
 							35 = { # The invaders are thrown back
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_stable
 							}
 							65 = { }
@@ -705,8 +713,7 @@ character_event = {
 									factor = 3
 									is_doom_very_high_trigger = yes
 								}
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_ascendant
 							}
 							6 = { # A rival power invades
@@ -720,8 +727,7 @@ character_event = {
 											factor = 3
 											khorne_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_khorne_invasion
 									}
 									10 = {
@@ -729,8 +735,7 @@ character_event = {
 											factor = 3
 											nurgle_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_nurgle_invasion
 									}
 									10 = {
@@ -738,8 +743,7 @@ character_event = {
 											factor = 3
 											tzeentch_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_tzeentch_invasion
 									}
 								}
@@ -758,8 +762,7 @@ character_event = {
 						}
 						random_list = {
 							20 = { # The tide ebbs
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_stable
 							}
 							8 = { # The other powers band together against it
@@ -769,8 +772,7 @@ character_event = {
 											factor = 3
 											khorne_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_khorne_invasion
 									}
 									10 = {
@@ -778,8 +780,7 @@ character_event = {
 											factor = 3
 											nurgle_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_nurgle_invasion
 									}
 									10 = {
@@ -787,8 +788,7 @@ character_event = {
 											factor = 3
 											tzeentch_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_tzeentch_invasion
 									}
 								}
@@ -811,8 +811,7 @@ character_event = {
 						}
 						random_list = {
 							35 = { # The invaders are thrown back
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_stable
 							}
 							65 = { }
@@ -844,8 +843,7 @@ character_event = {
 									factor = 3
 									is_doom_very_high_trigger = yes
 								}
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_ascendant
 							}
 							6 = { # A rival power invades
@@ -859,8 +857,7 @@ character_event = {
 											factor = 3
 											khorne_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_khorne_invasion
 									}
 									10 = {
@@ -868,8 +865,7 @@ character_event = {
 											factor = 3
 											nurgle_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_nurgle_invasion
 									}
 									10 = {
@@ -877,8 +873,7 @@ character_event = {
 											factor = 3
 											slaanesh_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_slaanesh_invasion
 									}
 								}
@@ -897,8 +892,7 @@ character_event = {
 						}
 						random_list = {
 							20 = { # The tide ebbs
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_stable
 							}
 							8 = { # The other powers band together against it
@@ -908,8 +902,7 @@ character_event = {
 											factor = 3
 											khorne_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_khorne_invasion
 									}
 									10 = {
@@ -917,8 +910,7 @@ character_event = {
 											factor = 3
 											nurgle_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_nurgle_invasion
 									}
 									10 = {
@@ -926,8 +918,7 @@ character_event = {
 											factor = 3
 											slaanesh_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_slaanesh_invasion
 									}
 								}
@@ -950,8 +941,7 @@ character_event = {
 						}
 						random_list = {
 							35 = { # The invaders are thrown back
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_stable
 							}
 							65 = { }
@@ -983,8 +973,7 @@ character_event = {
 									factor = 3
 									is_doom_very_high_trigger = yes
 								}
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_ascendant
 							}
 							6 = { # A rival power invades
@@ -998,8 +987,7 @@ character_event = {
 											factor = 3
 											khorne_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_khorne_invasion
 									}
 									10 = {
@@ -1007,8 +995,7 @@ character_event = {
 											factor = 3
 											nurgle_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_nurgle_invasion
 									}
 									10 = {
@@ -1016,8 +1003,7 @@ character_event = {
 											factor = 3
 											slaanesh_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_slaanesh_invasion
 									}
 									10 = {
@@ -1025,8 +1011,7 @@ character_event = {
 											factor = 3
 											tzeentch_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_tzeentch_invasion
 									}
 								}
@@ -1040,31 +1025,26 @@ character_event = {
 									factor = 0
 									warp_any_realm_ascendant_trigger = yes
 								}
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_united
 								khorne_warp = {
 									set_offmap_flag = no_status_news
-									clr_offmap_flag = warp_tide_turned
-									set_offmap_flag = warp_tide_turned
+									warp_tide_turned_effect = yes
 									set_status = warp_united
 								}
 								nurgle_warp = {
 									set_offmap_flag = no_status_news
-									clr_offmap_flag = warp_tide_turned
-									set_offmap_flag = warp_tide_turned
+									warp_tide_turned_effect = yes
 									set_status = warp_united
 								}
 								slaanesh_warp = {
 									set_offmap_flag = no_status_news
-									clr_offmap_flag = warp_tide_turned
-									set_offmap_flag = warp_tide_turned
+									warp_tide_turned_effect = yes
 									set_status = warp_united
 								}
 								tzeentch_warp = {
 									set_offmap_flag = no_status_news
-									clr_offmap_flag = warp_tide_turned
-									set_offmap_flag = warp_tide_turned
+									warp_tide_turned_effect = yes
 									set_status = warp_united
 								}
 							}
@@ -1082,8 +1062,7 @@ character_event = {
 						}
 						random_list = {
 							20 = { # The tide ebbs
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_stable
 							}
 							8 = { # The other powers band together against it
@@ -1093,8 +1072,7 @@ character_event = {
 											factor = 3
 											khorne_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_khorne_invasion
 									}
 									10 = {
@@ -1102,8 +1080,7 @@ character_event = {
 											factor = 3
 											nurgle_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_nurgle_invasion
 									}
 									10 = {
@@ -1111,8 +1088,7 @@ character_event = {
 											factor = 3
 											slaanesh_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_slaanesh_invasion
 									}
 									10 = {
@@ -1120,8 +1096,7 @@ character_event = {
 											factor = 3
 											tzeentch_warp = { has_status = warp_ascendant }
 										}
-										clr_offmap_flag = warp_tide_turned
-										set_offmap_flag = warp_tide_turned
+										warp_tide_turned_effect = yes
 										set_status = warp_tzeentch_invasion
 									}
 								}
@@ -1145,8 +1120,7 @@ character_event = {
 						}
 						random_list = {
 							35 = { # The invaders are thrown back
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_stable
 							}
 							65 = { }
@@ -1167,31 +1141,26 @@ character_event = {
 									factor = 0.5
 									is_doom_very_high_trigger = yes
 								}
-								clr_offmap_flag = warp_tide_turned
-								set_offmap_flag = warp_tide_turned
+								warp_tide_turned_effect = yes
 								set_status = warp_stable
 								khorne_warp = {
 									set_offmap_flag = no_status_news
-									clr_offmap_flag = warp_tide_turned
-									set_offmap_flag = warp_tide_turned
+									warp_tide_turned_effect = yes
 									set_status = warp_stable
 								}
 								nurgle_warp = {
 									set_offmap_flag = no_status_news
-									clr_offmap_flag = warp_tide_turned
-									set_offmap_flag = warp_tide_turned
+									warp_tide_turned_effect = yes
 									set_status = warp_stable
 								}
 								slaanesh_warp = {
 									set_offmap_flag = no_status_news
-									clr_offmap_flag = warp_tide_turned
-									set_offmap_flag = warp_tide_turned
+									warp_tide_turned_effect = yes
 									set_status = warp_stable
 								}
 								tzeentch_warp = {
 									set_offmap_flag = no_status_news
-									clr_offmap_flag = warp_tide_turned
-									set_offmap_flag = warp_tide_turned
+									warp_tide_turned_effect = yes
 									set_status = warp_stable
 								}
 							}
@@ -1209,8 +1178,7 @@ character_event = {
 								}
 							}
 						}
-						clr_offmap_flag = warp_tide_turned
-						set_offmap_flag = warp_tide_turned
+						warp_tide_turned_effect = yes
 						set_status = warp_united
 					}
 					else_if = { # ...and scatter again when it ebbs
@@ -1224,8 +1192,7 @@ character_event = {
 								}
 							}
 						}
-						clr_offmap_flag = warp_tide_turned
-						set_offmap_flag = warp_tide_turned
+						warp_tide_turned_effect = yes
 						set_status = warp_stable
 					}
 		
@@ -1234,10 +1201,14 @@ character_event = {
 	}
 }
 
-# A warp realm changed status: tell the players who would notice (hidden)
-# Fired from on_offmap_status_changed. ROOT = governor, FROM = offmap.
+# incursion.11 A warp realm changes
+# Hidden. Tells the players who would notice: the Chaos faithful and the
+# beastmen always, everyone when a realm rises or the powers unite. A quiet
+# reset at low doom (flag no_status_news) sends no news.
+# Scope: ROOT is the warp realm's governor. FROM: the warp realm. Fired by
+#   on_offmap_status_changed (00_on_actions.txt).
 character_event = {
-	id = daemonic_incursion.11
+	id = incursion.11
 	hide_window = yes
 
 	is_triggered_only = yes
@@ -1256,32 +1227,35 @@ character_event = {
 	}
 
 	immediate = {
-		if = {
+		if = { # A quiet reset at low doom: no news
 			limit = { FROM = { has_offmap_flag = no_status_news } }
 			FROM = { clr_offmap_flag = no_status_news }
-			break = yes
 		}
-		any_player = {
-			limit = {
-				OR = {
-					religion_group = chaos_gods_group
-					trait = creature_beastman
-					FROM = {
-						OR = {
-							has_status = warp_ascendant
-							has_status = warp_united
+		else = {
+			any_player = {
+				limit = {
+					OR = {
+						religion_group = chaos_gods_group
+						trait = creature_beastman
+						FROM = {
+							OR = {
+								has_status = warp_ascendant
+								has_status = warp_united
+							}
 						}
 					}
 				}
+				narrative_event = { id = incursion.12 }
 			}
-			narrative_event = { id = daemonic_incursion.12 }
 		}
 	}
 }
 
-# News from the warp
+# incursion.12 News from the warp
+# The new state of the warp realm, in its own words.
+# Scope: ROOT is a player. FROM: the warp realm's governor (incursion.11).
 narrative_event = {
-	id = daemonic_incursion.12
+	id = incursion.12
 	title = EVTNAME_daemonic_incursion_12
 	desc = {
 		trigger = {
@@ -1470,15 +1444,18 @@ narrative_event = {
 	}
 }
 
-###########################################
+###############################################################################
 # Beastmen incursions
-###########################################
+###############################################################################
 
-# The Brayherd raises a warherd out of the deep forests (hidden)
-# Fired from on_offmap_yearly_pulse. ROOT = governor, FROM = brayherd_warp.
-# Uses the existing beastmen uprising (beastmen.2) in a forest province.
+# incursion.30 The warherd gathers
+# Hidden. The Brayherd may raise a beastman uprising (beastmen.2) in a
+# forest province, first where a herdstone stands, more often while it is
+# united and the doom is high.
+# Scope: ROOT is the Brayherd's governor. FROM: brayherd_warp. Fired by
+#   on_offmap_yearly_pulse (00_on_actions.txt).
 character_event = {
-	id = daemonic_incursion.30
+	id = incursion.30
 	hide_window = yes
 
 	is_triggered_only = yes

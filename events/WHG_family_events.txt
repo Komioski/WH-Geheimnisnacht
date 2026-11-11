@@ -21,6 +21,8 @@
 #                                      bastard.1 - bastard.81
 # Part 3: Courtly romance (namespace romance), see its header
 #                                      romance.1 - romance.11
+# Part 4: Dynasty requests (namespace dynreq), see its header
+#                                      dynreq.1 - dynreq.12
 #
 # Fired from: on_focus_pulse in 00_on_actions.txt (family.10, 20, 30, 40,
 #   50, 60). Shared triggers and effects are in WHG_focus_triggers.txt and
@@ -2443,5 +2445,347 @@ character_event = {
 			}
 		}
 		reverse_opinion = { who = FROM modifier = opinion_spurned years = 5 }
+	}
+}
+
+###############################################################################
+# Part 4: Dynasty requests (namespace dynreq)
+# Faction: Generic
+# Serves: landless members of every dynasty, and the kin who hold its land
+# (was 66000 - 66110 in the vanilla dynasty_events.txt)
+#
+# A landless kinsman with children of his own sees an old, childless
+# relative holding land, and asks for a claim on it or for a title outright.
+# A landless claimant may also beg the head of the family, if he is his
+# liege, to go to war for a claim. The vanilla request (66000) was
+# commented out, leaving the claim and title answers with no caller; it is
+# back, at a rare decade roll, and a granted title is never the elder's
+# capital or primary title.
+#
+# The request                         dynreq.1
+# A claim, or a title                 dynreq.2 - dynreq.3
+# Fight for my claim                  dynreq.10 - dynreq.12
+#
+# Callers: dynreq.1 from the decade dynasty_requests list (wh_on_actions;
+#   was 250 in the yearly vanilla list, then cut); dynreq.10 from the
+#   yearly random list in 00_on_actions.txt.
+# Saved: event targets claimant and claimant_claim (dynreq.12). Triggers in
+#   WHG_family_triggers.txt.
+###############################################################################
+
+namespace = dynreq
+
+# dynreq.1 My share of the inheritance
+# A landless kinsman with children asks an old, childless relative for a
+# claim on one of their titles, or, if the elder holds more than one, for a
+# title outright.
+# Scope: a landless, able adult with a child. Fired by the decade
+#   dynasty_requests list (wh_on_actions).
+character_event = {
+	id = dynreq.1
+	desc = EVTDESC66000
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes
+
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		num_of_children = 1
+		is_landed = no
+		NOT = { trait = eunuch }
+		NOT = { trait = in_hiding }
+		is_ascetic_trigger = no
+		OR = {
+			diplomacy = 12
+			intrigue = 12
+		}
+		any_dynasty_member = { dynreq_childless_elder_trigger = yes }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 3 trait = ambitious }
+		modifier = { factor = 2 trait = proud }
+		modifier = { factor = 2 trait = greedy }
+		modifier = { factor = 0.5 trait = content }
+		modifier = { factor = 0.5 trait = humble }
+		modifier = { factor = 0.5 trait = shy }
+		modifier = { factor = 0.5 is_ill = yes }
+		modifier = { factor = 0.5 is_lunatic_trigger = yes }
+	}
+
+	option = { # A claim
+		name = EVTOPTA66000
+		ai_chance = { factor = 1 }
+		random_dynasty_member = {
+			limit = { dynreq_childless_elder_trigger = yes }
+			character_event = { id = dynreq.2 days = 17 tooltip = EVTTOOLTIP66010 }
+		}
+	}
+	option = { # A title
+		name = EVTOPTB66000
+		trigger = {
+			any_dynasty_member = {
+				dynreq_childless_elder_trigger = yes
+				demesne_size = 2
+				any_demesne_title = {
+					tier = COUNT
+					is_primary_holder_title = no
+					location = { is_capital = no }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 2 trait = ambitious }
+		}
+		random_dynasty_member = {
+			limit = {
+				dynreq_childless_elder_trigger = yes
+				demesne_size = 2
+				any_demesne_title = {
+					tier = COUNT
+					is_primary_holder_title = no
+					location = { is_capital = no }
+				}
+			}
+			character_event = { id = dynreq.3 days = 17 tooltip = EVTTOOLTIP66020 }
+		}
+	}
+	option = { # Better not
+		name = EVTOPTCdynreq1
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = content }
+		}
+	}
+}
+
+# dynreq.2 A kinsman asks for a claim
+# Grant a claim on one of the elder's lesser titles, or refuse.
+# Scope: ROOT is the elder. FROM: the kinsman (dynreq.1).
+character_event = {
+	id = dynreq.2
+	desc = EVTDESC66010
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # dynreq.1
+
+	option = { # Grant the claim
+		name = EVTOPTA66010
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 FROM = { diplomacy = 14 } }
+			modifier = { factor = 2 FROM = { martial = 14 } }
+			modifier = { factor = 2 FROM = { intrigue = 14 } }
+			modifier = { factor = 1.5 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 2 opinion = { who = FROM value = 50 } }
+			modifier = { factor = 3 opinion = { who = FROM value = 75 } }
+			modifier = { factor = 0.5 trait = greedy }
+		}
+		prestige = -5
+		if = {
+			limit = { any_demesne_title = { is_primary_holder_title = no } }
+			random_demesne_title = {
+				limit = { is_primary_holder_title = no }
+				add_claim = FROM
+			}
+		}
+		else = {
+			random_demesne_title = { add_claim = FROM }
+		}
+		FROM = { opinion = { modifier = opinion_grateful who = ROOT years = 5 } }
+	}
+	option = { # Refuse
+		name = EVTOPTB66010
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 0 opinion = { who = FROM value = 80 } }
+		}
+		FROM = { opinion = { modifier = dynastic_refused_claim who = ROOT years = 5 } }
+	}
+}
+
+# dynreq.3 A kinsman asks for a title
+# Grant one of the elder's lesser counties (never the capital or the
+# primary title), or refuse.
+# Scope: ROOT is the elder. FROM: the kinsman (dynreq.1).
+character_event = {
+	id = dynreq.3
+	desc = EVTDESC66020
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # dynreq.1
+
+	option = { # Grant the title
+		name = EVTOPTA66020
+		trigger = {
+			any_demesne_title = {
+				tier = COUNT
+				is_primary_holder_title = no
+				location = { is_capital = no }
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 FROM = { diplomacy = 14 } }
+			modifier = { factor = 2 FROM = { martial = 14 } }
+			modifier = { factor = 2 FROM = { intrigue = 14 } }
+			modifier = { factor = 1.5 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 2 opinion = { who = FROM value = 50 } }
+			modifier = { factor = 3 opinion = { who = FROM value = 75 } }
+			modifier = { factor = 0.5 trait = greedy }
+		}
+		prestige = -5
+		random_demesne_title = {
+			limit = {
+				tier = COUNT
+				is_primary_holder_title = no
+				location = { is_capital = no }
+			}
+			grant_title = FROM
+		}
+		FROM = { opinion = { modifier = opinion_grateful who = ROOT years = 5 } }
+	}
+	option = { # Refuse
+		name = EVTOPTB66020
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 0 opinion = { who = FROM value = 80 } }
+		}
+		FROM = { opinion = { modifier = dynastic_refused_title who = ROOT years = 5 } }
+	}
+}
+
+# dynreq.10 A landless claimant
+# Hidden. Finds a landless kinsman of the head with a claim the head could
+# press, and has him ask (dynreq.11).
+# Scope: ROOT is a ruler at peace whose realm lets vassals wage war. Fired by
+#   the yearly random list in 00_on_actions.txt.
+character_event = {
+	id = dynreq.10
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	capable_only = yes
+	prisoner = no
+	min_age = 16
+
+	trigger = {
+		has_regent = no
+		war = no
+		is_tributary = no
+		is_nomadic = no
+		top_liege = {
+			OR = {
+				AND = {
+					has_dlc = "Conclave"
+					NOT = { has_law = vassal_wars_law_2 }
+				}
+				AND = {
+					NOT = { has_dlc = "Conclave" }
+					NOR = {
+						has_law = crown_authority_2
+						has_law = crown_authority_3
+						has_law = crown_authority_4
+					}
+				}
+			}
+		}
+		any_dynasty_member = { dynreq_war_claimant_trigger = yes }
+	}
+
+	immediate = {
+		random_dynasty_member = {
+			limit = { dynreq_war_claimant_trigger = yes }
+			character_event = { id = dynreq.11 }
+		}
+	}
+}
+
+# dynreq.11 My rightful land
+# The claimant may ask the head to fight for the claim.
+# Scope: ROOT is the claimant. FROM: the dynasty head (dynreq.10).
+character_event = {
+	id = dynreq.11
+	desc = EVTDESC66100
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # dynreq.10
+
+	option = { # Ask for the war
+		name = EVTOPTA66100
+		FROM = { character_event = { id = dynreq.12 days = 9 tooltip = EVTTOOLTIP66110 } }
+	}
+	option = { # Let it lie
+		name = EVTOPTBdynreq11
+		ai_chance = { factor = 0 }
+	}
+}
+
+# dynreq.12 Fight for my kinsman's claim
+# The head goes to war for the claim, or refuses and loses face. The claim
+# is checked again, since it may have vanished in the nine days.
+# Scope: ROOT is the dynasty head. FROM: the claimant (dynreq.11).
+character_event = {
+	id = dynreq.12
+	desc = EVTDESC66110
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # dynreq.11
+
+	trigger = {
+		war = no
+		FROM = {
+			is_alive = yes
+			is_landed = no
+			any_claim = { dynreq_war_claim_trigger = yes }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			save_event_target_as = claimant
+			random_claim = {
+				limit = { dynreq_war_claim_trigger = yes }
+				save_event_target_as = claimant_claim
+			}
+		}
+	}
+
+	option = { # To war
+		name = EVTOPTA66110
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 FROM = { diplomacy = 14 } }
+			modifier = { factor = 2 FROM = { martial = 14 } }
+			modifier = { factor = 2 FROM = { intrigue = 14 } }
+			modifier = { factor = 1.5 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 2 opinion = { who = FROM value = 50 } }
+			modifier = { factor = 3 opinion = { who = FROM value = 75 } }
+			modifier = { factor = 0.5 trait = craven }
+			modifier = { factor = 0.5 trait = content }
+		}
+		event_target:claimant_claim = {
+			reverse_unsafe_war = {
+				target = event_target:claimant
+				casus_belli = other_claim
+				thirdparty = ROOT
+			}
+		}
+		FROM = { opinion = { modifier = opinion_grateful who = ROOT years = 5 } }
+	}
+	option = { # Refuse
+		name = EVTOPTB66110
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 0 opinion = { who = FROM value = 80 } }
+		}
+		FROM = { opinion = { modifier = dynastic_refused_war who = ROOT years = 5 } }
+		prestige = -10
 	}
 }

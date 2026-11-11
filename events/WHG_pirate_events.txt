@@ -10,19 +10,30 @@
 # their neighbours and hold them for ransom, and their kin may pay to have
 # them back. A pirate's lost eye, hand or leg only makes the crew fear and
 # admire him more. When a pirate lord dies, his First Mate takes the ships
-# and the lands, and the blood heir is left the name.
+# and the lands, and the blood heir is left the name. A Pirate Legend of
+# the Brethren may fit out a plunder fleet under a trusted courtier, who
+# sails to raid in the Legend's name and sends half the booty home each
+# year, until the fleet is sunk, its captain comes home rich, or the captain
+# keeps the ships and turns free raider.
 #
 # The terror of the seas               pirate.1
 # Taken for ransom                     pirate.10 - pirate.13
 # Scars of the trade                   pirate.20
 # The First Mate                       pirate.30 - pirate.31
+# The plunder fleet                    pirate.39 - pirate.48
 #
 # Callers: pirate.1 from on_loot_settlement, pirate.10 from the five-year
 #   pirate_raids list (was MTTH 100 years), pirate.20 from on_bi_yearly_pulse
 #   (was DR_pirates.106 - 107), pirate.30 from on_new_holder_inheritance (all
 #   wh_on_actions.txt). The First Mate is the minor title
-#   title_designatedheir (00_armoury_minor_titles.txt).
+#   title_designatedheir (00_armoury_minor_titles.txt). pirate.39 from the
+#   pirate_plunder_fleet decision (wh_pirate_decisions.txt), the Plunder
+#   Fleet power of the adventurers_pirates society (was DR_pirates.101 -
+#   103, commented out with their decision); then a yearly chain.
 # Saved: event targets former_captain and designated_heir (pirate.30).
+#   Persistent event target plunder_patron on the captain; flags
+#   plunder_fleet_captain and plunder_fleet_patron; tributary type
+#   plunder_fleet (00_tributary_types.txt).
 #   Character modifiers one_eyed_pirate, one_handed_pirate and
 #   one_legged_pirate (wh_modifiers.txt). Triggers in wh_pirate_triggers.txt.
 # Loc: localisation/00_WHG_pirate_events.csv
@@ -506,5 +517,356 @@ narrative_event = {
 		prestige = 125
 		wealth = 35
 		set_player_character = event_target:designated_heir
+	}
+}
+
+###############################################################################
+# The plunder fleet
+###############################################################################
+
+# pirate.39 Fitting out the fleet
+# Hidden. Hands the new captain the fleet (pirate.40).
+# Scope: ROOT is the Pirate Legend. FROM: the new captain.
+character_event = {
+	id = pirate.39
+	hide_window = yes
+
+	is_triggered_only = yes # pirate_plunder_fleet decision
+
+	immediate = {
+		FROM = { character_event = { id = pirate.40 } }
+	}
+}
+
+# pirate.40 The fleet sails
+# Hidden. A Pirate Legend gives a courtier ships and a crew of cutthroats
+# and sends them out to plunder in the Legend's name (the plunder fleet
+# decision in wh_pirate_decisions.txt, via pirate.39). The captain leaves
+# the court with a landless title, a raiding host, a fleet and two mates,
+# and pays tribute to the Legend (with Jade Dragon, so the fleet will not
+# raid its own patron and can be called to the Legend's wars). The booty is
+# shared once a year (pirate.41).
+# Scope: ROOT is the new captain. FROM: the Pirate Legend.
+character_event = {
+	id = pirate.40
+	hide_window = yes
+
+	is_triggered_only = yes # pirate.39
+
+	immediate = {
+		end_inaccessibility_effect = yes
+		if = {
+			limit = { NOT = { trait = adventurer } }
+			add_trait = adventurer
+		}
+		save_persistent_event_target = { name = plunder_patron scope = FROM }
+		set_character_flag = plunder_fleet_captain
+		FROM = {
+			set_character_flag = plunder_fleet_patron
+			capital_scope = {
+				save_event_target_as = target_province
+				ROOT = {
+					set_defacto_liege = ROOT
+					create_title = {
+						tier = DUKE
+						landless = yes
+						temporary = yes
+						adventurer = yes
+						culture = ROOT
+						name = "DYNAMIC_PIRATE_PLUNDER_FLEET"
+						holder = ROOT
+						base_title = THIS
+					}
+					adventurer_raid_host_effect = yes
+					create_random_soldier = {
+						random_traits = yes
+						dynasty = none
+						religion = ROOT
+						culture = ROOT
+						age = 30
+					}
+					new_character = {
+						character_event = { id = aiclean.31 } # Racial trait
+					}
+					create_random_soldier = {
+						random_traits = yes
+						dynasty = none
+						religion = ROOT
+						culture = ROOT
+						age = 25
+					}
+					new_character = {
+						character_event = { id = aiclean.31 } # Racial trait
+					}
+					spawn_fleet = {
+						province = closest
+						owner = ROOT
+						troops = { galleys = { 110 110 } }
+					}
+				}
+			}
+			if = {
+				limit = { has_dlc = "Jade Dragon" }
+				make_tributary = { who = ROOT tributary_type = plunder_fleet }
+			}
+		}
+		character_event = { id = pirate.41 days = 365 }
+	}
+}
+
+# pirate.41 Weighing the plunder
+# Hidden. Once a year the captain takes stock. A fleet that is sunk or
+# scattered, a captain in chains or a captain who has won land of their own
+# is finished (pirate.44). A captain whose patron is dead keeps the ships
+# and turns free raider (pirate.43). Otherwise the patron's share goes home
+# (pirate.42), the captain may turn on the patron (pirate.43; likelier for
+# the ambitious, the greedy and the disloyal), and after five years at sea
+# the captain may come home with the last of the hoard (pirate.45).
+# Scope: ROOT is the captain.
+character_event = {
+	id = pirate.41
+	hide_window = yes
+
+	is_triggered_only = yes # pirate.40, itself
+
+	has_character_flag = plunder_fleet_captain
+
+	immediate = {
+		if = {
+			limit = {
+				OR = {
+					prisoner = yes
+					has_regiments = no
+					NOT = { primary_title = { temporary = yes adventurer = yes } }
+				}
+			}
+			character_event = { id = pirate.44 }
+		}
+		else_if = {
+			limit = { persistent_event_target:plunder_patron = { is_alive = no } }
+			character_event = { id = pirate.43 }
+		}
+		else = {
+			random_list = {
+				80 = { # Plunder on, and pay the share
+					persistent_event_target:plunder_patron = { letter_event = { id = pirate.42 } }
+					repeat_event = { id = pirate.41 days = 365 }
+				}
+				5 = { # Turn on the patron
+					modifier = { factor = 3 trait = ambitious }
+					modifier = { factor = 2 trait = greedy }
+					modifier = { factor = 2 trait = deceitful }
+					modifier = { factor = 2 trait = arbitrary }
+					modifier = { factor = 3 NOT = { opinion = { who = persistent_event_target:plunder_patron value = 0 } } }
+					modifier = { factor = 0.2 opinion = { who = persistent_event_target:plunder_patron value = 50 } }
+					modifier = { factor = 0.2 is_friend = persistent_event_target:plunder_patron }
+					modifier = { factor = 0.1 is_close_relative = persistent_event_target:plunder_patron }
+					modifier = { factor = 0.5 trait = honest }
+					modifier = { factor = 0.5 trait = content }
+					character_event = { id = pirate.43 }
+				}
+				10 = { # Home with the hoard
+					modifier = { factor = 0 NOT = { had_character_flag = { flag = plunder_fleet_captain days = 1825 } } }
+					modifier = { factor = 2 had_character_flag = { flag = plunder_fleet_captain days = 2920 } }
+					modifier = { factor = 3 had_character_flag = { flag = plunder_fleet_captain days = 4380 } }
+					modifier = { factor = 2 wealth = 500 }
+					modifier = { factor = 0.5 trait = ambitious }
+					character_event = { id = pirate.45 }
+				}
+			}
+		}
+	}
+}
+
+# pirate.42 The patron's share
+# The captain's purser brings the patron half of what the fleet has taken
+# this year. A good year raises the patron's name among the Brethren.
+# Scope: ROOT is the patron. FROM: the captain (pirate.41).
+letter_event = {
+	id = pirate.42
+	desc = EVTDESC_pirate_42
+
+	is_triggered_only = yes # pirate.41
+
+	option = {
+		name = EVTOPTA_pirate_42
+		FROM = { transfer_scaled_wealth = { to = ROOT value = 0.5 } }
+		if = {
+			limit = { FROM = { wealth = 200 } }
+			prestige = 25
+			change_society_currency = 50
+		}
+	}
+}
+
+# pirate.43 The fleet turns rogue
+# Hidden. The captain keeps the ships and the plunder and sails for
+# themself, and from now on is a free raider like any other (the raiding
+# adventurers of WHG_adventurer_events.txt, adventurer.10): one day they
+# will want land of their own. A living patron is told (pirate.46) and
+# loses the tribute.
+# Scope: ROOT is the captain.
+character_event = {
+	id = pirate.43
+	hide_window = yes
+
+	is_triggered_only = yes # pirate.41
+
+	immediate = {
+		clr_character_flag = plunder_fleet_captain
+		persistent_event_target:plunder_patron = {
+			clr_character_flag = plunder_fleet_patron
+			if = {
+				limit = { is_alive = yes }
+				character_event = { id = pirate.46 }
+				opinion = { modifier = opinion_traitor who = ROOT }
+			}
+		}
+		if = {
+			limit = { is_tributary = yes }
+			suzerain = { remove_tributary = ROOT }
+		}
+		set_character_flag = raiding_adventurer
+		character_event = { id = adventurer.10 days = 365 }
+	}
+}
+
+# pirate.44 The fleet is lost
+# Hidden. The fleet is sunk, scattered or its captain taken, or the captain
+# won land of their own. The host disbands and the fleet's title goes; a
+# free captain at sea goes home to the patron's court. The patron hears of
+# it unless the captain is now a landed ruler.
+# Scope: ROOT is the captain.
+character_event = {
+	id = pirate.44
+	hide_window = yes
+
+	is_triggered_only = yes # pirate.41
+
+	immediate = {
+		clr_character_flag = plunder_fleet_captain
+		persistent_event_target:plunder_patron = { clr_character_flag = plunder_fleet_patron }
+		if = {
+			limit = { is_tributary = yes }
+			suzerain = { remove_tributary = ROOT }
+		}
+		if = {
+			limit = { primary_title = { temporary = yes adventurer = yes } }
+			disband_event_forces = yes
+			primary_title = {
+				activate_title = { title = THIS status = no }
+				destroy_landed_title = THIS
+			}
+			if = {
+				limit = {
+					prisoner = no
+					persistent_event_target:plunder_patron = { is_alive = yes }
+				}
+				set_defacto_liege = persistent_event_target:plunder_patron
+			}
+		}
+		if = {
+			limit = {
+				is_landed = no
+				persistent_event_target:plunder_patron = { is_alive = yes ai = no }
+			}
+			persistent_event_target:plunder_patron = { letter_event = { id = pirate.47 } }
+		}
+	}
+}
+
+# pirate.45 Home with the hoard
+# Hidden. After years of plunder the captain sails home and tells the
+# patron (pirate.48), who takes the hoard and welcomes the captain back.
+# Scope: ROOT is the captain.
+character_event = {
+	id = pirate.45
+	hide_window = yes
+
+	is_triggered_only = yes # pirate.41
+
+	immediate = {
+		persistent_event_target:plunder_patron = { letter_event = { id = pirate.48 } }
+	}
+}
+
+# pirate.46 The fleet turns rogue
+# The patron learns the captain has kept the ships and the plunder.
+# Scope: ROOT is the patron. FROM: the captain (pirate.43).
+character_event = {
+	id = pirate.46
+	desc = EVTDESC_pirate_46
+	picture = GFX_evt_pirate_fleet
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # pirate.43
+
+	option = { # A price on their head
+		name = EVTOPTA_pirate_46
+		trigger = { wealth = 50 }
+		wealth = -50
+		add_rival = FROM
+		ai_chance = { factor = 1 }
+	}
+	option = { # The sea takes back its own
+		name = EVTOPTB_pirate_46
+		prestige = -50
+		ai_chance = { factor = 1 }
+	}
+}
+
+# pirate.47 The fleet is lost
+# The patron hears that the fleet is sunk, scattered, or its captain taken.
+# Scope: ROOT is the patron. FROM: the captain (pirate.44).
+letter_event = {
+	id = pirate.47
+	desc = EVTDESC_pirate_47
+
+	is_triggered_only = yes # pirate.44
+
+	option = {
+		name = EVTOPTA_pirate_47
+	}
+}
+
+# pirate.48 Home with the hoard
+# The captain lays the last of the hoard at the patron's feet: most of
+# what the fleet still holds, and a name among the Brethren. The fleet's
+# title goes and the host disbands; the captain returns to court.
+# Scope: ROOT is the patron. FROM: the captain (pirate.45).
+letter_event = {
+	id = pirate.48
+	desc = EVTDESC_pirate_48
+
+	is_triggered_only = yes # pirate.45
+
+	option = {
+		name = EVTOPTA_pirate_48
+		FROM = { transfer_scaled_wealth = { to = ROOT value = 0.75 } }
+		prestige = 100
+		change_society_currency = 100
+		opinion = { modifier = opinion_grateful who = FROM years = 10 }
+		hidden_tooltip = {
+			if = {
+				limit = { FROM = { is_tributary = { suzerain = ROOT } } }
+				remove_tributary = FROM
+			}
+		}
+		FROM = {
+			prestige = 100
+			hidden_tooltip = {
+				clr_character_flag = plunder_fleet_captain
+				disband_event_forces = yes
+				primary_title = {
+					if = {
+						limit = { temporary = yes adventurer = yes }
+						activate_title = { title = THIS status = no }
+						destroy_landed_title = THIS
+					}
+				}
+				set_defacto_liege = ROOT
+			}
+		}
+		clr_character_flag = plunder_fleet_patron
 	}
 }

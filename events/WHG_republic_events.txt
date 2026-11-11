@@ -13,6 +13,8 @@
 #         south                     wh_merchant_power_events.txt)
 # Part 4: the rise of the           mleague.1 - 30 (was REP.39 - 70 in
 #         Marienburg League         wh_republic_events.txt)
+# Part 5: republic elections        election.1 - 65 (rebuilt from REP.80 - 90
+#                                   in wh_republic_events.txt)
 ###############################################################################
 
 ###############################################################################
@@ -4382,9 +4384,7 @@ narrative_event = {
 # Dropped: a check on a variable (global_marienburg_expansion) that was
 #   written on a character and read with a malformed check_variable; the
 #   hansa_formed flag already keeps the chain to one run. The unfinished
-#   republic election campaign (REP.80 - 90, switched off, built on an
-#   effect CK2 does not have) and its republic_election_event_tombola_
-#   effect.
+#   republic election campaign (REP.80 - 90) is rebuilt as Part 5.
 # Callers: on_startup (1) in common/on_actions/wh_on_actions.txt.
 # Saved: global flags marienburg_league_checked, hansa_formed.
 # Loc: localisation/00_WHG_republic_events.csv; the tooltips
@@ -4655,5 +4655,653 @@ character_event = {
 
 	option = {
 		name = EVTOPTAmleague30
+	}
+}
+
+###############################################################################
+# Part 5: Republic elections (namespace election)
+# Faction: Generic
+# Serves: the doge and patricians of a merchant republic whose title has an
+#   election term law (law_election_cycles_0 - 5 in
+#   common/laws/wh_republic_laws.txt)
+#
+# The term laws set how long a doge holds office: 4, 8 or 16 years for the
+# short-lived races, 10, 15 or 20 for the immortal ones (Dictatorship and the
+# Drachau of the Druchii hold no elections). When the term runs out the doge
+# must stand again against the heads of the patrician houses. For three
+# months every candidate buys, speaks and schemes for the guilds' favour.
+# Each step of favour is 50 prestige, counted in the variable
+# election_prestige so that it can be taken back once the vote is over.
+#
+# On the day of the count the doge's prestige (with the seat's patronage,
+# 100 prestige) is set against every rival's. If a rival stands higher, the
+# doge lays down the seal: he abdicates, and the patrician election of the
+# republic chooses the successor as it does on a doge's death, which
+# rewards the same prestige. When the count is over the bought favour fades.
+# A doge left with negative prestige by then is impeached for buying the
+# vote and must abdicate too.
+#
+#   election.1         The term runs out: the election is called (hidden)
+#   election.10        Campaign funds
+#   election.20        Speeches before the guilds
+#   election.30 - 31   Smears and bribes, and the smeared rival hears of it
+#   election.40        The bribes come to light
+#   election.50 - 51   The count: bribes exposed, then the tally (hidden)
+#   election.52        The doge loses and lays down the seal
+#   election.55        The new doge takes office (hidden)
+#   election.60        The result
+#   election.65        The new doge is impeached
+#
+# Rebuilt from the unfinished campaign (REP.80 - 90 in
+# wh_republic_events.txt), which was never switched on and leaned on a
+# hold_election effect that CK2 does not have. Its funds, speech and smear
+# events and the design notes in the term laws (temporary prestige, impeached
+# for voting fraud with negative prestige afterwards) are kept.
+# Callers: on_yearly_pulse (1) in common/on_actions/wh_on_actions.txt.
+# Saved: character flags election_term_set, election_running,
+#   election_candidate, election_bribed, election_smeared,
+#   election_fraud_check; character modifier election_timer; variables
+#   election_prestige, election_votes; event targets election_doge,
+#   election_title, election_leader, election_rival, election_new_doge.
+# Effects and triggers: common/scripted_effects/WHG_republic_effects.txt,
+#   common/scripted_triggers/WHG_republic_triggers.txt.
+# Loc: localisation/00_WHG_republic_events.csv; election_timer keeps its key.
+###############################################################################
+
+namespace = election
+
+# election.1 The term runs out
+# A doge whose republic holds elections starts his term the first time the
+# pulse finds him (any leftovers of an election that died with his
+# predecessor are cleared then). When the term's timer has run out, the
+# election is called: the doge and every patrician house under him stand,
+# and the campaign events follow over three months. With no patrician to
+# stand against him, the doge is simply confirmed for another term.
+# Scope: ROOT is the doge.
+character_event = {
+	id = election.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_yearly_pulse
+
+	only_rulers = yes
+	prisoner = no
+
+	trigger = {
+		is_merchant_republic = yes
+		republic_election_law_trigger = yes
+		NOT = { has_character_modifier = election_timer }
+		NOT = { has_character_flag = election_running }
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { has_character_flag = election_term_set } }
+			republic_election_clear_effect = yes
+			any_vassal = {
+				limit = { has_character_flag = election_candidate }
+				republic_election_clear_effect = yes
+			}
+			republic_election_term_effect = yes
+		}
+		else_if = {
+			limit = { NOT = { any_vassal = { republic_election_candidate_trigger = yes } } }
+			republic_election_term_effect = yes
+		}
+		else = {
+			set_character_flag = election_running
+			save_event_target_as = election_doge
+			primary_title = { save_event_target_as = election_title }
+			republic_election_clear_effect = yes
+			set_character_flag = election_candidate
+			character_event = { id = election.10 days = 3 }
+			character_event = { id = election.20 days = 30 random = 10 }
+			character_event = { id = election.30 days = 55 random = 10 }
+			character_event = { id = election.50 days = 90 }
+			any_vassal = {
+				limit = { republic_election_candidate_trigger = yes }
+				republic_election_clear_effect = yes
+				set_character_flag = election_candidate
+				character_event = { id = election.10 days = 3 random = 5 }
+				character_event = { id = election.20 days = 30 random = 10 }
+				character_event = { id = election.30 days = 55 random = 10 }
+			}
+		}
+	}
+}
+
+# election.10 Campaign funds
+# The election is called. Every candidate decides how much gold goes into
+# the campaign: the richer the purse, the more favour it buys. The guild
+# masters can be leaned on instead, and a rich house that pays nothing is
+# marked as a miser. The doge gets his own opening text.
+# Scope: ROOT is a candidate. event_target:election_doge is the doge.
+character_event = {
+	id = election.10
+	desc = { trigger = { has_character_flag = election_running } text = EVTDESCelection10b }
+	desc = {
+		trigger = { NOT = { has_character_flag = election_running } }
+		text = EVTDESCelection10
+	}
+	picture = GFX_evt_doge_republic
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # election.1
+
+	has_character_flag = election_candidate
+
+	trigger = {
+		republic_election_running_trigger = yes
+	}
+
+	option = { # Open the coffers
+		name = EVTOPTAelection10
+		trigger = { wealth = 50 }
+		scaled_wealth = { value = -1.0 min = -50 max = -500 }
+		republic_election_gain_effect = yes
+		republic_election_gain_effect = yes
+		republic_election_gain_effect = yes
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = ambitious }
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 0.2 trait = greedy }
+			modifier = { factor = 0.5 trait = content }
+			modifier = { factor = 0.3 NOT = { wealth = 300 } }
+		}
+	}
+	option = { # A fair purse
+		name = EVTOPTBelection10
+		trigger = { wealth = 20 }
+		scaled_wealth = { value = -0.4 min = -20 max = -200 }
+		republic_election_gain_effect = yes
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 1.5 trait = diligent }
+			modifier = { factor = 0.5 trait = greedy }
+		}
+	}
+	option = { # Lean on the guild masters
+		name = EVTOPTCelection10
+		random_list = {
+			40 = {
+				modifier = { factor = 1.5 stewardship = 12 }
+				modifier = { factor = 1.5 stewardship = 18 }
+				modifier = { factor = 1.5 intrigue = 15 }
+				republic_election_gain_effect = yes
+				republic_election_gain_effect = yes
+			}
+			60 = {
+				modifier = { factor = 0.7 stewardship = 12 }
+				custom_tooltip = { text = election_guilds_refuse_tooltip }
+			}
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 stewardship = 15 }
+			modifier = { factor = 1.5 trait = deceitful }
+			modifier = { factor = 0.5 trait = honest }
+		}
+	}
+	option = { # Not a penny
+		name = EVTOPTDelection10
+		if = { limit = { wealth = 300 } republic_election_lose_effect = yes }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 5 trait = greedy }
+			modifier = { factor = 3 trait = content }
+			modifier = { factor = 0.2 trait = ambitious }
+		}
+	}
+}
+
+# election.20 Speeches before the guilds
+# Each candidate courts the guilds in public: a speech that rides on his
+# diplomacy, a promise of sound ledgers that rides on his stewardship (both
+# can fall flat), a spectacle in the harbour paid in gold, or silence.
+# Scope: ROOT is a candidate. event_target:election_doge is the doge.
+character_event = {
+	id = election.20
+	desc = EVTDESCelection20
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # election.1
+
+	has_character_flag = election_candidate
+
+	trigger = {
+		republic_election_running_trigger = yes
+	}
+
+	option = { # Sway their hearts
+		name = EVTOPTAelection20
+		random_list = {
+			30 = {
+				modifier = { factor = 2 diplomacy = 12 }
+				modifier = { factor = 2 diplomacy = 18 }
+				modifier = { factor = 1.5 trait = charismatic_negotiator }
+				modifier = { factor = 1.5 trait = gregarious }
+				custom_tooltip = { text = election_speech_triumph_tooltip }
+				republic_election_gain_effect = yes
+				republic_election_gain_effect = yes
+				republic_election_gain_effect = yes
+			}
+			40 = {
+				custom_tooltip = { text = election_speech_fair_tooltip }
+				republic_election_gain_effect = yes
+			}
+			30 = {
+				modifier = { factor = 0.5 diplomacy = 12 }
+				modifier = { factor = 0.5 diplomacy = 18 }
+				modifier = { factor = 2 trait = shy }
+				modifier = { factor = 1.5 trait = stutter }
+				custom_tooltip = { text = election_speech_flop_tooltip }
+				republic_election_lose_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 diplomacy = 12 }
+			modifier = { factor = 0.3 NOT = { diplomacy = 8 } }
+			modifier = { factor = 0.3 trait = shy }
+		}
+	}
+	option = { # Promise them certainty
+		name = EVTOPTBelection20
+		random_list = {
+			30 = {
+				modifier = { factor = 2 stewardship = 12 }
+				modifier = { factor = 2 stewardship = 18 }
+				modifier = { factor = 1.5 trait = diligent }
+				custom_tooltip = { text = election_speech_triumph_tooltip }
+				republic_election_gain_effect = yes
+				republic_election_gain_effect = yes
+			}
+			50 = {
+				custom_tooltip = { text = election_speech_fair_tooltip }
+				republic_election_gain_effect = yes
+			}
+			20 = {
+				modifier = { factor = 0.5 stewardship = 12 }
+				modifier = { factor = 2 trait = slothful }
+				custom_tooltip = { text = election_speech_dull_tooltip }
+			}
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 stewardship = 12 }
+			modifier = { factor = 0.3 NOT = { stewardship = 8 } }
+		}
+	}
+	option = { # A spectacle in the harbour
+		name = EVTOPTCelection20
+		trigger = { wealth = 25 }
+		scaled_wealth = { value = -0.5 min = -25 max = -250 }
+		republic_election_gain_effect = yes
+		republic_election_gain_effect = yes
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 wealth = 500 }
+			modifier = { factor = 0.3 trait = greedy }
+			modifier = { factor = 0 NOT = { wealth = 100 } }
+		}
+	}
+	option = { # Let my record speak
+		name = EVTOPTDelection20
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 trait = content }
+			modifier = { factor = 3 trait = shy }
+		}
+	}
+}
+
+# election.30 Smears and bribes
+# Late in the campaign every candidate may blacken a rival (the doge, if the
+# candidate is a patrician, else a patrician rival): intrigue decides whether
+# the rumour sticks or is traced back. Or he can buy the guild votes
+# outright, at the risk of the bribes coming to light at the count
+# (election.40), or keep the campaign clean.
+# Scope: ROOT is a candidate. event_target:election_doge is the doge;
+# event_target:election_rival is the rival chosen here.
+character_event = {
+	id = election.30
+	desc = EVTDESCelection30
+	picture = GFX_evt_scandal
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # election.1
+
+	has_character_flag = election_candidate
+
+	trigger = {
+		republic_election_running_trigger = yes
+		event_target:election_doge = {
+			OR = {
+				NOT = { character = ROOT }
+				any_vassal = { has_character_flag = election_candidate NOT = { character = ROOT } }
+			}
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { character = event_target:election_doge } }
+			event_target:election_doge = { save_event_target_as = election_rival }
+		}
+		else = {
+			random_vassal = {
+				limit = { has_character_flag = election_candidate NOT = { character = ROOT } }
+				save_event_target_as = election_rival
+			}
+		}
+	}
+
+	option = { # Blacken the rival's name
+		name = EVTOPTAelection30
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 intrigue = 12 }
+				modifier = { factor = 1.5 intrigue = 18 }
+				modifier = { factor = 1.3 trait = deceitful }
+				modifier = { factor = 1.3 trait = schemer }
+				custom_tooltip = { text = election_smear_sticks_tooltip }
+				event_target:election_rival = {
+					republic_election_lose_effect = yes
+					republic_election_lose_effect = yes
+					set_character_flag = election_smeared
+					character_event = { id = election.31 }
+				}
+			}
+			30 = {
+				modifier = { factor = 0.6 intrigue = 12 }
+				modifier = { factor = 0.6 intrigue = 18 }
+				modifier = { factor = 1.5 trait = honest }
+				custom_tooltip = { text = election_smear_traced_tooltip }
+				prestige = -50
+				event_target:election_rival = {
+					opinion = { modifier = opinion_slandered who = ROOT years = 5 }
+					character_event = { id = election.31 }
+				}
+			}
+			20 = { custom_tooltip = { text = election_smear_ignored_tooltip } }
+		}
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 2 trait = deceitful }
+			modifier = { factor = 2 trait = envious }
+			modifier = { factor = 1.5 intrigue = 12 }
+			modifier = { factor = 0.1 trait = honest }
+			modifier = { factor = 0.5 trait = kind }
+		}
+	}
+	option = { # Buy the guild votes
+		name = EVTOPTBelection30
+		trigger = { wealth = 50 }
+		scaled_wealth = { value = -0.8 min = -50 max = -400 }
+		republic_election_gain_effect = yes
+		republic_election_gain_effect = yes
+		set_character_flag = election_bribed
+		custom_tooltip = { text = election_bribe_risk_tooltip }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = ambitious }
+			modifier = { factor = 1.5 trait = deceitful }
+			modifier = { factor = 0.1 trait = honest }
+			modifier = { factor = 0.1 trait = just }
+			modifier = { factor = 0 NOT = { wealth = 150 } }
+		}
+	}
+	option = { # Keep the campaign clean
+		name = EVTOPTCelection30
+		if = {
+			limit = { OR = { trait = honest trait = just } }
+			republic_election_gain_effect = yes
+		}
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 3 trait = honest }
+			modifier = { factor = 2 trait = just }
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+}
+
+# election.31 Smeared
+# Tells the rival that a candidate spread rumours about him: whether they
+# stuck (he loses favour) or were traced back to their author.
+# Scope: ROOT is the smeared rival. FROM is the candidate who smeared him.
+character_event = {
+	id = election.31
+	desc = { trigger = { has_character_flag = election_smeared } text = EVTDESCelection31 }
+	desc = {
+		trigger = { NOT = { has_character_flag = election_smeared } }
+		text = EVTDESCelection31b
+	}
+	picture = GFX_evt_scandal
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # election.30
+
+	option = { # They will pay for this
+		name = EVTOPTAelection31
+		clr_character_flag = election_smeared
+		if = {
+			limit = { NOT = { has_opinion_modifier = { who = FROM modifier = opinion_slandered } } }
+			opinion = { modifier = opinion_slandered who = FROM years = 5 }
+		}
+	}
+}
+
+# election.40 The bribes come to light
+# A candidate who bought guild votes is found out on the day of the count:
+# the bought favour is gone and his name is tarnished.
+# Scope: ROOT is the candidate. FROM is the doge.
+character_event = {
+	id = election.40
+	desc = EVTDESCelection40
+	picture = GFX_evt_council_quarrelling
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # election.50
+
+	option = { # Lies and envy
+		name = EVTOPTAelection40
+		republic_election_lose_effect = yes
+		republic_election_lose_effect = yes
+		prestige = -100
+	}
+}
+
+# election.50 The count
+# Each candidate who bought guild votes is found out three times in ten
+# (election.40); the tally follows a day later.
+# Scope: ROOT is the doge.
+character_event = {
+	id = election.50
+	hide_window = yes
+
+	is_triggered_only = yes # election.1
+
+	has_character_flag = election_running
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = election_bribed }
+			random = { chance = 30 character_event = { id = election.40 } }
+		}
+		any_vassal = {
+			limit = { has_character_flag = election_candidate has_character_flag = election_bribed }
+			random = { chance = 30 character_event = { id = election.40 } }
+		}
+		character_event = { id = election.51 days = 1 }
+	}
+}
+
+# election.51 The tally
+# A day after the bribes are known, sets the doge's prestige (with the seat's
+# 100) against each rival's and saves the strongest as election_leader. The
+# doge keeps the seal unless a rival stands strictly higher: a re-elected
+# doge starts a new term and everyone hears the result; a beaten doge gets
+# election.52.
+# Scope: ROOT is the doge.
+character_event = {
+	id = election.51
+	hide_window = yes
+
+	is_triggered_only = yes # election.50
+
+	has_character_flag = election_running
+
+	immediate = {
+		save_event_target_as = election_leader
+		export_to_variable = { which = election_votes value = prestige }
+		change_variable = { which = election_votes value = 100 }
+		any_vassal = {
+			limit = { has_character_flag = election_candidate }
+			export_to_variable = { which = election_votes value = prestige }
+			if = {
+				limit = {
+					event_target:election_leader = {
+						NOT = {
+							check_variable = {
+								which = election_votes
+								which = election_votes
+								which = PREV
+							}
+						}
+					}
+				}
+				save_event_target_as = election_leader
+			}
+		}
+		if = {
+			limit = { event_target:election_leader = { character = ROOT } }
+			save_event_target_as = election_new_doge
+			republic_election_term_effect = yes
+			republic_election_end_effect = yes
+		}
+		else = { character_event = { id = election.52 } }
+	}
+}
+
+# election.52 The seal is laid down
+# The doge has lost the count. He abdicates, and the republic's patrician
+# election picks the new doge from the houses, as on a doge's death. A
+# player plays on as the heir of his house.
+# Scope: ROOT is the beaten doge.
+character_event = {
+	id = election.52
+	desc = EVTDESCelection52
+	picture = GFX_evt_doge_republic
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # election.51
+
+	option = { # Lay down the seal
+		name = EVTOPTAelection52
+		custom_tooltip = { text = election_lost_tooltip }
+		hidden_tooltip = {
+			clr_character_flag = election_term_set
+			character_event = { id = election.55 days = 1 }
+			abdicate = yes
+		}
+	}
+}
+
+# election.55 The new doge takes office
+# A day after the beaten doge abdicated, reads the republic's new holder,
+# who starts a new term, and ends the election for everyone.
+# Scope: ROOT is the old doge.
+character_event = {
+	id = election.55
+	hide_window = yes
+
+	is_triggered_only = yes # election.52
+
+	immediate = {
+		event_target:election_title = {
+			holder_scope = {
+				save_event_target_as = election_new_doge
+				republic_election_term_effect = yes
+			}
+		}
+		event_target:election_new_doge = { republic_election_end_effect = yes }
+		republic_election_clear_effect = yes
+	}
+}
+
+# election.60 The result
+# Every candidate hears who holds the seal now: the doge kept it, the
+# candidate won it, or another house did.
+# Scope: ROOT is a candidate. event_target:election_doge is the doge who
+# called the election, event_target:election_new_doge the one who holds the
+# seal now (the same man if he was re-elected).
+character_event = {
+	id = election.60
+	desc = {
+		trigger = {
+			character = event_target:election_new_doge
+			character = event_target:election_doge
+		}
+		text = EVTDESCelection60
+	}
+	desc = {
+		trigger = {
+			character = event_target:election_new_doge
+			NOT = { character = event_target:election_doge }
+		}
+		text = EVTDESCelection60b
+	}
+	desc = {
+		trigger = {
+			NOT = { character = event_target:election_new_doge }
+			event_target:election_new_doge = { character = event_target:election_doge }
+		}
+		text = EVTDESCelection60c
+	}
+	desc = {
+		trigger = {
+			NOT = { character = event_target:election_new_doge }
+			event_target:election_new_doge = { NOT = { character = event_target:election_doge } }
+		}
+		text = EVTDESCelection60d
+	}
+	picture = GFX_evt_doge_republic
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # republic_election_end_effect
+
+	option = {
+		name = { trigger = { character = event_target:election_new_doge } text = EVTOPTAelection60 }
+		name = {
+			trigger = { NOT = { character = event_target:election_new_doge } }
+			text = EVTOPTBelection60
+		}
+	}
+}
+
+# election.65 Impeached
+# Once the bought favour has faded, the doge's prestige is below zero: the
+# guilds charge him with buying the vote and he must abdicate; the patrician
+# election chooses again.
+# Scope: ROOT is the doge.
+character_event = {
+	id = election.65
+	desc = EVTDESCelection65
+	picture = GFX_evt_council_quarrelling
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # republic_election_end_effect
+
+	option = { # Curse them all
+		name = EVTOPTAelection65
+		custom_tooltip = { text = election_impeached_tooltip }
+		hidden_tooltip = {
+			clr_character_flag = election_term_set
+			remove_character_modifier = election_timer
+			abdicate = yes
+		}
 	}
 }

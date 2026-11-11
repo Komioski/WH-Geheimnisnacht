@@ -1,0 +1,1032 @@
+###############################################################################
+# The Great Hunt
+# Namespace: herdhunt (was TOG.100 - TOG.299 in oldgods_mongol_events.txt)
+# Faction: Beastmen
+# Serves: every beastman herd
+#
+# In late summer a Beastlord sounds the horns and the chieftains of the herd
+# must come. For two months the warherd sweeps the deep forest in a great
+# ring, driving stag, boar and the men of the woodland villages before it
+# towards the herdstone. While the ring tightens a chieftain may be gored,
+# two may fight to settle who stands nearer the herdstone (the Pretender's
+# way), or a chieftain's ungors may break the line or kill before the
+# Beastlord, who may beat him for it or let it pass. At the herdstone the
+# Beastlord takes the first kill, then the chieftains take theirs. A young
+# gor may outshine them all, or a sounder of razorgors may be caught in the
+# ring: a runt to keep, or the whole sounder yoked for war. The captives
+# left over are let run to tell the villages, or dragged to the herdstone
+# for the Dark Gods. Then the herd feasts (the shared feast scenes in
+# WHG_northern_rites_events.txt), and once in a life a Beastlord may keep a
+# skull-totem of the hunt. If war comes, the hunt breaks up.
+#
+# A kept razorgor lives at its master's side for years: it awes visiting
+# chieftains, mauls a courtier, pines in its pen, and dies one day.
+#
+# The hunt                             herdhunt.1 - herdhunt.2
+# Trouble in the ring                  herdhunt.10 - herdhunt.18
+# At the herdstone                     herdhunt.20 - herdhunt.28
+# War breaks the hunt                  herdhunt.30
+# The razorgor                         herdhunt.40 - herdhunt.44
+# Housekeeping                         herdhunt.90 - herdhunt.91
+#
+# Fired from: the hold_nerge decision in minor_decisions.txt (herdhunt.1,
+#   with the safety herdhunt.90). Shared triggers and effects are in
+#   WHG_old_gods_triggers.txt and WHG_old_gods_effects.txt; the skull-totem is
+#   in 41_artifacts_old_gods.txt. The feast scenes are rites.50 - rites.59
+#   (flags rites_feast_host and rites_feast_guest).
+# Saved: event targets herdhunt_brawler, herdhunt_rival, herdhunt_scorner,
+#   herdhunt_victim; flags holding_nerge (decision), herdhunt_host,
+#   herdhunt_hunter, herdhunt_incident, herdhunt_gap, herdhunt_early_kill,
+#   herdhunt_finishing, herdhunt_found_champion, herdhunt_found_razorgors
+#   (cleared by herdhunt_clear_flags_effect), herdhunt_razorgor and
+#   herdhunt_razorgor_sullen (the pet), herdhunt_maul_* (cleared by
+#   herdhunt.42), took_razorgor_herd and took_hunt_totem (once per life).
+###############################################################################
+
+namespace = herdhunt
+
+###############################################################################
+# The hunt
+###############################################################################
+
+# herdhunt.1 The horns sound
+# Every chieftain of the herd fit to hunt must come (herdhunt.2). The ring
+# closes on the herdstone after about two months (herdhunt.20); trouble may
+# break out three times on the way (herdhunt.10). War breaks it up
+# (herdhunt.18, herdhunt.30).
+# Scope: ROOT is the Beastlord (flag holding_nerge).
+character_event = {
+	id = herdhunt.1
+	desc = EVTDESCherdhunt1
+	picture = GFX_evt_beastman_chief
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	option = {
+		name = EVTOPTAherdhunt1
+		set_character_flag = herdhunt_host
+		custom_tooltip = { text = herdhunt_summon_tt }
+		hidden_effect = {
+			any_vassal = {
+				limit = { herdhunt_can_hunt_trigger = yes }
+				set_character_flag = herdhunt_hunter
+				set_character_flag = do_not_disturb
+				character_event = { id = herdhunt.2 }
+				character_event = { id = herdhunt.91 days = 150 } # Safety
+			}
+			character_event = { id = herdhunt.10 days = 15 }
+			character_event = { id = herdhunt.10 days = 30 }
+			character_event = { id = herdhunt.10 days = 45 }
+			character_event = { id = herdhunt.18 days = 60 random = 10 }
+		}
+		if = {
+			limit = { ai = no }
+			chronicle = {
+				entry = CHRONICLE_HELD_NERGE
+				picture = GFX_evt_beastman_chief
+			}
+		}
+	}
+}
+
+# herdhunt.2 Summoned to the hunt
+# Scope: ROOT is a chieftain (flag herdhunt_hunter), FROM the Beastlord.
+character_event = {
+	id = herdhunt.2
+	desc = EVTDESCherdhunt2
+	picture = GFX_evt_beastman_chief
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAherdhunt2
+		custom_tooltip = { text = herdhunt_assemble_tt }
+	}
+}
+
+###############################################################################
+# Trouble in the ring
+###############################################################################
+
+# herdhunt.10 The ring tightens
+# Picks one chieftain who has had no trouble yet: gored (herdhunt.11), a
+# fight with another chieftain (herdhunt.13), or a broken line or an early
+# kill (herdhunt.15). Often nothing happens. War breaks the hunt (herdhunt.30).
+# Scope: ROOT is the Beastlord (flag herdhunt_host).
+character_event = {
+	id = herdhunt.10
+
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = herdhunt_host
+		NOT = { has_character_flag = herdhunt_finishing }
+	}
+
+	immediate = {
+		if = {
+			limit = { war = yes }
+			character_event = { id = herdhunt.30 }
+		}
+		else = {
+			random_list = {
+				40 = { }
+				20 = { # Gored
+					modifier = {
+						factor = 0
+						NOT = {
+							any_vassal = {
+								herdhunt_free_hunter_trigger = yes
+								NOT = { trait = wounded }
+							}
+						}
+					}
+					random_vassal = {
+						limit = {
+							herdhunt_free_hunter_trigger = yes
+							NOT = { trait = wounded }
+						}
+						preferred_limit = { NOT = { martial = 8 } }
+						set_character_flag = herdhunt_incident
+						character_event = { id = herdhunt.11 }
+					}
+				}
+				20 = { # The Pretender's way
+					modifier = {
+						factor = 0
+						NOT = {
+							any_vassal = {
+								count = 2
+								herdhunt_free_hunter_trigger = yes
+							}
+						}
+					}
+					random_vassal = {
+						limit = { herdhunt_free_hunter_trigger = yes }
+						preferred_limit = { trait = wroth }
+						set_character_flag = herdhunt_incident
+						save_event_target_as = herdhunt_brawler
+					}
+					random_vassal = {
+						limit = {
+							herdhunt_free_hunter_trigger = yes
+							NOT = { character = event_target:herdhunt_brawler }
+						}
+						set_character_flag = herdhunt_incident
+						save_event_target_as = herdhunt_rival
+					}
+					event_target:herdhunt_brawler = { character_event = { id = herdhunt.13 } }
+					event_target:herdhunt_rival = { character_event = { id = herdhunt.13 } }
+					character_event = { id = herdhunt.14 }
+				}
+				20 = { # A broken line or an early kill
+					modifier = {
+						factor = 0
+						NOT = { any_vassal = { herdhunt_free_hunter_trigger = yes } }
+					}
+					random_vassal = {
+						limit = { herdhunt_free_hunter_trigger = yes }
+						preferred_limit = {
+							OR = {
+								trait = slothful
+								trait = greedy
+								trait = arbitrary
+								trait = imbecile
+								NOT = { martial = 6 }
+							}
+						}
+						set_character_flag = herdhunt_incident
+						random_list = {
+							50 = {
+								modifier = { factor = 1.5 trait = slothful }
+								modifier = { factor = 1.5 NOT = { martial = 6 } }
+								set_character_flag = herdhunt_gap
+							}
+							50 = {
+								modifier = { factor = 1.5 trait = greedy }
+								modifier = { factor = 1.5 trait = arbitrary }
+								modifier = { factor = 0.5 trait = patient }
+								set_character_flag = herdhunt_early_kill
+							}
+						}
+						character_event = { id = herdhunt.15 }
+					}
+				}
+			}
+		}
+	}
+}
+
+# herdhunt.11 Gored
+# Scope: ROOT is the chieftain, FROM the Beastlord.
+character_event = {
+	id = herdhunt.11
+	desc = EVTDESCherdhunt11
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAherdhunt11
+		add_trait = wounded
+		hidden_effect = { FROM = { character_event = { id = herdhunt.12 } } }
+	}
+}
+
+# herdhunt.12 A chieftain is gored
+# Scope: ROOT is the Beastlord, FROM the chieftain.
+character_event = {
+	id = herdhunt.12
+	desc = EVTDESCherdhunt12
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAherdhunt12
+		tooltip = { FROM = { add_trait = wounded } }
+	}
+}
+
+# herdhunt.13 Horns locked
+# Two chieftains fight over who stands nearer the herdstone; each thinks
+# worse of the other.
+# Scope: ROOT is herdhunt_brawler or herdhunt_rival, FROM the Beastlord.
+character_event = {
+	id = herdhunt.13
+	desc = {
+		trigger = { character = event_target:herdhunt_brawler }
+		text = EVTDESCherdhunt13_brawler
+	}
+	desc = {
+		trigger = { NOT = { character = event_target:herdhunt_brawler } }
+		text = EVTDESCherdhunt13_rival
+	}
+	picture = GFX_evt_beastmen_charge
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAherdhunt13
+		if = {
+			limit = { character = event_target:herdhunt_brawler }
+			opinion = { modifier = opinion_nerge_rival who = event_target:herdhunt_rival }
+		}
+		else = {
+			opinion = { modifier = opinion_nerge_rival who = event_target:herdhunt_brawler }
+		}
+	}
+}
+
+# herdhunt.14 The Beastlord hears of the fight
+# Scope: ROOT is the Beastlord.
+character_event = {
+	id = herdhunt.14
+	desc = EVTDESCherdhunt14
+	picture = GFX_evt_beastmen_charge
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAherdhunt14
+		tooltip = {
+			event_target:herdhunt_brawler = {
+				opinion = { modifier = opinion_nerge_rival who = event_target:herdhunt_rival }
+			}
+			event_target:herdhunt_rival = {
+				opinion = { modifier = opinion_nerge_rival who = event_target:herdhunt_brawler }
+			}
+		}
+	}
+}
+
+# herdhunt.15 The line breaks / the early kill
+# Scope: ROOT is the chieftain (flag herdhunt_gap or herdhunt_early_kill),
+#   FROM the Beastlord.
+character_event = {
+	id = herdhunt.15
+	desc = {
+		trigger = { has_character_flag = herdhunt_gap }
+		text = EVTDESCherdhunt15_gap
+	}
+	desc = {
+		trigger = { has_character_flag = herdhunt_early_kill }
+		text = EVTDESCherdhunt15_kill
+	}
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAherdhunt15
+		hidden_effect = { FROM = { character_event = { id = herdhunt.16 } } }
+	}
+}
+
+# herdhunt.16 Beat him, or let it pass?
+# A beaten chieftain is wounded and bears a grudge (herdhunt.17); one let
+# off is grateful, but two others think the Beastlord grows soft.
+# Scope: ROOT is the Beastlord, FROM the chieftain.
+character_event = {
+	id = herdhunt.16
+	desc = {
+		trigger = { FROM = { has_character_flag = herdhunt_gap } }
+		text = EVTDESCherdhunt16_gap
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = herdhunt_early_kill } }
+		text = EVTDESCherdhunt16_kill
+	}
+	picture = GFX_evt_beastman_chief
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = { # Beat him
+		name = EVTOPTAherdhunt16
+		FROM = {
+			opinion = { modifier = opinion_punished_nerge who = ROOT }
+			character_event = { id = herdhunt.17 tooltip = EVTTOOLTIPherdhunt17 }
+		}
+		tooltip = { FROM = { add_trait = wounded } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = wroth }
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 0.5 trait = kind }
+			modifier = { factor = 0.5 trait = patient }
+		}
+	}
+	option = { # Let it pass
+		name = EVTOPTBherdhunt16
+		FROM = { opinion = { modifier = opinion_grateful who = ROOT } }
+		random_vassal = {
+			limit = {
+				has_character_flag = herdhunt_hunter
+				NOT = { character = FROM }
+			}
+			opinion = { modifier = opinion_disappointed who = ROOT years = 1 }
+			save_event_target_as = herdhunt_scorner
+		}
+		random_vassal = {
+			limit = {
+				has_character_flag = herdhunt_hunter
+				NOT = { character = FROM }
+				NOT = { character = event_target:herdhunt_scorner }
+			}
+			opinion = { modifier = opinion_disappointed who = ROOT years = 1 }
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 1.5 trait = patient }
+			modifier = { factor = 0.5 trait = wroth }
+		}
+	}
+}
+
+# herdhunt.17 Beaten before the herd
+# Scope: ROOT is the chieftain, FROM the Beastlord.
+character_event = {
+	id = herdhunt.17
+	desc = EVTDESCherdhunt17
+	picture = GFX_evt_beastman_chief
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAherdhunt17
+		add_trait = wounded
+	}
+}
+
+# herdhunt.18 The ring closes
+# Unless war has come (herdhunt.30), the quarry reaches the herdstone
+# (herdhunt.20).
+# Scope: ROOT is the Beastlord (flag herdhunt_host).
+character_event = {
+	id = herdhunt.18
+
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = herdhunt_host
+		NOT = { has_character_flag = herdhunt_finishing }
+	}
+
+	immediate = {
+		if = {
+			limit = { war = yes }
+			character_event = { id = herdhunt.30 }
+		}
+		else = {
+			character_event = { id = herdhunt.20 }
+		}
+	}
+}
+
+###############################################################################
+# At the herdstone
+###############################################################################
+
+# herdhunt.20 The quarry at the herdstone
+# The Beastlord takes the first kill, then the chieftains (herdhunt.21). A
+# hunter, or one with no calling yet (25%), shines (herdhunt.22). Once in a
+# hunt a young gor may stand out (herdhunt.23) or razorgors be caught in the
+# ring (herdhunt.24). The captives are next (herdhunt.26).
+# Scope: ROOT is the Beastlord (flag herdhunt_host), from herdhunt.18.
+character_event = {
+	id = herdhunt.20
+	desc = EVTDESCherdhunt20
+	picture = GFX_evt_beastmen_herdstone
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	trigger = {
+		has_character_flag = herdhunt_host
+		NOT = { has_character_flag = herdhunt_finishing }
+	}
+
+	option = {
+		name = EVTOPTAherdhunt20
+		set_character_flag = herdhunt_finishing
+		custom_tooltip = {
+			text = herdhunt_first_kill_tt
+			hidden_effect = {
+				any_vassal = {
+					limit = { has_character_flag = herdhunt_hunter }
+					character_event = { id = herdhunt.21 }
+				}
+				herdhunt_shine_effect = yes
+				random_list = {
+					70 = { }
+					15 = {
+						modifier = { factor = 0 has_character_flag = herdhunt_found_champion }
+						set_character_flag = herdhunt_found_champion
+						character_event = { id = herdhunt.23 days = 3 }
+					}
+					15 = {
+						modifier = { factor = 0 has_character_flag = herdhunt_found_razorgors }
+						set_character_flag = herdhunt_found_razorgors
+						character_event = { id = herdhunt.24 days = 3 }
+					}
+				}
+				character_event = { id = herdhunt.26 days = 10 }
+			}
+		}
+	}
+}
+
+# herdhunt.21 The chieftains' turn
+# Scope: ROOT is a chieftain, FROM the Beastlord.
+character_event = {
+	id = herdhunt.21
+	desc = EVTDESCherdhunt21
+	picture = GFX_evt_beastmen_herdstone
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAherdhunt21
+		custom_tooltip = {
+			text = herdhunt_kill_tt
+			hidden_effect = { herdhunt_shine_effect = yes }
+		}
+	}
+}
+
+# herdhunt.22 A fine kill
+# Without Way of Life, one with no calling yet becomes a hunter.
+# Scope: the Beastlord or a chieftain.
+character_event = {
+	id = herdhunt.22
+	desc = EVTDESCherdhunt22
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	option = {
+		name = EVTOPTAherdhunt22
+		if = {
+			limit = {
+				NOT = { lifestyle_traits = 1 }
+				NOT = { has_dlc = "Way of Life" }
+			}
+			add_trait = hunter
+		}
+		prestige = 100
+	}
+}
+
+# herdhunt.23 A young gor stands out
+# Scope: ROOT is the Beastlord.
+character_event = {
+	id = herdhunt.23
+	desc = EVTDESCherdhunt23
+	picture = GFX_evt_beastmen_charge
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = { # Bring him to the herd
+		name = EVTOPTAherdhunt23
+		create_character = {
+			random_traits = no
+			dynasty = none
+			female = no
+			age = 22
+			religion = ROOT
+			culture = ROOT
+			trait = creature_beastman
+			trait = horns_big
+			trait = brave
+			trait = wroth
+			trait = diligent
+			trait = brilliant_strategist
+			trait = strong
+			attributes = {
+				martial = 12
+			}
+		}
+		ai_chance = { factor = 90 }
+	}
+	option = { # Leave him with the ungors
+		name = EVTOPTBherdhunt23
+		prestige = 10
+		ai_chance = { factor = 10 }
+	}
+}
+
+# herdhunt.24 Razorgors in the ring
+# Keep the runt (the razorgor lives at the Beastlord's side, herdhunt.40),
+# yoke the sounder for war (a unit of razorgors and ungor herders, once per
+# life) or roast them all.
+# Scope: ROOT is the Beastlord.
+character_event = {
+	id = herdhunt.24
+	desc = EVTDESCherdhunt24
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = { # Keep the runt
+		name = EVTOPTAherdhunt24
+		trigger = { NOT = { has_character_flag = herdhunt_razorgor } }
+		set_character_flag = herdhunt_razorgor
+		custom_tooltip = { text = herdhunt_razorgor_kept_tt }
+		hidden_effect = { character_event = { id = herdhunt.40 days = 730 random = 365 } }
+		ai_chance = { factor = 40 }
+	}
+	option = { # Yoke them for war
+		name = EVTOPTBherdhunt24
+		trigger = { NOT = { has_character_flag = took_razorgor_herd } }
+		set_character_flag = took_razorgor_herd
+		wealth = -25
+		capital_scope = {
+			spawn_unit = {
+				province = THIS
+				home = THIS
+				owner = ROOT
+				earmark = razorgor_herd
+				troops = {
+					knights = { 30 30 }
+					light_infantry = { 120 120 }
+				}
+				maintenance_multiplier = 0.5
+				attrition = 1.0
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 0 NOT = { wealth = 25 } }
+			modifier = { factor = 2 trait = ambitious }
+		}
+	}
+	option = { # Roast them
+		name = EVTOPTCherdhunt24
+		prestige = 25
+		ai_chance = { factor = 20 }
+	}
+}
+
+# herdhunt.26 The captives
+# Let the last of the men run to tell the villages, or drag them all to the
+# herdstone for the Dark Gods. The feast follows (herdhunt.27).
+# Scope: ROOT is the Beastlord (flag herdhunt_finishing).
+character_event = {
+	id = herdhunt.26
+	desc = EVTDESCherdhunt26
+	picture = GFX_evt_beastmen_herdstone
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	trigger = { has_character_flag = herdhunt_finishing }
+
+	option = { # Let them run
+		name = EVTOPTAherdhunt26
+		prestige = 25
+		hidden_effect = { character_event = { id = herdhunt.27 days = 5 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.5 trait = cruel }
+			modifier = { factor = 1.5 trait = kind }
+		}
+	}
+	option = { # To the herdstone
+		name = EVTOPTBherdhunt26
+		piety = 25
+		add_trait_cruel_effect = yes
+		if = {
+			limit = { trait = kind }
+			remove_trait = kind
+		}
+		hidden_effect = { character_event = { id = herdhunt.27 days = 5 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 0.5 trait = kind }
+		}
+	}
+}
+
+# herdhunt.27 The feast at the herdstone
+# The chieftains think better of the Beastlord for a year. Up to four scenes
+# at the feast (rites.50); it ends after 25 days (herdhunt.28).
+# Scope: ROOT is the Beastlord (flag herdhunt_host) or a chieftain, FROM the
+#   Beastlord.
+character_event = {
+	id = herdhunt.27
+	desc = EVTDESCherdhunt27
+	picture = GFX_evt_beastmen_herdstone
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = { # The Beastlord
+		name = EVTOPTAherdhunt27
+		trigger = { has_character_flag = herdhunt_host }
+		set_character_flag = rites_feast_host
+		custom_tooltip = { text = rites_feast_begins_tt }
+		hidden_effect = {
+			any_vassal = {
+				limit = { has_character_flag = herdhunt_hunter }
+				opinion = { modifier = opinion_held_nerge who = ROOT }
+				character_event = { id = herdhunt.27 }
+			}
+			character_event = { id = rites.50 days = 3 }
+			character_event = { id = rites.50 days = 8 }
+			character_event = { id = rites.50 days = 13 }
+			character_event = { id = rites.50 days = 18 }
+			character_event = { id = herdhunt.28 days = 25 }
+		}
+	}
+	option = { # A chieftain
+		name = EVTOPTBherdhunt27
+		trigger = { NOT = { has_character_flag = herdhunt_host } }
+		set_character_flag = rites_feast_guest
+	}
+}
+
+# herdhunt.28 The hunt is over
+# Two years of the herd's fervour (morale_from_nerge), four until the next
+# hunt (held_nerge_timer). A Beastlord may keep a skull-totem of the hunt
+# (8%, once per life, none held).
+# Scope: ROOT is the Beastlord (flag herdhunt_host) or a chieftain, FROM the
+#   Beastlord.
+character_event = {
+	id = herdhunt.28
+	desc = {
+		trigger = { has_character_flag = herdhunt_host }
+		text = EVTDESCherdhunt28_host
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = herdhunt_host } }
+		text = EVTDESCherdhunt28_hunter
+	}
+	picture = GFX_evt_beastman_chief
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAherdhunt28
+		if = {
+			limit = { has_character_flag = herdhunt_host }
+			add_character_modifier = {
+				name = morale_from_nerge
+				duration = 730
+			}
+			add_character_modifier = {
+				name = held_nerge_timer
+				duration = 1460
+				hidden = yes
+			}
+			if = {
+				limit = {
+					NOT = { has_character_flag = took_hunt_totem }
+					NOT = { any_artifact = { has_artifact_flag = hunt_totem } }
+				}
+				random = {
+					chance = 8
+					set_character_flag = took_hunt_totem
+					add_artifact = great_hunt_totem
+				}
+			}
+			hidden_effect = {
+				any_vassal = {
+					limit = { has_character_flag = herdhunt_hunter }
+					character_event = { id = herdhunt.28 }
+				}
+			}
+		}
+		herdhunt_clear_flags_effect = yes
+	}
+}
+
+###############################################################################
+# War breaks the hunt
+###############################################################################
+
+# herdhunt.30 The hunt breaks up
+# The Beastlord may sound the horns again next summer.
+# Scope: ROOT is the Beastlord (flag herdhunt_host) or a chieftain, FROM the
+#   Beastlord.
+character_event = {
+	id = herdhunt.30
+	desc = {
+		trigger = { has_character_flag = herdhunt_host }
+		text = EVTDESCherdhunt30_host
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = herdhunt_host } }
+		text = EVTDESCherdhunt30_hunter
+	}
+	picture = GFX_evt_beastmen_mist
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAherdhunt30
+		if = {
+			limit = { has_character_flag = herdhunt_host }
+			hidden_effect = {
+				any_vassal = {
+					limit = { has_character_flag = herdhunt_hunter }
+					character_event = { id = herdhunt.30 }
+				}
+			}
+		}
+		herdhunt_clear_flags_effect = yes
+	}
+}
+
+###############################################################################
+# The razorgor
+###############################################################################
+
+# herdhunt.40 A year with the razorgor
+# Every two to three years: it awes visiting chieftains (herdhunt.41), mauls
+# a courtier (herdhunt.42), pines in its pen (herdhunt.43) or dies
+# (herdhunt.44, likelier once it has pined).
+# Scope: ROOT is the owner (flag herdhunt_razorgor).
+character_event = {
+	id = herdhunt.40
+
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = herdhunt_razorgor }
+
+	immediate = {
+		random_list = {
+			25 = { }
+			25 = { character_event = { id = herdhunt.41 } }
+			20 = {
+				modifier = {
+					factor = 0
+					NOT = { any_courtier = { herdhunt_maul_victim_trigger = yes } }
+				}
+				random_courtier = {
+					limit = { herdhunt_maul_victim_trigger = yes }
+					save_event_target_as = herdhunt_victim
+				}
+				random_list = {
+					50 = { set_character_flag = herdhunt_maul_wound }
+					30 = { set_character_flag = herdhunt_maul_maim }
+					20 = { set_character_flag = herdhunt_maul_kill }
+				}
+				character_event = { id = herdhunt.42 }
+			}
+			15 = {
+				modifier = { factor = 0 has_character_flag = herdhunt_razorgor_sullen }
+				character_event = { id = herdhunt.43 }
+			}
+			15 = {
+				modifier = { factor = 3 has_character_flag = herdhunt_razorgor_sullen }
+				character_event = { id = herdhunt.44 }
+			}
+		}
+		character_event = { id = herdhunt.40 days = 730 random = 365 }
+	}
+}
+
+# herdhunt.41 The razorgor awes the visitors
+# Scope: ROOT is the owner.
+character_event = {
+	id = herdhunt.41
+	desc = EVTDESCherdhunt41
+	picture = GFX_evt_beastman_chief
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAherdhunt41
+		prestige = 100
+	}
+}
+
+# herdhunt.42 The razorgor mauls a courtier
+# Wounded, maimed or killed (flag herdhunt_maul_* on the owner). The owner
+# may have the beast butchered.
+# Scope: ROOT is the owner; herdhunt_victim the courtier.
+character_event = {
+	id = herdhunt.42
+	desc = {
+		trigger = { has_character_flag = herdhunt_maul_wound }
+		text = EVTDESCherdhunt42_wound
+	}
+	desc = {
+		trigger = { has_character_flag = herdhunt_maul_maim }
+		text = EVTDESCherdhunt42_maim
+	}
+	desc = {
+		trigger = { has_character_flag = herdhunt_maul_kill }
+		text = EVTDESCherdhunt42_kill
+	}
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	immediate = {
+		event_target:herdhunt_victim = {
+			if = {
+				limit = { ROOT = { has_character_flag = herdhunt_maul_wound } }
+				add_trait = wounded
+			}
+			else_if = {
+				limit = { ROOT = { has_character_flag = herdhunt_maul_maim } }
+				add_maimed_trait_effect = yes
+			}
+			else = {
+				death = { death_reason = death_accident_boar }
+			}
+		}
+	}
+
+	option = { # It is a beast; it does as beasts do
+		name = EVTOPTAherdhunt42
+		ai_chance = { factor = 80 }
+	}
+	option = { # Butcher it
+		name = EVTOPTBherdhunt42
+		clr_character_flag = herdhunt_razorgor
+		clr_character_flag = herdhunt_razorgor_sullen
+		custom_tooltip = { text = herdhunt_razorgor_butchered_tt }
+		prestige = -25
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 has_character_flag = herdhunt_maul_kill }
+		}
+	}
+
+	after = {
+		clr_character_flag = herdhunt_maul_wound
+		clr_character_flag = herdhunt_maul_maim
+		clr_character_flag = herdhunt_maul_kill
+	}
+}
+
+# herdhunt.43 The razorgor pines
+# Let it go back to the forest, or keep it penned (it may die of it,
+# herdhunt.44).
+# Scope: ROOT is the owner.
+character_event = {
+	id = herdhunt.43
+	desc = EVTDESCherdhunt43
+	picture = GFX_evt_beastmen_mist
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = { # Let it go
+		name = EVTOPTAherdhunt43
+		clr_character_flag = herdhunt_razorgor
+		custom_tooltip = { text = herdhunt_razorgor_released_tt }
+		prestige = -50
+		add_trait_kind_effect = yes
+		if = {
+			limit = { trait = cruel }
+			remove_trait = cruel
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+	option = { # Keep it penned
+		name = EVTOPTBherdhunt43
+		set_character_flag = herdhunt_razorgor_sullen
+		custom_tooltip = { text = herdhunt_razorgor_penned_tt }
+		random = {
+			chance = 33
+			add_trait_cruel_effect = yes
+		}
+		ai_chance = { factor = 70 }
+	}
+}
+
+# herdhunt.44 The razorgor dies
+# Scope: ROOT is the owner.
+character_event = {
+	id = herdhunt.44
+	desc = EVTDESCherdhunt44
+	picture = GFX_evt_beastmen_mist
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAherdhunt44
+		clr_character_flag = herdhunt_razorgor
+		clr_character_flag = herdhunt_razorgor_sullen
+		custom_tooltip = { text = herdhunt_razorgor_dies_tt }
+		random = {
+			chance = 20
+			add_trait_depressed_effect = yes
+		}
+	}
+}
+
+###############################################################################
+# Housekeeping
+###############################################################################
+
+# herdhunt.90 Safety
+# Clears a hunt that never ended (150 days after the decision).
+# Scope: the Beastlord.
+character_event = {
+	id = herdhunt.90
+
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = holding_nerge }
+
+	immediate = {
+		any_vassal = {
+			limit = { has_character_flag = herdhunt_hunter }
+			herdhunt_clear_flags_effect = yes
+		}
+		herdhunt_clear_flags_effect = yes
+	}
+}
+
+# herdhunt.91 Safety for a chieftain
+# Clears a chieftain's hunt flags (and do_not_disturb) if the Beastlord died
+# or the chieftain left the herd before the hunt ended.
+# Scope: ROOT is a chieftain (flag herdhunt_hunter).
+character_event = {
+	id = herdhunt.91
+
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = { has_character_flag = herdhunt_hunter }
+
+	immediate = {
+		herdhunt_clear_flags_effect = yes
+	}
+}

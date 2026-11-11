@@ -1,0 +1,2039 @@
+###############################################################################
+# Cathay's wars in the west
+# Namespace: cathayinv (was JD.10100 - 10202 and JD.60100 - 60403 in
+#   jd_chinese_invasion_events; cathay_expedition.1 - 4 in
+#   wh_cathay_invasion_events)
+# Faction: Cathay & the East
+#
+# Every year the Jade Viceroy, Cathay's governor in the west, may march on
+# a lord within his reach: a small lord is asked to pay tribute and is
+# attacked if he refuses, while an Expansionist Cathay takes the Dzhagna
+# frontier or bends whole kingdoms to its will. A western empire that
+# claims the Dragon's mandate (a rebel general's) is always first in line.
+# When a house falls in Cathay, its exiles ride west: a displaced prince of
+# the old house or a Man-chu warlord loots the steppe until he can carve
+# out a duchy, and a rebel general of a lost civil war marches to found an
+# empire of his own, with temple names for his heirs.
+#
+# The Viceroy marches                     cathayinv.1 - cathayinv.12
+# Exiles from Cathay                      cathayinv.20 - cathayinv.27
+# Silver for the steppe                   cathayinv.30 - cathayinv.31
+# The rebel general                       cathayinv.40 - cathayinv.49
+# The west invades Cathay                 cathayinv.50 - cathayinv.53
+# Expeditions into Cathay                 cathayinv.54 - cathayinv.57
+#
+# Callers: common/on_actions/00_on_actions.txt: on_offmap_yearly_pulse (1,
+# 10, 11), on_offmap_ruler_changed (12), on_offmap_governor_changed (20),
+# on_new_holder, on_new_holder_inheritance and on_new_holder_usurpation
+# (44), on_death (47); WHG_cathay_state_events.txt and
+# WHG_cathay_state_effects.txt (22, 23, 40); common/cb_types (30, 31, 46,
+# 48, 51 - 53, 56); decisions/wh_chaos_decisions.txt (50);
+# decisions/wh_cathay_invasion_decisions.txt (54, 57);
+# cathay_expedition_launch_effect in wh_offmap_effects.txt (55).
+# Shared code: cathayinv_* in WHG_cathay_invasion_effects.txt and
+# WHG_cathay_invasion_triggers.txt.
+# Loc: localisation/00_WHG_cathay_invasion_events.csv
+#
+# Dropped: the debug logs; JD.10114 and JD.10115 (never called); the
+# monthly fallback JD.10121, whose flags nothing set any more (cathayinv.20
+# hands an unspawned exile to the next Viceroy instead).
+# Fixed: target searches of up to 18 passes now one pass with preferred
+# limits; a Man-chu or Tong warlord is a Chaos-worshipping Hung, not a
+# Cathayan; exiles and the rebel general's household are of the right
+# race; the rebel general's empires take the fantasy dynasty names; the
+# Viceroy's muster point is saved before war is declared; no break.
+# An expedition's plunder now brings one Cathayan treasure, not two.
+###############################################################################
+
+namespace = cathayinv
+
+###############################################################################
+# The Viceroy marches
+###############################################################################
+
+# cathayinv.1 The Viceroy plans a war
+# Hidden. Once a year a Cathay at ease may make war in the west: on a
+# western pretender to the Dragon's mandate, on a lord it asks for tribute,
+# or, when Expansionist, for land. A busy Cathay mostly stays home.
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathayinv.1
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = { is_offmap_tag = offmap_cathay }
+		war = no
+		NOT = { has_offmap_tmp_flag = launching_invasion_of_the_west }
+		cathay_is_fine_trigger = yes
+		NOR = {
+			has_game_rule = { name = cathayan_invasions value = none }
+			has_game_rule = { name = cathayan_invasions value = adventurers_only }
+		}
+	}
+
+	immediate = {
+		set_offmap_tmp_flag = launching_invasion_of_the_west
+		save_event_target_as = the_protector_general
+		if = { limit = { is_landed = yes } set_offmap_tmp_flag = WP_is_on_map }
+		else = { set_offmap_tmp_flag = WP_is_not_on_map }
+		if = {
+			limit = {
+				OR = {
+					NOT = { has_offmap_tmp_flag = pretender_cathayan_empire_war_cooldown }
+					had_offmap_tmp_flag = {
+						flag = pretender_cathayan_empire_war_cooldown
+						years = 150
+					}
+				}
+				any_playable_ruler = { primary_title = { has_title_flag = rebel_general_title } }
+			}
+			set_offmap_tmp_flag = pretender_cathayan_empire_exists
+		}
+		random_list = {
+			100 = { # Bring down the pretender
+				trigger = { has_offmap_tmp_flag = pretender_cathayan_empire_exists }
+				modifier = { factor = 2 has_offmap_tmp_flag = WP_is_on_map }
+				modifier = { factor = 1.5 has_status = cathay_golden_age }
+				random_playable_ruler = {
+					limit = { primary_title = { has_title_flag = rebel_general_title } }
+					save_event_target_as = cathayan_invasion_target
+				}
+				cathayinv_spawn_point_effect = yes
+				war = {
+					casus_belli = dismantle_pretender_cathay_cb
+					target = event_target:cathayan_invasion_target
+				}
+				clr_offmap_tmp_flag = pretender_cathayan_empire_exists
+				clr_offmap_tmp_flag = pretender_cathayan_empire_war_cooldown
+				any_player = {
+					limit = { has_offmap_news_enabled = offmap_cathay is_within_diplo_range = ROOT }
+					narrative_event = { id = cathayinv.8 days = 1 }
+				}
+			}
+			100 = { # Ask for tribute
+				trigger = {
+					NOT = { has_offmap_tmp_flag = pretender_cathayan_empire_exists }
+					NOT = { has_offmap_tmp_flag = tributary_invasion_fired }
+					OR = {
+						AND = {
+							NOT = { has_policy = cathay_expansionist }
+							any_independent_ruler = {
+								cathayinv_tributary_target_trigger = yes
+								cathayinv_small_realm_trigger = yes
+							}
+						}
+						AND = {
+							has_policy = cathay_expansionist
+							any_independent_ruler = {
+								cathayinv_tributary_target_trigger = yes
+								num_of_count_titles_in_realm = 15
+							}
+						}
+					}
+				}
+				modifier = { factor = 1.5 has_offmap_tmp_flag = WP_is_not_on_map }
+				modifier = {
+					factor = 1.5
+					OR = {
+						cathay_is_stable_expansionist_trigger = yes
+						cathay_is_golden_age_open_trigger = yes
+					}
+				}
+				modifier = { # An Open Cathay with few tributaries wants more
+					factor = 10
+					OR = {
+						AND = {
+							cathay_is_stable_open_trigger = yes
+							NOT = {
+								any_playable_ruler = {
+									count = 4
+									is_tributary = { suzerain = ROOT }
+								}
+							}
+						}
+						AND = {
+							cathay_is_golden_age_open_trigger = yes
+							NOT = {
+								any_playable_ruler = {
+									count = 9
+									is_tributary = { suzerain = ROOT }
+								}
+							}
+						}
+					}
+				}
+				modifier = { factor = 2 has_status = cathay_golden_age }
+				random_list = {
+					10 = { # A small realm
+						trigger = {
+							OR = {
+								NOT = { has_policy = cathay_expansionist }
+								NOT = {
+									any_independent_ruler = {
+										cathayinv_tributary_target_trigger = yes
+										num_of_count_titles_in_realm = 15
+									}
+								}
+							}
+						}
+						cathayinv_pick_small_tributary_effect = yes
+					}
+					10 = { # A large realm, only when Expansionist
+						trigger = {
+							has_policy = cathay_expansionist
+							any_independent_ruler = {
+								cathayinv_tributary_target_trigger = yes
+								num_of_count_titles_in_realm = 15
+							}
+						}
+						modifier = { factor = 10 cathay_is_golden_age_expansionist_trigger = yes }
+						cathayinv_pick_big_tributary_effect = yes
+					}
+				}
+				event_target:cathayan_invasion_target = { character_event = { id = cathayinv.2 } }
+			}
+			100 = { # Take land
+				trigger = {
+					NOT = { has_offmap_tmp_flag = pretender_cathayan_empire_exists }
+					NOT = { has_offmap_tmp_flag = major_invasion_fired }
+					NOT = { has_offmap_tmp_flag = attacked_small_neighbor }
+					NOT = {
+						has_game_rule = { name = cathayan_invasions value = no_major_invasions }
+					}
+					OR = {
+						cathayinv_dzhagna_open_trigger = yes
+						AND = {
+							has_policy = cathay_expansionist
+							any_independent_ruler = {
+								OR = {
+									cathayinv_medium_conquest_target_trigger = yes
+									cathayinv_big_conquest_target_trigger = yes
+								}
+							}
+						}
+						AND = {
+							has_offmap_tmp_flag = WP_is_on_map
+							any_neighbor_independent_ruler = {
+								valid_offmap_cathay_target_location = yes
+								valid_offmap_cathay_target = yes
+								higher_real_tier_than = BARON
+								is_nomadic = no
+							}
+						}
+					}
+				}
+				modifier = { factor = 1.5 has_status = cathay_golden_age }
+				modifier = { factor = 3 has_policy = cathay_expansionist }
+				modifier = { factor = 4 cathay_is_golden_age_expansionist_trigger = yes }
+				modifier = { # A Cathay with no land in the west wants some
+					factor = 2
+					has_offmap_tmp_flag = WP_is_not_on_map
+					OR = { has_status = cathay_golden_age has_policy = cathay_expansionist }
+				}
+				random_list = {
+					100 = { # The Dzhagna frontier, whatever the policy
+						trigger = { cathayinv_dzhagna_open_trigger = yes }
+						d_dzhagna = {
+							any_direct_de_jure_vassal_title = { add_claim = ROOT }
+							random_direct_de_jure_vassal_title = {
+								limit = {
+									holder_scope = {
+										top_liege = { valid_offmap_cathay_target = yes }
+									}
+								}
+								holder_scope = {
+									top_liege = { save_event_target_as = cathayan_invasion_target }
+								}
+							}
+						}
+						set_offmap_tmp_flag = should_claim_all_titles_war
+					}
+					50 = { # A middling realm, when Expansionist
+						trigger = {
+							has_policy = cathay_expansionist
+							any_independent_ruler = {
+								cathayinv_medium_conquest_target_trigger = yes
+							}
+						}
+						if = { # a neighbour first
+							limit = {
+								has_offmap_tmp_flag = WP_is_on_map
+								any_neighbor_independent_ruler = {
+									cathayinv_medium_conquest_target_trigger = yes
+								}
+							}
+							random_neighbor_independent_ruler = {
+								limit = { cathayinv_medium_conquest_target_trigger = yes }
+								save_event_target_as = cathayan_invasion_target
+							}
+						}
+						else = {
+							random_independent_ruler = {
+								limit = { cathayinv_medium_conquest_target_trigger = yes }
+								save_event_target_as = cathayan_invasion_target
+							}
+						}
+						set_offmap_tmp_flag = start_submission_war
+					}
+					10 = { # A great realm, when Expansionist
+						trigger = {
+							has_policy = cathay_expansionist
+							any_independent_ruler = { cathayinv_big_conquest_target_trigger = yes }
+						}
+						modifier = { factor = 2 has_status = cathay_golden_age }
+						if = { # a neighbour first, one the Emperor dislikes best
+							limit = {
+								has_offmap_tmp_flag = WP_is_on_map
+								any_neighbor_independent_ruler = {
+									valid_offmap_cathay_target = yes
+									is_nomadic = no
+									num_of_count_titles_in_realm = 20
+								}
+							}
+							random_neighbor_independent_ruler = {
+								limit = {
+									valid_offmap_cathay_target = yes
+									is_nomadic = no
+									num_of_count_titles_in_realm = 20
+								}
+								preferred_limit = { cathayinv_disliked_trigger = yes }
+								save_event_target_as = cathayan_invasion_target
+							}
+						}
+						else = {
+							random_independent_ruler = {
+								limit = { cathayinv_big_conquest_target_trigger = yes }
+								preferred_limit = { cathayinv_disliked_trigger = yes }
+								save_event_target_as = cathayan_invasion_target
+							}
+						}
+						set_offmap_tmp_flag = start_submission_war
+					}
+					100 = { # A neighbour, small if possible
+						trigger = {
+							has_offmap_tmp_flag = WP_is_on_map
+							any_neighbor_independent_ruler = {
+								valid_offmap_cathay_target_location = yes
+								valid_offmap_cathay_target = yes
+								is_nomadic = no
+							}
+						}
+						random_neighbor_independent_ruler = {
+							limit = {
+								valid_offmap_cathay_target_location = yes
+								valid_offmap_cathay_target = yes
+								is_nomadic = no
+							}
+							preferred_limit = { NOT = { num_of_count_titles_in_realm = 5 } }
+							preferred_limit = { NOT = { num_of_count_titles_in_realm = 10 } }
+							preferred_limit = { NOT = { num_of_count_titles_in_realm = 20 } }
+							save_event_target_as = cathayan_invasion_target
+						}
+						set_offmap_tmp_flag = start_submission_war
+						if = { # A small war: it does not count as a major one
+							limit = {
+								event_target:cathayan_invasion_target = {
+									NOT = { num_of_count_titles_in_realm = 20 }
+								}
+							}
+							set_offmap_tmp_flag = attacked_small_neighbor
+						}
+						else_if = { # Too big for a Cathay that is not Expansionist
+							limit = { NOT = { has_policy = cathay_expansionist } }
+							cathayinv_clear_plans_effect = yes
+						}
+					}
+				}
+				if = {
+					limit = { has_offmap_tmp_flag = launching_invasion_of_the_west }
+					character_event = { id = cathayinv.6 }
+				}
+			}
+			400 = { # Cathay is busy with its own troubles
+				modifier = { factor = 0 has_policy = cathay_expansionist }
+				cathayinv_clear_plans_effect = yes
+			}
+		}
+	}
+}
+
+# cathayinv.2 The Viceroy asks for tribute
+# Kneel to the Dragon Throne as a tributary, or face war (cathayinv.3).
+# A raider of Cathay gives up the raids when kneeling.
+# Scope: the target; FROM is the Jade Viceroy.
+character_event = {
+	id = cathayinv.2
+	desc = EVTDESCcathayinv2
+	picture = GFX_evt_china_invades
+	is_triggered_only = yes # cathayinv.1
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		set_character_flag = asked_to_become_tributary
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAcathayinv2
+			trigger = { NOT = { has_character_modifier = cathay_raid_active } }
+		}
+		name = {
+			text = EVTOPTAcathayinv2_raider
+			trigger = { has_character_modifier = cathay_raid_active }
+		}
+		prestige = -100
+		add_grace_minor_effect = yes
+		if = {
+			limit = { is_tributary = yes }
+			custom_tooltip = {
+				text = REMOVE_PREVIOUS_SUZERAIN
+				hidden_effect = { any_suzerain = { ROOT = { remove_tributary = PREV } } }
+			}
+		}
+		if = { limit = { has_character_modifier = cathay_raid_active } cathayraid_end_effect = yes }
+		FROM = { prestige = 200 make_tributary = { who = ROOT tributary_type = offmap } }
+		any_player = {
+			limit = {
+				has_offmap_news_enabled = offmap_cathay
+				is_within_diplo_range = ROOT
+				NOT = { character = ROOT }
+			}
+			narrative_event = { id = cathayinv.4 }
+		}
+		clr_character_flag = asked_to_become_tributary
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 1.5 trait = craven }
+			modifier = { factor = 1.1 offmap_cathay = { has_policy = cathay_expansionist } }
+		}
+	}
+
+	option = {
+		name = EVTOPTBcathayinv2
+		detract_grace_super_huge_effect = yes
+		custom_tooltip = { text = EVTOPTBcathayinv2_tt }
+		FROM = { character_event = { id = cathayinv.3 } }
+		clr_character_flag = asked_to_become_tributary
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 1.1 trait = brave }
+			modifier = { factor = 1.1 trait = ambitious }
+			modifier = { factor = 1.1 trait = greedy }
+			modifier = { # The bigger the realm, the prouder its lord
+				factor = 1.5
+				num_of_count_titles_in_realm = 10
+			}
+			modifier = { factor = 1.5 num_of_count_titles_in_realm = 15 }
+			modifier = { factor = 1.5 num_of_count_titles_in_realm = 20 }
+		}
+	}
+}
+
+# cathayinv.3 The Viceroy makes war for tribute
+# Hidden. Musters the army and declares the tributary war.
+# Scope: the Jade Viceroy; FROM is the target.
+character_event = {
+	id = cathayinv.3
+	hide_window = yes
+	is_triggered_only = yes # cathayinv.2
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		set_offmap_tmp_flag = tributary_invasion_fired
+		cathayinv_spawn_point_effect = yes
+		war = { casus_belli = tributary_offmap_cb target = event_target:cathayan_invasion_target }
+		any_player = {
+			limit = { has_offmap_news_enabled = offmap_cathay is_within_diplo_range = ROOT }
+			narrative_event = { id = cathayinv.5 }
+		}
+	}
+}
+
+# cathayinv.4 News from Cathay: a new tributary
+# Scope: a player.
+narrative_event = {
+	id = cathayinv.4
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_invades
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # cathayinv.2
+
+	has_dlc = "Jade Dragon"
+
+	desc = {
+		trigger = {
+			event_target:cathayan_invasion_target = { NOT = { num_of_count_titles_in_realm = 20 } }
+		}
+		text = EVTDESCcathayinv4_small
+	}
+	desc = {
+		trigger = { event_target:cathayan_invasion_target = { num_of_count_titles_in_realm = 20 } }
+		text = EVTDESCcathayinv4_big
+	}
+
+	option = {
+		name = EVTOPTAcathayinv4
+		show_portrait = event_target:cathayan_invasion_target
+		custom_tooltip = { text = EVTOPTAcathayinv4_tt }
+	}
+}
+
+# cathayinv.5 News from Cathay: a war for tribute
+# Scope: a player (perhaps the target); FROM is the Jade Viceroy.
+narrative_event = {
+	id = cathayinv.5
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_invades
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # cathayinv.3
+
+	has_dlc = "Jade Dragon"
+
+	desc = {
+		trigger = { event_target:cathayan_invasion_target = { character = ROOT } }
+		text = EVTDESCcathayinv5_us
+	}
+	desc = {
+		trigger = { NOT = { event_target:cathayan_invasion_target = { character = ROOT } } }
+		text = EVTDESCcathayinv5_them
+	}
+
+	option = {
+		name = { text = EVTOPTAcathayinv5_brave trigger = { trait = brave } }
+		name = { text = EVTOPTAcathayinv5_craven trigger = { trait = craven } }
+		name = {
+			text = EVTOPTAcathayinv5_pious
+			trigger = { NOT = { trait = brave } NOT = { trait = craven } is_pious_trigger = yes }
+		}
+		name = {
+			text = EVTOPTAcathayinv5
+			trigger = { NOT = { trait = brave } NOT = { trait = craven } is_pious_trigger = no }
+		}
+		trigger = { event_target:cathayan_invasion_target = { character = ROOT } }
+	}
+
+	option = {
+		name = {
+			text = EVTOPTBcathayinv5_same_faith
+			trigger = { event_target:cathayan_invasion_target = { religion_group = ROOT } }
+		}
+		name = {
+			text = EVTOPTBcathayinv5_other_faith
+			trigger = {
+				NOT = { event_target:cathayan_invasion_target = { religion_group = ROOT } }
+			}
+		}
+		event_target:cathayan_invasion_target = { show_portrait = yes }
+		trigger = { NOT = { event_target:cathayan_invasion_target = { character = ROOT } } }
+	}
+}
+
+# cathayinv.6 The Viceroy makes war for land
+# Hidden. Musters the army and declares war for the Dzhagna claims or for
+# the target's submission.
+# Scope: the Jade Viceroy.
+character_event = {
+	id = cathayinv.6
+	hide_window = yes
+	is_triggered_only = yes # cathayinv.1
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		if = { # A war on a small neighbour does not count as major
+			limit = { NOT = { has_offmap_tmp_flag = attacked_small_neighbor } }
+			set_offmap_tmp_flag = major_invasion_fired
+		}
+		cathayinv_spawn_point_effect = yes
+		if = {
+			limit = { has_offmap_tmp_flag = should_claim_all_titles_war }
+			if = {
+				limit = {
+					can_use_cb = {
+						casus_belli = claim_all
+						target = event_target:cathayan_invasion_target
+						only_check_triggers = yes
+					}
+				}
+				war = { casus_belli = claim_all target = event_target:cathayan_invasion_target }
+			}
+			else = {
+				any_claim = {
+					limit = {
+						holder_scope = {
+							OR = {
+								character = event_target:cathayan_invasion_target
+								top_liege = { character = event_target:cathayan_invasion_target }
+							}
+						}
+					}
+					ROOT = {
+						war = {
+							casus_belli = claim
+							target = event_target:cathayan_invasion_target
+							thirdparty_title = PREV
+						}
+					}
+				}
+			}
+		}
+		if = {
+			limit = { has_offmap_tmp_flag = start_submission_war }
+			war = { casus_belli = offmap_submission target = event_target:cathayan_invasion_target }
+		}
+		clr_offmap_tmp_flag = start_submission_war
+		clr_offmap_tmp_flag = should_claim_all_titles_war
+		any_player = {
+			limit = { has_offmap_news_enabled = offmap_cathay is_within_diplo_range = ROOT }
+			narrative_event = { id = cathayinv.7 days = 1 }
+		}
+	}
+}
+
+# cathayinv.7 News from Cathay: a war of conquest
+# Scope: a player (perhaps the target); FROM is the Jade Viceroy.
+narrative_event = {
+	id = cathayinv.7
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_invades
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # cathayinv.6
+
+	has_dlc = "Jade Dragon"
+
+	desc = {
+		trigger = { event_target:cathayan_invasion_target = { character = ROOT } }
+		text = EVTDESCcathayinv7_us
+	}
+	desc = {
+		trigger = { NOT = { event_target:cathayan_invasion_target = { character = ROOT } } }
+		text = EVTDESCcathayinv7_them
+	}
+
+	option = {
+		name = { text = EVTOPTAcathayinv5_brave trigger = { trait = brave } }
+		name = { text = EVTOPTAcathayinv5_craven trigger = { trait = craven } }
+		name = {
+			text = EVTOPTAcathayinv5_pious
+			trigger = { NOT = { trait = brave } NOT = { trait = craven } is_pious_trigger = yes }
+		}
+		name = {
+			text = EVTOPTAcathayinv5
+			trigger = { NOT = { trait = brave } NOT = { trait = craven } is_pious_trigger = no }
+		}
+		trigger = { event_target:cathayan_invasion_target = { character = ROOT } }
+	}
+
+	option = {
+		name = { text = EVTOPTBcathayinv7_brave trigger = { trait = brave } }
+		name = {
+			text = EVTOPTBcathayinv7_pious
+			trigger = { NOT = { trait = brave } is_pious_trigger = yes }
+		}
+		name = {
+			text = EVTOPTAcathayinv5
+			trigger = { NOT = { trait = brave } is_pious_trigger = no }
+		}
+		event_target:cathayan_invasion_target = { show_portrait = yes }
+		trigger = { NOT = { event_target:cathayan_invasion_target = { character = ROOT } } }
+	}
+}
+
+# cathayinv.8 News from Cathay: war on the pretender
+# Scope: a player (perhaps the pretender).
+narrative_event = {
+	id = cathayinv.8
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_rebel_general
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # cathayinv.1
+
+	has_dlc = "Jade Dragon"
+
+	desc = {
+		trigger = { event_target:cathayan_invasion_target = { character = ROOT } }
+		text = EVTDESCcathayinv8_us
+	}
+	desc = {
+		trigger = { NOT = { event_target:cathayan_invasion_target = { character = ROOT } } }
+		text = EVTDESCcathayinv8_them
+	}
+
+	option = {
+		name = { text = EVTOPTAcathayinv5_brave trigger = { trait = brave } }
+		name = { text = EVTOPTAcathayinv5_craven trigger = { trait = craven } }
+		name = {
+			text = EVTOPTAcathayinv5_pious
+			trigger = { NOT = { trait = brave } NOT = { trait = craven } is_pious_trigger = yes }
+		}
+		name = {
+			text = EVTOPTAcathayinv5
+			trigger = { NOT = { trait = brave } NOT = { trait = craven } is_pious_trigger = no }
+		}
+		trigger = { event_target:cathayan_invasion_target = { character = ROOT } }
+	}
+
+	option = {
+		name = EVTOPTBcathayinv8
+		event_target:cathayan_invasion_target = { show_portrait = yes }
+		trigger = { NOT = { event_target:cathayan_invasion_target = { character = ROOT } } }
+	}
+}
+
+# cathayinv.10 The Viceroy may plan again
+# Hidden. Five years after a war for tribute (three after a war on a small
+# neighbour), the Viceroy may plan another.
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathayinv.10
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = { is_offmap_tag = offmap_cathay }
+		offmap_cathay = {
+			OR = {
+				had_offmap_tmp_flag = { flag = tributary_invasion_fired years = 5 }
+				had_offmap_tmp_flag = { flag = launching_invasion_of_the_west years = 5 }
+				had_offmap_tmp_flag = { flag = attacked_small_neighbor years = 3 }
+			}
+		}
+	}
+
+	immediate = {
+		offmap_cathay = {
+			clr_offmap_tmp_flag = WP_is_on_map
+			clr_offmap_tmp_flag = WP_is_not_on_map
+			clr_offmap_tmp_flag = launching_invasion_of_the_west
+			clr_offmap_tmp_flag = tributary_invasion_fired
+			clr_offmap_tmp_flag = attacked_small_neighbor
+		}
+	}
+}
+
+# cathayinv.11 The Viceroy may make war for land again
+# Hidden. Twenty years after a war of conquest, or five after a new
+# Emperor took the throne (cathayinv.12).
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathayinv.11
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = { is_offmap_tag = offmap_cathay }
+		offmap_cathay = {
+			OR = {
+				had_offmap_tmp_flag = { flag = major_invasion_fired years = 20 }
+				had_offmap_tmp_flag = { flag = sent_major_invasion_cleanup years = 5 }
+			}
+		}
+	}
+
+	immediate = {
+		offmap_cathay = {
+			clr_offmap_tmp_flag = major_invasion_fired
+			clr_offmap_tmp_flag = sent_major_invasion_cleanup
+		}
+	}
+}
+
+# cathayinv.12 A new Emperor may make war sooner
+# Hidden. A new Emperor who is not Isolationist need not wait out the old
+# one's timers in full (cathayinv.11).
+# Scope: the new Emperor; FROMFROM is Cathay.
+character_event = {
+	id = cathayinv.12
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_ruler_changed
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		offmap_cathay = {
+			NOT = { has_policy = cathay_isolationist }
+			OR = {
+				has_offmap_tmp_flag = WP_is_on_map
+				has_offmap_tmp_flag = WP_is_not_on_map
+				has_offmap_tmp_flag = major_invasion_fired
+				has_offmap_tmp_flag = launching_invasion_of_the_west
+				has_offmap_tmp_flag = tributary_invasion_fired
+				has_offmap_tmp_flag = attacked_small_neighbor
+			}
+		}
+	}
+
+	immediate = {
+		offmap_cathay = { set_offmap_tmp_flag = sent_major_invasion_cleanup }
+	}
+}
+
+###############################################################################
+# Exiles from Cathay
+###############################################################################
+
+# cathayinv.20 A new Viceroy takes over the exiles
+# Hidden. An exile the old Viceroy was about to send west (cathayinv.22,
+# 23, 40) is sent by the new one instead.
+# Scope: the new Jade Viceroy; FROM is the old one, FROMFROM is Cathay.
+character_event = {
+	id = cathayinv.20
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_governor_changed
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROMFROM = { is_offmap_tag = offmap_cathay }
+		FROM = {
+			OR = {
+				has_character_flag = spawning_a_displaced_royal
+				has_character_flag = spawning_a_jurchen_invader
+				has_character_flag = spawning_a_rebel_general
+			}
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { FROM = { has_character_flag = spawning_a_displaced_royal } }
+			set_character_flag = spawning_a_displaced_royal
+			character_event = { id = cathayinv.23 days = 15 }
+		}
+		if = {
+			limit = { FROM = { has_character_flag = spawning_a_jurchen_invader } }
+			set_character_flag = spawning_a_jurchen_invader
+			character_event = { id = cathayinv.22 days = 15 }
+		}
+		if = {
+			limit = { FROM = { has_character_flag = spawning_a_rebel_general } }
+			set_character_flag = spawning_a_rebel_general
+			character_event = { id = cathayinv.40 days = 15 }
+		}
+		FROM = {
+			clr_character_flag = spawning_a_displaced_royal
+			clr_character_flag = spawning_a_jurchen_invader
+			clr_character_flag = spawning_a_rebel_general
+		}
+	}
+}
+
+# cathayinv.21 News from Cathay: an exile rides west
+# Scope: a player.
+narrative_event = {
+	id = cathayinv.21
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_rebel_general
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # cathayinv.22, 23, 40
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		event_target:the_cathayan_invader = { is_alive = yes }
+	}
+
+	desc = {
+		trigger = {
+			event_target:the_cathayan_invader = { has_character_flag = is_jurchen_invader }
+		}
+		text = EVTDESCcathayinv21_warlord
+	}
+	desc = {
+		trigger = {
+			event_target:the_cathayan_invader = { has_character_flag = is_displaced_prince }
+		}
+		text = EVTDESCcathayinv21_prince
+	}
+	desc = {
+		trigger = { event_target:the_cathayan_invader = { has_character_flag = is_rebel_general } }
+		text = EVTDESCcathayinv21_general
+	}
+
+	option = {
+		name = EVTOPTAcathayinv21
+		show_portrait = event_target:the_cathayan_invader
+	}
+}
+
+# cathayinv.22 A Man-chu warlord rides west
+# Hidden. A Hung warlord of the Man-chu or the Tong, sworn to the Dark
+# Gods, leads his riders out of the steppe to loot the west
+# (cathayinv.24).
+# Scope: the Jade Viceroy.
+character_event = {
+	id = cathayinv.22
+	hide_window = yes
+	is_triggered_only = yes # WHG_cathay_state_events and effects; cathayinv.20
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		has_character_flag = spawning_a_jurchen_invader
+	}
+
+	immediate = {
+		clr_character_flag = spawning_a_displaced_royal
+		clr_character_flag = spawning_a_jurchen_invader
+		clr_character_flag = spawning_a_rebel_general
+		save_event_target_as = the_protector_general
+		random_list = {
+			50 = {
+				create_character = {
+					random_traits = yes
+					religion = chaos
+					culture = man_chu
+					dynasty = actually_culture
+					female = no
+					age = 30
+					trait = creature_human
+					trait = tough_soldier
+					historical = yes
+				}
+			}
+			50 = {
+				create_character = {
+					random_traits = yes
+					religion = chaos
+					culture = tong
+					dynasty = actually_culture
+					female = no
+					age = 30
+					trait = creature_human
+					trait = tough_soldier
+					historical = yes
+				}
+			}
+		}
+		new_character = {
+			add_trait = ambitious
+			remove_trait = content
+			remove_trait = craven
+			random = { chance = 25 add_trait = cruel }
+			set_character_flag = is_jurchen_invader
+			save_event_target_as = the_cathayan_invader
+			character_event = { id = cathayinv.24 }
+		}
+		any_player = {
+			limit = { has_offmap_news_enabled = offmap_cathay is_within_diplo_range = ROOT }
+			narrative_event = { id = cathayinv.21 days = 1 }
+		}
+	}
+}
+
+# cathayinv.23 A displaced prince rides west
+# Hidden. A son of the fallen house, of its blood and race, flees west
+# with what gold he could carry (cathayinv.24).
+# Scope: the Jade Viceroy.
+character_event = {
+	id = cathayinv.23
+	hide_window = yes
+	is_triggered_only = yes # WHG_cathay_state_effects; cathayinv.20
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		has_character_flag = spawning_a_displaced_royal
+		offmap_cathay = { offmap_prev_ruler = { always = yes } }
+	}
+
+	immediate = {
+		clr_character_flag = spawning_a_displaced_royal
+		clr_character_flag = spawning_a_jurchen_invader
+		clr_character_flag = spawning_a_rebel_general
+		save_event_target_as = the_protector_general
+		offmap_cathay = { offmap_prev_ruler = { save_event_target_as = previousEmperor } }
+		create_character = {
+			random_traits = yes
+			religion = event_target:previousEmperor
+			culture = event_target:previousEmperor
+			dynasty = event_target:previousEmperor
+			female = no
+			age = 20
+			trait = tough_soldier
+			historical = yes
+		}
+		new_character = {
+			save_event_target_as = displaced_prince
+			save_event_target_as = the_cathayan_invader
+			if = {
+				limit = { event_target:previousEmperor = { trait = creature_hobgoblin } }
+				add_trait = creature_hobgoblin
+			}
+			else = { add_trait = creature_human }
+			cathayinv_prince_parent_effect = yes
+			add_trait = ambitious
+			remove_trait = content
+			remove_trait = craven
+			set_character_flag = is_displaced_prince
+			add_character_modifier = { name = jd_prince duration = -1 }
+			wealth = 1000
+			character_event = { id = cathayinv.24 }
+		}
+		any_player = {
+			limit = { has_offmap_news_enabled = offmap_cathay is_within_diplo_range = ROOT }
+			narrative_event = { id = cathayinv.21 days = 1 }
+		}
+	}
+}
+
+# cathayinv.24 The exile sets out
+# Hidden. Gives the exile a landless adventurer's duchy and an army at the
+# edge of the map (the warlord's riders at Nuur, the prince's foot at
+# Jagrol) and starts the looting (cathayinv.25).
+# Scope: the exile; FROM is the Jade Viceroy.
+character_event = {
+	id = cathayinv.24
+	hide_window = yes
+	is_triggered_only = yes # cathayinv.22, 23
+	capable_only = yes
+	prisoner = no
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		NOT = { has_game_rule = { name = adventurers value = none } }
+	}
+
+	immediate = {
+		add_trait = adventurer
+		set_defacto_liege = ROOT
+		create_title = {
+			tier = DUKE
+			landless = yes
+			adventurer = yes
+			culture = ROOT
+			name = "CLAIMANT_ADVENTURE"
+			holder = ROOT
+			base_title = THIS
+		}
+		set_character_flag = raiding_adventurer
+		if = {
+			limit = { has_character_flag = is_jurchen_invader }
+			set_character_flag = raiding_adventurer_nomad
+			1188 = { save_event_target_as = cathayinv_road_end } # Nuur
+		}
+		else = {
+			2361 = { save_event_target_as = cathayinv_road_end } # Jagrol
+		}
+		cathayinv_adventurer_troops_effect = yes
+		create_random_soldier = {
+			random_traits = yes
+			dynasty = none
+			religion = ROOT
+			culture = ROOT
+			female = no
+			age = 30
+		}
+		new_character = { cathayinv_race_of_root_effect = yes }
+		create_random_soldier = {
+			random_traits = yes
+			dynasty = none
+			religion = ROOT
+			culture = ROOT
+			female = no
+			age = 25
+		}
+		new_character = { cathayinv_race_of_root_effect = yes }
+		character_event = { id = cathayinv.25 days = 1095 }
+	}
+}
+
+# cathayinv.25 The exile loots on
+# Hidden. Every year, once rich enough or long enough on the road, the
+# exile may turn on a lord he has looted who is not too strong for him
+# (cathayinv.26); after thirty years he must.
+# Scope: the exile.
+character_event = {
+	id = cathayinv.25
+	hide_window = yes
+	is_triggered_only = yes # cathayinv.24, 25, 27
+	has_character_flag = raiding_adventurer
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		primary_title = { temporary = yes }
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				OR = { wealth = 300 had_character_flag = { flag = raiding_adventurer days = 1825 } }
+				any_independent_ruler = {
+					has_opinion_modifier = { who = ROOT modifier = opinion_looted }
+					NOT = { realm_levy_diff = { who = ROOT value = 3000 } }
+					demesne_size = 1
+				}
+			}
+			random_list = {
+				50 = {
+					modifier = { factor = 2 trait = cruel }
+					modifier = { factor = 2 trait = ambitious }
+					character_event = { id = cathayinv.26 }
+				}
+				50 = {
+					modifier = {
+						factor = 0.5
+						had_character_flag = { flag = raiding_adventurer days = 2555 }
+					}
+					modifier = {
+						factor = 0.5
+						had_character_flag = { flag = raiding_adventurer days = 3285 }
+					}
+					modifier = {
+						factor = 0.5
+						had_character_flag = { flag = raiding_adventurer days = 4015 }
+					}
+					modifier = {
+						factor = 0
+						had_character_flag = { flag = raiding_adventurer days = 10950 }
+					}
+					repeat_event = { id = cathayinv.25 days = 365 }
+				}
+			}
+		}
+		else_if = {
+			limit = { had_character_flag = { flag = raiding_adventurer days = 10950 } }
+			character_event = { id = cathayinv.26 }
+		}
+		else = { repeat_event = { id = cathayinv.25 days = 365 } }
+	}
+}
+
+# cathayinv.26 The exile seeks a home
+# Hidden. A great lord he has looted is offered terms (ADV.1); a lesser
+# one is attacked for a duchy. With no one to turn on, the exile gives up.
+# Scope: the exile.
+character_event = {
+	id = cathayinv.26
+	hide_window = yes
+	is_triggered_only = yes # cathayinv.25
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		any_army = { set_can_toggle_looting = yes set_looting = no }
+		random_independent_ruler = {
+			limit = {
+				has_opinion_modifier = { who = ROOT modifier = opinion_looted }
+				NOT = { realm_levy_diff = { who = ROOT value = 3000 } }
+				demesne_size = 1
+				NOT = { has_character_flag = negotiating_with_adventurer }
+				NOT = { any_realm_province = { has_province_modifier = settled_adventurer } }
+			}
+			save_event_target_as = random_ruler_target
+		}
+		if = {
+			limit = { event_target:random_ruler_target = { higher_real_tier_than = DUKE } }
+			event_target:random_ruler_target = {
+				set_character_flag = negotiating_with_adventurer
+				character_event = { id = ADV.1 }
+			}
+			character_event = { id = cathayinv.27 days = 65 }
+		}
+		else_if = {
+			limit = { event_target:random_ruler_target = { always = yes } }
+			clr_character_flag = raiding_adventurer
+			event_target:random_ruler_target = {
+				random_realm_province = {
+					preferred_limit = { # on the border
+						any_neighbor_province = { NOT = { owner = { same_realm = ROOT } } }
+					}
+					ROOT = {
+						unsafe_war = {
+							target = event_target:random_ruler_target
+							casus_belli = duchy_adventure
+							thirdparty_title = PREV
+							tier = DUKE
+						}
+					}
+				}
+				character_event = { id = adventurer.12 }
+			}
+			if = { limit = { war = no } character_event = { id = adventurer.49 } }
+		}
+		else = { clr_character_flag = raiding_adventurer character_event = { id = adventurer.49 } }
+	}
+}
+
+# cathayinv.27 Talks failed: back to looting
+# Hidden.
+# Scope: the exile.
+character_event = {
+	id = cathayinv.27
+	hide_window = yes
+	is_triggered_only = yes # cathayinv.26
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		war = no
+		primary_title = { temporary = yes adventurer = yes }
+	}
+
+	immediate = {
+		character_event = { id = cathayinv.25 }
+	}
+}
+
+###############################################################################
+# Silver for the steppe
+###############################################################################
+
+# cathayinv.30 A restless steppe province
+# Hidden. Counts the Viceroy's newly won provinces whose herders refuse to
+# settle (cathayinv.31).
+# Scope: the province; FROM is the Jade Viceroy.
+province_event = {
+	id = cathayinv.30
+	hide_window = yes
+	is_triggered_only = yes # claim_all, offmap_submission on_success
+
+	immediate = {
+		FROM = { change_variable = { which = WP_nomad_provinces value = 1 } }
+	}
+}
+
+# cathayinv.31 Cathay sends silver to settle the steppe
+# Hidden. 200 gold for each restless province (at most 2500), more from a
+# Cathay at ease, less from a suffering one.
+# Scope: the Jade Viceroy.
+character_event = {
+	id = cathayinv.31
+	hide_window = yes
+	is_triggered_only = yes # claim_all, offmap_submission on_success
+
+	immediate = {
+		set_variable = { which = WP_nomad_gold_from_cathay which = WP_nomad_provinces }
+		multiply_variable = { which = WP_nomad_gold_from_cathay value = 200 }
+		if = {
+			limit = { cathay_is_suffering_trigger = yes }
+			multiply_variable = { which = WP_nomad_gold_from_cathay value = 0.3 }
+		}
+		if = {
+			limit = { cathay_is_fine_trigger = yes }
+			multiply_variable = { which = WP_nomad_gold_from_cathay value = 1.5 }
+		}
+		if = {
+			limit = { check_variable = { which = WP_nomad_gold_from_cathay value = 2500 } }
+			set_variable = { which = WP_nomad_gold_from_cathay value = 2500 }
+		}
+		wealth = WP_nomad_gold_from_cathay
+	}
+}
+
+###############################################################################
+# The rebel general
+###############################################################################
+
+# cathayinv.40 A rebel general flees west
+# Hidden. A general of the losing side of Cathay's civil war, the older the
+# better at war, flees west to found his own empire (cathayinv.41).
+# Scope: the Jade Viceroy.
+character_event = {
+	id = cathayinv.40
+	hide_window = yes
+	is_triggered_only = yes # cathaystate.62; cathayinv.20
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		has_character_flag = spawning_a_rebel_general
+	}
+
+	immediate = {
+		clr_character_flag = spawning_a_displaced_royal
+		clr_character_flag = spawning_a_jurchen_invader
+		clr_character_flag = spawning_a_rebel_general
+		save_event_target_as = the_protector_general
+		random_list = {
+			1 = {
+				create_character = {
+					age = 27
+					random_traits = yes
+					female = no
+					religion = draconite
+					culture = cathayan
+					dynasty = actually_culture
+					trait = creature_human
+					trait = brilliant_strategist
+					martial = 8
+					flag = young_general
+					historical = yes
+				}
+			}
+			2 = {
+				create_character = {
+					age = 36
+					random_traits = yes
+					female = no
+					religion = draconite
+					culture = cathayan
+					dynasty = actually_culture
+					trait = creature_human
+					trait = brilliant_strategist
+					martial = 10
+					flag = middle_general
+					historical = yes
+				}
+			}
+			1 = {
+				create_character = {
+					age = 52
+					random_traits = yes
+					female = no
+					religion = draconite
+					culture = cathayan
+					dynasty = actually_culture
+					trait = creature_human
+					trait = brilliant_strategist
+					martial = 12
+					flag = old_general
+					historical = yes
+				}
+			}
+		}
+		new_character = {
+			change_martial = 7
+			add_trait = ambitious
+			add_trait = brave
+			random_list = {
+				30 = { trigger = { NOT = { trait = master_of_flame } } add_trait = master_of_flame }
+				30 = {
+					trigger = { NOT = { trait = logistics_expert } }
+					add_trait = logistics_expert
+				}
+				30 = {
+					trigger = { NOT = { trait = levy_coordinator } }
+					add_trait = levy_coordinator
+				}
+				30 = { trigger = { NOT = { trait = sapper } } add_trait = sapper }
+			}
+			set_character_flag = is_rebel_general
+			save_event_target_as = rebel_general
+			save_event_target_as = the_cathayan_invader
+			wealth = 200
+			character_event = { id = cathayinv.41 }
+		}
+		any_player = {
+			limit = { has_offmap_news_enabled = offmap_cathay is_within_diplo_range = ROOT }
+			narrative_event = { id = cathayinv.21 days = 1 }
+		}
+	}
+}
+
+# cathayinv.41 The general picks his prey
+# Hidden. The largest realm within the Viceroy's reach that is not the
+# Viceroy's: an emperor, else a king, a duke, a count. With none, the
+# general goes home. Otherwise he takes the title of a rebel empire and
+# his household joins him, and the prey is warned (cathayinv.42).
+# Scope: the rebel general; FROM is the Jade Viceroy.
+character_event = {
+	id = cathayinv.41
+	hide_window = yes
+	is_triggered_only = yes # cathayinv.40
+	capable_only = yes
+	prisoner = no
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		NOT = { has_game_rule = { name = adventurers value = none } }
+	}
+
+	immediate = {
+		random_independent_ruler = {
+			limit = { cathayinv_rebel_general_target_trigger = yes }
+			preferred_limit = {
+				NOT = { character = event_target:the_protector_general }
+				higher_tier_than = KING
+				num_of_count_titles_in_realm = 30
+			}
+			preferred_limit = {
+				NOT = { character = event_target:the_protector_general }
+				higher_tier_than = DUKE
+				num_of_count_titles_in_realm = 15
+			}
+			preferred_limit = {
+				NOT = { character = event_target:the_protector_general }
+				higher_tier_than = COUNT
+				num_of_count_titles_in_realm = 5
+			}
+			preferred_limit = { NOT = { character = event_target:the_protector_general } }
+			save_event_target_as = rebel_general_target
+		}
+		if = {
+			limit = { NOT = { event_target:rebel_general_target = { always = yes } } }
+			death = { death_reason = death_went_back_to_cathay }
+		}
+		else = {
+			create_title = {
+				tier = EMPEROR
+				temporary = no
+				landless = yes
+				custom_created = yes
+				culture = ROOT
+				name = "REBEL_GENERAL"
+				holder = ROOT
+				base_title = THIS
+				short_name = yes
+			}
+			new_title = { save_event_target_as = rebel_general_title }
+			set_defacto_liege = ROOT
+			set_special_character_title = TITLE_GENERAL
+			cathayinv_general_household_effect = yes
+			prestige = 500
+			event_target:rebel_general_target = { character_event = { id = cathayinv.42 days = 5 } }
+		}
+	}
+}
+
+# cathayinv.42 A rebel general marches on us
+# Scope: the prey; FROM is the rebel general.
+character_event = {
+	id = cathayinv.42
+	desc = EVTDESCcathayinv42
+	picture = GFX_evt_china_rebel_general
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes # cathayinv.41
+	hide_new = yes
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAcathayinv42
+		custom_tooltip = { text = rebel_general_will_invade_tt }
+		hidden_effect = { character_event = { id = cathayinv.43 days = 10 random = 5 } }
+	}
+}
+
+# cathayinv.43 The rebel general invades
+# Hidden. Declares war and raises an army for the general at a road end:
+# fewer troops than the Viceroy's, but commanders as good as a quarter of
+# his own skill makes them. If the general is dead, the prey hears of it
+# (cathayinv.45).
+# Scope: the prey.
+character_event = {
+	id = cathayinv.43
+	hide_window = yes
+	is_triggered_only = yes # cathayinv.42
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		event_target:rebel_general = { is_alive = yes }
+	}
+
+	fail_trigger_effect = { character_event = { id = cathayinv.45 } }
+
+	immediate = {
+		event_target:rebel_general = {
+			war = { casus_belli = offmap_submission target = event_target:rebel_general_target }
+			set_variable = { which = cathay_war_troop_quantity value = 10 }
+			set_variable = { which = cathay_war_target_match_mult value = 1 }
+			set_variable = { which = cathay_war_troop_quality value = 3 }
+			set_variable = { which = cathay_war_minimum_commander_martial value = 14 }
+			export_to_variable = { which = rebel_general_martial value = martial }
+			divide_variable = { which = rebel_general_martial value = 4 }
+			change_variable = {
+				which = cathay_war_minimum_commander_martial
+				which = rebel_general_martial
+			}
+			cathay_war_modify_variables_by_century_effect = yes
+			export_to_variable = {
+				which = cathay_temp_troop_calc
+				value = realm_levies_plus_allies
+				who = FROM
+			}
+			divide_variable = { which = cathay_temp_troop_calc value = 500 }
+			multiply_variable = {
+				which = cathay_temp_troop_calc
+				which = cathay_war_target_match_mult
+			}
+			change_variable = { which = cathay_war_troop_quantity which = cathay_temp_troop_calc }
+			any_courtier_or_vassal = {
+				set_variable = { which = cathay_war_minimum_commander_martial which = PREV }
+			}
+			if = {
+				limit = {
+					NOT = {
+						any_courtier_or_vassal = {
+							count = 5
+							martial = cathay_war_minimum_commander_martial
+						}
+					}
+				}
+				cathay_spawn_commander_effect = yes
+				cathay_spawn_commander_effect = yes
+				cathay_spawn_commander_effect = yes
+				cathay_spawn_commander_effect = yes
+				cathay_spawn_commander_effect = yes
+			}
+			cathayinv_road_end_effect = yes
+			event_target:cathayinv_road_end = { save_event_target_as = spawn_province }
+			cathay_war_spawn_troops_no_disband_effect = yes
+		}
+	}
+}
+
+# cathayinv.44 A temple name for the new Emperor
+# Hidden. Heirs to a rebel general's empire take temple names: a founder's
+# name for a new house, which also renames the empire, else a name no
+# forebear of the empire used. An heir not of the east who keeps the
+# Cathayan government first chooses his ways (cathayinv.49).
+# Scope: the new holder; FROM is the title, FROMFROM the old holder.
+character_event = {
+	id = cathayinv.44
+	hide_window = yes
+	is_triggered_only = yes # on_new_holder (all three kinds)
+
+	has_global_flag = cathayinv_temple_names # set with the title flag
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = { has_title_flag = uses_temple_names_by_script }
+		NOT = { has_character_flag = given_temple_name_by_script }
+	}
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = cathayan_imperial_government_preserve }
+			character_event = { id = cathayinv.49 days = 1 }
+		}
+		else = {
+			FROM = { save_event_target_as = temple_name_title }
+			if = {
+				limit = { NOT = { dynasty = FROMFROM } }
+				cathayinv_founder_name_effect = yes
+				event_target:temple_name_title = { cathayinv_empire_name_effect = yes }
+			}
+			else = { cathayinv_temple_name_effect = yes }
+		}
+	}
+}
+
+# cathayinv.45 The rebel general is dead
+# The Viceroy's soldiers caught him before he reached us. His household is
+# put to death and his empire is no more.
+# Scope: the prey.
+character_event = {
+	id = cathayinv.45
+	desc = EVTDESCcathayinv45
+	picture = GFX_evt_china_rebel_general
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes # cathayinv.43
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		event_target:rebel_general_title = {
+			holder_scope = {
+				any_courtier = { death = { death_reason = death_executed_by_cathayan_emperor } }
+			}
+			activate_title = { title = THIS status = no }
+			destroy_landed_title = THIS
+		}
+	}
+
+	option = {
+		name = EVTOPTAcathayinv45
+	}
+}
+
+# cathayinv.46 News from Cathay: the pretender's empire falls
+# Lost in war, or left with no fit heir (cathayinv.47).
+# Scope: a player; FROM is the fallen Emperor (or the victor, FROMFROM the
+# fallen Emperor).
+narrative_event = {
+	id = cathayinv.46
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_rebel_general
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # cathayinv.47; two pretender war CBs (01_cb_types)
+
+	has_dlc = "Jade Dragon"
+
+	desc = {
+		trigger = {
+			FROM = { has_character_flag = pretender_cathayan_empire_destroyed_inheritance }
+		}
+		text = EVTDESCcathayinv46_heir
+	}
+	desc = {
+		trigger = {
+			FROM = {
+				NOT = { has_character_flag = pretender_cathayan_empire_destroyed_inheritance }
+			}
+		}
+		text = EVTDESCcathayinv46_war
+	}
+
+	option = {
+		name = EVTOPTAcathayinv46
+	}
+}
+
+# cathayinv.47 A Cathayan Emperor dies
+# Hidden. A rebel general's empire with an heir not of the east shatters:
+# its vassals go free and its counties to new lords. A Cathayan-governed
+# realm of another kind lets a player or landless heir choose to keep the
+# eastern ways (cathayinv.49); an AI heir lets them go.
+# Scope: the dying character.
+character_event = {
+	id = cathayinv.47
+	hide_window = yes
+	is_triggered_only = yes # on_death
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		government = cathayan_imperial_government
+		current_heir = { NOR = { culture_group = oriental_group culture = tong culture = man_chu } }
+	}
+
+	immediate = {
+		if = {
+			limit = { primary_title = { has_title_flag = rebel_general_title } }
+			set_character_flag = pretender_cathayan_empire_destroyed_inheritance
+			any_player = {
+				limit = {
+					OR = {
+						AND = {
+							has_offmap_news_enabled = offmap_cathay
+							is_within_diplo_range = ROOT
+						}
+						liege = { character = ROOT }
+					}
+				}
+				narrative_event = { id = cathayinv.46 }
+			}
+			any_vassal = { set_defacto_liege = THIS }
+			any_demesne_title = {
+				limit = {
+					higher_tier_than = COUNT
+					NOT = { has_title_flag = pretender_cathayan_empire }
+				}
+				destroy_landed_title = THIS
+			}
+			any_demesne_title = {
+				limit = { tier = COUNT }
+				location = {
+					create_character = {
+						religion = THIS
+						culture = THIS
+						dynasty = actually_culture
+						age = 33
+						random_traits = yes
+						female = no
+					}
+					new_character = {
+						save_event_target_as = pretender_cathayan_empire_new_character
+						PREVPREV = {
+							usurp_title_plus_barony_if_unlanded = {
+								target = event_target:pretender_cathayan_empire_new_character
+								type = invasion
+							}
+						}
+					}
+				}
+			}
+			primary_title = {
+				activate_title = { title = THIS status = no }
+				destroy_landed_title = THIS
+			}
+		}
+		else_if = {
+			limit = { OR = { ai = no current_heir = { is_landed = no } } }
+			current_heir = { set_character_flag = cathayan_imperial_government_preserve }
+		}
+		else = {
+			primary_title = {
+				clr_title_flag = pretender_cathayan_empire
+				clr_title_flag = uses_temple_names_by_script
+				clear_flags_with_prefix = temple_name_
+				clear_flags_with_prefix = cathay_name_
+				set_name = "[Root.Capital.GetName] Empire"
+			}
+		}
+	}
+}
+
+# cathayinv.48 News from Cathay: a rival Dragon Throne in the west
+# Scope: a player; FROM is the general, now Emperor.
+narrative_event = {
+	id = cathayinv.48
+	title = NEWS_FROM_CATHAY
+	desc = EVTDESCcathayinv48
+	picture = GFX_evt_china_rebel_general
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # offmap_submission on_success
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAcathayinv48
+		trigger = { FROM = { is_liege_of = ROOT } }
+	}
+	option = {
+		name = EVTOPTBcathayinv48
+		trigger = { NOT = { FROM = { is_liege_of = ROOT } } }
+	}
+}
+
+# cathayinv.49 The eastern ways
+# The heir of a Cathayan-governed realm takes up the ways of the one who
+# ruled before, keeping the government and the temple names, or lets the
+# empire go its own way.
+# Scope: the heir; FROMFROM is the one who ruled before.
+character_event = {
+	id = cathayinv.49
+	desc = EVTDESCcathayinv49
+	picture = GFX_evt_china_rebel_general
+	is_triggered_only = yes # cathayinv.44
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAcathayinv49
+		culture = FROMFROM
+		clr_character_flag = cathayan_imperial_government_preserve
+		repeat_event = { id = cathayinv.44 }
+	}
+
+	option = {
+		name = EVTOPTBcathayinv49
+		primary_title = {
+			clr_title_flag = pretender_cathayan_empire
+			clr_title_flag = uses_temple_names_by_script
+			clear_flags_with_prefix = temple_name_
+			clear_flags_with_prefix = cathay_name_
+			set_name = "[Root.Capital.GetName] Empire"
+		}
+		if = {
+			limit = { religion_group = ormazd_gods_group }
+			set_government_type = muslim_government
+		}
+		else = { set_government_type = feudal_government }
+		clr_character_flag = cathayan_imperial_government_preserve
+		ai_chance = { factor = 0 }
+	}
+}
+
+###############################################################################
+# The west invades Cathay
+# Only the servants of Chaos march east for the Dragon Throne itself. Any
+# other realm on the eastern edge may launch an expedition for what Cathay
+# has instead (cathayinv.54); both wars are invasion_of_cathay_cb.
+###############################################################################
+
+# cathayinv.50 News from Cathay: the west marches east
+# Scope: a player (perhaps the invader); FROM is the Jade Viceroy,
+# FROMFROM the invader, FROMFROMFROM the claimant.
+narrative_event = {
+	id = cathayinv.50
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_civil_war
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # decisions/wh_chaos_decisions.txt
+
+	has_dlc = "Jade Dragon"
+
+	desc = {
+		trigger = { event_target:invasion_of_cathay_attacker = { character = ROOT } }
+		text = EVTDESCcathayinv50_us
+	}
+	desc = {
+		trigger = { NOT = { event_target:invasion_of_cathay_attacker = { character = ROOT } } }
+		text = EVTDESCcathayinv50_them
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAcathayinv50_us
+			trigger = { event_target:invasion_of_cathay_attacker = { character = ROOT } }
+		}
+		name = {
+			text = EVTOPTAcathayinv50_them
+			trigger = { NOT = { event_target:invasion_of_cathay_attacker = { character = ROOT } } }
+		}
+		show_portrait = event_target:invasion_of_cathay_claimant
+	}
+}
+
+# cathayinv.51 News from Cathay: the west takes the Dragon Throne
+# Cathay opens its gates to its new masters.
+# Scope: a player; FROM is the victor, FROMFROM the Jade Viceroy.
+narrative_event = {
+	id = cathayinv.51
+	title = NEWS_FROM_CATHAY
+	desc = EVTDESCcathayinv51
+	picture = GFX_evt_china_civil_war
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # invasion_of_cathay_cb on_success
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		offmap_cathay = {
+			set_offmap_flag = no_policy_news
+			set_policy = cathay_open
+			clr_offmap_flag = no_policy_news
+		}
+	}
+
+	option = {
+		name = EVTOPTAcathayinv51
+	}
+}
+
+# cathayinv.52 News from Cathay: the invasion is thrown back
+# Scope: a player; FROM is the invader, FROMFROM the Jade Viceroy.
+narrative_event = {
+	id = cathayinv.52
+	title = NEWS_FROM_CATHAY
+	desc = EVTDESCcathayinv52
+	picture = GFX_evt_china_civil_war
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # invasion_of_cathay_cb on_reverse_demand
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAcathayinv52
+		show_portrait = event_target:invasion_of_cathay_claimant
+	}
+}
+
+# cathayinv.53 News from Cathay: the claimant is dead
+# Scope: a player; FROM is the invader.
+narrative_event = {
+	id = cathayinv.53
+	title = NEWS_FROM_CATHAY
+	desc = EVTDESCcathayinv53
+	picture = GFX_evt_china_civil_war
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # invasion_of_cathay_cb on_invalidation
+
+	has_dlc = "Jade Dragon"
+
+	option = {
+		name = EVTOPTAcathayinv53
+		trigger = { NOT = { FROM = { character = ROOT } } }
+		show_portrait = event_target:invasion_of_cathay_claimant
+	}
+	option = {
+		name = EVTOPTBcathayinv53
+		trigger = { FROM = { character = ROOT } }
+		show_portrait = event_target:invasion_of_cathay_claimant
+	}
+}
+
+# cathayinv.54 An expedition east
+# A realm that does not serve Chaos picks what it marches on Cathay for:
+# gold, slaves, a place at the court or Cathay's learning. The goal flag
+# decides what invasion_of_cathay_cb pays out on success.
+# Scope: the invader.
+character_event = {
+	id = cathayinv.54
+	title = EVTNAMEcathayinv54
+	desc = EVTDESCcathayinv54
+	picture = GFX_evt_china_invades
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes # cathay_launch_expedition decision
+
+	option = { # Plunder
+		name = EVTOPTAcathayinv54
+		custom_tooltip = { text = cathay_expedition_goal_plunder_tt }
+		cathay_expedition_clear_flags_effect = yes
+		set_character_flag = cathay_expedition_goal_plunder
+		cathay_expedition_launch_effect = yes
+		ai_chance = {
+			factor = 10
+			modifier = {
+				factor = 3
+				OR = {
+					culture_group = ogre_group
+					culture_group = orc_group
+					culture_group = goblin_group
+					culture_group = hung_group
+					culture_group = kurgan_group
+				}
+			}
+		}
+	}
+	option = { # Slaves
+		name = EVTOPTBcathayinv54
+		custom_tooltip = { text = cathay_expedition_goal_slaves_tt }
+		cathay_expedition_clear_flags_effect = yes
+		set_character_flag = cathay_expedition_goal_slaves
+		cathay_expedition_launch_effect = yes
+		ai_chance = {
+			factor = 3
+			modifier = {
+				factor = 5
+				OR = {
+					culture_group = druchii_group
+					culture_group = dwarf_chaos_group
+					culture_group = skaven_group
+				}
+			}
+		}
+	}
+	option = { # Influence
+		name = EVTOPTCcathayinv54
+		custom_tooltip = { text = cathay_expedition_goal_influence_tt }
+		cathay_expedition_clear_flags_effect = yes
+		set_character_flag = cathay_expedition_goal_influence
+		cathay_expedition_launch_effect = yes
+		ai_chance = {
+			factor = 5
+			modifier = {
+				factor = 2
+				diplomacy = 15
+			}
+		}
+	}
+	option = { # Knowledge
+		name = EVTOPTDcathayinv54
+		custom_tooltip = { text = cathay_expedition_goal_knowledge_tt }
+		cathay_expedition_clear_flags_effect = yes
+		set_character_flag = cathay_expedition_goal_knowledge
+		cathay_expedition_launch_effect = yes
+		ai_chance = {
+			factor = 5
+			modifier = {
+				factor = 3
+				OR = {
+					culture_group = asur_group
+					culture_group = lizardman_group
+				}
+			}
+			modifier = {
+				factor = 2
+				learning = 15
+			}
+		}
+	}
+	option = { # Not yet
+		name = EVTOPTEcathayinv54
+		ai_chance = { factor = 0 }
+	}
+}
+
+# cathayinv.55 News from Cathay: an expedition marches east
+# The text follows the invader's goal.
+# Scope: a player within reach; FROM is the invader.
+narrative_event = {
+	id = cathayinv.55
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_invades
+	portrait = FROM
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # cathay_expedition_launch_effect
+
+	desc = {
+		trigger = { FROM = { has_character_flag = cathay_expedition_goal_plunder } }
+		text = EVTDESCcathayinv55_plunder
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = cathay_expedition_goal_slaves } }
+		text = EVTDESCcathayinv55_slaves
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = cathay_expedition_goal_influence } }
+		text = EVTDESCcathayinv55_influence
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = cathay_expedition_goal_knowledge } }
+		text = EVTDESCcathayinv55_knowledge
+	}
+
+	option = {
+		name = EVTOPTAcathayinv55
+	}
+}
+
+# cathayinv.56 News from Cathay: an expedition comes home victorious
+# The text follows the invader's goal.
+# Scope: a player within reach or a vassal; FROM is the invader.
+narrative_event = {
+	id = cathayinv.56
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_civil_war
+	portrait = FROM
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # invasion_of_cathay_cb on_success
+
+	desc = {
+		trigger = { FROM = { has_character_flag = cathay_expedition_goal_plunder } }
+		text = EVTDESCcathayinv56_plunder
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = cathay_expedition_goal_slaves } }
+		text = EVTDESCcathayinv56_slaves
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = cathay_expedition_goal_influence } }
+		text = EVTDESCcathayinv56_influence
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = cathay_expedition_goal_knowledge } }
+		text = EVTDESCcathayinv56_knowledge
+	}
+
+	option = {
+		name = EVTOPTAcathayinv56
+	}
+}
+
+# cathayinv.57 News from Cathay: Chaos marches on the Dragon Throne
+# Scope: a player within reach; FROM is the Chaos ruler. The claimant who
+# would sit on the throne is event_target:invasion_of_cathay_claimant.
+narrative_event = {
+	id = cathayinv.57
+	title = NEWS_FROM_CATHAY
+	desc = EVTDESCcathayinv57
+	picture = GFX_evt_chaos_hordes
+	portrait = event_target:invasion_of_cathay_claimant
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	is_triggered_only = yes # cathay_chaos_assault_dragon_throne decision
+
+	option = {
+		name = EVTOPTAcathayinv57
+	}
+}

@@ -1,0 +1,1820 @@
+###############################################################################
+# Way of Life: the hunting focus
+# Namespace: hunting (was WoL.5000 - WoL.5291 in wol_hunting_events.txt)
+# Faction: Generic
+#
+# The white beast: peasants whisper of a white beast in the wilds of the
+# realm, a white hart in the Old World and Athel Loren, a white bear in the
+# north, a white tiger in the hot south and a white lion in Ulthuan, Araby
+# and the badlands. The hunter sets out after it again and again until the
+# beast is caught. To a follower of Taal or Kurnous the white hart is the
+# god's own beast, and so is the white bear to a Kislevite who prays to
+# Ursun: they should let it run. To an Asur of Chrace the white lion is the
+# oldest rite of the hunt, and its pelt is worn with pride.
+#
+# The hound: a friend, spouse, lover or courtier gives the hunter a puppy.
+# It grows into a good hound (or a vicious one), cheers its master, charms
+# the court or mauls it, is trained, and dies one day.
+#
+# The white beast                      hunting.1 - hunting.7
+# The hunt                             hunting.10 - hunting.23
+# The hound                            hunting.30 - hunting.51
+#
+# Fired from: on_focus_pulse in 00_on_actions.txt (hunting.1, .30, .40, .41,
+#   .42, .44, .45). hunting.6 is an MTTH event during the Holy Fury grand
+#   hunt. hunting.50 is also scheduled by the pet events, the offmap
+#   effects and the legendary bloodline effects; hunting.51 by the Cathayan
+#   envoy's snake (ivory.9). Shared triggers and effects are in
+#   WHG_focus_triggers.txt and WHG_focus_effects.txt. The flags epic_hunt,
+#   white_stag and white_bear are shared with hunting_events.txt.
+###############################################################################
+
+namespace = hunting
+
+###############################################################################
+# The white beast
+###############################################################################
+
+# hunting.1 The legend begins
+# Picks the white beast of the hunter's lands. Once a lifetime unless the
+# hunter gives up the chase (hunting_legend_abandoned_effect).
+# Scope: the hunter.
+character_event = {
+	id = hunting.1
+	hide_window = yes
+	is_triggered_only = yes # on_focus_pulse
+
+	only_playable = yes
+
+	trigger = {
+		has_focus = focus_hunting
+		in_command = no
+		hunting_forbidden_faith_trigger = no
+		NOT = { has_character_flag = do_not_disturb }
+		NOT = { has_character_flag = epic_hunt }
+	}
+
+	immediate = {
+		set_character_flag = epic_hunt
+		hunting_pick_legend_effect = yes
+		narrative_event = { id = hunting.2 }
+	}
+}
+
+# hunting.2 Rumours of a white beast
+# The hunter sends people out to find it (hunting.3) or lets it be.
+# Scope: the hunter.
+narrative_event = {
+	id = hunting.2
+	title = { trigger = { has_character_flag = white_stag } text = EVTTITLEhunting2 }
+	title = { trigger = { has_character_flag = white_bear } text = EVTTITLEhunting2_bear }
+	title = { trigger = { has_character_flag = white_tiger } text = EVTTITLEhunting2_tiger }
+	title = { trigger = { has_character_flag = white_lion } text = EVTTITLEhunting2_lion }
+	desc = {
+		trigger = {
+			has_character_flag = white_stag
+			hunting_taal_hart_trigger = no
+		}
+		text = EVTDESChunting2
+	}
+	desc = {
+		trigger = {
+			has_character_flag = white_bear
+			hunting_ursun_bear_trigger = no
+		}
+		text = EVTDESChunting2b
+	}
+	desc = { trigger = { has_character_flag = white_tiger } text = EVTDESChunting2c }
+	desc = {
+		trigger = {
+			has_character_flag = white_lion
+			hunting_chrace_lion_trigger = no
+		}
+		text = EVTDESChunting2d
+	}
+	desc = { trigger = { hunting_taal_hart_trigger = yes } text = EVTDESChunting2e }
+	desc = { trigger = { hunting_ursun_bear_trigger = yes } text = EVTDESChunting2f }
+	desc = { trigger = { hunting_chrace_lion_trigger = yes } text = EVTDESChunting2g }
+	picture = GFX_evt_mysterious_forest
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # hunting.1
+
+	option = { # Find it
+		name = EVTOPTAhunting2
+		hidden_tooltip = { character_event = { id = hunting.3 days = 50 random = 150 } }
+		ai_chance = { factor = 3 }
+	}
+	option = { # No time for tales
+		name = EVTOPTBhunting2
+		trigger = { NOT = { trait = hunter } }
+		hunting_legend_abandoned_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = slothful }
+			modifier = { factor = 0.5 trait = brave }
+		}
+	}
+}
+
+# hunting.3 Router: news of the white beast
+# Waits while the hunter is busy, then finds a realm county within 500 of
+# the capital where the beast was seen (hunting.5). A hunter who left the
+# hunting focus gives up the chase.
+# Scope: the hunter.
+character_event = {
+	id = hunting.3
+	hide_window = yes
+	is_triggered_only = yes # hunting.2, hunting.7, hunting_beast_escapes_effect
+
+	immediate = {
+		if = {
+			limit = { NOT = { has_focus = focus_hunting } }
+			hunting_legend_abandoned_effect = yes
+		}
+		else_if = {
+			limit = {
+				OR = {
+					has_regent = yes
+					in_command = yes
+					prisoner = yes
+					trait = pregnant
+					has_character_flag = do_not_disturb
+				}
+			}
+			repeat_event = { id = hunting.3 days = 30 }
+		}
+		else = {
+			capital_scope = {
+				ROOT = {
+					random_realm_province = {
+						limit = {
+							NOT = {
+								distance = {
+									where = PREVPREV
+									distance = 500
+								}
+							}
+						}
+						save_event_target_as = hunting_beast_county
+					}
+				}
+			}
+			character_event = { id = hunting.5 }
+		}
+	}
+}
+
+# hunting.5 The white beast was seen
+# Sets out on the hunt (hunting.10) or gives it up.
+# Scope: the hunter; event_target:hunting_beast_county is where it was seen.
+character_event = {
+	id = hunting.5
+	desc = { trigger = { has_character_flag = white_stag } text = EVTDESChunting5 }
+	desc = { trigger = { has_character_flag = white_bear } text = EVTDESChunting5b }
+	desc = { trigger = { has_character_flag = white_tiger } text = EVTDESChunting5c }
+	desc = { trigger = { has_character_flag = white_lion } text = EVTDESChunting5d }
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.3
+
+	option = { # Set out
+		name = EVTOPTAhunting5
+		end_inaccessibility_effect = yes
+		set_character_flag = do_not_disturb
+		hidden_tooltip = { character_event = { id = hunting.10 days = 60 } }
+		ai_chance = { factor = 3 }
+	}
+	option = { # Not now
+		name = EVTOPTBhunting5
+		trigger = { NOT = { trait = hunter } }
+		hunting_legend_abandoned_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 war = yes }
+			modifier = { factor = 2 trait = slothful }
+		}
+	}
+}
+
+# hunting.6 A glimpse of the white beast during a grand hunt
+# MTTH while the Holy Fury grand hunt runs (hunt_begin flag, see
+# hunting_events.txt).
+# Scope: the hunter.
+character_event = {
+	id = hunting.6
+	hide_window = yes
+
+	only_playable = yes
+	has_character_flag = hunt_begin
+	min_age = 16
+	prisoner = no
+
+	trigger = {
+		has_dlc = "Way of Life"
+		has_focus = focus_hunting
+		has_character_modifier = holding_grand_hunt
+		hunting_forbidden_faith_trigger = no
+		NOT = { has_character_flag = epic_hunt }
+		NOT = { trait = incapable }
+		NOT = { health_traits = 1 }
+		OR = {
+			NOT = { has_character_flag = hunt_event_happened }
+			had_character_flag = {
+				flag = hunt_event_happened
+				days = 3
+			}
+		}
+		had_character_flag = {
+			flag = hunt_begin
+			days = 3
+		}
+	}
+
+	mean_time_to_happen = {
+		days = 200
+		modifier = {
+			factor = 0.33
+			NOT = { has_character_flag = hunt_event_happened }
+		}
+		modifier = {
+			factor = 1.5
+			has_character_flag = hunt_event_happened
+		}
+		modifier = { factor = 1.5 trait = content }
+		modifier = { factor = 0.8 trait = hunter }
+		modifier = { factor = 0.8 martial = 15 }
+		modifier = { factor = 2.0 trait = slothful }
+		modifier = { factor = 0.5 has_character_flag = hunt_good_hounds }
+		modifier = { factor = 1.25 trait = craven }
+	}
+
+	immediate = {
+		set_character_flag = hunt_event_happened
+		set_character_flag = epic_hunt
+		hunting_pick_legend_effect = yes
+		narrative_event = { id = hunting.7 }
+	}
+}
+
+# hunting.7 The white beast in the distance
+# Same choice as hunting.2.
+# Scope: the hunter.
+narrative_event = {
+	id = hunting.7
+	title = { trigger = { has_character_flag = white_stag } text = EVTTITLEhunting2 }
+	title = { trigger = { has_character_flag = white_bear } text = EVTTITLEhunting2_bear }
+	title = { trigger = { has_character_flag = white_tiger } text = EVTTITLEhunting2_tiger }
+	title = { trigger = { has_character_flag = white_lion } text = EVTTITLEhunting2_lion }
+	desc = { trigger = { has_character_flag = white_stag } text = EVTDESChunting7 }
+	desc = { trigger = { has_character_flag = white_bear } text = EVTDESChunting7b }
+	desc = { trigger = { has_character_flag = white_tiger } text = EVTDESChunting7c }
+	desc = { trigger = { has_character_flag = white_lion } text = EVTDESChunting7d }
+	picture = GFX_evt_mysterious_forest
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes # hunting.6
+
+	option = { # Find it
+		name = EVTOPTAhunting2
+		hidden_tooltip = { character_event = { id = hunting.3 days = 50 random = 150 } }
+		ai_chance = { factor = 3 }
+	}
+	option = { # No time for tales
+		name = EVTOPTBhunting2
+		trigger = { NOT = { trait = hunter } }
+		hunting_legend_abandoned_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = slothful }
+			modifier = { factor = 0.5 trait = brave }
+		}
+	}
+}
+
+###############################################################################
+# The hunt
+###############################################################################
+
+# hunting.10 The hunt sets out
+# Scope: the hunter.
+character_event = {
+	id = hunting.10
+	desc = { trigger = { has_character_flag = white_stag } text = EVTDESChunting10 }
+	desc = { trigger = { has_character_flag = white_bear } text = EVTDESChunting10b }
+	desc = { trigger = { has_character_flag = white_tiger } text = EVTDESChunting10c }
+	desc = { trigger = { has_character_flag = white_lion } text = EVTDESChunting10d }
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.5
+
+	option = { # First hunt
+		name = EVTOPTAhunting10
+		trigger = { NOT = { has_character_flag = failed_epic_hunt } }
+		hidden_tooltip = { character_event = { id = hunting.11 days = 15 random = 20 } }
+	}
+	option = { # It escaped before
+		name = EVTOPTBhunting10
+		trigger = { has_character_flag = failed_epic_hunt }
+		hidden_tooltip = { character_event = { id = hunting.11 days = 15 random = 20 } }
+	}
+}
+
+# hunting.11 Router: how the hunt goes
+# The beast is caught rarely; hunters, the persistent, the skilled and those
+# with a good hound catch it more often. The cottage outcomes need a race
+# with women. Vampires, Tomb Kings and daemons do not tire, hunger or meet
+# strangers in cottages: the wild flees them instead (hunting.23).
+# Scope: the hunter.
+character_event = {
+	id = hunting.11
+	hide_window = yes
+	is_triggered_only = yes # hunting.10
+
+	immediate = {
+		random_list = {
+			2 = { # The beast is cornered
+				modifier = { factor = 2 trait = hunter }
+				modifier = { factor = 2 has_character_flag = failed_epic_hunt }
+				modifier = { factor = 1.5 martial = 15 }
+				modifier = { factor = 1.5 has_character_modifier = pet_hunting_dog }
+				character_event = { id = hunting.12 }
+			}
+			10 = { # So close, across a gorge
+				set_character_flag = failed_epic_hunt
+				character_event = { id = hunting.13 }
+			}
+			10 = { # A rival hunter
+				set_character_flag = failed_epic_hunt
+				character_event = { id = hunting.14 }
+			}
+			10 = { # Lost, and miserable
+				set_character_flag = failed_epic_hunt
+				character_event = { id = hunting.15 }
+			}
+			10 = { # Lost, and glad of it
+				modifier = { factor = 0 focus_unliving_trigger = yes }
+				set_character_flag = failed_epic_hunt
+				character_event = { id = hunting.16 }
+			}
+			30 = { # Nothing
+				set_character_flag = failed_epic_hunt
+				character_event = { id = hunting.17 }
+			}
+			40 = { # The beasts flee the unliving
+				trigger = { focus_unliving_trigger = yes }
+				character_event = { id = hunting.23 }
+			}
+			10 = { # The crone in the cottage
+				modifier = { factor = 0 is_no_females_race = yes }
+				modifier = { factor = 0 focus_unliving_trigger = yes }
+				set_character_flag = failed_epic_hunt
+				character_event = { id = hunting.18 }
+			}
+			10 = { # The stranger in the cottage
+				modifier = { factor = 0 is_no_females_race = yes }
+				modifier = { factor = 0 focus_unliving_trigger = yes }
+				modifier = { factor = 0.25 trait = celibate }
+				set_character_flag = failed_epic_hunt
+				character_event = { id = hunting.21 }
+			}
+		}
+	}
+}
+
+# hunting.12 The beast is cornered
+# Kill it or spare it. The faithful of Taal, Kurnous and Ursun lose piety
+# for the kill and gain it for mercy; an Asur of Chrace gains piety for the
+# lion's death and loses some for sparing it. A kill may rarely leave a trophy (lion cloak for the Asur,
+# antlers for the hart, a pelt for the rest), and mercy may rarely bring the
+# beast home as a mount (hart, bear or tiger). Each once a lifetime.
+# Scope: the hunter.
+character_event = {
+	id = hunting.12
+	desc = {
+		trigger = {
+			has_character_flag = white_stag
+			hunting_taal_hart_trigger = no
+		}
+		text = EVTDESChunting12
+	}
+	desc = {
+		trigger = {
+			has_character_flag = white_bear
+			hunting_ursun_bear_trigger = no
+		}
+		text = EVTDESChunting12b
+	}
+	desc = { trigger = { has_character_flag = white_tiger } text = EVTDESChunting12c }
+	desc = {
+		trigger = {
+			has_character_flag = white_lion
+			hunting_chrace_lion_trigger = no
+		}
+		text = EVTDESChunting12d
+	}
+	desc = { trigger = { hunting_taal_hart_trigger = yes } text = EVTDESChunting12e }
+	desc = { trigger = { hunting_ursun_bear_trigger = yes } text = EVTDESChunting12f }
+	desc = { trigger = { hunting_chrace_lion_trigger = yes } text = EVTDESChunting12g }
+	picture = GFX_evt_mysterious_forest
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.11
+
+	option = { # The kill
+		name = EVTOPTAhunting12
+		prestige = 200
+		if = {
+			limit = { hunting_sacred_beast_trigger = yes }
+			piety = -150
+		}
+		if = {
+			limit = { hunting_chrace_lion_trigger = yes }
+			piety = 100
+		}
+		if = {
+			limit = { NOT = { lifestyle_traits = 1 } }
+			add_trait = hunter
+		}
+		if = {
+			limit = { ai = no }
+			set_character_flag = achievement_great_hunter
+		}
+		if = {
+			limit = {
+				NOT = { has_character_flag = hunt_trophy_given }
+				NOT = { has_artifact = white_hart_antlers }
+				NOT = { has_artifact = white_beast_pelt }
+				NOT = { has_artifact = asur_artifact_lion_cloak }
+			}
+			random = {
+				chance = 35
+				set_character_flag = hunt_trophy_given
+				if = {
+					limit = { hunting_chrace_lion_trigger = yes }
+					add_artifact = asur_artifact_lion_cloak
+				}
+				else_if = {
+					limit = { has_character_flag = white_stag }
+					add_artifact = white_hart_antlers
+				}
+				else = {
+					add_artifact = white_beast_pelt
+				}
+			}
+		}
+		hunting_legend_won_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0.05 hunting_sacred_beast_trigger = yes }
+			modifier = { factor = 5 hunting_chrace_lion_trigger = yes }
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 0.5 trait = kind }
+		}
+	}
+	option = { # Mercy
+		name = EVTOPTBhunting12
+		prestige = 200
+		if = {
+			limit = { hunting_sacred_beast_trigger = yes }
+			piety = 100
+		}
+		if = {
+			limit = { hunting_chrace_lion_trigger = yes }
+			piety = -50
+		}
+		if = {
+			limit = {
+				NOT = { has_character_flag = hunt_mount_given }
+				NOT = { has_character_flag = white_lion }
+				NOT = { has_artifact = asrai_stag }
+				NOT = { has_artifact = war_bear_mount }
+				NOT = { has_artifact = amazon_tiger }
+			}
+			random = {
+				chance = 20
+				modifier = { factor = 2 hunting_sacred_beast_trigger = yes }
+				set_character_flag = hunt_mount_given
+				set_character_flag = has_mount
+				if = {
+					limit = { has_character_flag = white_stag }
+					add_artifact = asrai_stag
+				}
+				else_if = {
+					limit = { has_character_flag = white_bear }
+					add_artifact = war_bear_mount
+				}
+				else = {
+					add_artifact = amazon_tiger
+				}
+				custom_tooltip = { text = hunting_beast_follows_tt }
+			}
+		}
+		hunting_legend_won_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 10 hunting_sacred_beast_trigger = yes }
+			modifier = { factor = 0.1 hunting_chrace_lion_trigger = yes }
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 0.5 trait = cruel }
+		}
+	}
+}
+
+# hunting.13 Across the gorge
+# The beast stares back across a gorge and runs. The hunter may find a
+# purpose in the chase.
+# Scope: the hunter.
+character_event = {
+	id = hunting.13
+	desc = { trigger = { has_character_flag = white_stag } text = EVTDESChunting13 }
+	desc = { trigger = { has_character_flag = white_bear } text = EVTDESChunting13b }
+	desc = { trigger = { has_character_flag = white_tiger } text = EVTDESChunting13c }
+	desc = { trigger = { has_character_flag = white_lion } text = EVTDESChunting13d }
+	picture = GFX_evt_mysterious_forest
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.11
+
+	option = { # My purpose in life
+		name = EVTOPTAhunting13
+		trigger = { NOT = { lifestyle_traits = 1 } }
+		add_trait = hunter
+		if = {
+			limit = { has_nickname = no }
+			give_nickname = nick_the_hunter
+		}
+		clr_character_flag = do_not_disturb
+		hunting_beast_escapes_effect = yes
+	}
+	option = { # Some day
+		name = EVTOPTBhunting13
+		clr_character_flag = do_not_disturb
+		hunting_beast_escapes_effect = yes
+	}
+}
+
+# hunting.14 A rival hunter
+# A lone hunter is after the same beast. Invite him to court, leave him, or
+# (if mad, wrathful or paranoid) see that he never hunts again.
+# Scope: the hunter.
+character_event = {
+	id = hunting.14
+	desc = EVTDESChunting14
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.11
+
+	option = { # Join my court
+		name = EVTOPTAhunting14
+		create_character = {
+			random_traits = yes
+			dynasty = NONE
+			religion = ROOT
+			culture = ROOT
+			female = no
+			age = 36
+			trait = hunter
+			trait = brave
+			attributes = {
+				martial = 8
+			}
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			hidden_tooltip = { add_random_education_trait = martial }
+			give_nickname = nick_the_hunter
+		}
+		hunting_beast_escapes_effect = yes
+		hidden_tooltip = { character_event = { id = hunting.20 days = 5 } }
+		ai_chance = { factor = 2 }
+	}
+	option = { # Hunt alone
+		name = EVTOPTBhunting14
+		hunting_beast_escapes_effect = yes
+		hidden_tooltip = { character_event = { id = hunting.20 days = 5 } }
+		ai_chance = { factor = 1 }
+	}
+	option = { # A rival: he dies
+		name = EVTOPTChunting14
+		trigger = {
+			OR = {
+				trait = impaler
+				trait = lunatic_1
+				trait = lunatic_2
+				trait = lunatic_3
+				trait = wroth
+				trait = paranoid
+			}
+		}
+		custom_tooltip = { text = hunting_rival_dies_tt }
+		if = {
+			limit = { NOT = { trait = cruel } }
+			add_trait = cruel
+		}
+		if = {
+			limit = { trait = paranoid }
+			add_trait = envious
+		}
+		else = {
+			add_trait = paranoid
+		}
+		hunting_beast_escapes_effect = yes
+		hidden_tooltip = { character_event = { id = hunting.20 days = 5 } }
+		ai_chance = { factor = 0.5 }
+	}
+}
+
+# hunting.15 Lost in the wilds
+# Weeks of bugs, snakes and saddle sores: sickness (unless the race is
+# immune), stress, gloom or a short temper.
+# Scope: the hunter.
+character_event = {
+	id = hunting.15
+	desc = EVTDESChunting15
+	picture = GFX_evt_bandits
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.11
+
+	option = {
+		name = EVTOPTAhunting15
+		if = {
+			limit = {
+				is_ill = no
+				is_disease_immune_race = no
+			}
+			random = {
+				chance = 30
+				if = {
+					limit = { has_dlc = "Reapers" }
+					add_trait = infection
+					hidden_tooltip = { character_event = { id = treatment.2 days = 365 random = 1095 } }
+				}
+				else = {
+					add_trait = pneumonic
+				}
+				nurgle_blessing_check_effect = yes
+			}
+		}
+		if = {
+			limit = { trait = stressed }
+			random = {
+				chance = 20
+				add_trait = depressed
+				hidden_tooltip = { character_event = { id = 38288 } } # Notify Depressed
+			}
+		}
+		else = {
+			random = {
+				chance = 20
+				add_trait = stressed
+				hidden_tooltip = { character_event = { id = 38282 } } # Notify Stressed
+			}
+		}
+		if = {
+			limit = {
+				NOT = { trait = patient }
+				NOT = { trait = wroth }
+			}
+			random = {
+				chance = 20
+				add_trait = wroth
+				hidden_tooltip = { character_event = { id = 38254 } } # Notify Wroth
+			}
+		}
+		hunting_beast_escapes_effect = yes
+		hidden_tooltip = { character_event = { id = hunting.20 days = 5 } }
+	}
+}
+
+# hunting.16 Lost, and glad of it
+# The wilds make the hunter stronger.
+# Scope: the hunter.
+character_event = {
+	id = hunting.16
+	desc = EVTDESChunting16
+	picture = GFX_evt_fishing
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.11
+
+	option = {
+		name = EVTOPTAhunting16
+		if = {
+			limit = { trait = slothful }
+			remove_trait = slothful
+		}
+		if = {
+			limit = { is_weak_trigger = yes }
+			random = {
+				chance = 20
+				remove_trait = weak
+				remove_trait = feeble
+			}
+		}
+		else_if = {
+			limit = { is_strong_trigger = no }
+			random = {
+				chance = 20
+				add_trait = robust
+			}
+		}
+		hunting_beast_escapes_effect = yes
+		hidden_tooltip = { character_event = { id = hunting.20 days = 5 } }
+	}
+}
+
+# hunting.17 Home empty-handed
+# Blame yourself (humble) or the servants (arbitrary, then proud).
+# Scope: the hunter.
+character_event = {
+	id = hunting.17
+	desc = EVTDESChunting17
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.11
+
+	option = { # My own failure
+		name = EVTOPTAhunting17
+		prestige = -20
+		if = {
+			limit = { NOT = { trait = humble } }
+			add_trait = humble
+		}
+		clr_character_flag = do_not_disturb
+		hunting_beast_escapes_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 trait = proud }
+			modifier = { factor = 2 trait = humble }
+		}
+	}
+	option = { # Useless servants
+		name = EVTOPTBhunting17
+		if = {
+			limit = {
+				trait = arbitrary
+				NOT = { trait = proud }
+			}
+			add_trait = proud
+		}
+		else_if = {
+			limit = { NOT = { trait = arbitrary } }
+			add_trait = arbitrary
+		}
+		clr_character_flag = do_not_disturb
+		hunting_beast_escapes_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 trait = humble }
+			modifier = { factor = 2 trait = proud }
+		}
+	}
+}
+
+# hunting.18 The crone in the cottage
+# A hedge witch sells a potion that will make the hunter a better one
+# (hunting.19). A witch hunter, or a zealous Sigmarite, hands her over to
+# the Order instead.
+# Scope: the hunter.
+character_event = {
+	id = hunting.18
+	desc = EVTDESChunting18
+	picture = GFX_evt_pagan
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.11
+
+	option = { # Drink
+		name = EVTOPTAhunting18
+		wealth = -5
+		custom_tooltip = { text = potion_unforeseen_effects }
+		hunting_beast_escapes_effect = yes
+		hidden_tooltip = { character_event = { id = hunting.19 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.25 trait = craven }
+			modifier = { factor = 0.25 trait = zealous }
+		}
+	}
+	option = { # Go home
+		name = EVTOPTBhunting18
+		hunting_beast_escapes_effect = yes
+		hidden_tooltip = { character_event = { id = hunting.20 days = 3 } }
+		ai_chance = { factor = 1 }
+	}
+	option = { # Seize the witch
+		name = EVTOPTChunting18
+		trigger = {
+			OR = {
+				trait = witch_hunter
+				AND = {
+					religion = sigmarite
+					trait = zealous
+				}
+			}
+		}
+		piety = 25
+		hunting_beast_escapes_effect = yes
+		hidden_tooltip = { character_event = { id = hunting.20 days = 3 } }
+		ai_chance = { factor = 3 }
+	}
+}
+
+# hunting.19 The potion
+# Ill, stressed, lustful, brave or diligent.
+# Scope: the hunter.
+character_event = {
+	id = hunting.19
+	desc = {
+		trigger = {
+			OR = {
+				has_character_flag = potion_lustful
+				has_character_flag = potion_brave
+				has_character_flag = potion_diligent
+			}
+		}
+		text = EVTDESChunting19
+	}
+	desc = {
+		trigger = {
+			OR = {
+				has_character_flag = potion_ill
+				has_character_flag = potion_stressed
+			}
+		}
+		text = EVTDESChunting19b
+	}
+	picture = GFX_evt_pagan
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.18
+
+	immediate = {
+		random_list = {
+			10 = { set_character_flag = potion_ill }
+			10 = { set_character_flag = potion_stressed }
+			10 = { set_character_flag = potion_lustful }
+			10 = { set_character_flag = potion_brave }
+			10 = { set_character_flag = potion_diligent }
+		}
+	}
+
+	option = { # Ill
+		name = EVTOPTAhunting19
+		trigger = { has_character_flag = potion_ill }
+		if = {
+			limit = {
+				is_ill = no
+				is_disease_immune_race = no
+			}
+			if = {
+				limit = { has_dlc = "Reapers" }
+				set_character_flag = disease_not_serious
+				add_trait = diarrhea
+				hidden_tooltip = { character_event = { id = treatment.5 days = 30 random = 90 } }
+			}
+			else = {
+				add_trait = ill
+			}
+			nurgle_blessing_check_effect = yes
+		}
+		clr_character_flag = potion_ill
+		hidden_tooltip = { character_event = { id = hunting.20 days = 3 } }
+	}
+	option = { # Stressed
+		name = EVTOPTAhunting19
+		trigger = { has_character_flag = potion_stressed }
+		if = {
+			limit = { NOT = { trait = stressed } }
+			add_trait = stressed
+		}
+		clr_character_flag = potion_stressed
+		hidden_tooltip = { character_event = { id = hunting.20 days = 3 } }
+	}
+	option = { # Lustful
+		name = EVTOPTBhunting19
+		trigger = { has_character_flag = potion_lustful }
+		if = {
+			limit = { NOT = { trait = lustful } }
+			add_trait = lustful
+		}
+		clr_character_flag = potion_lustful
+		hidden_tooltip = { character_event = { id = hunting.20 days = 3 } }
+	}
+	option = { # Brave
+		name = EVTOPTBhunting19
+		trigger = { has_character_flag = potion_brave }
+		if = {
+			limit = { NOT = { trait = brave } }
+			add_trait = brave
+		}
+		clr_character_flag = potion_brave
+		hidden_tooltip = { character_event = { id = hunting.20 days = 3 } }
+	}
+	option = { # Diligent
+		name = EVTOPTBhunting19
+		trigger = { has_character_flag = potion_diligent }
+		if = {
+			limit = { NOT = { trait = diligent } }
+			add_trait = diligent
+		}
+		clr_character_flag = potion_diligent
+		hidden_tooltip = { character_event = { id = hunting.20 days = 3 } }
+	}
+}
+
+# hunting.20 Home again
+# The end of a hunt that went astray. The beast's modifier and the next
+# news of it were set by the outcome.
+# Scope: the hunter.
+character_event = {
+	id = hunting.20
+	desc = EVTDESChunting20
+	picture = GFX_evt_rider_adventure
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.14 - hunting.19, hunting.21, hunting.22
+
+	option = {
+		name = EVTOPTAhunting20
+		clr_character_flag = do_not_disturb
+	}
+}
+
+# hunting.21 The stranger in the cottage
+# A lonely stranger asks the hunter to stay the night (hunting.22). The
+# paranoid or mad see a trap.
+# Scope: the hunter.
+character_event = {
+	id = hunting.21
+	desc = { trigger = { has_character_flag = woods_female_lover } text = EVTDESChunting21 }
+	desc = { trigger = { has_character_flag = woods_male_lover } text = EVTDESChunting21b }
+	picture = GFX_evt_rider_adventure
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.11
+
+	immediate = {
+		if = {
+			limit = {
+				OR = {
+					AND = {
+						is_woman_trigger = no
+						NOT = { trait = homosexual }
+					}
+					AND = {
+						is_woman_trigger = yes
+						trait = homosexual
+					}
+				}
+			}
+			set_character_flag = woods_female_lover
+		}
+		else = {
+			set_character_flag = woods_male_lover
+		}
+	}
+
+	option = { # Stay the night
+		name = EVTOPTAhunting21
+		trigger = { NOT = { trait = celibate } }
+		add_character_modifier = {
+			name = good_times
+			years = 2
+		}
+		if = {
+			limit = { NOT = { trait = lustful } }
+			random = {
+				chance = 50
+				add_trait = lustful
+			}
+		}
+		hunting_beast_escapes_effect = yes
+		hidden_tooltip = { character_event = { id = hunting.22 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = lustful }
+			modifier = { factor = 0.1 trait = chaste }
+			modifier = { factor = 0.5 is_married = yes }
+		}
+	}
+	option = { # Leave
+		name = EVTOPTBhunting21
+		clr_character_flag = woods_female_lover
+		clr_character_flag = woods_male_lover
+		if = {
+			limit = { NOT = { trait = chaste } }
+			random = {
+				chance = 20
+				add_trait = chaste
+				hidden_tooltip = { character_event = { id = 38274 } } # Notify Chaste
+			}
+		}
+		hunting_beast_escapes_effect = yes
+		hidden_tooltip = { character_event = { id = hunting.20 days = 5 } }
+		ai_chance = { factor = 1 }
+	}
+	option = { # A trap!
+		name = EVTOPTChunting21
+		trigger = {
+			OR = {
+				trait = paranoid
+				trait = lunatic_1
+				trait = lunatic_2
+				trait = lunatic_3
+			}
+		}
+		clr_character_flag = woods_female_lover
+		clr_character_flag = woods_male_lover
+		custom_tooltip = { text = cottage_person_dies }
+		if = {
+			limit = { NOT = { trait = wroth } }
+			add_trait = wroth
+		}
+		else_if = {
+			limit = { NOT = { trait = paranoid } }
+			add_trait = paranoid
+		}
+		hunting_beast_escapes_effect = yes
+		hidden_tooltip = { character_event = { id = hunting.20 days = 5 } }
+		ai_chance = { factor = 0.5 }
+	}
+}
+
+# hunting.22 The morning after
+# Leave, or bring the stranger home as a lover.
+# Scope: the hunter.
+character_event = {
+	id = hunting.22
+	desc = EVTDESChunting22
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.21
+
+	option = { # I have to go
+		name = EVTOPTAhunting22
+		clr_character_flag = woods_female_lover
+		clr_character_flag = woods_male_lover
+		hidden_tooltip = { character_event = { id = hunting.20 days = 5 } }
+		ai_chance = { factor = 1 }
+	}
+	option = { # Come with me
+		name = EVTOPTBhunting22
+		if = {
+			limit = { has_character_flag = woods_female_lover }
+			create_character = {
+				random_traits = yes
+				dynasty = NONE
+				religion = ROOT
+				culture = ROOT
+				female = yes
+				age = 17
+				trait = intricate_webweaver
+				trait = fair
+				trait = quick
+				trait = lustful
+				attributes = {
+					intrigue = 10
+				}
+			}
+		}
+		else = {
+			create_character = {
+				random_traits = yes
+				dynasty = NONE
+				religion = ROOT
+				culture = ROOT
+				female = no
+				age = 17
+				trait = intricate_webweaver
+				trait = fair
+				trait = quick
+				trait = lustful
+				attributes = {
+					intrigue = 10
+				}
+			}
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			give_nickname = nick_of_the_wilds
+			if = {
+				limit = { ROOT = { trait = homosexual } }
+				add_trait = homosexual
+			}
+			if = {
+				limit = {
+					is_no_females_race = no
+					ROOT = { is_no_females_race = no }
+				}
+				add_lover = ROOT
+			}
+			remove_trait = genius
+			remove_trait = imbecile
+			remove_trait = ugly
+			remove_trait = slow
+			remove_trait = chaste
+		}
+		clr_character_flag = woods_female_lover
+		clr_character_flag = woods_male_lover
+		hidden_tooltip = { character_event = { id = hunting.20 days = 5 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = lustful }
+			modifier = { factor = 0.25 is_married = yes }
+		}
+	}
+}
+
+# hunting.23 The wild flees the unliving
+# Every beast of the wild knows death when it rides by. Drive the white beast
+# with the dead (or through the Warp) and perhaps corner it (hunting.12),
+# hunt other prey, or ride home.
+# Scope: the hunter.
+character_event = {
+	id = hunting.23
+	desc = { trigger = { is_vampire_trigger = yes } text = EVTDESChunting23 }
+	desc = { trigger = { focus_tomb_king_trigger = yes } text = EVTDESChunting23b }
+	desc = { trigger = { focus_daemon_host_trigger = yes } text = EVTDESChunting23c }
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.11
+
+	option = { # Drive it with the dead, or through the Warp
+		name = { trigger = { focus_daemon_host_trigger = no } text = EVTOPTAhunting23 }
+		name = { trigger = { focus_daemon_host_trigger = yes } text = EVTOPTAhunting23c }
+		random_list = {
+			30 = {
+				modifier = { factor = 1.5 trait = hunter }
+				modifier = { factor = 1.5 martial = 15 }
+				character_event = { id = hunting.12 }
+			}
+			70 = {
+				set_character_flag = failed_epic_hunt
+				prestige = -10
+				clr_character_flag = do_not_disturb
+				hunting_beast_escapes_effect = yes
+			}
+		}
+		ai_chance = { factor = 2 }
+	}
+	option = { # Other prey
+		name = { trigger = { is_vampire_trigger = yes } text = EVTOPTBhunting23 }
+		name = { trigger = { focus_tomb_king_trigger = yes } text = EVTOPTBhunting23b }
+		name = { trigger = { focus_daemon_host_trigger = yes } text = EVTOPTBhunting23c }
+		set_character_flag = failed_epic_hunt
+		if = {
+			limit = { focus_tomb_king_trigger = yes }
+			piety = 15
+		}
+		else = {
+			prestige = 15
+			if = {
+				limit = { trait = stressed }
+				random = { chance = 30 remove_trait = stressed }
+			}
+		}
+		if = {
+			limit = {
+				is_vampire_trigger = yes
+				is_vampire_visible_trigger = no
+			}
+			random = { chance = 20 prestige = -50 }
+		}
+		clr_character_flag = do_not_disturb
+		hunting_beast_escapes_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 0.25 is_vampire_trigger = yes is_vampire_visible_trigger = no }
+		}
+	}
+	option = { # Ride home
+		name = EVTOPTChunting23
+		set_character_flag = failed_epic_hunt
+		clr_character_flag = do_not_disturb
+		hunting_beast_escapes_effect = yes
+		ai_chance = { factor = 1 }
+	}
+}
+
+###############################################################################
+# The hound
+###############################################################################
+
+# hunting.30 A puppy for the hunter
+# Picks who sends it: a friend, a spouse who likes the hunter, a lover, a
+# courtier who likes the hunter, any spouse, any courtier. Once a lifetime.
+# Scope: the hunter.
+character_event = {
+	id = hunting.30
+	hide_window = yes
+	is_triggered_only = yes # on_focus_pulse
+
+	only_playable = yes
+
+	trigger = {
+		has_focus = focus_hunting
+		hunting_forbidden_faith_trigger = no
+		NOT = { has_character_modifier = pet_hunting_dog }
+		NOT = { has_character_flag = offered_puppy }
+		NOT = { has_character_flag = had_hunting_dog }
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				any_friend = { hunting_puppy_giver_trigger = yes }
+			}
+			random_friend = {
+				limit = { hunting_puppy_giver_trigger = yes }
+				character_event = { id = hunting.31 }
+			}
+			set_character_flag = offered_puppy
+		}
+		else_if = {
+			limit = {
+				any_spouse = {
+					hunting_puppy_giver_trigger = yes
+					opinion = { who = ROOT value = 0 }
+				}
+			}
+			random_spouse = {
+				limit = {
+					hunting_puppy_giver_trigger = yes
+					opinion = { who = ROOT value = 0 }
+				}
+				character_event = { id = hunting.31 }
+			}
+			set_character_flag = offered_puppy
+		}
+		else_if = {
+			limit = {
+				any_lover = { hunting_puppy_giver_trigger = yes }
+			}
+			random_lover = {
+				limit = { hunting_puppy_giver_trigger = yes }
+				character_event = { id = hunting.31 }
+			}
+			set_character_flag = offered_puppy
+		}
+		else_if = {
+			limit = {
+				any_courtier = {
+					hunting_puppy_giver_trigger = yes
+					opinion = { who = ROOT value = 0 }
+				}
+			}
+			random_courtier = {
+				limit = {
+					hunting_puppy_giver_trigger = yes
+					opinion = { who = ROOT value = 0 }
+				}
+				character_event = { id = hunting.31 }
+			}
+			set_character_flag = offered_puppy
+		}
+		else_if = {
+			limit = {
+				any_spouse = { hunting_puppy_giver_trigger = yes }
+			}
+			random_spouse = {
+				limit = { hunting_puppy_giver_trigger = yes }
+				character_event = { id = hunting.31 }
+			}
+			set_character_flag = offered_puppy
+		}
+		else_if = {
+			limit = {
+				any_courtier = { hunting_puppy_giver_trigger = yes }
+			}
+			random_courtier = {
+				limit = { hunting_puppy_giver_trigger = yes }
+				character_event = { id = hunting.31 }
+			}
+			set_character_flag = offered_puppy
+		}
+	}
+}
+
+# hunting.31 Bounce: the giver sends the puppy
+# Fired in the giver's scope, so that the giver is FROM in hunting.32.
+# Scope: the giver; FROM is the hunter.
+character_event = {
+	id = hunting.31
+	hide_window = yes
+	is_triggered_only = yes # hunting.30
+
+	immediate = {
+		FROM = { character_event = { id = hunting.32 } }
+	}
+}
+
+# hunting.32 The gift
+# Accept it (named in hunting.33, dies in hunting.50 in ten to fifteen
+# years), send it back, or have it quietly disposed of. A greenskin gets a
+# wolf cub from the pens.
+# Scope: the hunter; FROM is the giver.
+character_event = {
+	id = hunting.32
+	desc = {
+		trigger = { NOT = { religion_group = greenskin_gods_group } }
+		text = EVTDESChunting32
+	}
+	desc = {
+		trigger = { religion_group = greenskin_gods_group }
+		text = EVTDESChunting32b
+	}
+	picture = GFX_evt_hunting_scene
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.31
+
+	option = { # Accept
+		name = EVTOPTAhunting32
+		add_character_modifier = {
+			modifier = pet_hunting_dog
+			duration = -1
+		}
+		clr_character_flag = offered_puppy
+		clr_character_flag = hunting_dog_already_killed
+		set_character_flag = had_hunting_dog
+		hidden_tooltip = {
+			character_event = { id = hunting.33 }
+			character_event = { id = hunting.50 days = 3500 random = 2000 } # The hound dies
+			character_event = { id = pet.20 days = 30 random = 100 } # Cat and hound
+		}
+		ai_chance = { factor = 10 }
+	}
+	option = { # Send it back
+		name = EVTOPTBhunting32
+		reverse_opinion = {
+			modifier = opinion_insulted
+			who = FROM
+			years = 2
+		}
+		clr_character_flag = offered_puppy
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 opinion = { who = FROM value = 0 } }
+		}
+	}
+	option = { # Dispose of it
+		name = EVTOPTChunting32
+		wealth = -10
+		random = {
+			chance = 30
+			reverse_opinion = {
+				modifier = insulted
+				who = FROM
+				years = 5
+			}
+		}
+		clr_character_flag = offered_puppy
+		ai_chance = {
+			factor = 0
+			modifier = { factor = 1 trait = cruel }
+		}
+	}
+}
+
+# hunting.33 Naming the puppy
+# Its temper is set here: nine in ten are good hounds. A follower of the
+# Chaos gods may name it for Karanak, the Hound of Khorne.
+# Scope: the hunter.
+character_event = {
+	id = hunting.33
+	desc = EVTDESChunting33
+	picture = GFX_evt_hunting_scene
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.32
+
+	immediate = {
+		random_list = {
+			90 = { set_character_flag = good_dog }
+			10 = { set_character_flag = bad_dog }
+		}
+	}
+
+	option = { # Faithful
+		name = EVTOPTAhunting33
+		set_character_flag = dog_name_faithful
+		hidden_tooltip = { character_event = { id = hunting.34 days = 150 } }
+	}
+	option = { # Hunter
+		name = EVTOPTBhunting33
+		set_character_flag = dog_name_hunter
+		hidden_tooltip = { character_event = { id = hunting.34 days = 150 } }
+	}
+	option = { # Tricky
+		name = EVTOPTChunting33
+		set_character_flag = dog_name_tricky
+		hidden_tooltip = { character_event = { id = hunting.34 days = 150 } }
+	}
+	option = { # Karanak
+		name = EVTOPTDhunting33
+		trigger = { religion_group = chaos_gods_group }
+		set_character_flag = dog_name_karanak
+		hidden_tooltip = { character_event = { id = hunting.34 days = 150 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 5 religion = khorne }
+		}
+	}
+}
+
+# hunting.34 The puppy grows up
+# Scope: the hunter.
+character_event = {
+	id = hunting.34
+	desc = { trigger = { has_character_flag = good_dog } text = EVTDESChunting34 }
+	desc = { trigger = { has_character_flag = bad_dog } text = EVTDESChunting34b }
+	picture = GFX_evt_hunting_scene
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.33
+
+	trigger = {
+		has_character_modifier = pet_hunting_dog
+	}
+
+	option = {
+		name = EVTOPTAhunting34
+		trigger = { NOT = { has_character_flag = bad_dog } }
+		prestige = 10
+	}
+	option = {
+		name = EVTOPTBhunting34
+		trigger = { has_character_flag = bad_dog }
+		prestige = 10
+	}
+}
+
+# hunting.40 A faithful friend
+# The hound lifts its master's stress or gloom.
+# Scope: the hunter.
+character_event = {
+	id = hunting.40
+	desc = EVTDESChunting40
+	picture = GFX_evt_hunting_scene
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_focus_pulse
+
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		has_character_modifier = pet_hunting_dog
+		OR = {
+			trait = stressed
+			trait = depressed
+		}
+	}
+
+	option = {
+		name = EVTOPTAhunting40
+		if = {
+			limit = { trait = stressed }
+			remove_trait = stressed
+		}
+		if = {
+			limit = { trait = depressed }
+			remove_trait = depressed
+		}
+	}
+}
+
+# hunting.41 The court's favourite
+# A good hound charms the hunters and the children of the court. At most
+# once every five years.
+# Scope: the hunter.
+character_event = {
+	id = hunting.41
+	desc = EVTDESChunting41
+	picture = GFX_evt_hunting_scene
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_focus_pulse
+
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		has_character_modifier = pet_hunting_dog
+		has_character_flag = good_dog
+		OR = {
+			NOT = { has_character_flag = hound_charmed_court }
+			had_character_flag = {
+				flag = hound_charmed_court
+				days = 1825
+			}
+		}
+	}
+
+	immediate = {
+		clr_character_flag = hound_charmed_court
+		set_character_flag = hound_charmed_court
+	}
+
+	option = {
+		name = EVTOPTAhunting41
+		any_courtier = {
+			limit = {
+				is_adult = yes
+				trait = hunter
+			}
+			opinion = {
+				modifier = opinion_nice_dog
+				who = ROOT
+				years = 3
+			}
+		}
+		any_courtier = {
+			limit = { is_adult = no }
+			opinion = {
+				modifier = opinion_nice_dog_children
+				who = ROOT
+				years = 8
+			}
+		}
+	}
+}
+
+# hunting.42 Training the hound
+# The hunter trains the hound in person (hunting.43) or leaves it to the
+# kennel masters. Once per hound.
+# Scope: the hunter.
+character_event = {
+	id = hunting.42
+	desc = EVTDESChunting42
+	picture = GFX_evt_hunting_scene
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_focus_pulse
+
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		has_character_modifier = pet_hunting_dog
+		in_command = no
+		NOT = { has_character_flag = training_dog }
+	}
+
+	immediate = {
+		set_character_flag = training_dog
+	}
+
+	option = { # Train it
+		name = EVTOPTAhunting42
+		custom_tooltip = { text = trains_dog }
+		hidden_tooltip = { character_event = { id = hunting.43 days = 150 random = 150 } }
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 0.25 trait = slothful }
+		}
+	}
+	option = { # The kennel masters will do it
+		name = EVTOPTBhunting42
+		prestige = 20
+		ai_chance = { factor = 1 }
+	}
+}
+
+# hunting.43 A trained hound
+# Months outdoors with the hound: diligence, health, or the end of a
+# weakness.
+# Scope: the hunter.
+character_event = {
+	id = hunting.43
+	desc = EVTDESChunting43
+	picture = GFX_evt_hunting_scene
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.42
+
+	trigger = {
+		has_character_modifier = pet_hunting_dog
+	}
+
+	option = {
+		name = EVTOPTAhunting43
+		hunting_train_hound_effect = yes
+	}
+}
+
+# hunting.44 The hound kills a courtier's dog
+# Scope: the hunter.
+character_event = {
+	id = hunting.44
+	desc = EVTDESChunting44
+	picture = GFX_evt_hunting_scene
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_focus_pulse
+
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		has_character_modifier = pet_hunting_dog
+		has_character_flag = bad_dog
+		any_courtier = { ai = yes }
+	}
+
+	option = {
+		name = EVTOPTAhunting44
+		random_courtier = {
+			limit = { ai = yes }
+			opinion = {
+				modifier = opinion_unhappy
+				who = ROOT
+				years = 8
+			}
+		}
+	}
+}
+
+# hunting.45 The hound mauls a courtier
+# Call it off, or (if cruel or mad) urge it on before the whole court.
+# Scope: the hunter.
+character_event = {
+	id = hunting.45
+	desc = EVTDESChunting45
+	picture = GFX_evt_hunting_scene
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_focus_pulse
+
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		has_character_modifier = pet_hunting_dog
+		has_character_flag = bad_dog
+		any_courtier = { prisoner = no }
+	}
+
+	option = { # Heel!
+		name = EVTOPTAhunting45
+		random_courtier = {
+			limit = { prisoner = no }
+			hunting_hound_mauls_effect = yes
+		}
+		ai_chance = { factor = 1 }
+	}
+	option = { # Kill!
+		name = EVTOPTBhunting45
+		trigger = {
+			OR = {
+				trait = impaler
+				trait = possessed
+				trait = lunatic_1
+				trait = lunatic_2
+				trait = lunatic_3
+				trait = cruel
+			}
+		}
+		random_courtier = {
+			limit = { prisoner = no }
+			hunting_hound_mauls_effect = yes
+		}
+		prestige = 100
+		custom_tooltip = { text = crazymurderdog_court_tooltip }
+		hidden_tooltip = {
+			any_courtier = {
+				opinion = {
+					modifier = opinion_shocked
+					who = ROOT
+					years = 1
+				}
+			}
+		}
+		ai_chance = { factor = 0.5 }
+	}
+}
+
+# hunting.50 The hound dies
+# Bury it quietly, give it a funeral, or (a madman, or a king of Nehekhara
+# who keeps his hounds for eternity) raise a pyramid over it.
+# Scope: the hunter.
+character_event = {
+	id = hunting.50
+	desc = EVTDESChunting50
+	picture = GFX_evt_hunting_scene
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # hunting.32, pet events, offmap and bloodline effects
+
+	trigger = {
+		has_character_modifier = pet_hunting_dog
+		NOT = { has_character_flag = hunting_dog_already_killed }
+	}
+
+	immediate = {
+		remove_character_modifier = pet_best_friends
+	}
+
+	option = { # A quiet grave
+		name = EVTOPTAhunting50
+		remove_character_modifier = pet_hunting_dog
+		hidden_tooltip = { character_event = { id = hunting.51 } }
+		ai_chance = { factor = 1 }
+	}
+	option = { # A funeral
+		name = EVTOPTBhunting50
+		wealth = -10
+		prestige = 20
+		remove_character_modifier = pet_hunting_dog
+		hidden_tooltip = { character_event = { id = hunting.51 } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 NOT = { wealth = 50 } }
+		}
+	}
+	option = { # A pyramid
+		name = EVTOPTChunting50
+		trigger = {
+			ai = no
+			NOT = { religion_group = nehekharan_gods_group }
+			OR = {
+				trait = lunatic_1
+				trait = lunatic_2
+				trait = lunatic_3
+				trait = possessed
+			}
+		}
+		scaled_wealth = -2
+		capital_scope = {
+			add_province_modifier = {
+				name = pyramid
+				duration = -1
+			}
+		}
+		remove_character_modifier = pet_hunting_dog
+		hidden_tooltip = { character_event = { id = hunting.51 } }
+	}
+	option = { # A pyramid, as a king of Nehekhara should
+		name = EVTOPTDhunting50
+		trigger = {
+			ai = no
+			religion_group = nehekharan_gods_group
+		}
+		scaled_wealth = -2
+		capital_scope = {
+			add_province_modifier = {
+				name = pyramid
+				duration = -1
+			}
+		}
+		remove_character_modifier = pet_hunting_dog
+		hidden_tooltip = { character_event = { id = hunting.51 } }
+	}
+
+	after = {
+		hidden_effect = {
+			if = {
+				limit = {
+					has_dlc = "Mystics"
+					OR = {
+						has_character_modifier = good_relationship_omen
+						has_character_modifier = bad_relationship_omen
+					}
+				}
+				set_character_flag = dog_death_omen
+				character_event = { id = verena.108 days = 35 random = 30 } # Scrying vision come true
+			}
+			send_new_dog_event_effect = yes # Only for certain bloodlines
+		}
+	}
+}
+
+# hunting.51 The hound is gone
+# Clears every hound flag and event, so that the next hound starts fresh.
+# Scope: the hunter.
+character_event = {
+	id = hunting.51
+	hide_window = yes
+	is_triggered_only = yes # hunting.50, ivory.9
+
+	immediate = {
+		hunting_hound_gone_effect = yes
+	}
+}

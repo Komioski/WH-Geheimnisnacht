@@ -1,0 +1,1085 @@
+###############################################################################
+# Nomad clans, pillage and the settled lands
+# Namespace: nomad (was HL.1 - HL.12, 44482 in hl_misc_events.txt and
+#   HL.4800 - HL.4999 in hl_nomad_events.txt)
+# Faction: Generic
+# Serves: the horse peoples of the steppe (Kurgan, Hung, Ungol), and the
+#   greenskin and Beastmen hordes who burn what they take
+#
+# Clans: notices when a horde settles down, a clan feud starts, a clan
+# changes faith or a blood brother dies, and the hidden bookkeeping for
+# temples, feuds and blood oaths.
+#
+# Pillage: a horde that burns the land keeps burning it every six months
+# while the holding stands; sieges let raiders sack a holding; an emptied
+# county becomes grazing land, a field of bones or a place of rites.
+#
+# The settled lands: a horde that takes a county where nobody has built
+# keeps its own people there. Settled rulers who leave such counties empty
+# see them break away to a new clan chief, who joins the nearest great
+# horde of the same blood.
+#
+# Clans                                nomad.1 - nomad.12
+# Pillage                              nomad.20 - nomad.25
+# The settled lands                    nomad.30 - nomad.35
+#
+# Fired from: the settle decisions (nomad.1, nomad.2) and the pillage
+#   decision (nomad.20, nomad.21, nomad.25) in settlement_decisions.txt;
+#   HL_clan_decisions.txt (nomad.9, nomad.11); 00_on_actions.txt
+#   (on_settlement_construction_completed nomad.3 and .4, on_feud_started
+#   nomad.6, on_blood_brother_death nomad.10, on_death nomad.12 and .34,
+#   on_siege_over_winner nomad.24 via the raiding_events list in
+#   wh_on_actions.txt, on_new_holder* nomad.22, .23, .32, .35,
+#   on_loot_province nomad.8). Shared triggers and effects are in
+#   WHG_horse_lords_triggers.txt and WHG_horse_lords_effects.txt.
+###############################################################################
+
+namespace = nomad
+
+###############################################################################
+# Clans
+###############################################################################
+
+# nomad.1 A new realm
+# A horde settles down as a feudal realm. Shown once per settling: the flag
+# keeps the two settle decisions from showing it twice.
+# Scope: ROOT is told; FROMFROM is the ruler who settled.
+narrative_event = {
+	id = nomad.1
+	title = EVTNAMEnomad1
+	desc = EVTDESCnomad1
+	picture = GFX_evt_steppe_mercenaries
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes # settlement_decisions.txt
+
+	trigger = {
+		NOT = { has_character_flag = nomad_settle_shown }
+	}
+
+	immediate = {
+		set_character_flag = nomad_settle_shown
+	}
+
+	option = {
+		name = EVTOPTAnomad1
+		clr_character_flag = nomad_settle_shown
+	}
+}
+
+# nomad.2 The horde settles
+# A horde settles down as a tribal realm.
+# Scope: ROOT is told; FROMFROM is the ruler who settled.
+narrative_event = {
+	id = nomad.2
+	title = EVTNAMEnomad2
+	desc = EVTDESCnomad2
+	picture = GFX_evt_council
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes # settlement_decisions.txt
+
+	option = {
+		name = EVTOPTAnomad1
+	}
+}
+
+# nomad.3 A temple is built
+# Hidden. A finished temple raises the faith's authority and counts towards
+# the strengthen-the-faith ambition.
+# Scope: ROOT is the builder, FROM the new holding.
+character_event = {
+	id = nomad.3
+	hide_window = yes
+	is_triggered_only = yes # on_settlement_construction_completed
+
+	only_playable = yes
+
+	trigger = {
+		FROM = { holding_type = TEMPLE }
+	}
+
+	immediate = {
+		religion_authority = { modifier = temple_built years = 20 }
+		if = {
+			limit = { has_ambition = obj_strengthen_religion }
+			change_variable = { which = strengthen_religion value = 1 }
+		}
+	}
+}
+
+# nomad.4 The clans approve
+# Hidden. A clan that builds a temple earns the thanks of every clan of the
+# same faith in the horde that is not feuding with it.
+# Scope: ROOT is the builder, FROM the new holding.
+character_event = {
+	id = nomad.4
+	hide_window = yes
+	is_triggered_only = yes # on_settlement_construction_completed
+
+	only_playable = yes
+
+	trigger = {
+		has_dlc = "Horse Lords"
+		FROM = { holding_type = TEMPLE }
+		clan_title = { clan = yes }
+	}
+
+	immediate = {
+		clan_title = {
+			holder_scope = {
+				top_liege = {
+					if = {
+						limit = {
+							religion = ROOT
+							NOT = { character = ROOT }
+							NOT = { has_feud_with = ROOT }
+						}
+						clan_title = {
+							clan_reverse_opinion = {
+								who = PREVPREVPREV
+								modifier = opinion_built_temple
+								years = 20
+							}
+						}
+					}
+					any_vassal = {
+						limit = {
+							clan = yes
+							religion = ROOT
+							NOT = { character = ROOT }
+							NOT = { has_feud_with = ROOT }
+						}
+						clan_title = {
+							clan_reverse_opinion = {
+								who = PREVPREVPREVPREV
+								modifier = opinion_built_temple
+								years = 20
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# nomad.6 A clan feud
+# Scope: ROOT is told; FROM leads the clan we now feud with.
+character_event = {
+	id = nomad.6
+	title = EVTNAMEnomad6
+	desc = EVTDESCnomad6
+	picture = GFX_evt_shaman
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_feud_started
+
+	only_playable = yes
+
+	trigger = {
+		has_dlc = "Horse Lords"
+	}
+
+	option = {
+		name = EVTOPTAnomad6
+	}
+}
+
+# nomad.8 Looting starts a feud
+# Hidden. A clan that loots the land of another clan of the same horde
+# starts a feud with it (on_feud_started then tells them, nomad.6).
+# Scope: ROOT is the looter, FROM the looted province.
+character_event = {
+	id = nomad.8
+	hide_window = yes
+	is_triggered_only = yes # on_loot_province
+
+	only_playable = yes
+
+	trigger = {
+		has_dlc = "Horse Lords"
+		is_nomadic = yes
+		FROM = {
+			owner = {
+				is_nomadic = yes
+				is_ruler = yes
+				same_realm = ROOT
+				NOT = { has_feud_with = ROOT }
+			}
+		}
+	}
+
+	immediate = {
+		clan_title = {
+			FROM = {
+				owner = {
+					clan_title = {
+						create_feud = PREVPREVPREV
+					}
+				}
+			}
+		}
+	}
+}
+
+# nomad.9 A clan takes another faith
+# Scope: ROOT is told; FROMFROM leads the clan, FROM is of the faith it took.
+character_event = {
+	id = nomad.9
+	title = EVTNAMEnomad9
+	desc = EVTDESCnomad9
+	picture = GFX_evt_tribal_shrine
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # HL_clan_decisions.txt
+
+	only_playable = yes
+
+	trigger = {
+		has_dlc = "Horse Lords"
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# nomad.10 Death of a blood brother
+# Scope: ROOT is told; FROM is the dead blood brother.
+character_event = {
+	id = nomad.10
+	title = EVTNAMEnomad10
+	desc = EVTDESCnomad10
+	picture = GFX_evt_tribal_shrine
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_blood_brother_death
+
+	only_playable = yes
+
+	trigger = {
+		has_dlc = "Horse Lords"
+	}
+
+	option = {
+		name = EVTOPTAnomad10
+	}
+}
+
+# nomad.11 A clan takes our faith
+# Scope: ROOT is told; FROMFROM leads the clan.
+character_event = {
+	id = nomad.11
+	title = EVTNAMEnomad11
+	desc = EVTDESCnomad11
+	picture = GFX_evt_tribal_shrine
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # HL_clan_decisions.txt
+
+	only_playable = yes
+
+	trigger = {
+		has_dlc = "Horse Lords"
+	}
+
+	option = {
+		name = EXCELLENT
+	}
+}
+
+# nomad.12 The oath dies with the chief
+# Hidden. A dead clan chief's blood oaths end.
+# Scope: the dead chief.
+character_event = {
+	id = nomad.12
+	hide_window = yes
+	is_triggered_only = yes # on_death
+
+	only_playable = yes
+
+	trigger = {
+		has_dlc = "Horse Lords"
+		is_nomadic = yes
+	}
+
+	immediate = {
+		clan_title = {
+			end_oath = THIS
+		}
+	}
+}
+
+###############################################################################
+# Pillage
+###############################################################################
+
+# nomad.20 The burning goes on
+# Hidden. Every six months while the pillage decision's burning lasts: loot,
+# two buildings fewer, and the land stays scorched. A holding with nothing
+# left is razed (nomad.21 tidies the county, nomad.25 tells the raider).
+# Scope: the pillaging ruler.
+character_event = {
+	id = nomad.20
+	hide_window = yes
+	is_triggered_only = yes # pillage decision, itself
+
+	trigger = {
+		any_realm_province = {
+			any_province_holding = {
+				owner = { character = ROOT }
+				has_holding_modifier = recently_burnt_the_land
+				NOT = { has_holding_modifier = stop_burning_land }
+			}
+		}
+	}
+
+	immediate = {
+		character_event = { id = nomad.20 days = 180 }
+		add_character_modifier = {
+			modifier = pillage_cooldown
+			hidden = yes
+			months = 6
+		}
+		any_realm_province = {
+			any_province_holding = {
+				limit = {
+					owner = { character = ROOT }
+					has_holding_modifier = recently_burnt_the_land
+					NOT = { has_holding_modifier = stop_burning_land }
+				}
+				add_holding_modifier = {
+					modifier = recently_burnt_the_land
+					months = 7
+				}
+			}
+			any_province_holding = {
+				limit = {
+					owner = { character = ROOT }
+					has_holding_modifier = recently_burnt_the_land
+					NOT = { has_holding_modifier = stop_burning_land }
+					has_siege = no
+				}
+				if = {
+					limit = { NOT = { holding_type = tribal } }
+					ROOT = { wealth = 50 }
+					custom_tooltip = {
+						text = gain_tech_custom_tooltip
+						hidden_tooltip = {
+							ROOT = { nomad_plunder_tech_effect = yes }
+						}
+					}
+				}
+				else = {
+					ROOT = {
+						wealth = 25
+						population = 150
+					}
+				}
+				destroy_random_building = THIS
+				destroy_random_building = THIS
+				location = {
+					add_province_modifier = { modifier = rampaging_nomads years = 10 }
+					add_province_modifier = { modifier = burnt_the_land years = 10 }
+				}
+				if = {
+					limit = {
+						NOT = { has_any_building = yes }
+						owner = { character = ROOT }
+					}
+					location = {
+						province_event = { id = nomad.21 days = 1 }
+						save_event_target_as = target_location
+						ROOT = { character_event = { id = nomad.25 days = 2 random = 2 } }
+					}
+					destroy_settlement = THIS
+				}
+			}
+		}
+	}
+}
+
+# nomad.21 Nothing left standing
+# Hidden. Once a county has no holdings left, its rampage, prosperity and
+# depopulation modifiers go.
+# Scope: the province.
+province_event = {
+	id = nomad.21
+	hide_window = yes
+	is_triggered_only = yes # nomad.20, pillage decision
+
+	trigger = {
+		NOT = {
+			any_province_holding = {
+				OR = {
+					holding_type = city
+					holding_type = temple
+					holding_type = castle
+					holding_type = tribal
+				}
+			}
+		}
+	}
+
+	immediate = {
+		remove_province_modifier = rampaging_nomads
+		remove_province_modifier = prosperity_modifier_1
+		remove_province_modifier = prosperity_modifier_2
+		remove_province_modifier = prosperity_modifier_3
+		remove_province_modifier = depopulated_1
+		remove_province_modifier = depopulated_2
+		remove_province_modifier = depopulated_3
+	}
+}
+
+# nomad.22 The rampage ends
+# Hidden. A settled conqueror ends the rampage in a county.
+# Scope: ROOT is the new holder, FROM the county title.
+character_event = {
+	id = nomad.22
+	hide_window = yes
+	is_triggered_only = yes # on_new_holder, on_new_holder_usurpation
+
+	only_rulers = yes
+
+	trigger = {
+		is_nomadic = no
+		FROM = {
+			tier = COUNT
+			location = { has_province_modifier = rampaging_nomads }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			location = { remove_province_modifier = rampaging_nomads }
+		}
+	}
+}
+
+# nomad.23 The burning ends
+# Hidden. A new holder of a county stops the old holder's burning.
+# Scope: ROOT is the new holder, FROM the county title.
+character_event = {
+	id = nomad.23
+	hide_window = yes
+	is_triggered_only = yes # on_new_holder, on_new_holder_inheritance, on_new_holder_usurpation
+
+	only_rulers = yes
+
+	trigger = {
+		FROM = {
+			tier = COUNT
+			location = {
+				any_province_holding = {
+					OR = {
+						has_holding_modifier = recently_burnt_the_land
+						has_holding_modifier = stop_burning_land
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		FROM = {
+			location = {
+				any_province_holding = {
+					remove_holding_modifier = recently_burnt_the_land
+					remove_holding_modifier = stop_burning_land
+				}
+			}
+		}
+	}
+}
+
+# nomad.24 Sack the holding?
+# After a siege a horde, a WAAAGH! or a Beastmen warherd may sack the
+# holding (loot, a building fewer, a furious owner) or spare it for prestige.
+# Greenskins sack on their own in a WAAAGH! war (waaagh.30), and Chaos hordes
+# have chaoshorde.42.
+# Scope: ROOT is the winner, FROM the sieged holding.
+character_event = {
+	id = nomad.24
+	desc = EVTDESCnomad24
+	picture = {
+		trigger = { nomad_greenskin_raider_trigger = yes }
+		picture = GFX_evt_orcs
+	}
+	picture = {
+		trigger = { government = freeboota_government }
+		picture = GFX_evt_orcs_freeboota
+	}
+	picture = {
+		trigger = { culture_group = beastman_group }
+		picture = GFX_evt_beastmen_charge
+	}
+	picture = {
+		trigger = {
+		FROM = { greatsack_city_falls_now_trigger = no } # A great city falls to greatsack.1 instead
+			NOR = {
+				culture_group = beastman_group
+				nomad_greenskin_raider_trigger = yes
+			}
+		}
+		picture = GFX_evt_mongols_pillage_oldgods
+	}
+	border = GFX_event_normal_frame_war
+	portrait = event_target:top_liege_target
+
+	is_triggered_only = yes # on_siege_over_winner (raiding_events list)
+
+	trigger = {
+		OR = {
+			culture_group = beastman_group
+			religion_group = greenskin_gods_group
+			AND = {
+				is_nomadic = yes
+				NOR = {
+					religion_group = greenskin_gods_group
+					religion_group = chaos_gods_group
+				}
+			}
+		}
+		OR = {
+			NOT = { religion_group = greenskin_gods_group }
+			NOT = {
+				any_war = {
+					using_cb = waaagh_war
+					any_attacker = { character = ROOT }
+					any_defender = {
+						any_realm_title = { title = FROM }
+					}
+				}
+			}
+		}
+		FROM = {
+			OR = {
+				holding_type = city
+				holding_type = temple
+				holding_type = castle
+				holding_type = tribal
+			}
+			num_of_buildings = 4
+			location = {
+				NOT = { has_province_modifier = recently_burnt_the_land_not_owner }
+			}
+		}
+	}
+
+	immediate = {
+		FROM = {
+			holder_scope = {
+				save_event_target_as = holder_target
+				top_liege = { save_event_target_as = top_liege_target }
+			}
+			location = {
+				add_province_modifier = {
+					name = recently_burnt_the_land_not_owner
+					years = 10
+				}
+			}
+		}
+	}
+
+	option = { # Sack it
+		name = EVTOPTAnomad24
+		show_portrait = event_target:holder_target
+		if = {
+			limit = { FROM = { holding_type = tribal } }
+			wealth = 5
+			population = 75
+		}
+		else = {
+			wealth = 10
+			custom_tooltip = {
+				text = gain_tech_custom_tooltip
+				hidden_tooltip = { nomad_plunder_tech_effect = yes }
+			}
+		}
+		FROM = {
+			destroy_random_building = THIS
+			holder_scope = {
+				show_scope_change = no
+				opinion = { modifier = opinion_furious who = ROOT years = 3 }
+				top_liege = {
+					show_scope_change = no
+					opinion = { modifier = opinion_furious who = ROOT years = 3 }
+				}
+			}
+		}
+		ai_chance = { factor = 95 }
+	}
+	option = { # Spare it
+		name = EVTOPTBnomad24
+		prestige = 50
+		ai_chance = { factor = 5 }
+	}
+}
+
+# nomad.25 Razed
+# A pillaged holding is gone. A diligent or green-fingered raider turns the
+# ruins to pasture, a cruel one builds a mound of skulls, a zealous one holds
+# rites there.
+# Scope: ROOT is the raider; event_target:target_location the county.
+character_event = {
+	id = nomad.25
+	desc = {
+		trigger = { is_nomadic = yes }
+		text = EVTDESCnomad25
+	}
+	desc = {
+		trigger = { is_nomadic = no }
+		text = EVTDESCnomad25b
+	}
+	picture = GFX_evt_beastmen_charge
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # nomad.20, pillage decision
+
+	trigger = {
+		event_target:target_location = {
+			OR = {
+				NOT = { has_province_flag = destroyed_by_nomads }
+				had_province_flag = { flag = destroyed_by_nomads days = 365 }
+			}
+		}
+	}
+
+	immediate = {
+		event_target:target_location = {
+			set_province_flag = destroyed_by_nomads
+		}
+	}
+
+	option = { # Pasture
+		name = EVTOPTAnomad25
+		trigger = {
+			OR = {
+				trait = gardener
+				trait = diligent
+			}
+			event_target:target_location = { nomad_county_empty_trigger = yes }
+		}
+		if = {
+			limit = { is_nomadic = yes }
+			capital_holding = {
+				add_holding_modifier = {
+					name = nomad_population_boom
+					years = 10
+					stacking = yes
+				}
+			}
+		}
+		ai_chance = { factor = 95 }
+	}
+	option = { # A mound of skulls
+		name = EVTOPTBnomad25
+		trigger = {
+			OR = {
+				trait = impaler
+				trait = cruel
+			}
+			event_target:target_location = { nomad_county_empty_trigger = yes }
+		}
+		event_target:target_location = {
+			add_province_modifier = { name = throne_of_skulls years = 10 }
+		}
+		ai_chance = { factor = 95 }
+	}
+	option = { # Rites for the gods
+		name = EVTOPTCnomad25
+		trigger = {
+			OR = {
+				trait = zealous
+				trait = possessed
+			}
+			event_target:target_location = { nomad_county_empty_trigger = yes }
+		}
+		event_target:target_location = {
+			add_province_modifier = { name = nomadic_rites years = 10 }
+		}
+		ai_chance = { factor = 95 }
+	}
+	option = { # Good
+		name = EXCELLENT
+		prestige = 5
+		ai_chance = { factor = 5 }
+	}
+}
+
+###############################################################################
+# The settled lands
+###############################################################################
+
+# nomad.30 New clans join the horde
+# Scope: ROOT is the great horde's khan; event_target:new_nomad the new chief.
+character_event = {
+	id = nomad.30
+	desc = EVTDESCnomad30
+	picture = GFX_evt_horsemanship
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # nomad.31
+
+	option = {
+		name = EXCELLENT
+		event_target:new_nomad = {
+			opinion = { modifier = opinion_loyal_servant who = ROOT years = 10 }
+		}
+	}
+}
+
+# nomad.31 Join a horde of the same blood
+# Hidden. A new clan chief joins a neighbouring great horde of their own
+# people, if there is one.
+# Scope: the new clan chief.
+character_event = {
+	id = nomad.31
+	hide_window = yes
+	is_triggered_only = yes # nomad.34
+
+	trigger = {
+		any_realm_province = {
+			any_neighbor_province = {
+				holder_scope = {
+					top_liege = { nomad_great_horde_of_root_trigger = yes }
+				}
+			}
+		}
+	}
+
+	immediate = {
+		random_realm_province = {
+			limit = {
+				any_neighbor_province = {
+					holder_scope = {
+						top_liege = { nomad_great_horde_of_root_trigger = yes }
+					}
+				}
+			}
+			random_neighbor_province = {
+				limit = {
+					holder_scope = {
+						top_liege = { nomad_great_horde_of_root_trigger = yes }
+					}
+				}
+				holder_scope = {
+					top_liege = { save_event_target_as = new_nomad_liege }
+				}
+			}
+		}
+		set_defacto_liege = event_target:new_nomad_liege
+		event_target:new_nomad_liege = { character_event = { id = nomad.30 } }
+	}
+}
+
+# nomad.32 The agitation ends
+# Hidden. A horde that takes a restless county calms it.
+# Scope: ROOT is the new holder, FROM the county title.
+character_event = {
+	id = nomad.32
+	hide_window = yes
+	is_triggered_only = yes # on_new_holder, on_new_holder_usurpation
+
+	only_rulers = yes
+
+	trigger = {
+		is_nomadic = yes
+		FROM = {
+			tier = COUNT
+			location = { has_province_modifier = nomad_agitation }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			location = { remove_province_modifier = nomad_agitation }
+		}
+	}
+}
+
+# nomad.33 The steppe rises
+# Scope: ROOT is the settled ruler who lost the land.
+character_event = {
+	id = nomad.33
+	title = EVTNAMEnomad33
+	desc = EVTDESCnomad33
+	picture = GFX_evt_horsemanship
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # nomad.34
+
+	option = {
+		name = CURSES
+	}
+}
+
+# nomad.34 The restless counties break away
+# Hidden. On the death of a settled independent ruler, each restless county
+# (nomad_agitation) that has no castle, city or growing tribe breaks away to
+# a new clan chief with a family and a warband. Repeats for the next chief.
+# Scope: the dead ruler.
+character_event = {
+	id = nomad.34
+	hide_window = yes
+	is_triggered_only = yes # on_death, itself
+
+	only_playable = yes
+	only_independent = yes
+
+	trigger = {
+		higher_tier_than = BARON
+		is_nomadic = no
+		any_realm_province = {
+			NOT = { has_province_modifier = nomad_agitation }
+		}
+		any_realm_province = {
+			nomad_restless_county_trigger = yes
+		}
+	}
+
+	immediate = {
+		clr_character_flag = found_nomad_separatist
+		random_realm_province = {
+			limit = { nomad_restless_county_trigger = yes }
+			ROOT = { set_character_flag = found_nomad_separatist }
+			remove_province_modifier = nomad_agitation
+			save_event_target_as = new_nomad_province
+			county = {
+				create_random_soldier = {
+					random_traits = yes
+					dynasty = random
+					religion = PREV
+					culture = PREV
+					female = no
+					age = 25
+				}
+				new_character = {
+					character_event = { id = aiclean.31 } # Racial trait
+					prestige = 800
+					wealth = 250
+					piety = 200
+					grant_title = { target = PREV type = revolt }
+					set_defacto_liege = THIS
+					set_appropriate_nomad_gov = yes
+					save_event_target_as = new_nomad
+				}
+				if = {
+					limit = { event_target:new_nomad = { is_no_females_race = no } }
+					create_random_soldier = {
+						random_traits = yes
+						dynasty = NONE
+						religion = PREV
+						culture = PREV
+						female = yes
+						age = 23
+					}
+					new_character = {
+						character_event = { id = aiclean.31 } # Racial trait
+						add_spouse = event_target:new_nomad
+						save_event_target_as = new_nomad_wife
+					}
+					create_character = {
+						age = 6
+						religion = PREV
+						culture = PREV
+						female = no
+					}
+					new_character = {
+						character_event = { id = aiclean.31 } # Racial trait
+						dynasty = event_target:new_nomad
+						set_father = event_target:new_nomad
+						set_mother = event_target:new_nomad_wife
+					}
+					create_character = {
+						age = 5
+						religion = PREV
+						culture = PREV
+						female = no
+					}
+					new_character = {
+						character_event = { id = aiclean.31 } # Racial trait
+						dynasty = event_target:new_nomad
+						set_father = event_target:new_nomad
+						set_mother = event_target:new_nomad_wife
+					}
+					create_character = {
+						age = 4
+						religion = PREV
+						culture = PREV
+						female = yes
+					}
+					new_character = {
+						character_event = { id = aiclean.31 } # Racial trait
+						dynasty = event_target:new_nomad
+						set_father = event_target:new_nomad
+						set_mother = event_target:new_nomad_wife
+					}
+				}
+				event_target:new_nomad = {
+					population = 1000
+					manpower = 250
+					spawn_unit = {
+						province = PREV
+						troops = {
+							horse_archers = { 225 225 }
+							light_cavalry = { 450 450 }
+							knights = { 75 75 }
+						}
+					}
+				}
+			}
+			any_province_holding = {
+				limit = { holding_type = tribal }
+				destroy_settlement = THIS
+			}
+			ROOT = { character_event = { id = nomad.33 } }
+		}
+		if = {
+			limit = { has_character_flag = found_nomad_separatist }
+			any_realm_province = {
+				limit = {
+					culture = event_target:new_nomad
+					nomad_restless_county_trigger = yes
+				}
+				remove_province_modifier = nomad_agitation
+				county = {
+					grant_title = { target = event_target:new_nomad type = revolt }
+					event_target:new_nomad = {
+						population = 375
+						manpower = 100
+						spawn_unit = {
+							province = PREV
+							troops = {
+								horse_archers = { 75 75 }
+								light_cavalry = { 150 150 }
+								knights = { 25 25 }
+							}
+						}
+					}
+				}
+				any_province_holding = {
+					limit = { holding_type = tribal }
+					destroy_settlement = THIS
+				}
+			}
+			ROOT = { character_event = { id = nomad.34 } }
+			event_target:new_nomad = { character_event = { id = nomad.31 } }
+		}
+	}
+}
+
+# nomad.35 The horde keeps its people
+# Hidden. A settled ruler who takes an empty county from a horde finds it
+# full of the horde's people: they put up a tribe of the horde's faith and
+# blood, and grow restless (nomad_agitation). A landless raider of the same
+# blood becomes a clan chief there instead, and one of other blood takes
+# the tribe as a tribal vassal (raiders of the steppe peoples keep their own
+# faith and culture).
+# Scope: ROOT is the new holder, FROM the county title, FROMFROM the old
+# holder.
+character_event = {
+	id = nomad.35
+	hide_window = yes
+	is_triggered_only = yes # on_new_holder, on_new_holder_usurpation
+
+	only_rulers = yes
+
+	trigger = {
+		is_nomadic = no
+		FROM = {
+			tier = COUNT
+			location = {
+				NOR = {
+					has_province_modifier = incredibly_poor
+					any_province_holding = { holding_type = tribal }
+					any_province_holding = { holding_type = castle }
+					any_province_holding = { holding_type = city }
+					has_settlement_construction = yes
+				}
+			}
+		}
+	}
+
+	immediate = {
+		if = { # A raider of the horde's blood becomes a clan chief
+			limit = {
+				culture = FROMFROM
+				OR = {
+					AND = {
+						is_ruler = yes
+						is_landed = no
+						is_offmap_governor = no
+					}
+					has_character_modifier = raiding_adventurer_nomad_timer
+				}
+				FROMFROM = { is_nomadic = yes }
+			}
+			FROM = {
+				location = {
+					build_holding = { type = tribal holder = ROOT }
+				}
+			}
+			set_appropriate_nomad_gov = yes
+			add_character_modifier = {
+				modifier = raiding_adventurer_nomad_timer
+				days = 10
+				hidden = yes
+			}
+			FROM = {
+				location = {
+					any_province_holding = {
+						limit = { holding_type = tribal }
+						destroy_settlement = THIS
+					}
+				}
+			}
+		}
+		else_if = { # A raider of other blood becomes a tribal vassal
+			limit = {
+				NOT = { culture = FROMFROM }
+				OR = {
+					AND = {
+						is_ruler = yes
+						is_landed = no
+						is_offmap_governor = no
+					}
+					has_character_modifier = raiding_adventurer_tribal_timer
+				}
+				FROMFROM = { is_nomadic = yes }
+			}
+			FROM = {
+				location = {
+					build_holding = { type = tribal holder = ROOT }
+					if = {
+						limit = { ROOT = { nomad_steppe_people_trigger = yes } }
+						religion = ROOT
+						culture = ROOT
+					}
+					else = {
+						religion = FROMFROM
+						culture = FROMFROM
+					}
+				}
+			}
+			set_government_type = tribal_government
+			add_character_modifier = {
+				modifier = raiding_adventurer_tribal_timer
+				days = 10
+				hidden = yes
+			}
+		}
+		else = { # The horde's people stay, restless
+			FROM = {
+				location = {
+					build_holding = { type = tribal holder = ROOT }
+					religion = FROMFROM
+					culture = FROMFROM
+					add_province_modifier = { name = nomad_agitation years = 100 }
+				}
+			}
+		}
+	}
+}

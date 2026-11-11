@@ -1,0 +1,804 @@
+###############################################################################
+# Slavery
+# Namespace: slave (was slave.1 - 4 in wh_slavery_system_events.txt)
+# Faction: Generic
+# Serves: the slaver faiths of slaver_faith_trigger (Druchii, pirates,
+#   Ogres, greenskins, Chaos and the Chaos Dwarfs, Norsca, Amazons, Araby's
+#   Atruhayid and others)
+#
+# The full round of the slave trade. Captives come from raids (slave.1),
+# from the holdings a slaver storms (slave.4, slave.5), from prisoners put
+# in the pens (dawizharr.36, decision sell_into_slavery) and from the
+# market. They are kept in the slaver's pens, counted in lots in the
+# character variable slaves (at most 10) and shown by the pens modifier:
+# their labour pays, but the more there are, the more they are feared.
+# They can be sold or bought at the market (slave.2), set to work in a
+# province for 15 years (slave.3), given to the gods, driven into battle
+# as a slave levy, or fed to the Chaos Dwarfs' forges (decisions in
+# WHG_slavery_decisions.txt). Every year the pens may bring trouble
+# (slave.10): an escape (slave.11), sickness (slave.12), a slave who will
+# not break (slave.13, the pit slave.14), or a rising of the slaves worked
+# in a province (slave.15, slave.16). When the master dies the pens pass to
+# an heir who keeps slaves, or the slaves go free (slave.17). Lords of
+# faiths that keep no slaves may free the slaves worked on their land
+# (slave.19) and any they hold (decision free_slave_stock).
+#
+# Captives                              slave.1, slave.4 - slave.5
+# The slave market                      slave.2
+# Slaves set to work                    slave.3
+# Trouble in the pens                   slave.10 - slave.14
+# The slaves rise                       slave.15 - slave.16
+# The pens pass on                      slave.17
+# Freedom                               slave.19
+#
+# Callers: on_loot_province (slave.1, 5 in 100), on_siege_over_winner
+#   (slave.4), on_yearly_pulse (slave.10) and on_death (slave.17) in
+#   wh_on_actions.txt; the decisions openslaverymenu (slave.2) and
+#   deploy_slaves_province (slave.3) in decisions/wh_general_decisions.txt;
+#   free_worked_slaves (slave.19) in decisions/WHG_slavery_decisions.txt.
+# Shared code: WHG_slavery_effects.txt, WHG_slavery_triggers.txt,
+#   WHG_slavery_modifiers.txt (the pens).
+# Saved: variable slaves; flag slave_master; province modifiers
+#   slaves_taken, deployed_slaves, slaves_freed.
+# Loc: localisation/00_WHG_slavery_events.csv
+###############################################################################
+
+namespace = slave
+
+###############################################################################
+# Captives
+###############################################################################
+
+# slave.1 Captives
+# The raider rounds up the people of a looted province: one lot of slaves,
+# and the province is stripped of hands for five years. Faiths of Chaos,
+# Khaine and the Great Maw may give the captives to their gods instead.
+# Scope: ROOT is the looter, FROM the province.
+character_event = {
+	id = slave.1
+	desc = {
+		trigger = { religion_group = cytharai_group }
+		text = EVTDESCslave1_druchii
+	}
+	desc = {
+		trigger = { NOT = { religion_group = cytharai_group } }
+		text = EVTDESCslave1
+	}
+	picture = GFX_evt_slaves
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_loot_province
+	only_playable = yes
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		in_command = yes
+		slave_keeper_trigger = yes
+		FROM = { slave_stock_province_trigger = yes }
+	}
+
+	# Round them up
+	option = {
+		name = EVTOPTAslave1
+		slave_gain_lot_effect = yes
+		FROM = {
+			add_province_modifier = { name = slaves_taken duration = 1835 }
+		}
+		ai_chance = { factor = 80 }
+	}
+
+	# Give them to the gods
+	option = {
+		name = EVTOPTBslave1
+		trigger = { slave_sacrifice_faith_trigger = yes }
+		piety = 30
+		FROM = {
+			add_province_modifier = { name = slaves_taken duration = 1835 }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+
+	# Let them go
+	option = {
+		name = EVTOPTCslave1
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 0 NOT = { trait = kind } }
+		}
+	}
+}
+
+# slave.4 A holding taken (hidden)
+# A slaver who storms a holding of a people worth carrying off may take its
+# people too, one time in three (slave.5). The Chaos Dwarfs have their own
+# slave raids (dawizharr.30).
+# Scope: ROOT is the winner, FROM the holding title.
+character_event = {
+	id = slave.4
+	hide_window = yes
+
+	is_triggered_only = yes # on_siege_over_winner
+	only_playable = yes
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		slave_keeper_trigger = yes
+		NOT = { culture_group = dwarf_chaos_group }
+		FROM = {
+			location = { slave_stock_province_trigger = yes }
+		}
+	}
+
+	immediate = {
+		random = {
+			chance = 33
+			FROM = { location = { save_event_target_as = slave_stormed_province } }
+			character_event = { id = slave.5 }
+		}
+	}
+}
+
+# slave.5 The people of a stormed holding
+# Two lots of captives, the gods' share, or mercy.
+# Scope: ROOT is the winner, FROM the holding title.
+character_event = {
+	id = slave.5
+	desc = EVTDESCslave5
+	picture = GFX_evt_slave_whipped
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # slave.4
+
+	option = { # Chain them
+		name = EVTOPTAslave5
+		slave_gain_two_lots_effect = yes
+		event_target:slave_stormed_province = {
+			add_province_modifier = { name = slaves_taken duration = 1835 }
+		}
+		ai_chance = { factor = 80 }
+	}
+	option = { # The gods' share
+		name = EVTOPTBslave5
+		trigger = { slave_sacrifice_faith_trigger = yes }
+		piety = 60
+		event_target:slave_stormed_province = {
+			add_province_modifier = { name = slaves_taken duration = 1835 }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+	option = { # Spare them
+		name = EVTOPTCslave5
+		prestige = 10
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 0 NOT = { trait = kind } }
+		}
+	}
+}
+
+###############################################################################
+# The slave market
+###############################################################################
+
+# slave.2 The slave market
+# The dealers come to haggle. The market may be glutted (35 gold a lot,
+# buy at 60), as usual (50, buy at 80) or hungry (75, buy at 110). Sell one
+# lot, three, or all, or buy one.
+# Scope: ROOT is the slaver.
+character_event = {
+	id = slave.2
+	desc = {
+		trigger = { has_character_flag = slave_market_glut }
+		text = EVTDESCslave2_glut
+	}
+	desc = {
+		trigger = { has_character_flag = slave_market_hungry }
+		text = EVTDESCslave2_hungry
+	}
+	desc = {
+		trigger = {
+			NOT = { has_character_flag = slave_market_glut }
+			NOT = { has_character_flag = slave_market_hungry }
+		}
+		text = EVTDESCslave2
+	}
+	picture = GFX_evt_slaves
+
+	is_triggered_only = yes # decision openslaverymenu
+
+	immediate = {
+		hidden_effect = {
+			random_list = {
+				30 = { set_character_flag = slave_market_glut }
+				50 = { }
+				20 = {
+					modifier = { factor = 1.5 war = yes }
+					set_character_flag = slave_market_hungry
+				}
+			}
+		}
+	}
+
+	option = { # Sell one lot
+		name = EVTOPTAslave2
+		trigger = { check_variable = { which = slaves value = 1 } }
+		slave_sell_lot_effect = yes
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0.2 has_character_flag = slave_market_glut }
+		}
+	}
+	option = { # Sell three lots
+		name = EVTOPTBslave2
+		trigger = { check_variable = { which = slaves value = 3 } }
+		slave_sell_lot_effect = yes
+		slave_sell_lot_effect = yes
+		slave_sell_lot_effect = yes
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 0.1 has_character_flag = slave_market_glut }
+		}
+	}
+	option = { # Sell them all
+		name = EVTOPTCslave2
+		trigger = { check_variable = { which = slaves value = 4 } }
+		custom_tooltip = { text = EVTOPTCslave2_tt }
+		hidden_effect = {
+			while = {
+				limit = { check_variable = { which = slaves value = 1 } }
+				slave_sell_lot_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 3
+			modifier = { factor = 3 has_character_flag = slave_market_hungry }
+			modifier = { factor = 0 has_character_flag = slave_market_glut }
+		}
+	}
+	option = { # Buy a lot
+		name = EVTOPTEslave2
+		trigger = { slave_can_buy_lot_trigger = yes }
+		if = {
+			limit = { has_character_flag = slave_market_glut }
+			wealth = -60
+		}
+		else_if = {
+			limit = { has_character_flag = slave_market_hungry }
+			wealth = -110
+		}
+		else = { wealth = -80 }
+		slave_gain_lot_effect = yes
+		ai_chance = {
+			factor = 0
+			modifier = {
+				factor = 2
+				has_character_flag = slave_market_glut
+				NOT = { check_variable = { which = slaves value = 3 } }
+				wealth = 300
+			}
+		}
+	}
+	option = { # Not today
+		name = EVTOPTDslave2
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 has_character_flag = slave_market_glut }
+		}
+	}
+
+	after = {
+		slave_market_close_effect = yes
+	}
+}
+
+###############################################################################
+# Slaves set to work
+###############################################################################
+
+# slave.3 Slaves set to work
+# One lot of slaves works a province of the slaver for 15 years: more
+# taxes and cheaper building, but more unrest, and a rising is possible
+# (slave.15).
+# Scope: ROOT is the slaver, FROM the settlement chosen.
+character_event = {
+	id = slave.3
+	desc = EVTDESCslave3
+	picture = GFX_evt_slaves
+
+	is_triggered_only = yes # decision deploy_slaves_province
+
+	option = {
+		name = EVTOPTAslave3
+		trigger = { check_variable = { which = slaves value = 1 } }
+		slave_lose_lot_effect = yes
+		FROM = {
+			location = {
+				add_province_modifier = { name = deployed_slaves duration = 5500 }
+			}
+		}
+	}
+
+	# Not yet
+	option = {
+		name = EVTOPTBslave3
+		trigger = { ai = no }
+	}
+}
+
+###############################################################################
+# Trouble in the pens
+###############################################################################
+
+# slave.10 The pens (hidden)
+# Once a year the pens may bring trouble, more often the fuller they are:
+# an escape, sickness, or a slave who will not break (once a life), or a
+# rising where slaves are worked (slave.15). A cruel or paranoid master
+# keeps them cowed better; a kind one sees fewer sicken.
+# Scope: the slave master. on_yearly_pulse.
+character_event = {
+	id = slave.10
+	hide_window = yes
+
+	is_triggered_only = yes # on_yearly_pulse
+	only_rulers = yes
+	has_character_flag = slave_master
+
+	trigger = {
+		check_variable = { which = slaves value = 1 }
+	}
+
+	immediate = {
+		random_list = {
+			76 = { }
+			8 = {
+				modifier = { factor = 1.5 has_character_modifier = slave_pens_2 }
+				modifier = { factor = 2 has_character_modifier = slave_pens_3 }
+				modifier = { factor = 0.6 trait = cruel }
+				modifier = { factor = 0.6 trait = paranoid }
+				character_event = { id = slave.11 }
+			}
+			6 = {
+				modifier = { factor = 1.5 has_character_modifier = slave_pens_2 }
+				modifier = { factor = 2 has_character_modifier = slave_pens_3 }
+				modifier = { factor = 0.6 trait = kind }
+				character_event = { id = slave.12 }
+			}
+			4 = {
+				trigger = { NOT = { has_character_flag = slave_champion_met } }
+				modifier = { factor = 1.5 has_character_modifier = slave_pens_3 }
+				character_event = { id = slave.13 }
+			}
+			6 = {
+				trigger = {
+					any_demesne_province = { has_province_modifier = deployed_slaves }
+				}
+				modifier = { factor = 0.5 trait = cruel }
+				modifier = { factor = 1.5 trait = kind }
+				random_demesne_province = {
+					limit = { has_province_modifier = deployed_slaves }
+					province_event = { id = slave.15 }
+				}
+			}
+		}
+	}
+}
+
+# slave.11 An escape
+# Slaves broke out of the pens in the night: a lot is gone, two from full
+# pens. Hunt them down (martial: half come back, renown) or let them go.
+# A cruel master may make an example of the ones caught.
+# Scope: the slave master.
+character_event = {
+	id = slave.11
+	desc = EVTDESCslave11
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # slave.10
+
+	immediate = {
+		if = {
+			limit = { has_character_modifier = slave_pens_3 }
+			slave_lose_two_lots_effect = yes
+		}
+		else = { slave_lose_lot_effect = yes }
+	}
+
+	option = { # Hunt them down
+		name = EVTOPTAslave11
+		tooltip_info = martial
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.5 trait = hunter }
+				slave_gain_lot_effect = yes
+				prestige = 15
+			}
+			50 = { custom_tooltip = { text = EVTOPTAslave11_lost } }
+		}
+		ai_chance = { factor = 60 }
+	}
+	option = { # Make an example
+		name = EVTOPTBslave11
+		trigger = {
+			OR = {
+				trait = cruel
+				trait = impaler
+				trait = wroth
+			}
+		}
+		prestige = 25
+		custom_tooltip = { text = EVTOPTBslave11_tt }
+		hidden_effect = {
+			any_demesne_province = {
+				limit = { has_province_modifier = deployed_slaves }
+				add_province_modifier = { name = slaves_cowed duration = 1825 }
+			}
+		}
+		ai_chance = { factor = 30 }
+	}
+	option = { # Let them go
+		name = EVTOPTCslave11
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 trait = slothful }
+			modifier = { factor = 3 trait = kind }
+		}
+	}
+}
+
+# slave.12 Sickness in the pens
+# A flux runs through the pens. Pay a physician (40 gold: a lot dies), burn
+# the sick (a lot or two, and the gods of Chaos approve), or let it run its
+# course (one to three lots).
+# Scope: the slave master.
+character_event = {
+	id = slave.12
+	desc = EVTDESCslave12
+	picture = GFX_evt_plague_doctor
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # slave.10
+
+	option = { # A physician
+		name = EVTOPTAslave12
+		trigger = { wealth = 40 }
+		wealth = -40
+		slave_lose_lot_effect = yes
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.3 trait = greedy }
+		}
+	}
+	option = { # Burn the sick
+		name = EVTOPTBslave12
+		random_list = {
+			60 = { slave_lose_lot_effect = yes }
+			40 = { slave_lose_two_lots_effect = yes }
+		}
+		if = {
+			limit = { religion_group = chaos_gods_group }
+			piety = 20
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+	option = { # Let it run
+		name = EVTOPTCslave12
+		random_list = {
+			40 = { slave_lose_lot_effect = yes }
+			40 = { slave_lose_two_lots_effect = yes }
+			20 = {
+				slave_lose_two_lots_effect = yes
+				slave_lose_lot_effect = yes
+			}
+		}
+		ai_chance = { factor = 20 }
+	}
+}
+
+# slave.13 The one who will not break
+# A captive in the pens fights back whatever is done to them. Throw them
+# into the pit (slave.14), break them for good (they die), or free them and
+# take them into the guard. Once a life.
+# Scope: the slave master.
+character_event = {
+	id = slave.13
+	desc = EVTDESCslave13
+	picture = GFX_evt_slave_whipped
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # slave.10
+
+	immediate = {
+		set_character_flag = slave_champion_met
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			culture = ROOT
+			religion = ROOT
+			female = no
+			age = 25
+			attributes = {
+				martial = 10
+				diplomacy = 4
+				intrigue = 5
+			}
+			trait = creature_human
+			trait = strong
+			trait = tough_soldier
+		}
+		new_character = {
+			random_list = {
+				25 = { culture = averlander religion = sigmarite }
+				20 = { culture = armoric religion = grail }
+				15 = { culture = miraglian religion = myrmidian }
+				15 = { culture = kislevite religion = kislev_gods }
+				15 = { culture = cophic religion = atruhayid }
+				10 = { culture = astur religion = myrmidian }
+			}
+			save_event_target_as = slave_champion
+		}
+	}
+
+	option = { # The pit
+		name = EVTOPTAslave13
+		custom_tooltip = { text = EVTOPTAslave13_tt }
+		hidden_effect = { character_event = { id = slave.14 days = 10 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+	option = { # Break them
+		name = EVTOPTBslave13
+		event_target:slave_champion = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_slavery } }
+		}
+		prestige = 10
+		ai_chance = { factor = 30 }
+	}
+	option = { # Free them
+		name = EVTOPTCslave13
+		event_target:slave_champion = {
+			show_portrait = yes
+			opinion = { modifier = opinion_grateful who = ROOT years = 20 }
+		}
+		prestige = -10
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 5 trait = kind }
+			modifier = { factor = 3 trait = just }
+		}
+	}
+}
+
+# slave.14 The pit
+# The champion fights the beasts and the slave-masters' best. Most die. One
+# who wins three fights is given their freedom and a place in the guard,
+# and the master's renown grows either way.
+# Scope: the slave master.
+character_event = {
+	id = slave.14
+	desc = {
+		trigger = { has_character_flag = slave_pit_won }
+		text = EVTDESCslave14_won
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = slave_pit_won } }
+		text = EVTDESCslave14_died
+	}
+	picture = GFX_evt_duel3
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # slave.13
+
+	trigger = {
+		event_target:slave_champion = { is_alive = yes }
+	}
+
+	immediate = {
+		random = {
+			chance = 30
+			set_character_flag = slave_pit_won
+		}
+	}
+
+	option = {
+		name = EVTOPTAslave14
+		prestige = 40
+		if = {
+			limit = { has_character_flag = slave_pit_won }
+			event_target:slave_champion = {
+				show_portrait = yes
+				add_trait = brave
+				opinion = { modifier = opinion_impressed who = ROOT years = 20 }
+			}
+		}
+		else = {
+			event_target:slave_champion = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_slavery } }
+			}
+		}
+	}
+
+	after = {
+		clr_character_flag = slave_pit_won
+	}
+}
+
+###############################################################################
+# The slaves rise
+###############################################################################
+
+# slave.15 The slaves rise
+# The slaves worked in a province break their chains: the work there is
+# over, a former slave leads them against the master (slave_revolt rebels,
+# a peasant revolt), and the master hears of it (slave.16). Not while the
+# province is cowed (slaves_cowed) or already risen.
+# Scope: ROOT is the province, its owner the master.
+province_event = {
+	id = slave.15
+	hide_window = yes
+
+	is_triggered_only = yes # slave.10
+
+	trigger = {
+		has_province_modifier = deployed_slaves
+		NOR = {
+			has_province_modifier = slaves_cowed
+			has_province_modifier = recent_county_uprising
+		}
+		owner = {
+			top_liege = {
+				NOT = {
+					any_war = {
+						defender = { character = PREV }
+						using_cb = peasant_revolt
+						war_title = ROOT
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		remove_province_modifier = deployed_slaves
+		add_province_modifier = { name = recent_county_uprising duration = 1825 }
+		add_province_modifier = { name = slaves_taken duration = 1835 }
+		create_character = {
+			random_traits = yes
+			dynasty = random
+			culture = averlander
+			religion = sigmarite
+			female = no
+			age = 30
+			attributes = {
+				martial = 8
+			}
+			trait = creature_human
+			trait = tough_soldier
+		}
+		new_character = {
+			random_list = {
+				30 = { }
+				20 = { culture = armoric religion = grail }
+				15 = { culture = miraglian religion = myrmidian }
+				15 = { culture = kislevite religion = kislev_gods }
+				20 = { culture = cophic religion = atruhayid }
+			}
+			create_title = {
+				tier = DUKE
+				landless = yes
+				temporary = yes
+				rebel = yes
+				culture = ROOT
+				name = "SLAVE_REVOLT"
+				holder = THIS
+			}
+			wealth = 100
+			spawn_peasant_army_effect = yes
+			ROOT = {
+				owner = {
+					add_rival = PREVPREV
+					top_liege = {
+						reverse_war = {
+							target = PREVPREVPREV
+							casus_belli = peasant_revolt
+							thirdparty_title = ROOT
+						}
+					}
+				}
+			}
+		}
+		owner = { character_event = { id = slave.16 } }
+	}
+}
+
+# slave.16 The chains are broken
+# Scope: ROOT is the master, FROM the province.
+character_event = {
+	id = slave.16
+	desc = EVTDESCslave16
+	picture = GFX_evt_peasants
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # slave.15
+
+	option = {
+		name = EVTOPTAslave16
+	}
+}
+
+###############################################################################
+# The pens pass on
+###############################################################################
+
+# slave.17 The master is dead (hidden)
+# The pens pass to the heir if the heir keeps slaves. Otherwise the slaves
+# are set free.
+# Scope: the dead master. on_death.
+character_event = {
+	id = slave.17
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+	only_rulers = yes
+	has_character_flag = slave_master
+
+	trigger = {
+		check_variable = { which = slaves value = 1 }
+		current_heir = {
+			is_alive = yes
+			slave_keeper_trigger = yes
+		}
+	}
+
+	immediate = {
+		current_heir = {
+			change_variable = { which = slaves which = PREV }
+			slave_stock_update_effect = yes
+		}
+	}
+}
+
+###############################################################################
+# Freedom
+###############################################################################
+
+# slave.19 The slaves are freed
+# A lord whose faith keeps no slaves frees those worked on their land:
+# piety, and a quieter but poorer province for five years.
+# Scope: ROOT is the lord, FROM the settlement chosen.
+character_event = {
+	id = slave.19
+	desc = EVTDESCslave19
+	picture = GFX_evt_peasants
+
+	is_triggered_only = yes # decision free_worked_slaves
+
+	option = {
+		name = EVTOPTAslave19
+		piety = 50
+		FROM = {
+			location = {
+				remove_province_modifier = deployed_slaves
+				add_province_modifier = { name = slaves_freed duration = 1825 }
+			}
+		}
+	}
+}

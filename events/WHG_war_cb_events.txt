@@ -1,0 +1,541 @@
+###############################################################################
+# Wars of hostages, faith and tribute
+# Namespace: warcb (was JD.2000 - JD.2503 in jd_CB_events)
+# Faction: Generic
+#
+# The events behind three Jade Dragon wars. A lord who goes to war to free
+# kin held by an enemy gives the captor the choice to bargain, make an
+# example or kill them all (and Chaos, Dark Elf, Lizardmen and Khainite
+# captors give them to their gods). A zealous ruler may be stirred to free
+# fellow believers ruled by an infidel neighbour. A lord at war to make
+# another pay tribute may be offered a peaceful surrender.
+#
+# Hostages                               warcb.1 - warcb.6
+# Faith: freeing the faithful            warcb.10
+# Tribute                                warcb.20, warcb.30 - warcb.33
+#
+# Callers: common/cb_types/01_cb_types.txt (hostages_cb on_add: 1; the
+# tributary CBs: 30, also in 00_cb_types.txt), the random events list in
+# common/on_actions/00_on_actions.txt and the ambition in
+# common/objectives/WHG_ambitions.txt (10), the decision to stop paying
+# tribute (tributary_independence_normal in decisions/jd_decisions.txt: 20).
+# Shared code: warcb_* in WHG_war_cb_triggers.txt and WHG_war_cb_effects.txt.
+# Loc: localisation/00_WHG_war_cb_events.csv
+###############################################################################
+
+namespace = warcb
+
+###############################################################################
+# Hostages
+###############################################################################
+
+# warcb.1 They come for the captives
+# An enemy has declared war to free kin, friends or consorts the lord holds.
+# The lord may offer them back for peace, execute one, execute all, or
+# fight on. The captives cannot be ransomed while the lord decides.
+# Scope: the captor; FROM is the rescuer (the attacker).
+character_event = {
+	id = warcb.1
+	desc = EVTDESCwarcb1
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes # hostages_cb on_add
+
+	trigger = {
+		war_with = FROM
+	}
+
+	immediate = {
+		save_event_target_as = warcb_captor
+		FROM = { save_event_target_as = warcb_rescuer }
+		any_realm_character = { limit = { warcb_captive_trigger = yes } diplomatic_immunity = yes }
+		random_realm_character = {
+			limit = { warcb_captive_trigger = yes }
+			save_event_target_as = warcb_chosen_captive
+		}
+	}
+
+	# Offer the captives back for peace
+	option = {
+		name = EVTOPTAwarcb1
+		trigger = { event_target:warcb_chosen_captive = { is_alive = yes } }
+		FROM = { character_event = { id = warcb.2 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 2 trait = content }
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+
+	# Make an example of one
+	option = {
+		name = { text = EVTOPTBwarcb1 trigger = { warcb_sacrificing_captor_trigger = no } }
+		name = {
+			text = EVTOPTBwarcb1_sacrifice
+			trigger = { warcb_sacrificing_captor_trigger = yes }
+		}
+		trigger = { event_target:warcb_chosen_captive = { is_alive = yes } }
+		tooltip = { event_target:warcb_chosen_captive = { warcb_execute_captive_effect = yes } }
+		FROM = { character_event = { id = warcb.5 } }
+		prestige = 100
+		ai_chance = {
+			factor = 40
+			modifier = {
+				factor = 0
+				event_target:warcb_chosen_captive = {
+					OR = { is_friend = ROOT is_lover = ROOT is_close_relative = ROOT }
+				}
+			}
+			modifier = { factor = 2 warcb_sacrificing_captor_trigger = yes }
+		}
+	}
+
+	# Kill them all
+	option = {
+		name = { text = EVTOPTCwarcb1 trigger = { warcb_sacrificing_captor_trigger = no } }
+		name = {
+			text = EVTOPTCwarcb1_sacrifice
+			trigger = { warcb_sacrificing_captor_trigger = yes }
+		}
+		trigger = { any_realm_character = { count = 2 warcb_captive_trigger = yes } }
+		any_realm_character = {
+			limit = { warcb_captive_trigger = yes }
+			warcb_execute_captive_effect = yes
+		}
+		FROM = { character_event = { id = warcb.6 } }
+		prestige = 200
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 5 trait = cruel }
+			modifier = { factor = 5 trait = arbitrary }
+			modifier = { factor = 5 OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 } }
+			modifier = { factor = 5 trait = possessed }
+			modifier = { factor = 5 is_rival = FROM }
+			modifier = { factor = 3 warcb_sacrificing_captor_trigger = yes }
+		}
+	}
+
+	# Fight on
+	option = {
+		name = EVTOPTDwarcb1
+		ai_chance = { factor = 35 }
+	}
+
+	after = {
+		any_realm_character = { limit = { warcb_captive_trigger = yes } diplomatic_immunity = no }
+	}
+}
+
+# warcb.2 An offer to return the captives
+# The captor offers to free every captive and send them to the rescuer's
+# court if the war ends now.
+# Scope: the rescuer; FROM is the captor.
+character_event = {
+	id = warcb.2
+	desc = EVTDESCwarcb2
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes # warcb.1
+
+	# Accept: the captives come home, the war ends
+	option = {
+		name = EVTOPTAwarcb2
+		FROM = {
+			character_event = { id = warcb.3 }
+			any_realm_character = {
+				limit = { warcb_captive_trigger = yes }
+				warcb_release_captive_effect = yes
+			}
+		}
+		any_war = {
+			limit = { attacker = { character = ROOT } defender = { character = FROM } }
+			end_war = invalid
+		}
+		ai_chance = {
+			factor = 80
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 2 trait = content }
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+
+	# Refuse: the war is about loot now
+	option = {
+		name = EVTOPTBwarcb2
+		FROM = { character_event = { id = warcb.4 } }
+		prestige = -100
+		ai_chance = { factor = 20 modifier = { factor = 2 trait = arbitrary } }
+	}
+}
+
+# warcb.3 The offer is accepted
+# The war is over and the captives are free.
+# Scope: the captor; FROM is the rescuer.
+character_event = {
+	id = warcb.3
+	desc = EVTDESCwarcb3
+	picture = GFX_evt_carriage_default
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes # warcb.2
+
+	option = {
+		name = EVTOPTAwarcb3
+	}
+}
+
+# warcb.4 The offer is refused
+# The rescuer cares more for plunder than for the captives. The captor may
+# fight on or kill them all.
+# Scope: the captor; FROM is the rescuer.
+character_event = {
+	id = warcb.4
+	desc = EVTDESCwarcb4
+	picture = GFX_evt_lunatic
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes # warcb.2
+
+	# Fight on
+	option = {
+		name = EVTOPTAwarcb4
+		ai_chance = { factor = 60 modifier = { factor = 2 trait = craven } }
+	}
+
+	# Kill them all
+	option = {
+		name = { text = EVTOPTBwarcb4 trigger = { warcb_sacrificing_captor_trigger = no } }
+		name = {
+			text = EVTOPTBwarcb4_sacrifice
+			trigger = { warcb_sacrificing_captor_trigger = yes }
+		}
+		trigger = { any_realm_character = { warcb_captive_trigger = yes } }
+		any_realm_character = {
+			limit = { warcb_captive_trigger = yes }
+			warcb_execute_captive_effect = yes
+		}
+		FROM = { character_event = { id = warcb.6 } }
+		prestige = 100
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 2 trait = wroth }
+			modifier = { factor = 2 warcb_sacrificing_captor_trigger = yes }
+		}
+	}
+}
+
+# warcb.5 A captive is killed
+# The rescuer learns the captor has made an example of one captive (the
+# killing itself happens here, unless the captive was freed in between).
+# Scope: the rescuer; FROM is the captor.
+character_event = {
+	id = warcb.5
+	desc = { text = EVTDESCwarcb5 trigger = { FROM = { warcb_sacrificing_captor_trigger = no } } }
+	desc = {
+		text = EVTDESCwarcb5_sacrifice
+		trigger = { FROM = { warcb_sacrificing_captor_trigger = yes } }
+	}
+	picture = GFX_evt_beheading
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes # warcb.1
+
+	option = {
+		name = EVTOPTAwarcb5
+		event_target:warcb_chosen_captive = {
+			if = {
+				limit = {
+					NOT = { has_opinion_modifier = { modifier = opinion_my_saviour who = ROOT } }
+				}
+				warcb_execute_captive_effect = yes
+			}
+		}
+	}
+}
+
+# warcb.6 All the captives are killed
+# Scope: the rescuer; FROM is the captor.
+character_event = {
+	id = warcb.6
+	desc = { text = EVTDESCwarcb6 trigger = { FROM = { warcb_sacrificing_captor_trigger = no } } }
+	desc = {
+		text = EVTDESCwarcb6_sacrifice
+		trigger = { FROM = { warcb_sacrificing_captor_trigger = yes } }
+	}
+	picture = GFX_evt_beheading
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes # warcb.1, warcb.4
+
+	option = {
+		name = EVTOPTAwarcb6
+	}
+}
+
+###############################################################################
+# Faith: freeing the faithful
+###############################################################################
+
+# warcb.10 The faithful under an infidel's rule
+# A zealous independent ruler hears of fellow believers ruled by an
+# infidel neighbour in a kingdom the ruler borders, and may take one use of
+# the Liberate Religion war. Comes once per lifetime.
+# Scope: the ruler.
+character_event = {
+	id = warcb.10
+	desc = EVTDESCwarcb10
+	picture = GFX_evt_religious_exultation
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes # random events list, ambition
+
+	only_playable = yes
+	only_independent = yes
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		is_nomadic = no
+		mercenary = no
+		pacifist = no
+		top_liege = { religion = ROOT }
+		NOR = {
+			has_character_flag = had_liberate_opportunity
+			has_character_flag = denied_liberate_opportunity
+		}
+		warcb_liberation_possible_trigger = yes
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 3 trait = zealous }
+		modifier = { factor = 0.25 NOT = { higher_tier_than = DUKE } }
+		modifier = { factor = 0 trait = cynical }
+	}
+
+	immediate = {
+		random_independent_ruler = {
+			limit = { warcb_liberation_target_trigger = yes }
+			save_event_target_as = liberate_target
+		}
+	}
+
+	option = {
+		name = EVTOPTAwarcb10
+		custom_tooltip = {
+			text = cb_opportunity_liberate
+			hidden_effect = { set_character_flag = had_liberate_opportunity }
+		}
+	}
+
+	option = {
+		name = EVTOPTBwarcb10
+		custom_tooltip = {
+			text = cb_opportunity_liberate_deny
+			hidden_effect = { set_character_flag = denied_liberate_opportunity }
+		}
+		ai_chance = { factor = 0 }
+	}
+}
+
+###############################################################################
+# Tribute
+###############################################################################
+
+# warcb.20 A tributary stops paying
+# Scope: the suzerain; FROM is the former tributary.
+character_event = {
+	id = warcb.20
+	desc = EVTDESCwarcb20
+	picture = GFX_evt_throne_room
+	is_triggered_only = yes # decision tributary_independence_normal
+
+	option = {
+		name = EVTOPTAwarcb20
+	}
+}
+
+# warcb.30 Surrender to the tribute war?
+# A lord attacked by someone who wants tribute may offer to pay at once
+# and end the war before blood is spilled (warcb.31).
+# Scope: the defender; event_target:tribute_war_suzerain is the attacker.
+character_event = {
+	id = warcb.30
+	desc = EVTDESCwarcb30
+	picture = GFX_evt_council
+	is_triggered_only = yes # the tributary CBs
+
+	# Offer to pay
+	option = {
+		name = EVTOPTAwarcb30
+		event_target:tribute_war_suzerain = {
+			letter_event = { id = warcb.31 days = 1 tooltip = surrender_tributary_event_tt }
+		}
+		ai_chance = {
+			factor = 10
+			modifier = {
+				factor = 0
+				OR = {
+					trait = lunatic_1
+					trait = lunatic_2
+					trait = lunatic_3
+					trait = possessed
+					trait = proud
+					trait = stubborn
+					is_tributary = yes
+					relative_power_including_allies_defender = {
+						who = event_target:tribute_war_suzerain
+						power = 1.5
+					}
+					event_target:tribute_war_suzerain = {
+						any_war = {
+							NOT = { any_attacker = { character = ROOT } }
+							NOT = { any_defender = { character = ROOT } }
+						}
+					}
+				}
+			}
+			modifier = { factor = 2 OR = { trait = craven trait = content } }
+			modifier = {
+				factor = 1.5
+				NOT = {
+					relative_power_including_allies_defender = {
+						who = event_target:tribute_war_suzerain
+						power = 0.25
+					}
+				}
+			}
+			modifier = {
+				factor = 1.5
+				NOT = {
+					relative_power_including_allies_defender = {
+						who = event_target:tribute_war_suzerain
+						power = 0.5
+					}
+				}
+			}
+			modifier = {
+				factor = 1.5
+				NOT = {
+					relative_power_including_allies_defender = {
+						who = event_target:tribute_war_suzerain
+						power = 0.75
+					}
+				}
+			}
+			modifier = {
+				factor = 1.5
+				NOT = {
+					relative_power_including_allies_defender = {
+						who = event_target:tribute_war_suzerain
+						power = 0.9
+					}
+				}
+			}
+		}
+	}
+
+	# Fight
+	option = {
+		name = EVTOPTBwarcb30
+		ai_chance = { factor = 90 }
+	}
+}
+
+# warcb.31 The enemy offers to pay
+# The attacker may accept the surrender (warcb.32) or fight on for plunder
+# (warcb.33).
+# Scope: the attacker; FROM is the defender (event_target:tribute_war_target).
+letter_event = {
+	id = warcb.31
+	desc = EVTDESCwarcb31
+	is_triggered_only = yes # warcb.30
+
+	trigger = {
+		event_target:tribute_war_target = { is_alive = yes }
+	}
+
+	# Accept
+	option = {
+		name = EVTOPTAwarcb31
+		if = { limit = { uses_decadence = yes } decadence = -5 }
+		if = {
+			limit = { is_nomadic = yes }
+			clan_title = {
+				ROOT = {
+					any_vassal = {
+						limit = { is_nomadic = yes }
+						clan_title = {
+							clan_opinion = {
+								who = PREVPREVPREV
+								modifier = won_tributary_war
+								years = 3
+							}
+						}
+					}
+				}
+			}
+		}
+		if = {
+			limit = { is_tribal = yes }
+			any_vassal = {
+				limit = { is_tribal = yes }
+				opinion = { who = ROOT modifier = won_tributary_war years = 3 }
+			}
+		}
+		hidden_effect = { FROM = { letter_event = { id = warcb.32 } } }
+		tooltip = { event_target:tribute_war_target = { warcb_tribute_surrender_effect = yes } }
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 0.1 trait = cruel }
+			modifier = { factor = 0.5 trait = proud }
+			modifier = {
+				factor = 0
+				OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 trait = possessed }
+			}
+			modifier = { factor = 0.3 is_nomadic = yes }
+		}
+	}
+
+	# Refuse
+	option = {
+		name = EVTOPTBwarcb31
+		prestige = 20
+		FROM = { letter_event = { id = warcb.33 } }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = humble }
+			modifier = { factor = 5 trait = content }
+			modifier = { factor = 2 is_smart_trigger = yes }
+			modifier = { factor = 2 trait = kind }
+			modifier = {
+				factor = 3
+				NOT = { relative_power_including_allies_attacker = { who = FROM power = 1.5 } }
+			}
+		}
+	}
+}
+
+# warcb.32 The surrender is accepted
+# The defender becomes the attacker's tributary and the war ends.
+# Scope: the defender; FROM is the attacker.
+letter_event = {
+	id = warcb.32
+	desc = EVTDESCwarcb32
+	is_triggered_only = yes # warcb.31
+
+	option = {
+		name = EVTOPTAwarcb32
+		warcb_tribute_surrender_effect = yes
+		warcb_tribute_clear_effect = yes
+	}
+}
+
+# warcb.33 The surrender is refused
+# Scope: the defender; FROM is the attacker.
+letter_event = {
+	id = warcb.33
+	desc = EVTDESCwarcb33
+	is_triggered_only = yes # warcb.31
+
+	option = {
+		name = EVTOPTAwarcb33
+		warcb_tribute_clear_effect = yes
+	}
+}

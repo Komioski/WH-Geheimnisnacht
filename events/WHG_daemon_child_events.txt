@@ -1,0 +1,2629 @@
+###############################################################################
+# The daemon child
+# Namespace: daemonchild (was SoA.3000 - SoA.3092 in soa_various_events.txt,
+#   the vanilla Demon Child chain)
+# Faction: Chaos
+# Serves: players of the Old World, Araby, Stromfels and Norsca whose child
+#   the Dark Gods mark; the Chaos cults (Monks and Mystics)
+#
+# Once in a game the Dark Gods mark a young child at a player's court. The
+# parent sees the signs and may ask the court chaplain, who may calm them,
+# accuse the mother of witchcraft or call for her abdication. As the child
+# grows it tries to murder siblings who stand before it, a witch nanny of
+# the cult comes to raise it and may die for it, and wounds, blindness,
+# castration, madness, plague and prison do not hold it. At adulthood its
+# true nature shows: a genius, possessed, with the voice of a greater
+# daemon, it leads a Chaos cult or warband; at war three witches ride to its
+# side with armies. Cultists rejoice when it comes of age and mourn when it
+# dies. The Dark Gods can also send such a child to an unholy mother
+# (chaoscult.173 in WHG_chaos_cult_events). The vanilla Sunset Invasion
+# branch (the child sails west and returns as an Aztec emperor) is gone.
+#
+# A child is marked                    daemonchild.1 - daemonchild.3
+# The chaplain and the accusation      daemonchild.4 - daemonchild.17
+# The child grows                      daemonchild.19 - daemonchild.21
+# Murder in the nursery                daemonchild.30 - daemonchild.41
+# Nothing holds it                     daemonchild.50 - daemonchild.61
+# The witches                          daemonchild.65 - daemonchild.78
+# The cult                             daemonchild.90 - daemonchild.92
+#
+# Callers: wh_on_actions.txt (on_yearly_pulse daemon_child list: 1),
+#   00_on_actions.txt (on_adulthood: 20, on_death: 91, the yearly pulse
+#   recovery list: 50 - 53, 60).
+# Saved: global flag demon_child_born (once a game); character flags
+#   demon_child_non_pagan, demon_child_non_pagan_got_nanny,
+#   demon_child_non_pagan_cultists, witch_nanny, demonspawn_will_join_*;
+#   character modifiers demon_child_non_pagan, suspected_demon_spawn,
+#   suspected_witch, known_witch, voice_of_greater_daemon, demon_horns.
+###############################################################################
+
+namespace = daemonchild
+
+# daemonchild.1 A child is marked
+# Once a game, a young child of a player of the Old World, Araby, Stromfels or
+# Norsca is touched by the Dark Gods (daemonchild.2). More likely for the
+# possessed, mad, cruel and impaling, and four times for devil worshippers. Was
+# MTTH 500 years.
+# Scope: ROOT is the parent. From on_yearly_pulse (daemon_child list).
+character_event = {
+	id = daemonchild.1
+	hide_window = yes
+
+	is_triggered_only = yes
+	only_playable = yes
+
+	trigger = {
+		OR = {
+			has_dlc = "Sons of Abraham"
+			has_dlc = "Mystics"
+		}
+		OR = {
+			religion_group = old_world_group
+			religion_group = ormazd_gods_group
+			religion_group = stromfels_group
+			religion = norscan_gods
+			religion = norscan_gods_reformed
+		}
+		any_child = {
+			NOT = { age = 3 }
+			is_ill = no
+			NOT = { trait = inbred }
+			mother = {
+				always = yes
+			}
+		}
+		NOT = { has_global_flag = demon_child_born }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 2
+			trait = possessed
+		}
+		modifier = {
+			factor = 1.33
+			OR = {
+				trait = lunatic_1
+				trait = lunatic_2
+				trait = lunatic_3
+			}
+		}
+		modifier = {
+			factor = 1.33
+			trait = cruel
+		}
+		modifier = {
+			factor = 1.33
+			trait = impaler
+		}
+		modifier = {
+			factor = 4
+			is_devil_or_warband_worshiper_trigger = yes
+		}
+	}
+
+	immediate = {
+		random_child = {
+			limit = {
+				NOT = { age = 3 }
+				is_ill = no
+				NOT = { trait = inbred }
+			}
+			character_event = { id = daemonchild.2 }
+		}
+	}
+}
+
+# daemonchild.2 The marked child
+# Hidden: marks the child (flag and hidden modifier demon_child_non_pagan, global
+# flag demon_child_born), tells the parent (daemonchild.3) and starts the
+# child's antics (daemonchild.19).
+# Scope: ROOT is the child, FROM the parent (or the child itself from the
+#   orgy birth event in birth_events.txt, then the mother hears). From
+#   daemonchild.1.
+character_event = {
+	id = daemonchild.2
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = demon_child_non_pagan
+		set_global_flag = demon_child_born
+		add_character_modifier = {
+			name = demon_child_non_pagan
+			hidden = yes
+			days = -1
+		}
+		remove_trait = sickly
+		if = {
+			limit = { FROM = { character = ROOT } } # fired by the child's own birth event
+			mother = { narrative_event = { id = daemonchild.3 } }
+		}
+		else = {
+			FROM = { narrative_event = { id = daemonchild.3 } }
+		}
+		character_event = { id = daemonchild.19 days = 90 random = 90 } # Demon child tombola
+	}
+}
+
+# daemonchild.3 Something is wrong with the child
+# The parent sees the signs. A father or mother may pray (or, serving Chaos,
+# rejoice; half the time the child is suspected), or consult the court chaplain
+# (daemonchild.4).
+# Scope: ROOT is the parent, FROM the child. From daemonchild.2.
+narrative_event = {
+	id = daemonchild.3
+	title = EVTNAMEdaemonchild3
+	desc = EVTDESCdaemonchild3
+	picture = GFX_evt_birth
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = {
+			text = EVTOPTAdaemonchild3 # Pray and fast, father
+			trigger = {
+				NOT = { follower_of_any_chaos_gods = yes }
+			}
+		}
+		name = {
+			text = EVTOPTAdaemonchild3_chaos # Rejoice, father
+			trigger = {
+				follower_of_any_chaos_gods = yes
+			}
+		}
+
+		ai_chance = {
+			factor = 100
+		}
+
+		if = {
+			limit = { is_devil_or_warband_worshiper_trigger = yes }
+			add_society_currency_major_effect = yes
+		}
+
+		trigger = {
+			is_female = no
+		}
+		random_list = {
+			50 = {
+			}
+			50 = {
+				FROM = {
+					add_character_modifier = {
+						name = suspected_demon_spawn
+						duration = -1
+					}
+				}
+			}
+		}
+	}
+
+	option = {
+		name = {
+			text = EVTOPTBdaemonchild3 # Pray and fast, mother
+			trigger = {
+				NOT = { follower_of_any_chaos_gods = yes }
+			}
+		}
+		name = {
+			text = EVTOPTBdaemonchild3_chaos # Rejoice, mother
+			trigger = {
+				follower_of_any_chaos_gods = yes
+			}
+		}
+
+		trigger = {
+			is_woman_trigger = yes
+		}
+
+		ai_chance = {
+			factor = 100
+		}
+
+		if = {
+			limit = { is_devil_or_warband_worshiper_trigger = yes }
+			add_society_currency_massive_effect = yes
+		}
+
+		random_list = {
+			50 = {
+			}
+			50 = {
+				FROM = {
+					add_character_modifier = {
+						name = suspected_demon_spawn
+						duration = -1
+					}
+				}
+			}
+		}
+		random_list = {
+			50 = {
+			}
+			50 = {
+				add_character_modifier = {
+					name = suspected_witch
+					duration = -1
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTCdaemonchild3 # Consult the Court Chaplain
+
+		trigger = {
+			NOT = { is_devil_or_warband_worshiper_trigger = yes }
+			job_spiritual = {
+				religion = ROOT
+			}
+		}
+		job_spiritual = {
+			character_event = { id = daemonchild.4 days = 2 tooltip = EVTTOOLTIPdaemonchild4 }
+		}
+	}
+}
+
+# daemonchild.4 The chaplain's verdict
+# The chaplain says not to worry (daemonchild.5), accuses the mother who asked
+# (daemonchild.6), or tells a father that the child's mother is a witch
+# (daemonchild.7).
+# Scope: ROOT is the chaplain, FROM the parent, FROMFROM the child. From
+#   daemonchild.3.
+character_event = {
+	id = daemonchild.4
+	desc = EVTDESCdaemonchild4
+	picture = GFX_evt_birth
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild4 # Tell not to worry
+		ai_chance = {
+			factor = 100
+			modifier = {
+				factor = 0
+				trait = zealous
+				NOT = { follower_of_any_chaos_gods = yes }
+			}
+			modifier = {
+				factor = 2
+				FROM = {
+					is_woman_trigger = yes
+					trait = kind
+				}
+			}
+			modifier = {
+				factor = 2
+				FROM = {
+					is_woman_trigger = yes
+					trait = chaste
+				}
+			}
+			modifier = {
+				factor = 2
+				FROM = {
+					is_woman_trigger = yes
+					trait = zealous
+				}
+			}
+			modifier = {
+				factor = 2
+				opinion = {
+					who = FROM
+					value = 50
+				}
+			}
+		}
+		hidden_tooltip = {
+			FROMFROM = {
+				character_event = { id = daemonchild.5 days = 2 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTBdaemonchild4 # Accuse of witchcraft
+		trigger = {
+			FROM = { is_woman_trigger = yes }
+		}
+		ai_chance = {
+			factor = 100
+			modifier = {
+				factor = 0
+				trait = cynical
+			}
+			modifier = {
+				factor = 0
+				follower_of_any_chaos_gods = yes
+			}
+			modifier = {
+				factor = 2
+				trait = cruel
+			}
+			modifier = {
+				factor = 2
+				trait = arbitrary
+			}
+			modifier = {
+				factor = 2
+				FROM = { trait = possessed }
+			}
+			modifier = {
+				factor = 2
+				FROM = {
+					OR = {
+						trait = lunatic_1
+						trait = lunatic_2
+						trait = lunatic_3
+					}
+				}
+			}
+			modifier = {
+				factor = 2
+				FROM = { trait = cruel }
+			}
+			modifier = {
+				factor = 4
+				FROM = { trait = impaler }
+			}
+			modifier = {
+				factor = 2
+				FROM = { trait = mystic }
+			}
+			modifier = {
+				factor = 2
+				FROM = { trait = lustful }
+			}
+			modifier = {
+				factor = 2
+				NOT = {
+					opinion = {
+						who = FROM
+						value = 0
+					}
+				}
+			}
+			modifier = {
+				factor = 2
+				NOT = {
+					opinion = {
+						who = FROM
+						value = -50
+					}
+				}
+			}
+		}
+
+		tooltip = {
+			FROM = {
+				character_event = { id = daemonchild.6 days = 2 tooltip = EVTTOOLTIPdaemonchild6 }
+			}
+		}
+
+		hidden_tooltip = {
+			FROMFROM = {
+				character_event = { id = daemonchild.6 days = 2 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTCdaemonchild4 # Accuse mother of witchcraft
+		trigger = {
+			FROM = {
+				is_female = no
+			}
+			FROMFROM = {
+				mother_even_if_dead = {
+					is_alive = yes
+				}
+			}
+		}
+
+		ai_chance = {
+			factor = 100
+			modifier = {
+				factor = 0
+				trait = cynical
+			}
+			modifier = {
+				factor = 0
+				follower_of_any_chaos_gods = yes
+			}
+			modifier = {
+				factor = 2
+				trait = arbitrary
+			}
+			modifier = {
+				factor = 2
+				FROMFROM = { mother = { trait = possessed } }
+			}
+			modifier = {
+				factor = 2
+				FROMFROM = {
+					mother = {
+						OR = {
+							trait = lunatic_1
+							trait = lunatic_2
+							trait = lunatic_3
+						}
+					}
+				}
+			}
+			modifier = {
+				factor = 2
+				FROMFROM = { mother = { trait = cruel } }
+			}
+			modifier = {
+				factor = 4
+				FROMFROM = { mother = { trait = impaler } }
+			}
+			modifier = {
+				factor = 2
+				FROMFROM = { mother = { trait = mystic } }
+			}
+			modifier = {
+				factor = 2
+				FROMFROM = { mother = { trait = lustful } }
+			}
+			modifier = {
+				factor = 5
+				FROMFROM = { mother = { NOT = { religion = ROOT } } }
+			}
+			modifier = {
+				factor = 2
+				NOT = {
+					opinion = {
+						who = FROM
+						value = 0
+					}
+				}
+			}
+			modifier = {
+				factor = 2
+				FROMFROM = {
+					mother = {
+						NOT = {
+							reverse_opinion = {
+								who = FROM
+								value = 0
+							}
+						}
+					}
+				}
+			}
+			modifier = {
+				factor = 2
+				FROMFROM = {
+					mother = {
+						NOT = {
+							reverse_opinion = {
+								who = FROM
+								value = -50
+							}
+						}
+					}
+				}
+			}
+		}
+
+		tooltip = {
+			FROM = {
+				character_event = { id = daemonchild.7 days = 2 tooltip = EVTTOOLTIPdaemonchild7 }
+			}
+		}
+
+		hidden_tooltip = {
+			FROMFROM = {
+				character_event = { id = daemonchild.7 days = 2 }
+			}
+		}
+	}
+}
+
+# daemonchild.5 Bounce
+# Hidden: back to the parent (daemonchild.8).
+# Scope: ROOT is the child, FROM the chaplain. From daemonchild.4.
+character_event = {
+	id = daemonchild.5
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROMFROM = { character_event = { id = daemonchild.8 } }
+	}
+}
+
+# daemonchild.6 Bounce
+# Hidden: back to the mother (daemonchild.9).
+# Scope: ROOT is the child, FROM the chaplain. From daemonchild.4.
+character_event = {
+	id = daemonchild.6
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROMFROM = { character_event = { id = daemonchild.9 } }
+	}
+}
+
+# daemonchild.7 Bounce
+# Hidden: back to the father (daemonchild.10).
+# Scope: ROOT is the child, FROM the chaplain. From daemonchild.4.
+character_event = {
+	id = daemonchild.7
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROMFROM = { character_event = { id = daemonchild.10 } }
+	}
+}
+
+# daemonchild.8 Nothing to fear
+# The chaplain reassures the parent (100 piety).
+# Scope: ROOT is the parent, FROM the child, FROMFROM the chaplain. From
+#   daemonchild.5.
+character_event = {
+	id = daemonchild.8
+	desc = EVTDESCdaemonchild8
+	picture = GFX_evt_family
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	show_from_from = yes
+
+	option = {
+		name = EVTOPTAdaemonchild8 # What a relief!
+		piety = 100
+	}
+}
+
+# daemonchild.9 Accused of witchcraft
+# A mother is accused: deny it (500 piety lost, mother and child suspected,
+# daemonchild.11), tell of her dreams (daemonchild.12) or, with intrigue 10, have
+# the chaplain killed (50 gold).
+# Scope: ROOT is the mother, FROM the child, FROMFROM the chaplain. From
+#   daemonchild.6.
+character_event = {
+	id = daemonchild.9
+	desc = EVTDESCdaemonchild9
+	picture = GFX_evt_shadowy_cabal
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	show_from_from = yes
+
+	option = {
+		name = EVTOPTAdaemonchild9 # Deny these ridiculous charges!
+		add_character_modifier = {
+			name = suspected_witch
+			duration = -1
+		}
+		FROM = {
+			add_character_modifier = {
+				name = suspected_demon_spawn
+				duration = -1
+			}
+		}
+		piety = -500
+		hidden_tooltip = {
+			FROMFROM = { character_event = { id = daemonchild.11 days = 2 } }
+		}
+	}
+	option = {
+		name = EVTOPTBdaemonchild9 # Tell of lurid dreams
+		FROMFROM = { character_event = { id = daemonchild.12 days = 2 tooltip = EVTTOOLTIPdaemonchild12 } }
+	}
+	option = {
+		name = EVTOPTCdaemonchild9 # Get rid of the court chaplain
+		tooltip_info = intrigue
+		trigger = {
+			intrigue = 10
+		}
+
+		wealth = -50
+
+		FROMFROM = {
+			death = {
+				death_reason = death_murder
+				killer = ROOT
+			}
+		}
+	}
+}
+
+# daemonchild.10 The mother is accused
+# A father hears the mother is a witch: deny it (200 piety lost, both suspected),
+# seize her and disown the child (bastard of the mother's dynasty, the mother
+# divorced and jailed if at court), or have the chaplain killed.
+# Scope: ROOT is the father, FROM the child, FROMFROM the chaplain. From
+#   daemonchild.7.
+character_event = {
+	id = daemonchild.10
+	desc = EVTDESCdaemonchild10
+	picture = GFX_evt_quarrel
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	show_from_from = yes
+
+	option = {
+		name = EVTOPTAdaemonchild10 # Deny these ridiculous charges!
+		FROM = {
+			add_character_modifier = {
+				name = suspected_demon_spawn
+				duration = -1
+			}
+			mother = {
+				add_character_modifier = {
+					name = suspected_witch
+					duration = -1
+				}
+			}
+		}
+		piety = -200
+		hidden_tooltip = {
+			FROMFROM = { character_event = { id = daemonchild.16 days = 2 } }
+		}
+	}
+
+	option = {
+		name = EVTOPTBdaemonchild10 # Seize the mother declare the child illegitimate!
+		FROM = {
+			hidden_tooltip = {
+				if = {
+					limit = {
+						is_father_real_father = yes
+					}
+					set_character_flag = real_father_check_set
+				}
+				set_father = 0
+				if = {
+					limit = {
+						has_character_flag = real_father_check_set
+					}
+					set_real_father = ROOT
+					clr_character_flag = real_father_check_set
+				}
+			}
+			add_trait = bastard
+
+			dynasty = mother
+
+			mother = {
+				remove_spouse = yes
+				if = {
+					limit = {
+						employer = {
+							character = ROOT
+						}
+					}
+					imprison = ROOT
+					reverse_opinion = {
+						who = ROOT
+						modifier = opinion_witch
+					}
+				}
+				if = {
+					limit = { is_lover = ROOT }
+					remove_lover = ROOT
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTCdaemonchild9 # Get rid of the court chaplain
+		tooltip_info = intrigue
+		trigger = {
+			intrigue = 10
+		}
+
+		wealth = -50
+
+		FROMFROM = {
+			death = {
+				death_reason = death_murder
+				killer = ROOT
+			}
+		}
+	}
+}
+
+# daemonchild.11 Watchful
+# The chaplain accepts the denial, for now.
+# Scope: ROOT is the chaplain, FROM the mother. From daemonchild.9.
+character_event = {
+	id = daemonchild.11
+	desc = EVTDESCdaemonchild11
+	picture = GFX_evt_shadowy_cabal
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild11 # I must keep an eye on mother and child...
+	}
+}
+
+# daemonchild.12 The confession
+# The chaplain hears of the mother's dreams: demand her abdication and disown the
+# child (daemonchild.13), or call them ordinary nightmares (daemonchild.14).
+# Scope: ROOT is the chaplain, FROM the mother. From daemonchild.9.
+character_event = {
+	id = daemonchild.12
+	desc = EVTDESCdaemonchild12
+	picture = GFX_evt_quarrel
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild12 # Demand her abdication and declare the child illegitimate
+
+		ai_chance = {
+			factor = 70
+			modifier = {
+				factor = 0.5
+				FROM = { diplomacy = 7 }
+			}
+			modifier = {
+				factor = 0.5
+				FROM = { diplomacy = 9 }
+			}
+			modifier = {
+				factor = 0.5
+				FROM = { diplomacy = 12 }
+			}
+			modifier = {
+				factor = 2.0
+				FROM = { NOT = { diplomacy = 4 } }
+			}
+		}
+
+		opinion = {
+			who = FROM
+			modifier = opinion_witch
+		}
+		tooltip = {
+			FROM = { character_event = { id = daemonchild.13 days = 2 tooltip = EVTTOOLTIPdaemonchild13 } }
+		}
+		hidden_tooltip = {
+			FROMFROM = { character_event = { id = daemonchild.13 days = 2 } } # Bounce via the child
+		}
+	}
+	option = {
+		name = EVTOPTBdaemonchild12 # These are just normal dreams and nightmares
+
+		ai_chance = {
+			factor = 30
+		}
+
+		FROM = { character_event = { id = daemonchild.14 days = 2 tooltip = EVTTOOLTIPdaemonchild14 } }
+	}
+}
+
+# daemonchild.13 Bounce
+# Hidden: on to the mother (daemonchild.15).
+# Scope: ROOT is the child, FROM the chaplain. From daemonchild.12.
+character_event = {
+	id = daemonchild.13
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROMFROM = { character_event = { id = daemonchild.15 } }
+	}
+}
+
+# daemonchild.14 Only dreams
+# The chaplain reassures the mother (100 piety).
+# Scope: ROOT is the mother, FROM the chaplain. From daemonchild.12.
+character_event = {
+	id = daemonchild.14
+	desc = EVTDESCdaemonchild14
+	picture = GFX_evt_child_play
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	show_from_from = yes
+
+	option = {
+		name = EVTOPTAdaemonchild8
+		piety = 100
+	}
+}
+
+# daemonchild.15 Accused publicly
+# The chaplain denounces the mother: abdicate (the child is disowned, the mother
+# takes vows) or refuse (the chaplain is dismissed and jailed, the mother is a
+# known witch and may grow depressed or stressed).
+# Scope: ROOT is the mother, FROM the child, FROMFROM the chaplain. From
+#   daemonchild.13.
+character_event = {
+	id = daemonchild.15
+	desc = EVTDESCdaemonchild15
+	picture = GFX_evt_heretic
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	show_from_from = yes
+
+	immediate = {
+		FROM = {
+			add_character_modifier = {
+				name = suspected_demon_spawn
+				duration = -1
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemonchild15 # Abdicate
+
+		add_character_modifier = {
+			name = suspected_witch
+			duration = -1
+		}
+
+		FROM = {
+			hidden_tooltip = {
+				if = {
+					limit = {
+						is_father_real_father = yes
+					}
+					father_even_if_dead = {
+						character_event = { id = daemonchild.17 days = 1 }
+					}
+				}
+				set_father = 0
+			}
+			add_trait = bastard
+		}
+
+	   	transfer_crown_on_abdication_effect = yes
+		abdicate = yes
+
+		if = {
+			limit = {
+				religion_group = old_world_group
+			}
+			add_trait = nun
+		}
+	}
+
+	option = {
+		name = EVTOPTBdaemonchild15 # Never!
+
+		FROMFROM = {
+			remove_title = job_spiritual
+			imprison = ROOT
+		}
+
+		add_character_modifier = {
+			name = known_witch
+			duration = -1
+		}
+
+		random_list = {
+			50 = {
+			}
+			25 = {
+				add_trait = depressed
+			}
+			25 = {
+				add_trait = stressed
+			}
+		}
+	}
+}
+
+# daemonchild.16 The mother is innocent
+# The chaplain accepts the father's word.
+# Scope: ROOT is the chaplain, FROM the father. From daemonchild.10.
+character_event = {
+	id = daemonchild.16
+	desc = EVTDESCdaemonchild16
+	picture = GFX_evt_birth
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild16
+	}
+}
+
+# daemonchild.17 The true father
+# Hidden: keeps the true father on record when a child is disowned.
+# Scope: ROOT is the father, FROM the child. From daemonchild.15.
+character_event = {
+	id = daemonchild.17
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = {
+			set_real_father = ROOT
+		}
+	}
+}
+
+# daemonchild.19 The child's antics
+# Hidden, every 400 - 800 days for life: a witch nanny comes (daemonchild.70),
+# the child tries to murder a sibling ahead in the succession (daemonchild.30),
+# or, as a ruler at war, receives the cult's help (daemonchild.65).
+# Scope: ROOT is the marked child. From daemonchild.2 and itself.
+character_event = {
+	id = daemonchild.19
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		character_event = { id = daemonchild.19 days = 400 random = 400 } # More fun next time!
+
+		# Spawn the Witch Nanny
+		if = {
+			limit = {
+				NOT = { has_character_flag = demon_child_non_pagan_got_nanny }
+				prisoner = no
+				is_incapable = no
+			}
+			character_event = { id = daemonchild.70 }
+		}
+
+		# Try to murder a sibling (ahead in the line of succession) in bed?
+		else_if = {
+			limit = {
+				age = 3
+				NOT = { age = 16 }
+				prisoner = no
+				is_incapable = no
+				is_ruler = no
+				any_sibling = {
+					NOT = { trait = bastard }
+					NOT = { trait = incapable }
+					OR = {
+						is_older_than = ROOT
+						ROOT = {
+							trait = bastard
+						}
+						AND = {
+							is_female = no
+							ROOT = {
+								is_woman_trigger = yes
+							}
+						}
+					}
+				}
+			}
+			character_event = { id = daemonchild.30 }
+		}
+
+		# Get some help during a war
+		else_if = {
+			limit = {
+				is_ruler = yes
+				war = yes
+				OR = {
+					is_primary_war_defender = yes
+					is_primary_war_attacker = yes
+				}
+				NOT = { has_character_flag = demon_child_non_pagan_cultists }
+				is_at_sea = no
+			}
+			character_event = { id = daemonchild.65 }
+		}
+	}
+}
+
+# daemonchild.20 The true nature
+# At adulthood the marked child's nature shows: cruel, lustful, deceitful,
+# ambitious, a genius, possessed, strong, with better skills and education, and
+# the voice of a greater daemon; with Monks and Mystics they lead a Chaos cult
+# or warband. Family hear of it (daemonchild.21), cultists too (daemonchild.90).
+# With a high doom they may grow horns.
+# Scope: ROOT is the marked child. From on_adulthood.
+character_event = {
+	id = daemonchild.20
+	desc = EVTDESCdaemonchild20
+	picture = GFX_evt_lunatic
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = demon_child_non_pagan
+	}
+
+	immediate = {
+		remove_trait = chaste
+		remove_trait = kind
+		remove_trait = honest
+		remove_trait = content
+		remove_trait = charitable
+		remove_trait = just
+		remove_trait = humble
+		remove_trait = quick
+		remove_trait = slow
+		remove_trait = imbecile
+		remove_trait = weak
+		remove_trait = feeble
+		remove_trait = dull
+		remove_trait = shy
+		remove_trait = trusting
+		add_trait = lustful
+		add_trait = deceitful
+		add_trait = ambitious
+		add_trait = cruel
+		add_trait = genius
+		add_trait = possessed
+		add_trait = strong
+		change_diplomacy = 5
+		change_martial = 5
+		change_stewardship = 5
+		change_intrigue = 10
+		change_learning = 5
+
+		if = {
+			limit = {
+				OR = {
+					trait = naive_appeaser
+					trait = underhanded_rogue
+					trait = charismatic_negotiator
+				}
+			}
+			clear_education_trait = yes
+			add_trait = grey_eminence
+		}
+
+		if = {
+			limit = {
+				OR = {
+					trait = amateurish_plotter
+					trait = flamboyant_schemer
+					trait = intricate_webweaver
+				}
+			}
+			clear_education_trait = yes
+			add_trait = elusive_shadow
+		}
+
+		if = {
+			limit = {
+				OR = {
+					trait = indulgent_wastrel
+					trait = thrifty_clerk
+					trait = fortune_builder
+				}
+			}
+			clear_education_trait = yes
+			add_trait = midas_touched
+		}
+
+		if = {
+			limit = {
+				OR = {
+					trait = misguided_warrior
+					trait = tough_soldier
+					trait = skilled_tactician
+				}
+			}
+			clear_education_trait = yes
+			add_trait = brilliant_strategist
+		}
+		if = {
+			limit = {
+				OR = {
+					trait = barbarian_1
+					trait = barbarian_2
+					trait = barbarian_3
+				}
+			}
+			clear_education_trait = yes
+			add_trait = barbarian_4
+		}
+
+
+		if = {
+			limit = {
+				OR = {
+					trait = detached_priest
+					trait = martial_cleric
+					trait = scholarly_theologian
+				}
+			}
+			clear_education_trait = yes
+			add_trait = mastermind_theologian
+		}
+
+		if = {
+			limit = { has_dlc = "Mystics" }
+			if = {
+				limit = {
+					NOT = { religion = slaanesh }
+					has_character_flag = demonspawn_will_join_cult_of_slaanesh
+				}
+				ROOT = {
+					join_society = cult_of_slaanesh
+					set_secret_religion = slaanesh
+
+					add_offmap_currency = {
+						offmap = slaanesh_warp
+						value = 5000
+					}
+					clr_character_flag = demonspawn_will_join_cult_of_slaanesh
+				}
+			}
+			if = {
+				limit = {
+					NOT = {religion = khorne}
+					has_character_flag = demonspawn_will_join_cult_of_khorne
+				}
+				ROOT = {
+					join_society = cult_of_khorne
+					set_secret_religion = khorne
+
+					add_offmap_currency = {
+						offmap = khorne_warp
+						value = 5000
+					}
+
+					clr_character_flag = demonspawn_will_join_cult_of_khorne
+				}
+			}
+			if = {
+				limit = {
+					NOT = {religion = nurgle}
+					has_character_flag = demonspawn_will_join_cult_of_nurgle
+				}
+				ROOT = {
+					join_society = cult_of_nurgle
+					set_secret_religion = nurgle
+
+					add_offmap_currency = {
+						offmap = nurgle_warp
+						value = 5000
+					}
+
+					clr_character_flag = demonspawn_will_join_cult_of_nurgle
+				}
+			}
+			if = {
+				limit = {
+					NOT = {religion = tzeentch}
+					has_character_flag = demonspawn_will_join_cult_of_tzeentch
+				}
+				ROOT = {
+					join_society = cult_of_tzeentch
+					set_secret_religion = tzeentch
+
+					add_offmap_currency = {
+						offmap = tzeentch_warp
+						value = 5000
+					}
+
+					clr_character_flag = demonspawn_will_join_cult_of_tzeentch
+				}
+			}
+			if = {
+				limit = {
+					NOT = {religion = chaos}
+					has_character_flag = demonspawn_will_join_cult_of_undivided
+				}
+				ROOT = {
+					join_society = cult_of_undivided
+					set_secret_religion = chaos
+
+					add_offmap_currency = {
+						offmap = undivided_warp
+						value = 5000
+					}
+
+					clr_character_flag = demonspawn_will_join_cult_of_undivided
+				}
+			}
+			if = {
+				limit = {
+					OR = {
+					has_character_flag = demonspawn_will_join_warband_of_slaanesh
+					religion = slaanesh
+					}
+				}
+				ROOT = {
+					join_society = warband_of_slaanesh
+
+					add_offmap_currency = {
+						offmap = slaanesh_warp
+						value = 5000
+					}
+
+					clr_character_flag = demonspawn_will_join_warband_of_slaanesh
+					clr_character_flag = demonspawn_will_join_cult_of_slaanesh
+				}
+			}
+			if = {
+				limit = {
+					OR = {
+						has_character_flag = demonspawn_will_join_warband_of_nurgle
+						religion = nurgle
+					}
+				}
+				ROOT = {
+					join_society = warband_of_nurgle
+
+					add_offmap_currency = {
+						offmap = nurgle_warp
+						value = 5000
+					}
+
+					clr_character_flag = demonspawn_will_join_warband_of_nurgle
+					clr_character_flag = demonspawn_will_join_cult_of_nurgle
+				}
+			}
+			if = {
+				limit = {
+					OR = {
+						religion = tzeentch
+						has_character_flag = demonspawn_will_join_warband_of_tzeentch
+					}
+				}
+				ROOT = {
+					join_society = warband_of_tzeentch
+					clr_character_flag = demonspawn_will_join_warband_of_tzeentch
+					clr_character_flag = demonspawn_will_join_cult_of_tzeentch
+
+					add_offmap_currency = {
+						offmap = tzeentch_warp
+						value = 5000
+					}
+
+				}
+			}
+			if = {
+				limit = {
+					OR = {
+						has_character_flag = demonspawn_will_join_warband_of_khorne
+						religion = khorne
+					}
+				}
+				ROOT = {
+					join_society = warband_of_khorne
+					clr_character_flag = demonspawn_will_join_warband_of_khorne
+					clr_character_flag = demonspawn_will_join_cult_of_khorne
+
+					add_offmap_currency = {
+						offmap = khorne_warp
+						value = 5000
+					}
+				}
+			}
+			if = {
+				limit = {
+					OR = {
+					has_character_flag = demonspawn_will_join_warband_of_undivided
+					religion = chaos
+					}
+				}
+				ROOT = {
+					join_society = warband_of_chaos
+
+					add_offmap_currency = {
+						offmap = undivided_warp
+						value = 5000
+					}
+
+					clr_character_flag = demonspawn_will_join_warband_of_undivided
+					clr_character_flag = demonspawn_will_join_cult_of_undivided
+				}
+			}
+			add_society_currency_massive_effect = yes
+			set_society_grandmaster = yes
+
+			society = {
+				any_society_member = {
+					limit = { NOT = { character = ROOT } }
+					narrative_event = { id = daemonchild.90 days = 3 }
+				}
+			}
+		}
+
+		add_character_modifier = {
+			name = voice_of_greater_daemon
+			duration = -1
+		}
+
+		father = {
+			narrative_event = { id = daemonchild.21 }
+		}
+
+		mother = {
+			narrative_event = { id = daemonchild.21 }
+		}
+
+		random_sibling = {
+			limit = {
+				ai = no
+				NOT = { is_father = ROOT }
+				NOT = { is_mother = ROOT }
+			}
+			narrative_event = { id = daemonchild.21 }
+		}
+	}
+
+	option = {
+		name = EVTOPTZdaemonchild20
+		trigger = {
+			OR = {
+				is_doom_high_trigger = yes
+				is_doom_very_high_trigger = yes
+			}
+	   	}
+		ai_chance = { factor = 80 }
+		add_character_modifier = { name = demon_horns duration = -1 }
+	}
+	option = {
+		name = EVTOPTAdaemonchild20
+		trigger = {
+			NOR = {
+				is_doom_high_trigger = yes
+				is_doom_very_high_trigger = yes
+			}
+	   	}
+		ai_chance = { factor = 20 }
+	}
+}
+
+# daemonchild.21 The family hears
+# Parents and a sibling see what the child has become.
+# Scope: ROOT is a relative, FROM the marked child. From daemonchild.20.
+narrative_event = {
+	id = daemonchild.21
+	title = EVTNAMEdaemonchild21
+	desc = EVTDESCdaemonchild21
+	picture = GFX_evt_lunatic
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = {
+			text = EVTOPTAdaemonchild21
+			trigger = {
+				NOT = { follower_of_any_chaos_gods = yes}
+			}
+		}
+		name = {
+			text = EVTOPTAdaemonchild21_chaos
+			trigger = {
+				follower_of_any_chaos_gods = yes
+			}
+		}
+	}
+}
+
+# daemonchild.30 A murder in the nursery
+# Hidden: picks a sibling ahead in the succession.
+# Scope: ROOT is the marked child. From daemonchild.19.
+character_event = {
+	id = daemonchild.30
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_sibling = {
+			limit = {
+				NOT = { trait = bastard }
+				NOT = { trait = incapable }
+				OR = {
+					is_older_than = ROOT
+					AND = {
+						trait = born_in_the_purple
+						ROOT = { NOT = { trait = born_in_the_purple } }
+					}
+					ROOT = {
+						trait = bastard
+					}
+					AND = {
+						is_female = no
+						ROOT = {
+							is_woman_trigger = yes
+						}
+					}
+				}
+			}
+			character_event = { id = daemonchild.31 }
+		}
+	}
+}
+
+# daemonchild.31 The attempt
+# Hidden: 50% the sibling dies, 25% survives, 25% is left incapable.
+# Scope: ROOT is the sibling, FROM the marked child. From daemonchild.30.
+character_event = {
+	id = daemonchild.31
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_list = {
+			50 = {
+				FROM = { character_event = { id = daemonchild.32 } } # Success
+			}
+			25 = {
+				FROM = { character_event = { id = daemonchild.33 } } # Failure
+			}
+			25 = {
+				FROM = { character_event = { id = daemonchild.34 } } # Brain Damage
+			}
+		}
+	}
+}
+
+# daemonchild.32 The child creeps in
+# The marked child steals to the sibling's bed (murder).
+# Scope: ROOT is the marked child, FROM the sibling. From daemonchild.31.
+character_event = {
+	id = daemonchild.32
+	desc = EVTDESCdaemonchild32
+	picture = GFX_evt_shadow
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild32
+		FROM = { character_event = { id = daemonchild.35 tooltip = EVTTOOLTIPdaemonchild35 } }
+	}
+}
+
+# daemonchild.33 The child creeps in
+# The same, the sibling survives.
+# Scope: ROOT is the marked child, FROM the sibling. From daemonchild.31.
+character_event = {
+	id = daemonchild.33
+	desc = EVTDESCdaemonchild32
+	picture = GFX_evt_shadow
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild32
+		FROM = { character_event = { id = daemonchild.36 tooltip = EVTTOOLTIPdaemonchild35 } }
+	}
+}
+
+# daemonchild.34 The child creeps in
+# The same, the sibling is left incapable.
+# Scope: ROOT is the marked child, FROM the sibling. From daemonchild.31.
+character_event = {
+	id = daemonchild.34
+	desc = EVTDESCdaemonchild32
+	picture = GFX_evt_shadow
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild32
+		FROM = { character_event = { id = daemonchild.37 tooltip = EVTTOOLTIPdaemonchild35 } }
+	}
+}
+
+# daemonchild.35 Smothered
+# The sibling dies; the parents and player lieges hear (daemonchild.39).
+# Scope: ROOT is the sibling, FROM the marked child. From daemonchild.32.
+character_event = {
+	id = daemonchild.35
+	desc = EVTDESCdaemonchild35
+	picture = GFX_evt_shadow
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild35
+		death = {
+			death_reason = death_murder_unknown
+			killer = FROM
+		}
+		hidden_tooltip = {
+			mother = { narrative_event = { id = daemonchild.39 } }
+			father = { narrative_event = { id = daemonchild.39 } }
+			any_liege = {
+				limit = {
+					ai = no
+					NOT = { is_father = ROOT }
+					NOT = { is_mother = ROOT }
+				}
+				narrative_event = { id = daemonchild.39 }
+			}
+		}
+	}
+}
+
+# daemonchild.36 A narrow escape
+# The sibling survives; the family hears (daemonchild.40).
+# Scope: ROOT is the sibling, FROM the marked child. From daemonchild.33.
+character_event = {
+	id = daemonchild.36
+	desc = EVTDESCdaemonchild36
+	picture = GFX_evt_shadow
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild36
+		hidden_tooltip = {
+			mother = { narrative_event = { id = daemonchild.40 } }
+			father = { narrative_event = { id = daemonchild.40 } }
+			any_liege = {
+				limit = {
+					ai = no
+					NOT = { is_father = ROOT }
+					NOT = { is_mother = ROOT }
+				}
+				narrative_event = { id = daemonchild.40 }
+			}
+		}
+	}
+}
+
+# daemonchild.37 Never the same
+# The sibling is left incapable; the family hears (daemonchild.41).
+# Scope: ROOT is the sibling, FROM the marked child. From daemonchild.34.
+character_event = {
+	id = daemonchild.37
+	desc = EVTDESCdaemonchild37
+	picture = GFX_evt_shadow
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild37
+		add_trait = incapable
+		hidden_tooltip = {
+			mother = { narrative_event = { id = daemonchild.41 } }
+			father = { narrative_event = { id = daemonchild.41 } }
+			any_liege = {
+				limit = {
+					ai = no
+					NOT = { is_father = ROOT }
+					NOT = { is_mother = ROOT }
+				}
+				narrative_event = { id = daemonchild.41 }
+			}
+		}
+	}
+}
+
+# daemonchild.39 Death in the nursery
+# The family hears of the murder.
+# Scope: ROOT is a relative, FROM the dead sibling. From daemonchild.35.
+narrative_event = {
+	id = daemonchild.39
+	title = EVTNAMEdaemonchild39
+	desc = EVTDESCdaemonchild39
+	picture = GFX_evt_death
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild39
+		trigger = {
+			NOT = { follower_of_any_chaos_gods = yes }
+		}
+	}
+	option = {
+		name = EVTOPTAdaemonchild39_chaos
+		trigger = {
+			follower_of_any_chaos_gods = yes
+		}
+	}
+}
+
+# daemonchild.40 Terror in the nursery
+# The family hears of the attempt.
+# Scope: ROOT is a relative, FROM the sibling. From daemonchild.36.
+narrative_event = {
+	id = daemonchild.40
+	title = EVTNAMEdaemonchild40
+	desc = EVTDESCdaemonchild40
+	picture = GFX_evt_shadow
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild40
+		trigger = {
+			NOT = { follower_of_any_chaos_gods = yes }
+		}
+	}
+	option = {
+		name = EVTOPTAdaemonchild39_chaos
+		trigger = {
+			follower_of_any_chaos_gods = yes
+		}
+	}
+}
+
+# daemonchild.41 Horror in the nursery
+# The family hears the sibling will never recover.
+# Scope: ROOT is a relative, FROM the sibling. From daemonchild.37.
+narrative_event = {
+	id = daemonchild.41
+	title = EVTNAMEdaemonchild41
+	desc = EVTDESCdaemonchild41
+	picture = GFX_evt_shadow
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild41
+		trigger = {
+			NOT = { follower_of_any_chaos_gods = yes}
+		}
+	}
+	option = {
+		name = EVTOPTAdaemonchild39_chaos
+		trigger = {
+			follower_of_any_chaos_gods = yes
+		}
+	}
+}
+
+# daemonchild.50 The flesh mends
+# A marked child or one with a greater daemon's voice heals from maiming.
+# Scope: ROOT is the character. From the 00_on_actions.txt yearly pulse list.
+character_event = {
+	id = daemonchild.50
+	desc = EVTDESCdaemonchild50
+	picture = GFX_evt_lunatic
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes
+
+	trigger = {
+		is_maimed_trigger = yes
+		has_dlc = "Sons of Abraham"
+		OR = {
+			has_character_modifier = voice_of_greater_daemon
+			has_character_flag = demon_child_non_pagan
+		}
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = {
+			factor = 0.05
+			NOT = { has_character_flag = demon_child_non_pagan }
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemonchild50
+		if = {
+			limit = { trait = maimed }
+			remove_trait = maimed
+		}
+		if = {
+			limit = { trait = one_eyed }
+			remove_trait = one_eyed
+		}
+		if = {
+			limit = { trait = one_handed }
+			remove_trait = one_handed
+		}
+		if = {
+			limit = { trait = one_legged }
+			remove_trait = one_legged
+		}
+		if = {
+			limit = { trait = disfigured }
+			remove_trait = disfigured
+		}
+		if = {
+			limit = { trait = mangled }
+			remove_trait = mangled
+		}
+		if = {
+			limit = { has_character_modifier = phantom_pain }
+			remove_character_modifier = phantom_pain
+		}
+	}
+}
+
+# daemonchild.51 Sight returns
+# The same, from blinding.
+# Scope: ROOT is the character. From the 00_on_actions.txt yearly pulse list.
+character_event = {
+	id = daemonchild.51
+	desc = EVTDESCdaemonchild51
+	picture = GFX_evt_lunatic
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes
+
+	trigger = {
+		trait = blinded
+		has_dlc = "Sons of Abraham"
+		OR = {
+			has_character_modifier = voice_of_greater_daemon
+			has_character_flag = demon_child_non_pagan
+		}
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = {
+			factor = 0.05
+			NOT = { has_character_flag = demon_child_non_pagan }
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemonchild51
+		remove_trait = blinded
+	}
+}
+
+# daemonchild.52 Made whole
+# The same, from castration.
+# Scope: ROOT is the character. From the 00_on_actions.txt yearly pulse list.
+character_event = {
+	id = daemonchild.52
+	desc = EVTDESCdaemonchild52
+	picture = GFX_evt_lunatic
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes
+
+	trigger = {
+		trait = eunuch
+		has_dlc = "Sons of Abraham"
+		OR = {
+			has_character_modifier = voice_of_greater_daemon
+			has_character_flag = demon_child_non_pagan
+		}
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = {
+			factor = 0.05
+			NOT = { has_character_flag = demon_child_non_pagan }
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemonchild52
+		remove_trait = eunuch
+	}
+}
+
+# daemonchild.53 The mind returns
+# The same, from incapacity or infirmity (under 75).
+# Scope: ROOT is the character. From the 00_on_actions.txt yearly pulse list.
+character_event = {
+	id = daemonchild.53
+	desc = EVTDESCdaemonchild53
+	picture = GFX_evt_lunatic
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes
+
+	max_age = 75
+
+	trigger = {
+		OR = {
+			trait = incapable
+			trait = infirm
+		}
+		has_dlc = "Sons of Abraham"
+		OR = {
+			has_character_modifier = voice_of_greater_daemon
+			has_character_flag = demon_child_non_pagan
+		}
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = {
+			factor = 0.05
+			NOT = { has_character_flag = demon_child_non_pagan }
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemonchild53
+		if = {
+			limit = {
+				trait = incapable
+			}
+			remove_trait = incapable
+		}
+		if = {
+			limit = {
+				trait = infirm
+			}
+			remove_trait = infirm
+		}
+	}
+}
+
+# daemonchild.54 Plague passes over
+# The same, from an epidemic disease (MTTH one month, a year without the mark).
+# Scope: ROOT is the character.
+character_event = {
+	id = daemonchild.54
+	desc = EVTDESCdaemonchild54
+	picture = GFX_evt_lunatic
+	border = GFX_event_normal_frame_religion
+	is_sick = yes
+
+	trigger = {
+		has_dlc = "Sons of Abraham"
+		has_epidemic = yes
+
+		OR = {
+			has_character_modifier = voice_of_greater_daemon
+			has_character_flag = demon_child_non_pagan
+		}
+	}
+
+	mean_time_to_happen = {
+		months = 1
+		modifier = {
+			factor = 12
+			NOT = { has_character_flag = demon_child_non_pagan }
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemonchild54
+
+		if = {
+			limit = {
+				trait = has_bubonic_plague
+			}
+			remove_trait = has_bubonic_plague
+			set_character_flag = achievement_i_got_better
+		}
+
+		cure_illness = yes
+
+		clear_disease_level_effect = yes
+	}
+}
+
+# daemonchild.60 The cell is empty
+# The same escapes from prison; the jailer hears (daemonchild.61).
+# Scope: ROOT is the prisoner. From the 00_on_actions.txt yearly pulse list.
+character_event = {
+	id = daemonchild.60
+	desc = EVTDESCdaemonchild60
+	picture = GFX_evt_courier
+	border = GFX_event_normal_frame_religion
+	is_triggered_only = yes
+
+	prisoner = yes
+
+	trigger = {
+		has_dlc = "Sons of Abraham"
+		OR = {
+			has_character_modifier = voice_of_greater_daemon
+			has_character_flag = demon_child_non_pagan
+		}
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = {
+			factor = 0.05
+			NOT = { has_character_flag = demon_child_non_pagan }
+		}
+	}
+
+	option = {
+		name = EVTOPTAdaemonchild60
+		hidden_tooltip = {
+			host = {
+				character_event = { id = daemonchild.61 }
+			}
+		}
+		imprison = no
+	}
+}
+
+# daemonchild.61 The cell is empty
+# The jailer finds the cell empty.
+# Scope: ROOT is the jailer, FROM the prisoner. From daemonchild.60.
+character_event = {
+	id = daemonchild.61
+	desc = EVTDESCdaemonchild61
+	picture = GFX_evt_courier
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild61
+	}
+}
+
+# daemonchild.65 The witches ride
+# Three witches of the cult come with an army each (500 men) and take any office
+# at court. Once.
+# Scope: ROOT is the marked ruler. From daemonchild.19.
+character_event = {
+	id = daemonchild.65
+	desc = EVTDESCdaemonchild65
+	picture = GFX_evt_burning_house
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	immediate = {
+		location = {
+			ROOT = {
+				create_character = {
+					dynasty = none
+					religion = ROOT
+					culture = ROOT
+					female = yes
+					age = 25
+					dna=bdlhexmbcai
+					attributes = {
+						intrigue = 12
+						martial = 7
+						diplomacy = 10
+						stewardship = 4
+						learning = 10
+					}
+					trait = creature_human
+					trait = ambitious
+					trait = cruel
+					trait = envious
+					trait = cynical
+					trait = deceitful
+					trait = fair
+					trait = mystic
+					trait = brilliant_strategist
+					trait = flanker
+				}
+				new_character = {
+					spawn_unit = {
+						province = PREVPREV
+						home = PREVPREV
+						owner = ROOT
+						troops = {
+							archers = { 150 150 }
+							knights = { 100 100 }
+							heavy_infantry = { 250 250 }
+						}
+						attrition = 0.0
+					}
+					add_character_modifier = {
+						name = known_witch
+						duration = -1
+					}
+
+
+					join_demonspawn_socity_or_warband_effect = yes
+
+					opinion = {
+						who = ROOT
+						modifier = opinion_the_chosen_one
+					}
+					set_character_flag = special_marshal
+					set_character_flag = special_treasurer
+					set_character_flag = special_chancellor
+					set_character_flag = special_spiritual
+					set_character_flag = special_spymaster
+				}
+				create_character = {
+					dynasty = none
+					religion = ROOT
+					culture = ROOT
+					female = yes
+					age = 24
+					dna=dhmfgmabaaz
+					attributes = {
+						intrigue = 9
+						martial = 7
+						diplomacy = 12
+						stewardship = 3
+						learning = 8
+					}
+					trait = creature_human
+					trait = ambitious
+					trait = cruel
+					trait = envious
+					trait = lustful
+					trait = deceitful
+					trait = fair
+					trait = hedonist
+					trait = grey_eminence
+					trait = inspiring_leader
+				}
+				new_character = {
+					spawn_unit = {
+						province = PREVPREV
+						home = PREVPREV
+						owner = ROOT
+						troops = {
+							archers = { 150 150 }
+							knights = { 100 100 }
+							heavy_infantry = { 250 250 }
+						}
+						attrition = 0.0
+					}
+					add_character_modifier = {
+						name = known_witch
+						duration = -1
+					}
+
+					join_demonspawn_socity_or_warband_effect = yes
+
+					opinion = {
+						who = ROOT
+						modifier = opinion_the_chosen_one
+					}
+					set_character_flag = special_marshal
+					set_character_flag = special_treasurer
+					set_character_flag = special_chancellor
+					set_character_flag = special_spiritual
+					set_character_flag = special_spymaster
+				}
+				create_character = {
+					dynasty = none
+					religion = ROOT
+					culture = ROOT
+					female = yes
+					age = 27
+					dna=aefccojcgbd
+					attributes = {
+						intrigue = 15
+						martial = 7
+						diplomacy = 10
+						stewardship = 8
+						learning = 12
+					}
+					trait = creature_human
+					trait = ambitious
+					trait = cruel
+					trait = lustful
+					trait = envious
+					trait = genius
+					trait = deceitful
+					trait = fair
+					trait = mystic
+					trait = elusive_shadow
+					trait = defensive_leader
+				}
+				new_character = {
+					spawn_unit = {
+						province = PREVPREV
+						home = PREVPREV
+						owner = ROOT
+						troops = {
+							archers = { 150 150 }
+							knights = { 100 100 }
+							heavy_infantry = { 250 250 }
+						}
+						attrition = 0.0
+					}
+					add_character_modifier = {
+						name = known_witch
+						duration = -1
+					}
+
+					join_demonspawn_socity_or_warband_effect = yes
+
+					opinion = {
+						who = ROOT
+						modifier = opinion_the_chosen_one
+					}
+					set_character_flag = special_marshal
+					set_character_flag = special_treasurer
+					set_character_flag = special_chancellor
+					set_character_flag = special_spiritual
+					set_character_flag = special_spymaster
+				}
+			}
+		}
+		set_character_flag = demon_child_non_pagan_cultists
+	}
+
+	option = {
+		name = EVTOPTAdaemonchild65
+	}
+}
+
+# daemonchild.70 The nanny
+# Hidden: a witch nanny comes, to the child's host (daemonchild.71) or to the
+# child as ruler (daemonchild.72). Once.
+# Scope: ROOT is the marked child. From daemonchild.19.
+character_event = {
+	id = daemonchild.70
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = demon_child_non_pagan_got_nanny
+
+		if = {
+			limit = {
+				is_ruler = no
+			}
+			host = {
+				character_event = { id = daemonchild.71 }
+			}
+		}
+		if = {
+			limit = {
+				is_ruler = yes
+			}
+			character_event = { id = daemonchild.72 }
+		}
+	}
+}
+
+# daemonchild.71 A new nanny
+# A strange young woman offers herself as the child's nanny: a witch of the cult,
+# learned and cruel.
+# Scope: ROOT is the host, FROM the marked child. From daemonchild.70.
+character_event = {
+	id = daemonchild.71
+	desc = EVTDESCdaemonchild71
+	picture = GFX_evt_princess_byzantine
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild71
+
+		create_character = {
+			dynasty = none
+			religion = ROOT
+			culture = ROOT
+			female = yes
+			age = 20
+			dna=dkkdfdgibbe
+			attributes = {
+				intrigue = 10
+				martial = 4
+				diplomacy = 5
+				stewardship = 6
+				learning = 10
+			}
+			trait = creature_human
+			trait = cruel
+			trait = envious
+			trait = quick
+			trait = diligent
+			trait = patient
+			trait = scholar
+			trait = mastermind_theologian
+		}
+
+		hidden_tooltip = {
+			new_character = {
+				set_character_flag = special_treasurer
+				set_character_flag = special_chancellor
+				set_character_flag = special_spymaster
+
+				set_character_flag = witch_nanny
+
+				add_character_modifier = {
+					name = suspected_witch
+					duration = -1
+				}
+
+				join_demonspawn_socity_or_warband_effect = yes
+
+				if = {
+					limit = {
+						religion_group = old_world_group
+					}
+					add_trait = nun
+				}
+
+				FROM = {
+					reverse_opinion = {
+						who = PREV
+						modifier = opinion_the_chosen_one
+					}
+				}
+			}
+		}
+	}
+}
+
+# daemonchild.72 A new nanny
+# The same, for a child who already rules.
+# Scope: ROOT is the marked child. From daemonchild.70.
+character_event = {
+	id = daemonchild.72
+	desc = EVTDESCdaemonchild72
+	picture = GFX_evt_princess_byzantine
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild72
+
+		create_character = {
+			dynasty = none
+			religion = ROOT
+			culture = ROOT
+			female = yes
+			age = 20
+			dna=dkkdfdgibbe
+			attributes = {
+				intrigue = 10
+				martial = 4
+				diplomacy = 5
+				stewardship = 6
+				learning = 10
+			}
+			trait = creature_human
+			trait = cruel
+			trait = envious
+			trait = quick
+			trait = diligent
+			trait = patient
+			trait = scholar
+			trait = mastermind_theologian
+		}
+
+		hidden_tooltip = {
+			new_character = {
+				set_character_flag = special_treasurer
+				set_character_flag = special_chancellor
+				set_character_flag = special_spymaster
+
+				set_character_flag = witch_nanny
+
+				add_character_modifier = {
+					name = suspected_witch
+					duration = -1
+				}
+
+				join_demonspawn_socity_or_warband_effect = yes
+
+				if = {
+					limit = {
+						religion_group = old_world_group
+					}
+					add_trait = nun
+				}
+
+				FROM = {
+					reverse_opinion = {
+						who = PREV
+						modifier = opinion_the_chosen_one
+					}
+				}
+			}
+		}
+	}
+}
+
+# daemonchild.73 The nanny follows
+# Hidden: an unmarried witch nanny follows the child to its new court; the liege
+# hears (daemonchild.74).
+# Scope: ROOT is the nanny. MTTH one day for flagged nannies only.
+character_event = {
+	id = daemonchild.73
+	hide_window = yes
+
+	only_women = yes
+	prisoner = no
+	only_capable = yes
+	min_age = 16
+	has_character_flag = witch_nanny
+	has_dlc = "Sons of Abraham"
+	is_married = no
+
+	trigger = {
+		is_ruler = no
+		is_consort = no
+		NOT = { religion_group = chaos_gods_group }
+		NOT = {
+			any_courtier = {
+				has_character_flag = demon_child_non_pagan
+				host = {
+					ROOT = {
+						host = {
+							character = PREVPREV
+						}
+					}
+				}
+			}
+		}
+		top_liege = {
+			any_realm_character = {
+				prisoner = no
+				has_character_flag = demon_child_non_pagan
+			}
+		}
+	}
+
+	mean_time_to_happen = {
+		days = 1
+	}
+
+	immediate = {
+		liege = {
+			character_event = { id = daemonchild.74 }
+		}
+		top_liege = {
+			random_realm_character = {
+				limit = {
+					prisoner = no
+					has_character_flag = demon_child_non_pagan
+				}
+				host = {
+					ROOT = {
+						move_character = PREV
+					}
+				}
+			}
+		}
+	}
+}
+
+# daemonchild.74 The nanny leaves
+# The nanny goes after her charge.
+# Scope: ROOT is the liege, FROM the nanny. From daemonchild.73.
+character_event = {
+	id = daemonchild.74
+	desc = EVTDESCdaemonchild74
+	picture = GFX_evt_princess_byzantine
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild74
+	}
+}
+
+# daemonchild.75 The nanny's sacrifice
+# Hidden: before the child is grown (6 - 15), the nanny may throw herself from
+# the tower for her charge (MTTH 13 years) (daemonchild.76).
+# Scope: ROOT is the marked child. Players only.
+character_event = {
+	id = daemonchild.75
+	hide_window = yes
+
+	prisoner = no
+	min_age = 6
+	max_age = 15
+	has_character_flag = demon_child_non_pagan_got_nanny
+
+	trigger = {
+		has_dlc = "Sons of Abraham"
+		NOT = { religion_group = chaos_gods_group }
+		OR = {
+			ai = no
+			liege = {
+				ai = no
+			}
+		}
+		has_character_flag = demon_child_non_pagan
+		any_courtier = {
+			is_woman_trigger = yes
+			prisoner = no
+			NOT = { trait = incapable }
+			has_character_flag = witch_nanny
+		}
+	}
+
+	mean_time_to_happen = {
+		years = 13 # Does not always happen
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = {
+				is_woman_trigger = yes
+				prisoner = no
+				NOT = { trait = incapable }
+				has_character_flag = witch_nanny
+			}
+			character_event = { id = daemonchild.76 }
+		}
+	}
+}
+
+# daemonchild.76 The fall
+# Hidden: the nanny dies; her liege hears (daemonchild.77, or 78 if the liege is
+# the marked child).
+# Scope: ROOT is the nanny. From daemonchild.75.
+character_event = {
+	id = daemonchild.76
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = {
+				liege = {
+					NOT = { has_character_flag = demon_child_non_pagan }
+				}
+			}
+			liege = {
+				narrative_event = { id = daemonchild.77 }
+			}
+		}
+		if = {
+			limit = {
+				liege = {
+					has_character_flag = demon_child_non_pagan
+				}
+			}
+			liege = {
+				narrative_event = { id = daemonchild.78 }
+			}
+		}
+		death = {
+			death_reason = death_suicide_fall
+		}
+	}
+}
+
+# daemonchild.77 The nanny falls
+# The court hears the nanny's last cry, praising the child.
+# Scope: ROOT is the liege. From daemonchild.76.
+narrative_event = {
+	id = daemonchild.77
+	title = EVTNAMEdaemonchild77
+	desc = EVTDESCdaemonchild77
+	picture = GFX_evt_family
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = {
+			text = EVTOPTAdaemonchild77
+			trigger = {
+				NOT = { follower_of_any_chaos_gods = yes  }
+			}
+		}
+		name = {
+			text = EVTOPTAdaemonchild78
+			trigger = {
+				follower_of_any_chaos_gods = yes
+			}
+		}
+	}
+}
+
+# daemonchild.78 The nanny falls
+# The marked child hears that the nanny died for them.
+# Scope: ROOT is the marked child. From daemonchild.76.
+narrative_event = {
+	id = daemonchild.78
+	title = EVTNAMEdaemonchild78
+	desc = EVTDESCdaemonchild78
+	picture = GFX_evt_family
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild78
+	}
+}
+
+# daemonchild.90 The cult rejoices
+# Fellow cultists hear the marked child is grown.
+# Scope: ROOT is a cultist, FROM the marked child. From daemonchild.20.
+narrative_event = {
+	id = daemonchild.90
+	title = EVTNAMEdaemonchild90
+	desc = EVTDESCdaemonchild90
+	picture = GFX_evt_shadowy_cabal
+	border = GFX_event_narrative_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAdaemonchild90_araby
+			trigger = {
+				religion_group = ormazd_gods_group
+				NOT = { FROM = { is_child_of = ROOT } }
+			}
+		}
+		name = {
+			text = EVTOPTAdaemonchild90
+			trigger = {
+				NOT = { religion_group = ormazd_gods_group }
+				NOT = { FROM = { is_child_of = ROOT } }
+			}
+		}
+		name = {
+			text = EVTOPTAdaemonchild90_child
+			trigger = {
+				FROM = { is_child_of = ROOT }
+			}
+		}
+	}
+}
+
+# daemonchild.91 The marked child dies
+# Hidden: fellow cultists hear (daemonchild.92).
+# Scope: ROOT is the marked child. From on_death.
+character_event = {
+	id = daemonchild.91
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = demon_child_non_pagan
+	}
+
+	immediate = {
+		if = {
+			limit = { is_devil_or_warband_worshiper_trigger = yes }
+			society = {
+				any_society_member = {
+					limit = { NOT = { character = ROOT } }
+					narrative_event = { id = daemonchild.92 }
+				}
+			}
+		}
+	}
+}
+
+# daemonchild.92 The cult mourns
+# Fellow cultists hear the marked child is dead.
+# Scope: ROOT is a cultist, FROM the marked child. From daemonchild.91.
+narrative_event = {
+	id = daemonchild.92
+	title = EVTNAMEdaemonchild92
+	desc = EVTDESCdaemonchild92
+	picture = GFX_evt_death
+	border = GFX_event_narrative_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaemonchild92
+	}
+}

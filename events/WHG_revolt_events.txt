@@ -1,0 +1,2704 @@
+###############################################################################
+# Revolts
+# Namespace: revolt (was TOG.1000 - TOG.1191 in rebel_events_the_old_gods.txt,
+#   HL.2000 - HL.2011 in rebel_events_horse_lords.txt and 80000 - 80062 in
+#   rebel_events.txt)
+# Faction: Generic
+# Serves: every realm
+#
+# With The Old Gods the counties of a realm rise on their own (the old rebel
+# system is off): peasants under a former soldier, zealots of a heresy under a
+# charismatic preacher, the landholders of a lost kingdom, or the faithful of
+# a faith the top liege does not share under a militant priest. Each rising
+# can be reinforced while it lasts. Rebels who take a county seat may turn the
+# county to their faith or culture and leave unrest behind, and the mob may
+# kill someone who lived there. The undead and greenskins never rise as
+# peasants: instead a rival may claim the county, a tomb prince or an upstart
+# boss (revolt.50). Lizardmen are built to obey; where beastmen or the jungle
+# already trouble a county, that trouble comes instead of a revolt. Under a nomad lord a lesser clan or
+# herd may rise to demand a place among the great ones, its chieftain often
+# sworn to a Dark God. Without The Old Gods the old rebel system runs
+# instead: rebels who hold a county burn it, fall on those who live there and
+# may hand it to another ruler.
+#
+# Peasants                             revolt.1 - revolt.5
+# Zealots of a heresy                  revolt.10 - revolt.14
+# A lost kingdom                       revolt.20 - revolt.24
+# The faithful of another faith        revolt.30 - revolt.34
+# Minor clans                          revolt.40 - revolt.44
+# A rival rises (undead, greenskins)   revolt.50 - revolt.51
+# The mob                              revolt.90 - revolt.94
+# Without The Old Gods                 revolt.100 - revolt.122
+#
+# Fired from: on_rebel_revolt (risings and reinforcements),
+#   on_siege_over_winner (county seats taken) and on_siege_over_loc_chars
+#   (revolt.90; revolt.92 from on_siege_over_winner) in 00_on_actions.txt;
+#   the old rebel system (revolt.100, revolt.110, revolt.120) runs on mean
+#   time to happen, behind
+#   lacks_dlc = "The Old Gods"; revolt.1 also from WHG_chaos_cult_events,
+#   WHG_chaos_horde_events, WHG_vampire_events and DR_misc_events (flag
+#   force_peasant_revolt). Shared triggers are in WHG_old_gods_triggers.txt.
+#   The scripted effects that raise the armies (spawn_*_army_effect,
+#   spawn_*_reinforcements_effect) are in 00_scripted_effects.txt; those of
+#   the minor clans (revolt_clan_*_effect) in WHG_old_gods_effects.txt.
+# Saved: flags heretic_revolter, religious_revolter (on the leaders, set by
+#   the effects), force_peasant_revolt (province, set by the callers);
+#   event targets minor_clan_revolt_leader, province_top_liege,
+#   revolt_burned_lord, revolt_burned_holding, revolt_defected_from; flags
+#   revolt_band_* (cleared by revolt_clan_bands_effect), revolt_caught_*
+#   (cleared by revolt.94 and revolt.110); global flag
+#   possible_province_defection (cleared by revolt.121).
+###############################################################################
+
+namespace = revolt
+
+###############################################################################
+# Peasants
+###############################################################################
+
+# revolt.1 The peasants rise
+# A former soldier leads the peasants of the county against the top liege,
+# under a temporary rebel title, with an army scaled by the revolt strength
+# rule. Every liege of the owner hears of it (revolt.2). Heretic, religious
+# and national revolts come first where they fit; undead and lizardmen never
+# rise, and greenskin, beastman or jungle unrest takes the place of a revolt.
+# Five years without another rising in the county.
+# Scope: ROOT is the county (province). From on_rebel_revolt, and forced
+#   (flag force_peasant_revolt) by the Chaos cults, the Chaos hordes, the
+#   Skaven and the vampires.
+province_event = {
+	id = revolt.1
+	desc = EVTDESCrevolt1
+	picture = GFX_evt_peasants
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		OR = {
+			has_dlc = "The Old Gods"
+			has_province_flag = force_peasant_revolt
+		}
+		revolt_county_can_rise_trigger = yes
+
+		# Will get clan rebels instead
+		NAND = {
+			has_empty_holding = yes
+			owner = {
+				is_nomadic = yes
+			}
+		}
+
+		OR={
+			has_province_flag = force_peasant_revolt
+			any_province_holding = {NOT = { holding_type = nomad }}
+		}
+
+		# Heretic revolts have prio
+		OR = {
+			is_heretic = no
+			owner = {
+				top_liege = {
+					NOT = { is_parent_religion = ROOT }
+				}
+			}
+			NOT = { has_province_modifier = heretic_stronghold }
+			NOT = { has_province_modifier = fanatic_uprising }
+			has_province_flag = force_peasant_revolt
+		}
+
+		# Religious revolts have prio
+		OR = {
+			owner = {
+				top_liege = {
+					religion_group = ROOT
+				}
+			}
+			has_province_flag = force_peasant_revolt
+		}
+
+		# Nationalist revolts have prio
+		OR = {
+			owner = {
+				top_liege = {
+					culture = ROOT
+				}
+			}
+			kingdom = {
+				OR = {
+					has_holder = yes
+					NOT = { culture = ROOT }
+					NOT = {
+						# The de jure kingdom must have had an appropriate holder in the past
+						any_previous_holder = {
+							ROOT = {
+								owner = {
+									top_liege = {
+										NOT = { dynasty = PREVPREVPREV }
+										OR = {
+											is_nomadic = no
+											NOT = { culture_group = ROOT }
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			has_province_flag = force_peasant_revolt
+		}
+
+		OR = {
+			has_province_flag = force_peasant_revolt
+			NOT = { # Not if there is already an ongoing peasant revolt for this province
+				owner = {
+					top_liege = {
+						war = yes
+
+						any_war = {
+							defender = { character = PREV }
+							OR = {
+								AND = {
+									using_cb = peasant_revolt
+									war_title = ROOT # The county
+								}
+								AND = {
+									using_cb = heretic_revolt
+									attacker = { religion = ROOT }
+								}
+								AND = {
+									using_cb = religious_revolt
+									attacker = { religion = ROOT }
+								}
+								AND = {
+									using_cb = liberation_revolt
+									thirdparty_title_scope = {
+										ROOT = {
+											kingdom = {
+												title = PREVPREV
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		add_province_modifier = {
+			name = recent_county_uprising
+			duration = 1825 # Five years of -100% revolt risk in this county
+		}
+		remove_province_modifier = rumors_of_witchcraft
+
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = ROOT
+			culture = ROOT
+			female = no
+			age = 25
+			attributes = {
+				martial = 5
+			}
+			trait = peasant_leader
+			trait = tough_soldier
+		}
+
+		new_character = {
+			# Set Racial Trait
+			character_event = {
+			  id = aiclean.31
+			}
+			create_title = {
+				tier = DUKE
+				landless = yes
+				temporary = yes
+				rebel = yes
+				culture = ROOT
+				name = "PEASANT_REVOLT"
+				holder = THIS
+			}
+			set_amazon_male_to_female = yes
+			wealth = 100
+
+			spawn_peasant_army_effect = yes
+
+			if = {
+				limit = {
+					has_game_rule = {
+						name = provincial_revolt_strength
+						value = powerful
+					}
+				}
+				spawn_peasant_army_effect = yes
+				wealth = 150
+			}
+
+			if = {
+				limit = {
+					has_game_rule = {
+						name = provincial_revolt_strength
+						value = very_powerful
+					}
+				}
+				spawn_peasant_army_effect = yes
+				spawn_peasant_army_effect = yes
+				spawn_peasant_army_effect = yes
+				wealth = 250
+			}
+
+			if = {
+				limit = {
+					has_game_rule = {
+						name = provincial_revolt_strength
+						value = extremely_powerful
+					}
+				}
+				spawn_peasant_army_effect = yes
+				spawn_peasant_army_effect = yes
+				spawn_peasant_army_effect = yes
+				spawn_peasant_army_effect = yes
+				spawn_peasant_army_effect = yes
+				wealth = 350
+			}
+
+			# DoW on the province top liege
+			ROOT = {
+				owner = {
+					top_liege = {
+						reverse_war = {
+							target = PREVPREVPREV
+							casus_belli = peasant_revolt
+							thirdparty_title = ROOT # The county
+						}
+						reverse_opinion = {
+							who = PREVPREVPREV
+							modifier = opinion_evil_tyrant
+						}
+					}
+				}
+			}
+		}
+
+		owner = {
+			any_liege = { # Inform the lieges
+				character_event = {
+					id = revolt.2
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTArevolt1
+	}
+}
+
+# revolt.2 The peasants have risen
+# Scope: ROOT is a liege of the owner, FROM the county.
+character_event = {
+	id = revolt.2
+	desc = EVTDESCrevolt2
+	picture = GFX_evt_peasants
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt1
+	}
+}
+
+# revolt.3 The peasants take the county seat
+# Two years of peasant unrest in the county.
+# Scope: ROOT is the peasant leader, FROM the holding taken. From
+#   on_siege_over_winner.
+character_event = {
+	id = revolt.3
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		trait = peasant_leader
+		rebel = yes
+		FROM = {
+			is_capital = yes # The capital holding
+		}
+	}
+
+	immediate = {
+		FROM = {
+			location = {
+				if = {
+					limit = {
+						NOT = { has_province_modifier = peasant_unrest }
+					}
+					add_province_modifier = {
+						name = peasant_unrest
+						duration = 730
+					}
+				}
+			}
+		}
+	}
+}
+
+# revolt.4 More peasants rise
+# Reinforces an ongoing peasant revolt in the county, scaled like revolt.1.
+# Scope: ROOT is the county. From on_rebel_revolt.
+province_event = {
+	id = revolt.4
+	desc = EVTDESCrevolt4
+	picture = GFX_evt_peasants
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "The Old Gods"
+		revolt_county_can_rise_trigger = yes
+		any_province_holding = {
+			NOT = { holding_type = nomad }
+		}
+
+		# There is already an ongoing peasant revolt for this province
+		owner = {
+			top_liege = {
+				war = yes
+				any_war = {
+					defender = { character = PREV }
+					using_cb = peasant_revolt
+					war_title = ROOT # The county
+				}
+			}
+		}
+	}
+
+	immediate = {
+
+		add_province_modifier = {
+			name = recent_county_uprising
+			duration = 1825 # Five years of -100% revolt risk in this county
+		}
+
+		owner = {
+			top_liege = {
+				any_war = {
+					limit = {
+						defender = { character = PREV }
+						using_cb = peasant_revolt
+						war_title = ROOT # The county
+					}
+					attacker = {
+						spawn_peasant_reinforcements_effect = yes
+
+						if = {
+							limit = {
+								has_game_rule = {
+									name = provincial_revolt_strength
+									value = powerful
+								}
+							}
+							spawn_peasant_reinforcements_effect = yes
+						}
+
+						if = {
+							limit = {
+								has_game_rule = {
+									name = provincial_revolt_strength
+									value = very_powerful
+								}
+							}
+							spawn_peasant_reinforcements_effect = yes
+							spawn_peasant_reinforcements_effect = yes
+							spawn_peasant_reinforcements_effect = yes
+						}
+
+						if = {
+							limit = {
+								has_game_rule = {
+									name = provincial_revolt_strength
+									value = extremely_powerful
+								}
+							}
+							spawn_peasant_reinforcements_effect = yes
+							spawn_peasant_reinforcements_effect = yes
+							spawn_peasant_reinforcements_effect = yes
+							spawn_peasant_reinforcements_effect = yes
+							spawn_peasant_reinforcements_effect = yes
+						}
+					}
+				}
+			}
+		}
+
+		owner = {
+			any_liege = { # Inform the lieges
+				character_event = {
+					id = revolt.5
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTArevolt4
+	}
+}
+
+# revolt.5 More peasants have risen
+# Scope: ROOT is a liege of the owner, FROM the county.
+character_event = {
+	id = revolt.5
+	desc = EVTDESCrevolt5
+	picture = GFX_evt_peasants
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt4
+	}
+}
+
+###############################################################################
+# Zealots of a heresy
+###############################################################################
+
+# revolt.10 The zealots rise
+# In a heretic stronghold, or where a fanatic uprising has begun, a
+# charismatic zealot of the heresy leads its faithful against a top liege
+# of the parent faith. Every liege of the owner hears of it (revolt.11).
+# Scope: ROOT is the county. From on_rebel_revolt.
+province_event = {
+	id = revolt.10
+	desc = EVTDESCrevolt10
+	picture = GFX_evt_heretic
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "The Old Gods"
+		revolt_county_can_rise_trigger = yes
+
+		is_heretic = yes
+		OR = {
+			has_province_modifier = heretic_stronghold
+			has_province_modifier = fanatic_uprising
+		}
+
+		any_province_holding = {
+			NOT = { holding_type = nomad }
+		}
+
+		owner = {
+			top_liege = {
+				is_parent_religion = ROOT
+			}
+		}
+
+		NOT = { # Not if there is already an ongoing revolt
+			owner = {
+				top_liege = {
+					war = yes
+					any_war = {
+						defender = { character = PREV }
+						OR = {
+							AND = {
+								using_cb = peasant_revolt
+								war_title = ROOT # The county
+							}
+							AND = {
+								using_cb = heretic_revolt
+								attacker = { religion = ROOT }
+							}
+							AND = {
+								using_cb = religious_revolt
+								attacker = { religion = ROOT }
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		add_province_modifier = {
+			name = recent_county_uprising
+			duration = 1825 # Five years of -100% revolt risk in this county
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = ROOT
+			culture = ROOT
+			female = no
+			age = 32
+			attributes = {
+				martial = 7
+				learning = 7
+			}
+			trait = heresiarch
+			trait = zealous
+			trait = scholar
+			trait = skilled_tactician
+		}
+
+		new_character = {
+			# Set Racial Trait
+			character_event = {
+			  id = aiclean.31
+			}
+			set_character_flag = heretic_revolter
+			set_amazon_male_to_female = yes
+			create_title = {
+				tier = DUKE
+				landless = yes
+				temporary = yes
+				rebel = yes
+				culture = ROOT
+				name = "HERETIC_REVOLT"
+				holder = THIS
+			}
+
+			wealth = 100
+
+			spawn_heretic_army_effect = yes
+
+			if = {
+				limit = {
+					has_game_rule = {
+						name = provincial_revolt_strength
+						value = powerful
+					}
+				}
+				spawn_heretic_army_effect = yes
+				wealth = 150
+			}
+
+			if = {
+				limit = {
+					has_game_rule = {
+						name = provincial_revolt_strength
+						value = very_powerful
+					}
+				}
+				spawn_heretic_army_effect = yes
+				spawn_heretic_army_effect = yes
+				spawn_heretic_army_effect = yes
+				wealth = 250
+			}
+
+			if = {
+				limit = {
+					has_game_rule = {
+						name = provincial_revolt_strength
+						value = extremely_powerful
+					}
+				}
+				spawn_heretic_army_effect = yes
+				spawn_heretic_army_effect = yes
+				spawn_heretic_army_effect = yes
+				spawn_heretic_army_effect = yes
+				spawn_heretic_army_effect = yes
+				wealth = 350
+			}
+
+			# DoW on the province top liege
+			ROOT = {
+				owner = {
+					top_liege = {
+						reverse_war = {
+							target = PREVPREVPREV
+							casus_belli = heretic_revolt
+							thirdparty_title = ROOT # The county...
+							tier = DUKE # ... but really the de jure duchy
+						}
+						reverse_opinion = {
+							who = PREVPREVPREV
+							modifier = opinion_evil_tyrant
+						}
+					}
+				}
+			}
+		}
+
+		owner = {
+			any_liege = { # Inform the lieges
+				character_event = {
+					id = revolt.11
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTArevolt10
+	}
+}
+
+# revolt.11 The zealots have risen
+# Scope: ROOT is a liege of the owner, FROM the county.
+character_event = {
+	id = revolt.11
+	desc = EVTDESCrevolt11
+	picture = GFX_evt_heretic
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt10
+	}
+}
+
+# revolt.12 The zealots take the county seat
+# The county may turn to the heresy (when it fits the people's race), and
+# two years of religious unrest.
+# Scope: ROOT is the zealot leader, FROM the holding taken. From
+#   on_siege_over_winner.
+character_event = {
+	id = revolt.12
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		trait = heresiarch
+		rebel = yes
+		FROM = {
+			is_capital = yes # The capital holding
+		}
+	}
+
+	immediate = {
+		FROM = {
+			location = {
+				if = {
+					limit = {
+						NOT = { religion = ROOT }
+					}
+					random = {
+						chance = 50
+						religion = ROOT
+					}
+				}
+				if = {
+					limit = {
+						NOT = { has_province_modifier = fanatic_uprising }
+					}
+					add_province_modifier = {
+						name = fanatic_uprising #
+						duration = 1825
+					}
+				}
+			}
+		}
+	}
+}
+
+# revolt.13 More zealots rise
+# Scope: ROOT is the county. From on_rebel_revolt.
+province_event = {
+	id = revolt.13
+	desc = EVTDESCrevolt13
+	picture = GFX_evt_heretic
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "The Old Gods"
+
+		is_heretic = yes
+
+		owner = {
+			top_liege = {
+				is_parent_religion = ROOT
+			}
+		}
+
+		NOT = { culture_group = lizardman_group } #Lizardmen built for compliance to Lizardmen
+
+		OR = {
+			has_province_modifier = heretic_stronghold
+			has_province_modifier = fanatic_uprising
+		}
+
+
+		any_province_holding = {
+			NOT = { holding_type = nomad }
+		}
+
+		owner = {
+			top_liege = {
+				war = yes
+				any_war = {
+					defender = { character = PREV }
+					using_cb = heretic_revolt
+					attacker = { religion = ROOT }
+				}
+			}
+		}
+	}
+
+	immediate = {
+
+		add_province_modifier = {
+			name = recent_county_uprising
+			duration = 1825 # Five years of -100% revolt risk in this county
+		}
+
+		owner = {
+			top_liege = {
+				any_war = {
+					limit = {
+						defender = { character = PREV }
+						using_cb = heretic_revolt
+						attacker = { religion = ROOT }
+					}
+					attacker = {
+						spawn_heretic_reinforcements_effect = yes
+
+						if = {
+							limit = {
+								has_game_rule = {
+									name = provincial_revolt_strength
+									value = powerful
+								}
+							}
+							spawn_heretic_reinforcements_effect = yes
+						}
+
+						if = {
+							limit = {
+								has_game_rule = {
+									name = provincial_revolt_strength
+									value = very_powerful
+								}
+							}
+							spawn_heretic_reinforcements_effect = yes
+							spawn_heretic_reinforcements_effect = yes
+							spawn_heretic_reinforcements_effect = yes
+						}
+
+						if = {
+							limit = {
+								has_game_rule = {
+									name = provincial_revolt_strength
+									value = extremely_powerful
+								}
+							}
+							spawn_heretic_reinforcements_effect = yes
+							spawn_heretic_reinforcements_effect = yes
+							spawn_heretic_reinforcements_effect = yes
+							spawn_heretic_reinforcements_effect = yes
+							spawn_heretic_reinforcements_effect = yes
+						}
+					}
+				}
+			}
+		}
+
+		owner = {
+			any_liege = { # Inform the lieges
+				character_event = {
+					id = revolt.14
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTArevolt13
+	}
+}
+
+# revolt.14 More zealots have risen
+# Scope: ROOT is a liege of the owner, FROM the county.
+character_event = {
+	id = revolt.14
+	desc = EVTDESCrevolt14
+	picture = GFX_evt_heretic
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt13
+	}
+}
+
+###############################################################################
+# A lost kingdom
+###############################################################################
+
+# revolt.20 The kingdom rises
+# Where a top liege of a foreign culture holds a county of a kingdom that
+# once had a king of the county's own people, its landholders raise an army
+# to restore the kingdom. Every liege of the owner hears of it (revolt.21).
+# Scope: ROOT is the county. From on_rebel_revolt.
+province_event = {
+	id = revolt.20
+	desc = EVTDESCrevolt20
+	picture = GFX_evt_siege
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "The Old Gods"
+
+		any_province_holding = {
+			NOT = { holding_type = nomad }
+		}
+
+		revolt_county_can_rise_trigger = yes
+
+		owner = {
+			top_liege = {
+				NOT = { culture = ROOT }
+			}
+		}
+
+		kingdom = {
+			has_holder = no
+			culture = ROOT
+
+			# The de jure kingdom must have had an appropriate holder in the past
+			any_previous_holder = {
+				ROOT = {
+					owner = {
+						top_liege = {
+							NOT = { dynasty = PREVPREVPREV }
+							OR = {
+								is_nomadic = no
+								NOT = { culture_group = ROOT }
+							}
+						}
+					}
+				}
+			}
+		}
+
+		# Heretic revolts have prio
+		OR = {
+			is_heretic = no
+			owner = {
+				top_liege = {
+					NOT = { is_parent_religion = ROOT }
+				}
+			}
+		}
+
+		NOT = { # Not if there is already an ongoing revolt
+			owner = {
+				top_liege = {
+					war = yes
+					any_war = {
+						defender = { character = PREV }
+						OR = {
+							AND = {
+								using_cb = heretic_revolt
+								attacker = { religion = ROOT }
+							}
+							AND = {
+								using_cb = liberation_revolt
+								thirdparty_title_scope = {
+									ROOT = {
+										kingdom = {
+											title = PREVPREV
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		create_character = {
+			random_traits = yes
+			dynasty = random
+			religion = ROOT
+			culture = ROOT
+			female = no
+			age = 20
+			health = 7
+			fertility = 0.7
+			attributes = {
+				martial = 8
+				diplomacy = 9
+			}
+			trait = just
+			trait = brave
+			trait = gregarious
+			trait = ambitious
+			trait = brilliant_strategist
+			trait = inspiring_leader
+		}
+
+		new_character = {
+			# Set Racial Trait
+			character_event = {
+			  id = aiclean.31
+			}
+			set_character_flag = nationalist_rebel
+			set_amazon_male_to_female = yes
+			create_title = {
+				tier = DUKE
+				landless = yes
+				temporary = yes
+				rebel = yes
+				culture = ROOT
+				name = "NATIONALIST_REVOLT"
+				holder = THIS
+			}
+
+			wealth = 100
+
+			spawn_unit = {
+				province = ROOT
+				home = ROOT
+				owner = THIS
+				scaled_by_biggest_garrison = 1.75
+				troops = {
+					archers = { 6 6 }
+					light_cavalry = { 3 3 }
+					knights = { 1 1 }
+					light_infantry = { 7 7 }
+					heavy_infantry = { 3 3 }
+				}
+				attrition = 1.0
+			}
+
+			spawn_nationalist_army_effect = yes
+
+			if = {
+				limit = {
+					has_game_rule = {
+						name = provincial_revolt_strength
+						value = powerful
+					}
+				}
+				spawn_nationalist_army_effect = yes
+				wealth = 150
+			}
+
+			if = {
+				limit = {
+					has_game_rule = {
+						name = provincial_revolt_strength
+						value = very_powerful
+					}
+				}
+				spawn_nationalist_army_effect = yes
+				spawn_nationalist_army_effect = yes
+				spawn_nationalist_army_effect = yes
+				wealth = 250
+			}
+
+			if = {
+				limit = {
+					has_game_rule = {
+						name = provincial_revolt_strength
+						value = extremely_powerful
+					}
+				}
+				spawn_nationalist_army_effect = yes
+				spawn_nationalist_army_effect = yes
+				spawn_nationalist_army_effect = yes
+				spawn_nationalist_army_effect = yes
+				spawn_nationalist_army_effect = yes
+				wealth = 350
+			}
+
+			# DoW on the province top liege
+			ROOT = {
+				owner = {
+					top_liege = {
+						reverse_war = {
+							target = PREVPREVPREV
+							casus_belli = liberation_revolt
+							thirdparty_title = ROOT # The county...
+							tier = KING # ... but really the de jure kingdom
+						}
+						reverse_opinion = {
+							who = PREVPREVPREV
+							modifier = opinion_evil_tyrant
+						}
+					}
+				}
+			}
+		}
+
+		owner = {
+			any_liege = { # Inform the lieges
+				character_event = {
+					id = revolt.21
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTArevolt20
+	}
+}
+
+# revolt.21 The kingdom has risen
+# Scope: ROOT is a liege of the owner, FROM the county.
+character_event = {
+	id = revolt.21
+	desc = EVTDESCrevolt21
+	picture = GFX_evt_siege
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt20
+	}
+}
+
+# revolt.22 The rebels take the county seat
+# The county may return to the kingdom's culture (when it fits the people's
+# race), and two years of cultural unrest.
+# Scope: ROOT is the rebel leader, FROM the holding taken. From
+#   on_siege_over_winner.
+character_event = {
+	id = revolt.22
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		rebel = yes
+		FROM = {
+			is_capital = yes # The capital holding
+		}
+		any_war = {
+			attacker = { character = ROOT }
+			using_cb = liberation_revolt
+		}
+	}
+
+	immediate = {
+		FROM = {
+			location = {
+				if = {
+					limit = {
+						NOT = { culture = ROOT }
+						kingdom = { culture = ROOT }
+						ROOT = { culture_fits_race_of_prev_trigger = yes }
+					}
+					random = {
+						chance = 20
+						culture = ROOT
+					}
+				}
+				if = {
+					limit = {
+						culture = ROOT
+						NOT = { has_province_modifier = cultural_unrest }
+					}
+					add_province_modifier = {
+						name = cultural_unrest
+						duration = 730
+					}
+				}
+			}
+		}
+	}
+}
+
+# revolt.23 More rebels rise for the kingdom
+# Scope: ROOT is the county. From on_rebel_revolt.
+province_event = {
+	id = revolt.23
+	desc = EVTDESCrevolt23
+	picture = GFX_evt_siege
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "The Old Gods"
+
+		any_province_holding = {
+			NOT = { holding_type = nomad }
+		}
+
+		# There is already an ongoing nationalist revolt for the same kingdom
+		owner = {
+			top_liege = {
+				war = yes
+				any_war = {
+					defender = { character = PREV }
+					using_cb = liberation_revolt
+					thirdparty_title_scope = {
+						ROOT = {
+							kingdom = {
+								title = PREVPREV
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		add_province_modifier = {
+			name = recent_county_uprising
+			duration = 1825 # Five years of -100% revolt risk in this county
+		}
+		owner = {
+			top_liege = {
+				any_war = {
+					limit = {
+						defender = { character = PREV }
+						using_cb = liberation_revolt
+						thirdparty_title_scope = {
+							ROOT = {
+								kingdom = {
+									title = PREVPREV
+								}
+							}
+						}
+					}
+					attacker = {
+						spawn_nationalist_reinforcements_effect = yes
+
+						if = {
+							limit = {
+								has_game_rule = {
+									name = provincial_revolt_strength
+									value = powerful
+								}
+							}
+							spawn_nationalist_reinforcements_effect = yes
+						}
+
+						if = {
+							limit = {
+								has_game_rule = {
+									name = provincial_revolt_strength
+									value = very_powerful
+								}
+							}
+							spawn_nationalist_reinforcements_effect = yes
+							spawn_nationalist_reinforcements_effect = yes
+							spawn_nationalist_reinforcements_effect = yes
+						}
+
+						if = {
+							limit = {
+								has_game_rule = {
+									name = provincial_revolt_strength
+									value = extremely_powerful
+								}
+							}
+							spawn_nationalist_reinforcements_effect = yes
+							spawn_nationalist_reinforcements_effect = yes
+							spawn_nationalist_reinforcements_effect = yes
+							spawn_nationalist_reinforcements_effect = yes
+							spawn_nationalist_reinforcements_effect = yes
+						}
+					}
+				}
+			}
+		}
+
+		owner = {
+			any_liege = { # Inform the lieges
+				character_event = {
+					id = revolt.24
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTArevolt1
+	}
+}
+
+# revolt.24 More rebels have risen for the kingdom
+# Scope: ROOT is a liege of the owner, FROM the county.
+character_event = {
+	id = revolt.24
+	desc = EVTDESCrevolt24
+	picture = GFX_evt_siege
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt1
+	}
+}
+
+###############################################################################
+# The faithful of another faith
+###############################################################################
+
+# revolt.30 The faithful rise
+# Where a top liege of another faith group holds the county, a militant
+# priest of the county's faith leads its faithful against him. Every liege of
+# the owner hears of it (revolt.31).
+# Scope: ROOT is the county. From on_rebel_revolt.
+province_event = {
+	id = revolt.30
+	desc = EVTDESCrevolt30
+	picture = GFX_evt_heretic
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "The Old Gods"
+
+		revolt_county_can_rise_trigger = yes
+
+		is_heretic = no
+
+		any_province_holding = {
+			NOT = { holding_type = nomad }
+		}
+
+		owner = {
+			top_liege = {
+				NOT = { religion_group = ROOT }
+			}
+		}
+
+		# Nationalist revolts have prio
+		OR = {
+			owner = {
+				top_liege = {
+					culture = ROOT
+				}
+			}
+			kingdom = {
+				OR = {
+					has_holder = yes
+					NOT = { culture = ROOT }
+					NOT = {
+						# The de jure kingdom must have had an appropriate holder in the past
+						any_previous_holder = {
+							ROOT = {
+								owner = {
+									top_liege = {
+										NOT = { dynasty = PREVPREVPREV }
+										OR = {
+											is_nomadic = no
+											NOT = { culture_group = ROOT }
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			has_province_flag = force_peasant_revolt
+		}
+
+		NOT = { # Not if there is already an ongoing revolt
+			owner = {
+				top_liege = {
+					war = yes
+					any_war = {
+						defender = { character = PREV }
+						OR = {
+							AND = {
+								using_cb = peasant_revolt
+								war_title = ROOT # The county
+							}
+							AND = {
+								using_cb = heretic_revolt
+								attacker = { religion = ROOT }
+							}
+							AND = {
+								using_cb = religious_revolt
+								attacker = { religion = ROOT }
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = ROOT
+			culture = ROOT
+			female = no
+			age = 32
+			attributes = {
+				martial = 7
+				learning = 7
+			}
+			trait = zealous
+			trait = scholar
+			trait = skilled_tactician
+		}
+
+		new_character = {
+			# Set Racial Trait
+			character_event = {
+			  id = aiclean.31
+			}
+			set_character_flag = religious_revolter
+			set_amazon_male_to_female = yes
+			create_title = {
+				tier = DUKE
+				landless = yes
+				temporary = yes
+				rebel = yes
+				culture = ROOT
+				name = "HERETIC_REVOLT"
+				holder = THIS
+			}
+
+			wealth = 100
+
+			spawn_religious_army_effect = yes
+
+			if = {
+				limit = {
+					has_game_rule = {
+						name = provincial_revolt_strength
+						value = powerful
+					}
+				}
+				spawn_religious_army_effect = yes
+				wealth = 150
+			}
+
+			if = {
+				limit = {
+					has_game_rule = {
+						name = provincial_revolt_strength
+						value = very_powerful
+					}
+				}
+				spawn_religious_army_effect = yes
+				spawn_religious_army_effect = yes
+				spawn_religious_army_effect = yes
+				wealth = 250
+			}
+
+			if = {
+				limit = {
+					has_game_rule = {
+						name = provincial_revolt_strength
+						value = extremely_powerful
+					}
+				}
+				spawn_religious_army_effect = yes
+				spawn_religious_army_effect = yes
+				spawn_religious_army_effect = yes
+				spawn_religious_army_effect = yes
+				spawn_religious_army_effect = yes
+				wealth = 350
+			}
+
+			# DoW on the province top liege
+			ROOT = {
+				owner = {
+					top_liege = {
+						reverse_war = {
+							target = PREVPREVPREV
+							casus_belli = religious_revolt
+							thirdparty_title = ROOT # The county...
+							tier = DUKE # ... but really the de jure duchy
+						}
+						reverse_opinion = {
+							who = PREVPREVPREV
+							modifier = opinion_evil_tyrant
+						}
+					}
+				}
+			}
+		}
+
+		owner = {
+			any_liege = { # Inform the lieges
+				character_event = {
+					id = revolt.31
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTArevolt30
+		trigger = {
+			owner = { religion_group = ROOT }
+		}
+	}
+	option = {
+		name = EVTOPTBrevolt30
+		trigger = {
+			owner = { NOT = { religion_group = ROOT	} }
+		}
+	}
+}
+
+# revolt.31 The faithful have risen
+# Scope: ROOT is a liege of the owner, FROM the county.
+character_event = {
+	id = revolt.31
+	desc = EVTDESCrevolt31
+	picture = GFX_evt_heretic
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt30
+		trigger = {
+			religion_group = FROM
+		}
+	}
+	option = {
+		name = EVTOPTBrevolt30
+		trigger = {
+			NOT = { religion_group = FROM	}
+		}
+	}
+}
+
+# revolt.32 The faithful take the county seat
+# The county may turn to the rebels' faith (5%, when it fits the people's
+# race), and two years of religious unrest.
+# Scope: ROOT is the rebel leader, FROM the holding taken. From
+#   on_siege_over_winner.
+character_event = {
+	id = revolt.32
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = religious_revolter
+		rebel = yes
+		FROM = {
+			is_capital = yes # The capital holding
+		}
+	}
+
+	immediate = {
+		FROM = {
+			location = {
+				if = {
+					limit = {
+						NOT = { religion = ROOT }
+						ROOT = { faith_fits_race_of_prev_trigger = yes }
+					}
+					random = {
+						chance = 5
+						religion = ROOT
+					}
+				}
+				if = {
+					limit = {
+						NOT = { has_province_modifier = religious_unrest }
+					}
+					add_province_modifier = {
+						name = religious_unrest
+						duration = 730
+					}
+				}
+			}
+		}
+	}
+}
+
+# revolt.33 More of the faithful rise
+# Scope: ROOT is the county. From on_rebel_revolt.
+province_event = {
+	id = revolt.33
+	desc = EVTDESCrevolt33
+	picture = GFX_evt_heretic
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "The Old Gods"
+
+		is_heretic = no
+
+		any_province_holding = {
+			NOT = { holding_type = nomad }
+		}
+
+		owner = {
+			top_liege = {
+				NOT = { religion_group = ROOT }
+			}
+		}
+
+		owner = {
+			top_liege = {
+				war = yes
+				any_war = {
+					defender = { character = PREV }
+					using_cb = religious_revolt
+					attacker = { religion = ROOT }
+				}
+			}
+		}
+	}
+
+	immediate = {
+
+		add_province_modifier = {
+			name = recent_county_uprising
+			duration = 1825 # Five years of -100% revolt risk in this county
+		}
+
+		owner = {
+			top_liege = {
+				any_war = {
+					limit = {
+						defender = { character = PREV }
+						using_cb = religious_revolt
+						attacker = { religion = ROOT }
+					}
+					attacker = {
+						spawn_religious_reinforcements_effect = yes
+
+						if = {
+							limit = {
+								has_game_rule = {
+									name = provincial_revolt_strength
+									value = powerful
+								}
+							}
+							spawn_religious_reinforcements_effect = yes
+						}
+
+						if = {
+							limit = {
+								has_game_rule = {
+									name = provincial_revolt_strength
+									value = very_powerful
+								}
+							}
+							spawn_religious_reinforcements_effect = yes
+							spawn_religious_reinforcements_effect = yes
+							spawn_religious_reinforcements_effect = yes
+						}
+
+						if = {
+							limit = {
+								has_game_rule = {
+									name = provincial_revolt_strength
+									value = extremely_powerful
+								}
+							}
+							spawn_religious_reinforcements_effect = yes
+							spawn_religious_reinforcements_effect = yes
+							spawn_religious_reinforcements_effect = yes
+							spawn_religious_reinforcements_effect = yes
+							spawn_religious_reinforcements_effect = yes
+						}
+					}
+				}
+			}
+		}
+
+		owner = {
+			any_liege = { # Inform the lieges
+				character_event = {
+					id = revolt.34
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTArevolt33
+	}
+}
+
+# revolt.34 More of the faithful have risen
+# Scope: ROOT is a liege of the owner, FROM the county.
+character_event = {
+	id = revolt.34
+	desc = EVTDESCrevolt34
+	picture = GFX_evt_heretic
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt33
+	}
+}
+
+###############################################################################
+# The mob
+###############################################################################
+
+# revolt.90 The mob breaks in
+# Rebels who take a holding may fall on someone who lived there, though
+# rarely a woman or a child, and zealots and the faithful spare those of
+# their own faith. As in the old rebel system, half the victims are killed,
+# a quarter maimed and a quarter wounded (the invincible shrug it off). The
+# victim's lieges hear of it (revolt.91).
+# Scope: ROOT is the local character, FROM the holding taken, new_character
+#   the owner of the winning unit. From on_siege_over_loc_chars.
+character_event = {
+	id = revolt.90
+	desc = {
+		trigger = { has_character_flag = revolt_caught_killed }
+		text = EVTDESCrevolt90
+	}
+	desc = {
+		trigger = { has_character_flag = revolt_caught_maimed }
+		text = EVTDESCrevolt90_maimed
+	}
+	desc = {
+		trigger = { has_character_flag = revolt_caught_wounded }
+		text = EVTDESCrevolt90_wounded
+	}
+	desc = {
+		trigger = { has_character_flag = revolt_caught_survived }
+		text = EVTDESCrevolt90_survive
+	}
+	picture = GFX_evt_beheading
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		new_character = {
+			rebel = yes
+
+			OR = {
+				NOT = { religion = ROOT }
+				AND = {
+					NOT = { has_character_flag = heretic_revolter }
+					NOT = { has_character_flag = religious_revolter }
+					NOT = { has_character_flag = shepherds_crusade_leader }
+				}
+			}
+		}
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = {
+			factor = 0.5
+			is_woman_trigger = yes
+		}
+		modifier = {
+			factor = 0.5
+			is_adult = no
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { is_invincible_trigger = yes }
+			set_character_flag = revolt_caught_survived
+		}
+		else = {
+			random_list = {
+				50 = { set_character_flag = revolt_caught_killed }
+				25 = {
+					trigger = { is_maimed_trigger = no }
+					set_character_flag = revolt_caught_maimed
+				}
+				25 = {
+					trigger = { NOT = { trait = wounded } }
+					set_character_flag = revolt_caught_wounded
+				}
+			}
+			any_liege = { # Inform the victim's lieges
+				character_event = { id = revolt.91 }
+			}
+		}
+	}
+
+	option = {
+		name = {
+			trigger = { has_character_flag = revolt_caught_killed }
+			text = EVTOPTArevolt90
+		}
+		name = {
+			trigger = { has_character_flag = revolt_caught_maimed }
+			text = EVTOPTArevolt90_maimed
+		}
+		name = {
+			trigger = { has_character_flag = revolt_caught_wounded }
+			text = EVTOPTArevolt90_wounded
+		}
+		name = {
+			trigger = { has_character_flag = revolt_caught_survived }
+			text = EVTOPTArevolt90_survive
+		}
+		if = {
+			limit = { has_character_flag = revolt_caught_killed }
+			death = { death_reason = death_rabble }
+		}
+		else_if = {
+			limit = { has_character_flag = revolt_caught_maimed }
+			add_maimed_trait_effect = yes
+		}
+		else_if = {
+			limit = { has_character_flag = revolt_caught_wounded }
+			add_trait = wounded
+		}
+		if = { # The lieges' notices read the flags, so they go a little later
+			limit = { NOT = { has_character_flag = revolt_caught_killed } }
+			hidden_tooltip = { character_event = { id = revolt.94 days = 3 } }
+		}
+	}
+}
+
+# revolt.91 Fallen to the rebels
+# Scope: ROOT is a liege of the victim, FROM the victim (flag
+#   revolt_caught_*), FROMFROM the holding.
+character_event = {
+	id = revolt.91
+	desc = {
+		trigger = { FROM = { has_character_flag = revolt_caught_killed } }
+		text = EVTDESCrevolt91
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = revolt_caught_maimed } }
+		text = EVTDESCrevolt91_maimed
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = revolt_caught_wounded } }
+		text = EVTDESCrevolt91_wounded
+	}
+	picture = GFX_evt_beheading
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	notification = yes
+
+	ai = no
+
+	option = {
+		name = EVTOPTArevolt91
+	}
+}
+
+# revolt.94 Clean-up
+# Hidden. Clears the flags of revolt.90 once the lieges have heard.
+# Scope: ROOT is the survivor.
+character_event = {
+	id = revolt.94
+	hide_window = yes
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = revolt_caught_maimed
+		clr_character_flag = revolt_caught_wounded
+		clr_character_flag = revolt_caught_survived
+	}
+}
+
+# revolt.92 The rebels sack the holding
+# Hidden. A third of the time, rebels who take a holding with buildings
+# burn one, and its holder hears of it (revolt.93).
+# Scope: ROOT is the owner of the winning unit, FROM the holding taken.
+#   From on_siege_over_winner.
+character_event = {
+	id = revolt.92
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		rebel = yes
+		FROM = {
+			num_of_buildings = 1
+			has_holder = yes
+		}
+	}
+
+	immediate = {
+		random = {
+			chance = 33
+			FROM = {
+				save_event_target_as = revolt_burned_holding
+				holder_scope = {
+					character_event = { id = revolt.93 }
+				}
+			}
+		}
+	}
+}
+
+# revolt.93 My holding burns
+# Scope: ROOT is the holder, FROM the rebel; event_target:
+#   revolt_burned_holding the holding.
+character_event = {
+	id = revolt.93
+	desc = EVTDESCrevolt93
+	picture = GFX_evt_burning_house
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt100
+		event_target:revolt_burned_holding = {
+			destroy_random_building = yes
+		}
+	}
+}
+
+###############################################################################
+# Minor clans
+###############################################################################
+
+# revolt.40 A minor clan rises
+# Under a nomad lord (Horse Lords), a lesser clan of the lord's own people
+# rises in a county away from the capital, under a chieftain with two
+# kinsmen, and demands a place among the great clans: a temporary rebel
+# title and a war on the top liege. Where the clans follow the Dark Gods the
+# chieftain is sworn to one of them, now and then already a champion
+# (revolt_clan_leader_effect); a beastman herd rises on foot. Every liege of
+# the owner hears of it (revolt.41).
+# Scope: ROOT is the county. From on_rebel_revolt.
+province_event = {
+	id = revolt.40
+	desc = {
+		trigger = { NOT = { culture_group = beastman_group } }
+		text = EVTDESCrevolt40
+	}
+	desc = {
+		trigger = { culture_group = beastman_group }
+		text = EVTDESCrevolt40_herd
+	}
+	picture = GFX_evt_steppe_mercenaries
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "Horse Lords"
+
+		has_empty_holding = yes # Room for the clan's seat
+
+		owner = {
+			is_nomadic = yes
+			independent = yes
+			culture = ROOT
+			risks_minor_clan_rising = yes
+			in_revolt = no
+			capital_scope = {
+				NOT = { province = ROOT }
+			}
+		}
+
+		NOT = { # Not while a minor clan rising is under way
+			owner = {
+				top_liege = {
+					war = yes
+					any_war = {
+						defender = { character = PREV }
+						using_cb = cb_minor_clan_revolt
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		add_province_modifier = {
+			name = recent_county_uprising
+			duration = 1825 # Five years without another rising here
+		}
+
+		owner = {
+			top_liege = {
+				save_event_target_as = province_top_liege
+			}
+		}
+
+		revolt_clan_leader_effect = yes
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			create_title = {
+				tier = KING
+				landless = yes
+				temporary = yes
+				rebel = yes
+				culture = ROOT
+				name = "MINOR_CLAN_REVOLT"
+				holder = THIS
+				nomad = yes
+			}
+			set_appropriate_nomad_gov = yes
+
+			save_event_target_as = minor_clan_revolt_leader
+
+			wealth = 500
+			prestige = 500
+			population = 3000
+			manpower = 500
+
+			create_character = { # The chieftain's kinsmen
+				random_traits = yes
+				dynasty = none
+				religion = THIS
+				culture = THIS
+				female = no
+				age = 16
+				attributes = {
+					martial = 7
+				}
+				trait = barbarian_3
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Racial trait
+				dynasty = event_target:minor_clan_revolt_leader
+				set_father = event_target:minor_clan_revolt_leader
+			}
+			create_character = {
+				random_traits = yes
+				dynasty = none
+				religion = THIS
+				culture = THIS
+				female = no
+				age = 17
+				attributes = {
+					martial = 7
+				}
+				trait = barbarian_3
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Racial trait
+				dynasty = event_target:minor_clan_revolt_leader
+				set_father = event_target:minor_clan_revolt_leader
+			}
+
+			revolt_clan_bands_effect = yes
+
+			ROOT = { # War on the top liege
+				owner = {
+					top_liege = {
+						add_population_scaled = -0.1
+						reverse_war = {
+							target = event_target:minor_clan_revolt_leader
+							casus_belli = cb_minor_clan_revolt
+							thirdparty_title = ROOT # The county
+						}
+						reverse_opinion = {
+							who = event_target:minor_clan_revolt_leader
+							modifier = opinion_evil_tyrant
+						}
+					}
+				}
+			}
+		}
+
+		owner = {
+			any_liege = {
+				character_event = { id = revolt.41 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTArevolt40
+	}
+}
+
+# revolt.41 A minor clan has risen
+# Scope: ROOT is a liege of the owner, FROM the county.
+character_event = {
+	id = revolt.41
+	desc = {
+		trigger = { FROM = { NOT = { culture_group = beastman_group } } }
+		text = EVTDESCrevolt41
+	}
+	desc = {
+		trigger = { FROM = { culture_group = beastman_group } }
+		text = EVTDESCrevolt41_herd
+	}
+	picture = GFX_evt_steppe_mercenaries
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt40
+	}
+}
+
+# revolt.42 The clan takes a holding
+# Hidden. Two years of unrest in the county.
+# Scope: ROOT is the clan chieftain, FROM the holding taken. From
+#   on_siege_over_winner.
+character_event = {
+	id = revolt.42
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		rebel = yes
+		any_war = {
+			attacker = { character = ROOT }
+			using_cb = cb_minor_clan_revolt
+		}
+	}
+
+	immediate = {
+		FROM = {
+			location = {
+				if = {
+					limit = {
+						NOT = { has_province_modifier = peasant_unrest }
+					}
+					add_province_modifier = {
+						name = peasant_unrest
+						duration = 730
+					}
+				}
+			}
+		}
+	}
+}
+
+# revolt.43 More of the clan rise
+# Reinforces an ongoing minor clan rising: three more bands for the chieftain
+# (revolt_clan_bands_effect), raised like the first ones (on foot for a
+# herd). Every liege of the owner hears of it (revolt.44).
+# Scope: ROOT is the county. From on_rebel_revolt.
+province_event = {
+	id = revolt.43
+	desc = EVTDESCrevolt43
+	picture = GFX_evt_steppe_mercenaries
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "Horse Lords"
+
+		any_province_holding = {
+			NOT = { holding_type = nomad }
+		}
+
+		owner = { # A minor clan rising is under way
+			top_liege = {
+				war = yes
+				any_war = {
+					defender = { character = PREV }
+					using_cb = cb_minor_clan_revolt
+				}
+			}
+		}
+	}
+
+	immediate = {
+		add_province_modifier = {
+			name = recent_county_uprising
+			duration = 1825 # Five years without another rising here
+		}
+
+		owner = {
+			top_liege = {
+				save_event_target_as = province_top_liege
+				any_war = {
+					limit = {
+						defender = { character = PREV }
+						using_cb = cb_minor_clan_revolt
+					}
+					attacker = {
+						revolt_clan_bands_effect = yes
+					}
+				}
+			}
+		}
+
+		owner = {
+			any_liege = {
+				character_event = { id = revolt.44 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTArevolt40
+	}
+}
+
+# revolt.44 More of the clan have risen
+# Scope: ROOT is a liege of the owner, FROM the county.
+character_event = {
+	id = revolt.44
+	desc = EVTDESCrevolt44
+	picture = GFX_evt_steppe_mercenaries
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt40
+	}
+}
+
+###############################################################################
+# Without The Old Gods
+###############################################################################
+# The old rebel system, kept for players without The Old Gods: rebels who
+# hold a county burn buildings, fall on the lords and folk who live there,
+# and may hand a far-off county to another ruler.
+
+# revolt.100 The rebels burn the county
+# A lord of the county loses a building. The owner hears it here, a baron
+# by letter (revolt.101).
+# Scope: ROOT is the county, held by rebels.
+province_event = {
+	id = revolt.100
+	desc = EVTDESCrevolt100
+	picture = GFX_evt_burning_house
+
+	lacks_dlc = "The Old Gods"
+
+	trigger = {
+		num_of_settlements = 1
+		controlled_by = e_rebels # Early out
+		revolt_county_rebel_held_trigger = yes
+		any_province_lord = {
+			any_demesne_title = {
+				location = { province_id = ROOT }
+				tier = BARON
+				num_of_buildings = 1
+			}
+		}
+	}
+
+	mean_time_to_happen = {
+		months = 24
+	}
+
+	immediate = {
+		random_province_lord = {
+			limit = {
+				any_demesne_title = {
+					location = { province_id = ROOT }
+					tier = BARON
+					num_of_buildings = 1
+				}
+			}
+			save_event_target_as = revolt_burned_lord
+		}
+	}
+
+	option = {
+		name = {
+			trigger = { owner = { character = event_target:revolt_burned_lord } }
+			text = EVTOPTArevolt100
+		}
+		name = {
+			trigger = { NOT = { owner = { character = event_target:revolt_burned_lord } } }
+			text = EVTOPTBrevolt100
+		}
+		if = {
+			limit = { owner = { character = event_target:revolt_burned_lord } }
+			owner = {
+				random_demesne_title = {
+					limit = {
+						location = { province_id = ROOT }
+						tier = BARON
+						num_of_buildings = 1
+					}
+					destroy_random_building = yes
+				}
+			}
+		}
+		else = {
+			hidden_tooltip = {
+				event_target:revolt_burned_lord = {
+					character_event = { id = revolt.101 days = 1 }
+				}
+			}
+		}
+	}
+}
+
+# revolt.101 The rebels burn my holding
+# Scope: ROOT is the baron, FROM the county.
+character_event = {
+	id = revolt.101
+	desc = EVTDESCrevolt101
+	picture = GFX_evt_burning_house
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt100
+		random_demesne_title = {
+			limit = {
+				location = { province_id = FROM }
+				tier = BARON
+				num_of_buildings = 1
+			}
+			destroy_random_building = yes
+		}
+	}
+}
+
+# revolt.110 The rebels fall on me
+# A lord or anyone else who lives in a rebel-held county is caught by the
+# rebels: killed (half the time), maimed or wounded. The greater the lord,
+# the rarer it is (four years for a duke or above, three for a count, two
+# for a baron, ten for anyone else). The liege hears of it (revolt.111 -
+# revolt.113). Was four events (80005 - 80020).
+# Scope: ROOT is the character.
+character_event = {
+	id = revolt.110
+	desc = EVTDESCrevolt110
+	picture = GFX_evt_peasants
+
+	lacks_dlc = "The Old Gods"
+	prisoner = no
+
+	trigger = {
+		location = {
+			controlled_by = e_rebels # Early out
+			is_land = yes
+			revolt_county_rebel_held_trigger = yes
+		}
+		in_command = no
+		OR = {
+			is_ruler = no
+			age = 16
+		}
+		NOT = { has_global_flag = possible_province_defection }
+		is_inaccessible_trigger = no
+	}
+
+	mean_time_to_happen = {
+		months = 24
+		modifier = {
+			factor = 2
+			is_ruler = yes
+			primary_title = { higher_tier_than = COUNT }
+		}
+		modifier = {
+			factor = 1.5
+			is_ruler = yes
+			primary_title = { tier = COUNT }
+		}
+		modifier = {
+			factor = 5
+			is_ruler = no
+		}
+	}
+
+	immediate = {
+		random_list = {
+			50 = { set_character_flag = revolt_caught_killed }
+			25 = { set_character_flag = revolt_caught_maimed }
+			25 = { set_character_flag = revolt_caught_wounded }
+		}
+	}
+
+	option = { # Killed
+		name = EVTOPTArevolt110
+		trigger = { has_character_flag = revolt_caught_killed }
+		if = {
+			limit = {
+				OR = {
+					is_ruler = no
+					independent = no
+				}
+			}
+			hidden_tooltip = {
+				liege = { character_event = { id = revolt.111 days = 3 } }
+			}
+		}
+		if = {
+			limit = { is_invincible_trigger = yes }
+			antideath_effect = yes
+		}
+		else = {
+			death = { death_reason = death_rabble }
+		}
+	}
+	option = { # Maimed
+		name = EVTOPTBrevolt110
+		trigger = { has_character_flag = revolt_caught_maimed }
+		if = {
+			limit = {
+				OR = {
+					is_ruler = no
+					independent = no
+				}
+			}
+			hidden_tooltip = {
+				liege = { letter_event = { id = revolt.112 days = 3 } }
+			}
+		}
+		add_maimed_trait_effect = yes
+	}
+	option = { # Wounded
+		name = EVTOPTCrevolt110
+		trigger = { has_character_flag = revolt_caught_wounded }
+		if = {
+			limit = {
+				OR = {
+					is_ruler = no
+					independent = no
+				}
+			}
+			hidden_tooltip = {
+				liege = { letter_event = { id = revolt.113 days = 3 } }
+			}
+		}
+		add_trait = wounded
+	}
+
+	after = {
+		clr_character_flag = revolt_caught_killed
+		clr_character_flag = revolt_caught_maimed
+		clr_character_flag = revolt_caught_wounded
+	}
+}
+
+# revolt.111 Killed by the rebels
+# Scope: ROOT is the liege, FROM the victim.
+character_event = {
+	id = revolt.111
+	desc = EVTDESCrevolt111
+	picture = GFX_evt_death
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt111
+	}
+}
+
+# revolt.112 Maimed by the rebels
+# Scope: ROOT is the liege, FROM the victim.
+letter_event = {
+	id = revolt.112
+	desc = EVTDESCrevolt112
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt112
+	}
+}
+
+# revolt.113 Wounded by the rebels
+# Scope: ROOT is the liege, FROM the victim.
+letter_event = {
+	id = revolt.113
+	desc = EVTDESCrevolt113
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt113
+	}
+}
+
+# revolt.120 The rebels change sides
+# A rebel-held county cut off from the rest of its realm, inland, not its
+# owner's last county and not in a de jure duchy the realm holds, defects
+# to a neighbouring ruler (rebel_defection). One county at a time
+# (global flag possible_province_defection, cleared by revolt.121).
+# Scope: ROOT is the county.
+province_event = {
+	id = revolt.120
+	desc = EVTDESCrevolt120
+	picture = GFX_evt_peasants
+
+	lacks_dlc = "The Old Gods"
+
+	trigger = {
+		NOT = { has_global_flag = possible_province_defection }
+
+		num_of_settlements = 1
+		controlled_by = e_rebels
+		revolt_county_rebel_held_trigger = yes
+
+		owner = {
+			top_liege = { independent = yes } # Not in an independence war
+			OR = { # Not a player's last county
+				ai = yes
+				any_demesne_province = {
+					NOT = { province_id = ROOT }
+				}
+			}
+			top_liege = { # Not the only county of the realm
+				any_realm_province = {
+					NOT = { province_id = ROOT }
+				}
+			}
+		}
+
+		NOT = { # Cut off from the rest of the realm
+			any_neighbor_province = {
+				has_owner = yes
+				owner = {
+					top_liege = {
+						ROOT = {
+							owner = {
+								top_liege = {
+									character = PREVPREVPREV
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		any_neighbor_province = { # Not an island
+			has_owner = yes
+			is_land = yes
+		}
+		port = no
+		NOT = { # Not in a de jure duchy held within the realm
+			duchy = {
+				holder_scope = {
+					top_liege = {
+						ROOT = {
+							owner = {
+								top_liege = {
+									character = PREVPREVPREV
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	mean_time_to_happen = {
+		months = 1
+	}
+
+	immediate = {
+		set_global_flag = possible_province_defection
+		owner = { save_event_target_as = revolt_defected_from }
+	}
+
+	option = {
+		name = EVTOPTArevolt120
+		county = {
+			rebel_defection = yes
+		}
+		hidden_tooltip = {
+			province_event = { id = revolt.121 days = 3 }
+			clear_revolt = yes
+		}
+	}
+}
+
+# revolt.121 The rebels swear to a new ruler
+# The new owner hears it here; the old owner, the old liege and the old top
+# liege by notice (revolt.122).
+# Scope: ROOT is the county, FROM the county.
+province_event = {
+	id = revolt.121
+	desc = EVTDESCrevolt121
+	picture = GFX_evt_peasants
+
+	show_from_from = no
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt121
+		hidden_tooltip = {
+			event_target:revolt_defected_from = {
+				character_event = { id = revolt.122 days = 3 }
+				if = {
+					limit = { independent = no }
+					liege = { character_event = { id = revolt.122 days = 3 } }
+					if = {
+						limit = {
+							top_liege = {
+								NOT = { is_liege_of = PREV }
+							}
+						}
+						top_liege = { character_event = { id = revolt.122 days = 3 } }
+					}
+				}
+			}
+			clr_global_flag = possible_province_defection
+		}
+	}
+}
+
+# revolt.122 The rebels have changed sides
+# Scope: ROOT is the old owner or one of the old lieges, FROM and FROMFROM
+#   the county.
+character_event = {
+	id = revolt.122
+	desc = EVTDESCrevolt122
+	picture = GFX_evt_peasants
+
+	show_from_from = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt122
+	}
+}
+
+###############################################################################
+# A rival rises
+###############################################################################
+
+# revolt.50 A rival rises
+# Where the dead or the greenskins hold a county, no peasants rise. Instead a
+# rival claims it: a tomb prince wakes from his sleep in the sand, or a big
+# greenskin decides he is the boss now. A small host under a temporary rebel
+# title; if it wins, the rival takes the county. Five years without another
+# rising in the county. Lieges are told (revolt.51).
+# Scope: ROOT is the county (province). From on_rebel_revolt.
+province_event = {
+	id = revolt.50
+	desc = {
+		trigger = { culture = nehekharan }
+		text = EVTDESCrevolt50_undead
+	}
+	desc = {
+		trigger = { NOT = { culture = nehekharan } }
+		text = EVTDESCrevolt50_greenskin
+	}
+	picture = GFX_evt_peasants
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "The Old Gods"
+		revolt_rival_county_trigger = yes
+		NOT = { has_province_modifier = recent_county_uprising }
+		owner = {
+			top_liege = {
+				NOT = {
+					any_war = {
+						defender = { character = PREV }
+						using_cb = peasant_revolt
+						war_title = ROOT
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		add_province_modifier = {
+			name = recent_county_uprising
+			duration = 1825
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = random
+			religion = ROOT
+			culture = ROOT
+			female = no
+			age = 30
+			attributes = {
+				martial = 7
+			}
+			trait = tough_soldier
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			if = {
+				limit = { ROOT = { culture = nehekharan } }
+				create_title = {
+					tier = DUKE
+					landless = yes
+					temporary = yes
+					rebel = yes
+					culture = ROOT
+					name = "RIVAL_UPRISING_UNDEAD"
+					holder = THIS
+				}
+			}
+			else = {
+				create_title = {
+					tier = DUKE
+					landless = yes
+					temporary = yes
+					rebel = yes
+					culture = ROOT
+					name = "RIVAL_UPRISING_GREENSKIN"
+					holder = THIS
+				}
+			}
+			wealth = 100
+			spawn_peasant_army_effect = yes
+			ROOT = {
+				owner = {
+					add_rival = PREVPREV
+					top_liege = {
+						reverse_war = {
+							target = PREVPREVPREV
+							casus_belli = peasant_revolt
+							thirdparty_title = ROOT
+						}
+					}
+				}
+			}
+		}
+		owner = {
+			any_liege = { character_event = { id = revolt.51 } }
+		}
+	}
+
+	option = {
+		name = EVTOPTArevolt50
+	}
+}
+
+# revolt.51 A rival has risen
+# Scope: ROOT is a liege of the owner, FROM the county.
+character_event = {
+	id = revolt.51
+	desc = {
+		trigger = { FROM = { culture = nehekharan } }
+		text = EVTDESCrevolt51_undead
+	}
+	desc = {
+		trigger = { FROM = { NOT = { culture = nehekharan } } }
+		text = EVTDESCrevolt51_greenskin
+	}
+	picture = GFX_evt_peasants
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTArevolt1
+	}
+}
+

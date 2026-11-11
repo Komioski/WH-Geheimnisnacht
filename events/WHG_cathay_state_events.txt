@@ -1,0 +1,1880 @@
+###############################################################################
+# The state of Cathay
+# Namespace: cathaystate (was JD.10005 - 10006 in jd_china_succession_events
+#   and JD.50000 - 50401, JD.30504 in jd_chinese_status_and_policy_events;
+#   dragon_emperor.1 in wh_dragon_emperor_events)
+# Faction: Cathay & the East
+#
+# How Grand Cathay fares, as the west hears of it. Every year the empire
+# may settle down, fall into unrest, famine or plague, enter a golden age,
+# be invaded by the Hobgoblin hordes or the Man-chu horsemen of the Hung,
+# or tear itself apart in civil war (the Chaos, ogre and Skaven wars are in
+# wh_cathay_events.txt). Each change sets the Emperor's policy (open,
+# isolationist or expansionist) and the worth of the roads east, and lords
+# within reach read the news.
+#
+# The Celestial Dragon Emperor is immortal (creature_celdragon) and is
+# never overthrown by these wars: invaders are paid off or driven back,
+# and his nine children rule in his name while he is away on his quest
+# (since 2000 IC). The Dragon Throne can fall only at the end of days: to
+# Chaos in a war at home (weight 1 against 140, with doom very high,
+# cathay_chaos_takes_throne_effect in wh_cathay_events.txt), or to a Chaos
+# lord's invasion, which can be launched only with doom very high
+# (cathay_chaos_assault_dragon_throne). Even then the deposed Emperor
+# lives, and his children bring him back in a few years (cathay_war.30).
+# Only while he is gone can a hobgoblin khan, a Man-chu khagan or a rebel
+# general crown a new house. The empire then takes a new name, every
+# favour, timer and pact with the old house lapses, and the tributaries of
+# the old house are set free.
+#
+# A new house on the Dragon Throne        cathaystate.1 - cathaystate.2
+# A new Emperor and policy                cathaystate.10 - cathaystate.17
+# Status news and the roads east          cathaystate.20 - cathaystate.26
+# Peace, unrest, famine, plague, glory    cathaystate.30 - cathaystate.34
+# The Hobgoblin hordes                    cathaystate.40 - cathaystate.44
+# The Man-chu horsemen                    cathaystate.50 - cathaystate.54
+# Civil war                               cathaystate.60 - cathaystate.65
+# The old house goes home                 cathaystate.70
+#
+# Callers: common/on_actions/00_on_actions.txt: on_offmap_ruler_changed (1,
+# 10), on_startup (2, 26, 70), on_offmap_policy_changed (15, 25),
+# on_offmap_status_changed (20, 25), on_offmap_yearly_pulse (17) and the
+# random events of on_offmap_yearly_pulse (30 - 34, 40, 42, 50, 52, 60,
+# 62).
+# Shared code: cathaystate_* in WHG_cathay_state_effects.txt and
+# WHG_cathay_state_triggers.txt.
+# Loc: localisation/00_WHG_cathay_state_events.csv
+#
+# Dropped: the sacking of the western governor (he is the on-map King of
+# Naparaya, so he stays), the real-world dynasty names, the startup rename
+# of Cathay to Song or Ming, the 1200 date checks (the game starts in 2010),
+# the debug logs (JD.31000, JD.30500 - 30503), the Borjigin rules (their
+# dynasty ids belong to a Talabecland house in the mod), the grant of the
+# Viceroy's lands to a victorious khan, the Nipponese and Indish emperors,
+# and the commented templates.
+# Fixed: the roads east (the vanilla Silk Road is empty in the mod); the
+# foreign-emperor checks read the offmap power instead of its ruler; the
+# Man-chu winner was always a Cathayan.
+###############################################################################
+
+namespace = cathaystate
+
+###############################################################################
+# A new house on the Dragon Throne
+###############################################################################
+
+# cathaystate.1 A new house on the Dragon Throne
+# Hidden. Names the empire after the new house, unless the war that set it
+# up already chose a name (rename_override). Ends the peace pacts, grace
+# timers and trade contracts of the old house, frees its tributaries
+# (was_tributary_of_cathay, read by the news in
+# jd_chinese_status_and_policy_events) and wipes the kowtow honours.
+# Scope: the new ruler of Cathay; FROM is the old ruler, FROMFROM Cathay.
+character_event = {
+	id = cathaystate.1
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_ruler_changed
+	offmap = only
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		is_offmap_tag = offmap_cathay
+		NOT = { dynasty = FROM }
+	}
+
+	immediate = {
+		offmap_cathay = {
+			if = {
+				limit = { NOT = { any_player = { dynasty = ROOT } } }
+				clr_offmap_flag = cathay_invaded_player_dynasty
+			}
+			if = {
+				limit = { NOT = { has_offmap_flag = rename_override } }
+				cathaystate_new_empire_name_effect = yes
+			}
+		}
+
+		# Pacts with the old house end
+		any_playable_ruler = {
+			limit = {
+				has_character_modifier = peace_deal_with_cathay
+				OR = {
+					ai = yes
+					NOT = { has_offmap_news_enabled = FROMFROM }
+					NOT = { is_within_diplo_range = ROOT }
+				}
+			}
+			remove_character_modifier = peace_deal_with_cathay
+		}
+
+		# Grace timers and favours of the old house lapse
+		any_playable_ruler = {
+			limit = {
+				OR = {
+					has_character_modifier = cathayan_grace_send_gift_timer
+					has_character_modifier = cathayan_grace_send_eunuch_timer
+					has_character_modifier = cathayan_grace_send_concubine_timer
+					has_character_modifier = cathayan_grace_tributary_timer
+					has_character_modifier = jd_cathay_boon_cd
+					has_character_modifier = cathay_force_open_cooldown
+					has_character_modifier = angered_cathay_modifier
+					has_character_modifier = cathayan_imperial_trade_contract
+					has_character_modifier = cathay_raid_grace_cd
+				}
+			}
+			remove_character_modifier = cathayan_grace_send_gift_timer
+			remove_character_modifier = cathayan_grace_send_eunuch_timer
+			remove_character_modifier = cathayan_grace_send_concubine_timer
+			remove_character_modifier = cathayan_grace_tributary_timer
+			remove_character_modifier = jd_cathay_boon_cd
+			remove_character_modifier = cathay_force_open_cooldown
+			remove_character_modifier = angered_cathay_modifier
+			remove_character_modifier = cathayan_imperial_trade_contract
+			remove_character_modifier = cathay_raid_grace_cd
+		}
+
+		# The old house's tributaries go free
+		governor = {
+			any_tributary = {
+				limit = { is_tributary = { type = offmap } }
+				remove_tributary = PREV
+				set_character_flag = was_tributary_of_cathay
+			}
+		}
+
+		# Kowtow honours were owed to the old house
+		any_playable_ruler = {
+			limit = {
+				OR = {
+					trait = kow_tow_completed_tier_1
+					trait = kow_tow_completed_tier_2
+					trait = kow_tow_completed_tier_3
+				}
+			}
+			remove_trait = kow_tow_completed_tier_1
+			remove_trait = kow_tow_completed_tier_2
+			remove_trait = kow_tow_completed_tier_3
+			clr_character_flag = went_on_kow_tow_pilgrimage
+		}
+	}
+}
+
+# cathaystate.2 Cathay's name and government at game start
+# Hidden. Makes sure Cathay and its western governor run the Celestial
+# bureaucracy, and that Cathay under the Dragon Emperor is called Cathay.
+# Runs once per game.
+# Scope: a player.
+character_event = {
+	id = cathaystate.2
+	hide_window = yes
+	is_triggered_only = yes # on_startup
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		ai = no
+		NOT = { has_global_flag = cathaystate_startup_done }
+	}
+
+	immediate = {
+		set_global_flag = cathaystate_startup_done
+		offmap_cathay = {
+			set_government_type = confucian_bureaucracy
+			governor = { set_government_type = confucian_bureaucracy }
+			if = {
+				limit = {
+					offmap_ruler = { trait = creature_celdragon }
+					NOT = { has_offmap_name = cathay_cathay }
+				}
+				set_offmap_name = cathay_cathay
+			}
+		}
+	}
+}
+
+###############################################################################
+# A new Emperor and policy
+###############################################################################
+
+# cathaystate.10 A new Emperor picks a policy
+# Hidden. The new ruler of Cathay chooses to keep the empire open, close it
+# or turn expansionist, swayed by its state, by trends the last reign or
+# war left (cathay_isolationist_trend, cathay_expansionist_trend) and by
+# past defeats. Lords within reach hear of the new reign (cathaystate.11).
+# Scope: the new ruler; FROM is the old ruler, FROMFROM Cathay.
+character_event = {
+	id = cathaystate.10
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_ruler_changed
+	offmap = only
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		is_offmap_tag = offmap_cathay
+	}
+
+	immediate = {
+		FROMFROM = {
+			set_offmap_flag = no_policy_news
+			random_list = {
+				100 = {
+					modifier = { factor = 1.5 has_status = cathay_stable }
+					modifier = {
+						factor = 5
+						has_policy = cathay_open
+						NOT = { days_since_policy_change = 10950 } # 30 years
+					}
+					set_policy = cathay_open
+				}
+				20 = {
+					trigger = {
+						OR = {
+							NOT = { has_offmap_tmp_flag = cathay_forced_open }
+							had_offmap_tmp_flag = { flag = cathay_forced_open years = 50 }
+						}
+					}
+					modifier = { factor = 10 has_offmap_flag = cathay_isolationist_trend }
+					modifier = { factor = 2 cathay_is_suffering_trigger = yes }
+					modifier = { factor = 0.5 has_status = cathay_golden_age }
+					modifier = {
+						factor = 5
+						has_policy = cathay_isolationist
+						NOT = { days_since_policy_change = 10950 } # 30 years
+					}
+					set_policy = cathay_isolationist
+					clr_offmap_flag = cathay_isolationist_trend
+					clr_offmap_tmp_flag = cathay_forced_open
+				}
+				10 = {
+					trigger = {
+						NOT = { has_offmap_flag = cathay_badly_beaten_3 }
+						NOT = {
+							check_variable = {
+								which = global_cathay_change_to_expansionist_count
+								value = 6
+							}
+						}
+					}
+					modifier = {
+						factor = 3
+						OR = {
+							cathay_colony_in_danger_trigger = yes
+							cathay_exile_at_large_trigger = yes
+						}
+					}
+					modifier = { factor = 20 has_offmap_flag = cathay_expansionist_trend }
+					modifier = { factor = 2 has_status = cathay_golden_age }
+					modifier = { factor = 0.75 has_offmap_flag = cathay_badly_beaten_1 }
+					modifier = { factor = 0.5 has_offmap_flag = cathay_badly_beaten_2 }
+					modifier = {
+						factor = 10
+						has_policy = cathay_expansionist
+						NOT = { days_since_policy_change = 14600 } # 40 years
+					}
+					modifier = {
+						factor = 0.1
+						has_policy = cathay_expansionist
+						days_since_policy_change = 32850 # 90 years
+					}
+					modifier = {
+						factor = 0.2
+						check_variable = {
+							which = global_cathay_change_to_expansionist_count
+							value = 3
+						}
+					}
+					if = {
+						limit = { NOT = { has_policy = cathay_expansionist } }
+						change_variable = {
+							which = global_cathay_change_to_expansionist_count
+							value = 1
+						}
+					}
+					set_policy = cathay_expansionist
+					clr_offmap_flag = cathay_expansionist_trend
+				}
+			}
+		}
+		if = {
+			limit = { FROMFROM = { NOT = { has_offmap_flag = no_succession_news } } }
+			any_player = {
+				limit = { has_offmap_news_enabled = FROMFROM is_within_diplo_range = ROOT }
+				narrative_event = { id = cathaystate.11 }
+			}
+		}
+		FROMFROM = { clr_offmap_flag = no_policy_news clr_offmap_flag = no_succession_news }
+	}
+}
+
+# cathaystate.11 News from Cathay: a new Emperor
+# The old Emperor is gone; the news tells whether a new house rules and
+# whether the policy changed. Tributaries of the old house learn they are
+# free, and a peace deal with the old house is void.
+# Scope: a player; FROM is the new ruler, FROMFROM the old ruler.
+narrative_event = {
+	id = cathaystate.11
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_golden_age
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	portrait = event_target:portrait_target
+	is_triggered_only = yes # cathaystate.10
+
+	has_dlc = "Jade Dragon"
+
+	desc = {
+		trigger = {
+			FROM = { dynasty = FROMFROM offmap_cathay = { cathaystate_same_policy_trigger = yes } }
+		}
+		text = EVTDESCcathaystate11
+	}
+	desc = {
+		trigger = {
+			FROM = {
+				NOT = { dynasty = FROMFROM }
+				offmap_cathay = { cathaystate_same_policy_trigger = yes }
+			}
+		}
+		text = EVTDESCcathaystate11_new_house
+	}
+	desc = {
+		trigger = {
+			FROM = { dynasty = FROMFROM offmap_cathay = { cathaystate_same_policy_trigger = no } }
+		}
+		text = EVTDESCcathaystate11_new_policy
+	}
+	desc = {
+		trigger = {
+			FROM = {
+				NOT = { dynasty = FROMFROM }
+				offmap_cathay = { cathaystate_same_policy_trigger = no }
+			}
+		}
+		text = EVTDESCcathaystate11_new_house_new_policy
+	}
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = portrait_target } }
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAcathaystate11_open
+			trigger = { offmap_cathay = { has_policy = cathay_open } }
+		}
+		name = {
+			text = EVTOPTAcathaystate11_closed
+			trigger = { offmap_cathay = { has_policy = cathay_isolationist } }
+		}
+		name = {
+			text = EVTOPTAcathaystate11_expansionist
+			trigger = { offmap_cathay = { has_policy = cathay_expansionist } }
+		}
+		trigger = {
+			OR = {
+				NOT = { has_character_modifier = peace_deal_with_cathay }
+				FROM = { dynasty = FROMFROM }
+			}
+		}
+		cathaystate_old_tributary_effect = yes
+	}
+
+	option = {
+		name = EVTOPTBcathaystate11
+		trigger = {
+			has_character_modifier = peace_deal_with_cathay
+			FROM = { NOT = { dynasty = FROMFROM } }
+		}
+		cathaystate_old_tributary_effect = yes
+		remove_character_modifier = peace_deal_with_cathay
+	}
+}
+
+# cathaystate.15 Cathay changes its policy
+# Hidden. Lords within reach hear of it (cathaystate.16), unless the change
+# came with a new Emperor (cathaystate.11 tells of both).
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.15
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_policy_changed
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = { is_offmap_tag = offmap_cathay NOT = { has_offmap_flag = no_policy_news } }
+	}
+
+	immediate = {
+		any_player = {
+			limit = { has_offmap_news_enabled = FROM is_within_diplo_range = ROOT }
+			narrative_event = { id = cathaystate.16 }
+		}
+	}
+}
+
+# cathaystate.16 News from Cathay: a new policy
+# Scope: a player; FROMFROM is Cathay.
+narrative_event = {
+	id = cathaystate.16
+	title = NEWS_FROM_CATHAY
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	portrait = event_target:portrait_target
+	is_triggered_only = yes # cathaystate.15
+
+	has_dlc = "Jade Dragon"
+
+	desc = {
+		trigger = { FROMFROM = { has_policy = cathay_open } }
+		picture = GFX_evt_china_open
+		text = EVTDESCcathaystate16_open
+	}
+	desc = {
+		trigger = { FROMFROM = { has_policy = cathay_isolationist } }
+		picture = GFX_evt_china_isolationist
+		text = EVTDESCcathaystate16_closed
+	}
+	desc = {
+		trigger = { FROMFROM = { has_policy = cathay_expansionist } }
+		picture = GFX_evt_china_expansionist
+		text = EVTDESCcathaystate16_expansionist
+	}
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = portrait_target } }
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAcathaystate11_open
+			trigger = { offmap_cathay = { has_policy = cathay_open } }
+		}
+		name = {
+			text = EVTOPTAcathaystate16_closed
+			trigger = { offmap_cathay = { has_policy = cathay_isolationist } }
+		}
+		name = {
+			text = EVTOPTAcathaystate11_expansionist
+			trigger = { offmap_cathay = { has_policy = cathay_expansionist } }
+		}
+	}
+}
+
+# cathaystate.17 The Dragon Emperor changes his mind
+# Hidden. The Dragon Emperor never dies, so the policy that cathaystate.10
+# picks for a new Emperor would last forever. Instead, at most once every
+# 15 years, he may open or close the borders, or march west to defend
+# Cathay's colonies, hunt the exiles who fled him or punish those who
+# sacked Cathay (wh_cathay_events.txt does the marching). The news comes
+# from cathaystate.15.
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.17
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			days_since_policy_change = 5475
+		}
+		dragon_emperor_reigns_trigger = yes
+	}
+
+	immediate = {
+		FROM = {
+			if = {
+				limit = { has_policy = cathay_isolationist }
+				random_list = {
+					8 = { # Open the borders to trade
+						modifier = {
+							factor = 0
+							has_offmap_flag = cathay_isolationist_trend
+						}
+						modifier = {
+							factor = 1.5
+							has_status = cathay_stable
+						}
+						modifier = {
+							factor = 2
+							has_status = cathay_golden_age
+						}
+						modifier = {
+							factor = 0.25
+							cathay_is_suffering_trigger = yes
+						}
+						set_policy = cathay_open
+					}
+					2 = { # March west
+						modifier = { # A colony in the west is under attack
+							factor = 4
+							cathay_colony_in_danger_trigger = yes
+						}
+						modifier = { # Exiles and despoilers still at large
+							factor = 3
+							cathay_exile_at_large_trigger = yes
+						}
+						modifier = {
+							factor = 5
+							has_offmap_flag = cathay_expansionist_trend
+						}
+						modifier = {
+							factor = 2
+							has_status = cathay_golden_age
+						}
+						modifier = {
+							factor = 0.25
+							cathay_is_suffering_trigger = yes
+						}
+						modifier = { # Busy with a war at home
+							factor = 0
+							cathay_beset_trigger = yes
+						}
+						set_policy = cathay_expansionist
+						clr_offmap_flag = cathay_expansionist_trend
+					}
+					90 = { }
+				}
+			}
+			else_if = {
+				limit = { has_policy = cathay_open }
+				random_list = {
+					5 = { # Close the borders again
+						modifier = {
+							factor = 0
+							has_offmap_tmp_flag = cathay_forced_open
+							NOT = { had_offmap_tmp_flag = { flag = cathay_forced_open years = 50 } }
+						}
+						modifier = {
+							factor = 5
+							has_offmap_flag = cathay_isolationist_trend
+						}
+						modifier = {
+							factor = 3
+							cathay_is_suffering_trigger = yes
+						}
+						modifier = {
+							factor = 0.5
+							has_status = cathay_golden_age
+						}
+						set_policy = cathay_isolationist
+						clr_offmap_flag = cathay_isolationist_trend
+						clr_offmap_tmp_flag = cathay_forced_open
+					}
+					4 = { # March west
+						modifier = { # A colony in the west is under attack
+							factor = 4
+							cathay_colony_in_danger_trigger = yes
+						}
+						modifier = { # Exiles and despoilers still at large
+							factor = 3
+							cathay_exile_at_large_trigger = yes
+						}
+						modifier = {
+							factor = 5
+							has_offmap_flag = cathay_expansionist_trend
+						}
+						modifier = {
+							factor = 2
+							has_status = cathay_golden_age
+						}
+						modifier = {
+							factor = 0.25
+							cathay_is_suffering_trigger = yes
+						}
+						modifier = { # Busy with a war at home
+							factor = 0
+							cathay_beset_trigger = yes
+						}
+						set_policy = cathay_expansionist
+						clr_offmap_flag = cathay_expansionist_trend
+					}
+					91 = { }
+				}
+			}
+			else_if = {
+				limit = { has_policy = cathay_expansionist }
+				random_list = {
+					12 = { # Enough of the west; back to trade
+						modifier = { # Nothing left to fight for
+							factor = 3
+							NOR = {
+								cathay_colony_in_danger_trigger = yes
+								cathay_exile_at_large_trigger = yes
+							}
+						}
+						modifier = {
+							factor = 2
+							cathay_is_suffering_trigger = yes
+						}
+						set_policy = cathay_open
+					}
+					3 = { # Withdraw behind the Great Bastion
+						modifier = {
+							factor = 0
+							has_offmap_tmp_flag = cathay_forced_open
+							NOT = { had_offmap_tmp_flag = { flag = cathay_forced_open years = 50 } }
+						}
+						modifier = {
+							factor = 4
+							cathay_is_suffering_trigger = yes
+						}
+						set_policy = cathay_isolationist
+						clr_offmap_tmp_flag = cathay_forced_open
+					}
+					85 = { }
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# Status news and the roads east
+###############################################################################
+
+# cathaystate.20 Cathay's state changes
+# Hidden. Clears the invasion timers and tells lords within reach
+# (cathaystate.21), unless the change has news of its own.
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.20
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_status_changed
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = { is_offmap_tag = offmap_cathay }
+	}
+
+	immediate = {
+		FROM = {
+			clr_offmap_flag = cathay_mongol_invasion
+			clr_offmap_flag = cathay_jurchen_invasion
+		}
+		if = {
+			limit = { FROM = { NOT = { has_offmap_flag = no_status_news } } }
+			any_player = {
+				limit = { has_offmap_news_enabled = FROM is_within_diplo_range = ROOT }
+				narrative_event = { id = cathaystate.21 }
+			}
+		}
+	}
+}
+
+# cathaystate.21 News from Cathay: the empire's state
+# Scope: a player; FROMFROM is Cathay.
+narrative_event = {
+	id = cathaystate.21
+	title = NEWS_FROM_CATHAY
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	portrait = event_target:portrait_target
+	is_triggered_only = yes # cathaystate.20
+
+	has_dlc = "Jade Dragon"
+
+	desc = {
+		trigger = { FROMFROM = { has_status = cathay_stable } }
+		picture = GFX_evt_china_stable
+		text = EVTDESCcathaystate21_stable
+	}
+	desc = {
+		trigger = { FROMFROM = { has_status = cathay_unrest } }
+		picture = GFX_evt_china_unrest
+		text = EVTDESCcathaystate21_unrest
+	}
+	desc = {
+		trigger = { FROMFROM = { has_status = cathay_famine } }
+		picture = GFX_evt_china_famine
+		text = EVTDESCcathaystate21_famine
+	}
+	desc = {
+		trigger = { FROMFROM = { has_status = cathay_plague } }
+		picture = GFX_evt_china_devastating_plague
+		text = EVTDESCcathaystate21_plague
+	}
+	desc = {
+		trigger = { FROMFROM = { has_status = cathay_mongol_invasion } }
+		picture = GFX_evt_china_mongols_invade
+		text = EVTDESCcathaystate21_hobgoblins
+	}
+	desc = {
+		trigger = { FROMFROM = { has_status = cathay_jurchen_invasion } }
+		picture = GFX_evt_china_mongols_invade
+		text = EVTDESCcathaystate21_manchu
+	}
+	desc = {
+		trigger = { FROMFROM = { has_status = cathay_civil_war } }
+		picture = GFX_evt_china_civil_war
+		text = EVTDESCcathaystate21_civil_war
+	}
+	desc = {
+		trigger = { FROMFROM = { has_status = cathay_golden_age } }
+		picture = GFX_evt_china_golden_age
+		text = EVTDESCcathaystate21_golden_age
+	}
+	desc = {
+		trigger = { FROMFROM = { has_status = cathay_chaos_invasion } }
+		picture = GFX_evt_chaos_hordes
+		text = EVTDESC_cathay_war_3_CHAOS
+	}
+	desc = {
+		trigger = { FROMFROM = { has_status = cathay_ogre_war } }
+		picture = GFX_evt_ogre_raiders
+		text = EVTDESC_cathay_war_3_OGRE
+	}
+	desc = {
+		trigger = { FROMFROM = { has_status = cathay_skaven_war } }
+		picture = GFX_evt_skaven_assassin
+		text = EVTDESC_cathay_war_3_SKAVEN
+	}
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = portrait_target } }
+	}
+
+	option = {
+		name = INTERESTING
+	}
+}
+
+# cathaystate.25 The roads east follow Cathay's fortune
+# Hidden. Sets the worth of the roads east from Cathay's status and policy
+# (cathaystate_road_values_effect).
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.25
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_policy_changed, on_offmap_status_changed
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = { is_offmap_tag = offmap_cathay }
+	}
+
+	immediate = {
+		FROM = { cathaystate_road_values_effect = yes }
+	}
+}
+
+# cathaystate.26 The roads east at game start
+# Hidden. Sets the worth of the roads east once, for the host of a new game.
+# Scope: a player.
+character_event = {
+	id = cathaystate.26
+	hide_window = yes
+	is_triggered_only = yes # on_startup
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		is_multiplayer_host_character = yes
+		is_save_game = no
+	}
+
+	immediate = {
+		offmap_cathay = { cathaystate_road_values_effect = yes }
+	}
+}
+
+###############################################################################
+# Peace, unrest, famine, plague, glory
+###############################################################################
+
+# cathaystate.30 Peace returns to Cathay
+# Hidden. Unrest, famine, plague or a golden age ends and Cathay is stable
+# again, the more likely the longer the status has lasted. News through
+# cathaystate.20.
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.30
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse random
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			NOT = { has_status = cathay_stable }
+			cathaystate_at_peace_trigger = yes
+			cathaystate_status_too_young_trigger = no
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 2
+			FROM = {
+				has_status = cathay_unrest
+				had_offmap_tmp_flag = { flag = cathay_had_unrest years = 8 }
+			}
+		}
+		modifier = {
+			factor = 2
+			FROM = {
+				has_status = cathay_unrest
+				had_offmap_tmp_flag = { flag = cathay_had_unrest years = 12 }
+			}
+		}
+		modifier = {
+			factor = 2
+			FROM = {
+				has_status = cathay_unrest
+				had_offmap_tmp_flag = { flag = cathay_had_unrest years = 16 }
+			}
+		}
+		modifier = {
+			factor = 1.5
+			FROM = {
+				has_status = cathay_famine
+				had_offmap_tmp_flag = { flag = cathay_had_famine years = 6 }
+			}
+		}
+		modifier = {
+			factor = 2
+			FROM = {
+				has_status = cathay_famine
+				had_offmap_tmp_flag = { flag = cathay_had_famine years = 10 }
+			}
+		}
+		modifier = {
+			factor = 1.5
+			FROM = {
+				has_status = cathay_plague
+				had_offmap_tmp_flag = { flag = cathay_had_plague years = 3 }
+			}
+		}
+		modifier = {
+			factor = 2
+			FROM = {
+				has_status = cathay_plague
+				had_offmap_tmp_flag = { flag = cathay_had_plague years = 7 }
+			}
+		}
+		modifier = {
+			factor = 1.5
+			FROM = {
+				has_status = cathay_golden_age
+				had_offmap_tmp_flag = { flag = cathay_had_golden_age years = 60 }
+			}
+		}
+		modifier = {
+			factor = 2
+			FROM = {
+				has_status = cathay_golden_age
+				had_offmap_tmp_flag = { flag = cathay_had_golden_age years = 80 }
+			}
+		}
+	}
+
+	immediate = {
+		FROM = { set_status = cathay_stable }
+	}
+}
+
+# cathaystate.31 Unrest in Cathay
+# Hidden. Peasant risings and rebel sects; likelier after long hardship and
+# under a foreign Emperor, rare in a golden age.
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.31
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse random
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			NOT = { has_status = cathay_unrest }
+			cathaystate_at_peace_trigger = yes
+			cathaystate_hardship_too_young_trigger = no
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 0.75 FROM = { has_status = cathay_stable } }
+		modifier = { factor = 0.01 FROM = { has_status = cathay_golden_age } }
+		modifier = { factor = 1.25 FROM = { cathaystate_foreign_emperor_trigger = yes } }
+		modifier = {
+			factor = 1.5
+			FROM = {
+				has_status = cathay_famine
+				had_offmap_tmp_flag = { flag = cathay_had_famine years = 6 }
+			}
+		}
+		modifier = {
+			factor = 2
+			FROM = {
+				has_status = cathay_famine
+				had_offmap_tmp_flag = { flag = cathay_had_famine years = 10 }
+			}
+		}
+		modifier = {
+			factor = 1.5
+			FROM = {
+				has_status = cathay_plague
+				had_offmap_tmp_flag = { flag = cathay_had_plague years = 3 }
+			}
+		}
+		modifier = {
+			factor = 2
+			FROM = {
+				has_status = cathay_plague
+				had_offmap_tmp_flag = { flag = cathay_had_plague years = 7 }
+			}
+		}
+	}
+
+	immediate = {
+		FROM = { set_offmap_flag = cathay_had_unrest set_status = cathay_unrest }
+	}
+}
+
+# cathaystate.32 Famine in Cathay
+# Hidden. No more than one famine in ninety years, never early in a golden
+# age.
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.32
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse random
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			NOT = { has_status = cathay_famine }
+			cathaystate_at_peace_trigger = yes
+			OR = {
+				NOT = { has_offmap_flag = cathay_had_famine }
+				had_offmap_tmp_flag = { flag = cathay_had_famine years = 90 }
+			}
+			NOT = {
+				AND = {
+					has_status = cathay_golden_age
+					has_offmap_flag = cathay_had_golden_age
+					NOT = { had_offmap_tmp_flag = { flag = cathay_had_golden_age years = 50 } }
+				}
+			}
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 0.75
+			FROM = { OR = { has_status = cathay_stable has_status = cathay_golden_age } }
+		}
+	}
+
+	immediate = {
+		FROM = { set_offmap_flag = cathay_had_famine set_status = cathay_famine }
+	}
+}
+
+# cathaystate.33 Plague in Cathay
+# Hidden. No more than one plague in ninety years, never early in a golden
+# age.
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.33
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse random
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			NOT = { has_status = cathay_plague }
+			cathaystate_at_peace_trigger = yes
+			OR = {
+				NOT = { has_offmap_flag = cathay_had_plague }
+				had_offmap_tmp_flag = { flag = cathay_had_plague years = 90 }
+			}
+			NOT = {
+				AND = {
+					has_status = cathay_golden_age
+					has_offmap_flag = cathay_had_golden_age
+					NOT = { had_offmap_tmp_flag = { flag = cathay_had_golden_age years = 50 } }
+				}
+			}
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 0.75
+			FROM = { OR = { has_status = cathay_stable has_status = cathay_golden_age } }
+		}
+	}
+
+	immediate = {
+		FROM = { set_offmap_flag = cathay_had_plague set_status = cathay_plague }
+	}
+}
+
+# cathaystate.34 A golden age dawns
+# Hidden. Only from stability, about once in two to two and a half
+# centuries.
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.34
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse random
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			has_status = cathay_stable
+			OR = {
+				NOT = { has_offmap_flag = cathay_had_golden_age }
+				had_offmap_tmp_flag = { flag = cathay_had_golden_age years = 200 }
+			}
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 2
+			FROM = {
+				has_offmap_flag = cathay_had_golden_age
+				had_offmap_tmp_flag = { flag = cathay_had_golden_age years = 250 }
+			}
+		}
+	}
+
+	immediate = {
+		FROM = { set_offmap_flag = cathay_had_golden_age set_status = cathay_golden_age }
+	}
+}
+
+###############################################################################
+# The Hobgoblin hordes
+###############################################################################
+
+# cathaystate.40 The Hobgoblin hordes invade
+# Hidden. The khans of the eastern steppe unite and break through the Great
+# Bastion. Likelier when Cathay is weak, rarer after each of their
+# victories and never under a hobgoblin Emperor. Lords within reach hear of
+# it (cathaystate.41).
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.40
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse random
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			cathaystate_can_be_invaded_trigger = yes
+			cathaystate_hardship_too_young_trigger = no
+			offmap_ruler = { NOT = { culture = hobgoblin } }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 3 FROM = { cathaystate_weakened_trigger = yes } }
+		modifier = {
+			factor = 1.5
+			any_independent_ruler = { cathaystate_hobgoblin_khan_trigger = yes }
+		}
+		modifier = { factor = 0.5 FROM = { has_status = cathay_golden_age } }
+		modifier = { factor = 0.5 FROM = { has_offmap_flag = cathay_mongols_won_1 } }
+		modifier = { factor = 0.25 FROM = { has_offmap_flag = cathay_mongols_won_2 } }
+		modifier = { factor = 0.1 FROM = { has_offmap_flag = cathay_mongols_won_3 } }
+	}
+
+	immediate = {
+		FROM = {
+			set_offmap_flag = no_status_news
+			set_status = cathay_mongol_invasion
+			set_offmap_flag = cathay_mongol_invasion
+			clr_offmap_flag = no_status_news
+		}
+		any_player = {
+			limit = { has_offmap_news_enabled = FROM is_within_diplo_range = ROOT }
+			narrative_event = { id = cathaystate.41 }
+		}
+	}
+}
+
+# cathaystate.41 News from Cathay: the Hobgoblin hordes
+# Scope: a player; FROMFROM is Cathay.
+narrative_event = {
+	id = cathaystate.41
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_mongols
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	portrait = event_target:portrait_target
+	is_triggered_only = yes # cathaystate.40
+
+	has_dlc = "Jade Dragon"
+
+	desc = {
+		trigger = { FROMFROM = { cathaystate_prev_hardship_trigger = yes } }
+		text = EVTDESCcathaystate41_weak
+	}
+	desc = {
+		trigger = { FROMFROM = { prev_status = cathay_golden_age } }
+		text = EVTDESCcathaystate41_strong
+	}
+	desc = {
+		trigger = {
+			FROMFROM = {
+				cathaystate_prev_hardship_trigger = no
+				NOT = { prev_status = cathay_golden_age }
+			}
+		}
+		text = EVTDESCcathaystate21_hobgoblins
+	}
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = portrait_target } }
+	}
+
+	option = {
+		name = EVTOPTAcathaystate41
+	}
+}
+
+# cathaystate.42 The Hobgoblin war ends
+# Hidden. The longer the war, the likelier its end. Cathay wins (likelier
+# after a golden age) or the hordes win (likelier after hardship, or when a
+# hobgoblin khan of the map leads them). A victorious horde is paid off by
+# the Dragon Emperor; once the Dragon Throne has fallen, the khan or his
+# kin takes it. Exiles may flee west afterwards.
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.42
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse random
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = { is_offmap_tag = offmap_cathay has_status = cathay_mongol_invasion }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 2
+			FROM = { had_offmap_tmp_flag = { flag = cathay_mongol_invasion years = 2 } }
+		}
+		modifier = {
+			factor = 2
+			FROM = { had_offmap_tmp_flag = { flag = cathay_mongol_invasion years = 4 } }
+		}
+		modifier = {
+			factor = 2
+			FROM = { had_offmap_tmp_flag = { flag = cathay_mongol_invasion years = 8 } }
+		}
+		modifier = {
+			factor = 5
+			FROM = { had_offmap_tmp_flag = { flag = cathay_mongol_invasion years = 10 } }
+		}
+	}
+
+	immediate = {
+		random_independent_ruler = {
+			limit = { cathaystate_hobgoblin_khan_trigger = yes }
+			preferred_limit = { real_tier = EMPEROR }
+			preferred_limit = { real_tier = KING }
+			save_event_target_as = cathaystate_khan
+		}
+		random_list = {
+			100 = { # Cathay wins
+				modifier = { factor = 3 FROM = { prev_status = cathay_golden_age } }
+				FROM = { cathaystate_invasion_beaten_effect = yes }
+				any_player = {
+					limit = { has_offmap_news_enabled = FROM is_within_diplo_range = ROOT }
+					narrative_event = { id = cathaystate.43 }
+				}
+			}
+			100 = { # The hordes win
+				modifier = { factor = 3 FROM = { cathaystate_prev_hardship_trigger = yes } }
+				modifier = { factor = 2 event_target:cathaystate_khan = { always = yes } }
+				FROM = {
+					cathaystate_invasion_won_effect = yes
+					set_offmap_flag = cathay_expansionist_trend
+				}
+				if = {
+					limit = { dragon_emperor_reigns_trigger = no }
+					FROM = {
+						set_offmap_flag = no_succession_news
+						set_offmap_flag = cathaystate_heir_hobgoblin
+					}
+					cathaystate_new_emperor_effect = yes
+				}
+				event_target:cathaystate_khan = { cathaystate_khan_reward_effect = yes }
+				any_player = {
+					limit = { has_offmap_news_enabled = FROM is_within_diplo_range = ROOT }
+					narrative_event = { id = cathaystate.44 }
+				}
+				FROM = { clr_offmap_flag = no_succession_news }
+				cathaystate_exiles_flee_effect = yes
+			}
+		}
+	}
+}
+
+# cathaystate.43 News from Cathay: the hordes are beaten
+# Scope: a player.
+narrative_event = {
+	id = cathaystate.43
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_mongols_invade
+	desc = EVTDESCcathaystate43
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	portrait = event_target:portrait_target
+	is_triggered_only = yes # cathaystate.42
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = portrait_target } }
+	}
+
+	option = {
+		name = EVTOPTAcathaystate43
+	}
+}
+
+# cathaystate.44 News from Cathay: the hordes triumph
+# The Dragon Emperor paid them off, or a hobgoblin now sits on the Dragon
+# Throne; a peace deal with the old house is void.
+# Scope: a player.
+narrative_event = {
+	id = cathaystate.44
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_tengri_throneroom_oldgods
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	portrait = event_target:portrait_target
+	is_triggered_only = yes # cathaystate.42
+
+	has_dlc = "Jade Dragon"
+
+	desc = { trigger = { dragon_emperor_reigns_trigger = no } text = EVTDESCcathaystate44 }
+	desc = { trigger = { dragon_emperor_reigns_trigger = yes } text = EVTDESCcathaystate44_dragon }
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = portrait_target } }
+	}
+
+	option = {
+		name = EVTOPTAcathaystate44
+		trigger = {
+			OR = {
+				NOT = { has_character_modifier = peace_deal_with_cathay }
+				dragon_emperor_reigns_trigger = yes
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTBcathaystate11
+		trigger = {
+			has_character_modifier = peace_deal_with_cathay
+			dragon_emperor_reigns_trigger = no
+		}
+		remove_character_modifier = peace_deal_with_cathay
+	}
+}
+
+###############################################################################
+# The Man-chu horsemen
+###############################################################################
+
+# cathaystate.50 The Man-chu horsemen invade
+# Hidden. The Man-chu, Hung horse-tribes of the north-east, unite under a
+# khagan and ride into Cathay. Likelier when Cathay is weak, never under a
+# Man-chu Emperor. Lords within reach hear of it (cathaystate.51).
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.50
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse random
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			cathaystate_can_be_invaded_trigger = yes
+			cathaystate_hardship_too_young_trigger = no
+			offmap_ruler = { NOT = { culture = man_chu } }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 3 FROM = { cathaystate_weakened_trigger = yes } }
+		modifier = { factor = 1.5 is_doom_high_trigger = yes }
+		modifier = { factor = 0.5 FROM = { has_status = cathay_golden_age } }
+		modifier = { factor = 0.5 FROM = { has_offmap_flag = cathay_mongols_won_1 } }
+		modifier = { factor = 0.25 FROM = { has_offmap_flag = cathay_mongols_won_2 } }
+		modifier = { factor = 0.1 FROM = { has_offmap_flag = cathay_mongols_won_3 } }
+	}
+
+	immediate = {
+		FROM = {
+			set_offmap_flag = no_status_news
+			set_status = cathay_jurchen_invasion
+			set_offmap_flag = cathay_jurchen_invasion
+			clr_offmap_flag = no_status_news
+		}
+		any_player = {
+			limit = { has_offmap_news_enabled = FROM is_within_diplo_range = ROOT }
+			narrative_event = { id = cathaystate.51 }
+		}
+	}
+}
+
+# cathaystate.51 News from Cathay: the Man-chu horsemen
+# Scope: a player; FROMFROM is Cathay.
+narrative_event = {
+	id = cathaystate.51
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_mongols_invade
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	portrait = event_target:portrait_target
+	is_triggered_only = yes # cathaystate.50
+
+	has_dlc = "Jade Dragon"
+
+	desc = {
+		trigger = { FROMFROM = { cathaystate_prev_hardship_trigger = yes } }
+		text = EVTDESCcathaystate51_weak
+	}
+	desc = {
+		trigger = { FROMFROM = { prev_status = cathay_golden_age } }
+		text = EVTDESCcathaystate51_strong
+	}
+	desc = {
+		trigger = {
+			FROMFROM = {
+				cathaystate_prev_hardship_trigger = no
+				NOT = { prev_status = cathay_golden_age }
+			}
+		}
+		text = EVTDESCcathaystate21_manchu
+	}
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = portrait_target } }
+	}
+
+	option = {
+		name = EVTOPTAcathaystate41
+	}
+}
+
+# cathaystate.52 The Man-chu war ends
+# Hidden. As cathaystate.42: Cathay wins, or the horsemen win and are
+# driven back by the Dragon Emperor at a terrible price; once the Dragon
+# Throne has fallen, their khagan takes it.
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.52
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse random
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = { is_offmap_tag = offmap_cathay has_status = cathay_jurchen_invasion }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 2
+			FROM = { had_offmap_tmp_flag = { flag = cathay_jurchen_invasion years = 2 } }
+		}
+		modifier = {
+			factor = 2
+			FROM = { had_offmap_tmp_flag = { flag = cathay_jurchen_invasion years = 4 } }
+		}
+		modifier = {
+			factor = 2
+			FROM = { had_offmap_tmp_flag = { flag = cathay_jurchen_invasion years = 8 } }
+		}
+		modifier = {
+			factor = 5
+			FROM = { had_offmap_tmp_flag = { flag = cathay_jurchen_invasion years = 10 } }
+		}
+	}
+
+	immediate = {
+		random_list = {
+			100 = { # Cathay wins
+				modifier = { factor = 3 FROM = { prev_status = cathay_golden_age } }
+				FROM = { cathaystate_invasion_beaten_effect = yes }
+				any_player = {
+					limit = { has_offmap_news_enabled = FROM is_within_diplo_range = ROOT }
+					narrative_event = { id = cathaystate.53 }
+				}
+			}
+			100 = { # The horsemen win
+				modifier = { factor = 3 FROM = { cathaystate_prev_hardship_trigger = yes } }
+				FROM = { cathaystate_invasion_won_effect = yes }
+				if = {
+					limit = { dragon_emperor_reigns_trigger = no }
+					FROM = {
+						set_offmap_flag = no_succession_news
+						set_offmap_flag = cathaystate_heir_manchu
+					}
+					cathaystate_new_emperor_effect = yes
+				}
+				any_player = {
+					limit = { has_offmap_news_enabled = FROM is_within_diplo_range = ROOT }
+					narrative_event = { id = cathaystate.54 }
+				}
+				FROM = { clr_offmap_flag = no_succession_news }
+				cathaystate_exiles_flee_effect = yes
+			}
+		}
+	}
+}
+
+# cathaystate.53 News from Cathay: the horsemen are beaten
+# Scope: a player.
+narrative_event = {
+	id = cathaystate.53
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_mongols_invade
+	desc = EVTDESCcathaystate53
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	portrait = event_target:portrait_target
+	is_triggered_only = yes # cathaystate.52
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = portrait_target } }
+	}
+
+	option = {
+		name = EVTOPTAcathaystate53
+	}
+}
+
+# cathaystate.54 News from Cathay: the horsemen triumph
+# Scope: a player.
+narrative_event = {
+	id = cathaystate.54
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_tengri_throneroom_oldgods
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	portrait = event_target:portrait_target
+	is_triggered_only = yes # cathaystate.52
+
+	has_dlc = "Jade Dragon"
+
+	desc = { trigger = { dragon_emperor_reigns_trigger = no } text = EVTDESCcathaystate54 }
+	desc = { trigger = { dragon_emperor_reigns_trigger = yes } text = EVTDESCcathaystate54_dragon }
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = portrait_target } }
+	}
+
+	option = {
+		name = EVTOPTAcathaystate54
+		trigger = {
+			OR = {
+				NOT = { has_character_modifier = peace_deal_with_cathay }
+				dragon_emperor_reigns_trigger = yes
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTBcathaystate11
+		trigger = {
+			has_character_modifier = peace_deal_with_cathay
+			dragon_emperor_reigns_trigger = no
+		}
+		remove_character_modifier = peace_deal_with_cathay
+	}
+}
+
+###############################################################################
+# Civil war
+###############################################################################
+
+# cathaystate.60 Civil war in Cathay
+# Hidden. Long unrest turns into open war between the loyalists and rebel
+# governors, generals and sects; rare when Cathay is stable. Lords within
+# reach hear of it (cathaystate.61).
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.60
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse random
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			cathaystate_can_be_invaded_trigger = yes
+			NOT = {
+				AND = {
+					has_status = cathay_unrest
+					has_offmap_flag = cathay_had_unrest
+					NOT = { had_offmap_tmp_flag = { flag = cathay_had_unrest years = 2 } }
+				}
+			}
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 0.01 FROM = { has_status = cathay_golden_age } }
+		modifier = { factor = 0.01 FROM = { has_status = cathay_stable } }
+		modifier = {
+			factor = 0.1
+			FROM = {
+				NOR = {
+					has_status = cathay_unrest
+					has_status = cathay_stable
+					has_status = cathay_golden_age
+				}
+			}
+		}
+	}
+
+	immediate = {
+		FROM = {
+			set_offmap_flag = no_status_news
+			set_status = cathay_civil_war
+			set_offmap_flag = cathay_civil_war
+			clr_offmap_flag = no_status_news
+		}
+		any_player = {
+			limit = { has_offmap_news_enabled = FROM is_within_diplo_range = ROOT }
+			narrative_event = { id = cathaystate.61 }
+		}
+	}
+}
+
+# cathaystate.61 News from Cathay: civil war
+# Scope: a player; FROMFROM is Cathay.
+narrative_event = {
+	id = cathaystate.61
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_civil_war
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	portrait = event_target:portrait_target
+	is_triggered_only = yes # cathaystate.60
+
+	has_dlc = "Jade Dragon"
+
+	desc = {
+		trigger = { FROMFROM = { prev_status = cathay_unrest } }
+		text = EVTDESCcathaystate61_unrest
+	}
+	desc = {
+		trigger = { FROMFROM = { NOT = { prev_status = cathay_unrest } } }
+		text = EVTDESCcathaystate21_civil_war
+	}
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = portrait_target } }
+	}
+
+	option = {
+		name = EVTOPTAcathaystate61
+	}
+}
+
+# cathaystate.62 The civil war ends
+# Hidden. After at least two years, likelier the longer it lasts. The
+# loyalists win (always under the Dragon Emperor), or, once the Dragon
+# Throne has fallen, a rebel general founds a new house (likelier against
+# a foreign Emperor) or a pretender of the old house takes the throne.
+# Rebel generals and exiles may head west afterwards.
+# Scope: the Jade Viceroy; FROM is Cathay.
+character_event = {
+	id = cathaystate.62
+	hide_window = yes
+	is_triggered_only = yes # on_offmap_yearly_pulse random
+
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			has_status = cathay_civil_war
+			had_offmap_tmp_flag = { flag = cathay_civil_war years = 2 }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 2
+			FROM = { had_offmap_tmp_flag = { flag = cathay_civil_war years = 3 } }
+		}
+		modifier = {
+			factor = 2
+			FROM = { had_offmap_tmp_flag = { flag = cathay_civil_war years = 5 } }
+		}
+		modifier = {
+			factor = 2
+			FROM = { had_offmap_tmp_flag = { flag = cathay_civil_war years = 8 } }
+		}
+		modifier = {
+			factor = 5
+			FROM = { had_offmap_tmp_flag = { flag = cathay_civil_war years = 10 } }
+		}
+	}
+
+	immediate = {
+		FROM = { clr_offmap_flag = cathay_civil_war }
+		random_list = {
+			70 = { # The loyalists win
+				FROM = {
+					set_offmap_flag = no_status_news
+					set_status = cathay_stable
+					clr_offmap_flag = no_status_news
+				}
+				any_player = {
+					limit = { has_offmap_news_enabled = FROM is_within_diplo_range = ROOT }
+					narrative_event = { id = cathaystate.63 }
+				}
+				if = {
+					limit = { NOT = { has_game_rule = { name = cathayan_invasions value = none } } }
+					random_list = {
+						50 = {
+							character_event = { id = cathayinv.22 days = 15 } # a Man-chu warlord
+							set_character_flag = spawning_a_jurchen_invader
+						}
+						50 = {
+							trigger = {
+								OR = {
+									NOT = { has_global_flag = rebel_general_invasion_success }
+									had_global_flag = {
+										flag = rebel_general_invasion_success
+										days = 54750
+									}
+								}
+							}
+							character_event = { id = cathayinv.40 days = 15 } # a rebel general
+							set_character_flag = spawning_a_rebel_general
+						}
+					}
+				}
+			}
+			100 = { # A rebel general founds a new house
+				modifier = { factor = 0 dragon_emperor_reigns_trigger = yes }
+				modifier = { factor = 2.5 FROM = { cathaystate_foreign_emperor_trigger = yes } }
+				FROM = {
+					set_offmap_flag = no_status_news
+					random_list = {
+						50 = { set_status = cathay_stable }
+						50 = { set_status = cathay_unrest set_offmap_flag = cathay_had_unrest }
+					}
+					clr_offmap_flag = no_status_news
+					set_offmap_flag = no_succession_news
+					if = {
+						limit = { cathaystate_foreign_emperor_trigger = yes }
+						set_offmap_flag = foreign_dynasty_ousted
+					}
+				}
+				cathaystate_new_emperor_effect = yes
+				any_player = {
+					limit = { has_offmap_news_enabled = FROM is_within_diplo_range = ROOT }
+					narrative_event = { id = cathaystate.64 }
+				}
+				FROM = {
+					clr_offmap_flag = foreign_dynasty_ousted
+					clr_offmap_flag = no_succession_news
+				}
+				cathaystate_exiles_flee_effect = yes
+			}
+			70 = { # A pretender of the old house wins
+				modifier = { factor = 0 dragon_emperor_reigns_trigger = yes }
+				modifier = { factor = 0.5 FROM = { cathaystate_foreign_emperor_trigger = yes } }
+				FROM = {
+					set_offmap_flag = no_status_news
+					set_status = cathay_stable
+					clr_offmap_flag = no_status_news
+					set_offmap_flag = no_succession_news
+					offmap_ruler = {
+						if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+						else = { death = { death_reason = death_offmap } }
+					}
+				}
+				any_player = {
+					limit = { has_offmap_news_enabled = FROM is_within_diplo_range = ROOT }
+					narrative_event = { id = cathaystate.65 days = 1 }
+				}
+				if = {
+					limit = { NOT = { has_game_rule = { name = cathayan_invasions value = none } } }
+					random_list = {
+						90 = {
+							character_event = { id = cathayinv.22 days = 15 } # a Man-chu warlord
+							set_character_flag = spawning_a_jurchen_invader
+						}
+						10 = { }
+					}
+				}
+			}
+		}
+	}
+}
+
+# cathaystate.63 News from Cathay: the loyalists win
+# Scope: a player.
+narrative_event = {
+	id = cathaystate.63
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_civil_war
+	desc = EVTDESCcathaystate63
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	portrait = event_target:portrait_target
+	is_triggered_only = yes # cathaystate.62
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = portrait_target } }
+	}
+
+	option = {
+		name = EVTOPTAcathaystate63
+	}
+}
+
+# cathaystate.64 News from Cathay: a new house
+# A rebel general has founded a new house; a foreign house may have been
+# thrown out. A peace deal with the old house is void.
+# Scope: a player; FROMFROM is Cathay.
+narrative_event = {
+	id = cathaystate.64
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_civil_war
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	portrait = event_target:portrait_target
+	is_triggered_only = yes # cathaystate.62
+	hide_new = yes
+
+	has_dlc = "Jade Dragon"
+
+	desc = {
+		trigger = { FROMFROM = { has_offmap_flag = foreign_dynasty_ousted } }
+		text = EVTDESCcathaystate64_foreign_ousted
+	}
+	desc = {
+		trigger = { FROMFROM = { NOT = { has_offmap_flag = foreign_dynasty_ousted } } }
+		text = EVTDESCcathaystate64
+	}
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = portrait_target } }
+	}
+
+	option = {
+		name = EVTOPTAcathaystate63
+		trigger = { NOT = { has_character_modifier = peace_deal_with_cathay } }
+	}
+
+	option = {
+		name = EVTOPTBcathaystate11
+		trigger = { has_character_modifier = peace_deal_with_cathay }
+		remove_character_modifier = peace_deal_with_cathay
+	}
+}
+
+# cathaystate.65 News from Cathay: a pretender of the old house
+# Scope: a player.
+narrative_event = {
+	id = cathaystate.65
+	title = NEWS_FROM_CATHAY
+	picture = GFX_evt_china_civil_war
+	desc = EVTDESCcathaystate65
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+	portrait = event_target:portrait_target
+	is_triggered_only = yes # cathaystate.62
+
+	has_dlc = "Jade Dragon"
+
+	immediate = {
+		offmap_cathay = { offmap_ruler = { save_event_target_as = portrait_target } }
+	}
+
+	option = {
+		name = EVTOPTAcathaystate63
+	}
+}
+
+###############################################################################
+# The old house goes home
+###############################################################################
+
+# cathaystate.70 The Emperor's kin go home
+# Hidden. At the start of a new game, unlanded kin of the Emperor and of
+# his predecessor who are on the map return to Cathay.
+# Scope: the Jade Viceroy.
+character_event = {
+	id = cathaystate.70
+	hide_window = yes
+	is_triggered_only = yes # on_startup
+
+	only_playable = yes
+	has_dlc = "Jade Dragon"
+
+	trigger = {
+		is_offmap_governor = yes
+		is_save_game = no
+	}
+
+	immediate = {
+		offmap_cathay = {
+			offmap_ruler = {
+				any_dynasty_member = {
+					limit = { is_offmap_ruler = no is_ruler = no is_invincible_trigger = no }
+					death = { death_reason = death_went_back_to_cathay }
+				}
+			}
+			offmap_prev_ruler = {
+				any_dynasty_member = {
+					limit = { is_offmap_ruler = no is_ruler = no is_invincible_trigger = no }
+					death = { death_reason = death_went_back_to_cathay }
+				}
+			}
+		}
+	}
+}

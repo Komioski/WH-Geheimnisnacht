@@ -87,6 +87,7 @@
 #   Part 11: Debt (namespace debt)
 #   Part 12: Elective leagues (namespace league)
 #   Part 13: Burghers, priests and lords (namespace lordship)
+#   Part 14: Vassal requests (namespace vassalreq)
 ###############################################################################
 
 namespace = realm
@@ -7529,5 +7530,1546 @@ character_event = {
 		name = EVTOPTDlordship8
 		scaled_wealth = { value = 0.05 min = 10 }
 		ai_chance = { factor = 25 modifier = { factor = 2 trait = greedy } }
+	}
+}
+
+###############################################################################
+# Part 14: Vassal requests (namespace vassalreq)
+# Namespace: vassalreq (was 63000 - 63102 in vassal_request_events.txt;
+#   vassalreq.N is the old id minus 62900)
+# Faction: Diplomacy & realms
+# Serves: every feudal realm and its vassals
+#
+# Vassals ask their liege for things, and the liege answers with gold,
+# favours, flattery or the dungeon:
+#
+#   A lesser vassal handed over (or a claim set against the asker)
+#                                         vassalreq.100 - vassalreq.107
+#   A rival denounced as a traitor        vassalreq.110 - vassalreq.120
+#   Recompense for levies kept in the field (revived: vanilla had it off)
+#                                         vassalreq.130 - vassalreq.135
+#   A title from the liege's own demesne  vassalreq.140 - vassalreq.144
+#   A friend in the dungeon pleads for help
+#                                         vassalreq.150 - vassalreq.157
+#   A mayor asks for lower city taxes (without Conclave only)
+#                                         vassalreq.160 - vassalreq.165
+#   Independence when the liege dies over the vassal limit
+#                                         vassalreq.200 - vassalreq.202
+#
+# The starters were MTTH events on every character of the world (40, 80,
+# 18, 40 and 167 years). They now roll from named lists, with the old MTTH
+# modifiers turned into weight multipliers:
+#   on_five_year_pulse vassal_requests (wh_on_actions.txt): 100 = 0,
+#     15 = vassalreq.100, 7 = vassalreq.110, 15 = vassalreq.140,
+#     3 = vassalreq.160;
+#   on_yearly_pulse vassal_levy_complaints (wh_on_actions.txt): 100 = 0,
+#     6 = vassalreq.130 (only while the liege has kept the vassal's levies
+#     out for 73 days or more);
+#   on_decade_pulse random_events (00_on_actions.txt): vassalreq.150;
+#   on_over_vassal_limit_succession (00_on_actions.txt): vassalreq.200.
+# Saved: character flags requested_vassal_transfer, vassal_for_favor,
+#   requested_rival_removal, pleaded_innocence, requested_money_for_levies,
+#   obj_gain_any_title_abandoned; event targets vassal_wanted_title,
+#   rightful_liege.
+# Loc: localisation/00_WHG_realm_events.csv
+###############################################################################
+
+namespace = vassalreq
+
+# vassalreq.100 A vassal believes their liege should hand them a lesser vassal
+character_event = {
+	id = vassalreq.100
+	desc = EVTDESCvassalreq100
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_intrigue
+
+	only_playable = yes
+	capable_only = yes
+	prisoner = no
+	min_age = 16
+	war = no
+
+	is_triggered_only = yes # on_five_year_pulse list vassal_requests (wh_on_actions.txt)
+
+	trigger = {
+		independent = no
+		liege = {
+			NOT = { character = ROOT }
+			NOT = { holds_favor_on = ROOT }
+			war = no
+			any_vassal = {
+				NOT = { character = ROOT }
+				de_jure_liege = ROOT
+				war = no
+				is_patrician = no
+			}
+		}
+		NOT = { has_character_flag = requested_vassal_transfer }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 4 trait = greedy }
+		modifier = { factor = 2 trait = envious }
+		modifier = { factor = 4 trait = ambitious }
+		modifier = { factor = 0.1 trait = content }
+	}
+
+	option = {
+		name = EVTOPTAvassalreq100 # Ask my liege for the title
+		ai_chance = { factor = 100 }
+		set_character_flag = requested_vassal_transfer
+		liege = {
+			character_event = { id = vassalreq.101 days = 4 tooltip = EVTTOOLTIPvassalreq101 }
+		}
+	}
+
+	option = {
+		name = EVTOPTBvassalreq100 # It's not that important
+		ai_chance = { factor = 0 }
+	}
+}
+
+# vassalreq.101 Vassal requests a transfer of a vassal title
+character_event = {
+	id = vassalreq.101
+	desc = EVTDESCvassalreq101
+
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			liege = {
+				character = ROOT #to make sure no titles have *just* been given away
+			}
+		}
+	}
+
+	fail_trigger_effect = { FROM = { clr_character_flag = requested_vassal_transfer } }
+
+	option = {
+		trigger = { has_dlc = "Zeus" }
+		name = EVTOPTAvassalreq101B # Very well, for a favor
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2.0 trait = charitable }
+			modifier = { factor = 2.0 trait = just }
+			modifier = { factor = 2.0 trait = content }
+			modifier = { factor = 0.1 trait = greedy }
+			modifier = { factor = 0 NOT = { opinion = { who = FROM value = 0 } } }
+			modifier = { factor = 2.0 opinion = { who = FROM value = 25 } }
+		}
+		add_favor = FROM
+		FROM = { set_character_flag = vassal_for_favor }
+		random_vassal = {
+			limit = { NOT = { character = FROM } de_jure_liege = FROM war = no is_patrician = no }
+			character_event = { id = vassalreq.102 tooltip = EVTTOOLTIPvassalreq102 }
+		}
+	}
+
+	option = {
+		trigger = { NOT = { has_dlc = "Zeus" } }
+		name = EVTOPTAvassalreq101 # Very well
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2.0 trait = charitable }
+			modifier = { factor = 2.0 trait = just }
+			modifier = { factor = 2.0 trait = content }
+			modifier = { factor = 0.1 trait = greedy }
+			modifier = { factor = 0 NOT = { opinion = { who = FROM value = 0 } } }
+			modifier = { factor = 2.0 opinion = { who = FROM value = 25 } }
+		}
+		random_vassal = {
+			limit = { NOT = { character = FROM } de_jure_liege = FROM war = no is_patrician = no }
+			character_event = { id = vassalreq.102 tooltip = EVTTOOLTIPvassalreq102 }
+		}
+	}
+	option = {
+		name = EVTOPTBvassalreq101 # I think not
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.5 trait = charitable }
+			modifier = { factor = 0.5 trait = just }
+			modifier = { factor = 0.5 trait = content }
+			modifier = { factor = 10.0 trait = greedy }
+		}
+		reverse_opinion = { who = FROM modifier = opinion_disappointed months = 60 }
+		FROM = { character_event = { id = vassalreq.103 tooltip = EVTTOOLTIPvassalreq103 } }
+	}
+	option = {
+		name = EVTOPTCvassalreq101 # Give the target vassal a claim on the asker
+		tooltip_info = intrigue
+		trigger = { intrigue = 9 }
+		ai_chance = { factor = 50 }
+		random_vassal = {
+			limit = { NOT = { character = FROM } de_jure_liege = FROM war = no is_patrician = no }
+			opinion = { who = ROOT modifier = opinion_delighted months = 60 }
+			character_event = { id = vassalreq.107 tooltip = EVTTOOLTIPvassalreq107 }
+		}
+		reverse_opinion = { who = FROM modifier = opinion_betrayed months = 60 }
+		hidden_tooltip = { FROM = { character_event = { id = vassalreq.104 } } }
+	}
+	option = {
+		name = EVTOPTDvassalreq101 # Placate them with flattery and vague promises (no effect)
+		tooltip_info = diplomacy
+		trigger = { diplomacy = 9 }
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 0.5 trait = charitable }
+			modifier = { factor = 0.5 trait = just }
+			modifier = { factor = 0.5 trait = content }
+			modifier = { factor = 10.0 trait = greedy }
+		}
+		reverse_opinion = { who = FROM modifier = opinion_impressed months = 24 }
+		FROM = { letter_event = { id = vassalreq.105 tooltip = EVTTOOLTIPvassalreq105 } }
+	}
+}
+
+# vassalreq.102 The vassal to be transferred is notified
+character_event = {
+	id = vassalreq.102
+	desc = EVTDESCvassalreq102
+
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq102 # Very well
+		hidden_tooltip = { FROM = { FROM = { character_event = { id = vassalreq.106 days = 1 } } } }
+	}
+}
+
+# vassalreq.103 Request Denied
+character_event = {
+	id = vassalreq.103
+	desc = EVTDESCvassalreq103
+
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq103 # Well, there are other ways...
+	}
+}
+
+# vassalreq.104 The asker suspects treachery
+character_event = {
+	id = vassalreq.104
+	desc = EVTDESCvassalreq104
+
+	picture = GFX_evt_shadowy_cabal
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq104 # This bodes ill
+	}
+}
+
+# vassalreq.105 Liege impresses asker with flowery talk
+letter_event = {
+	id = vassalreq.105
+	desc = EVTDESCvassalreq105
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq105 # I am humbled
+	}
+}
+
+# vassalreq.106 The vassal is transferred
+character_event = {
+	id = vassalreq.106
+
+	desc = { text = EVTDESCvassalreq106B trigger = { has_character_flag = vassal_for_favor } }
+
+	desc = {
+		text = EVTDESCvassalreq106
+		trigger = { NOT = { has_character_flag = vassal_for_favor } }
+	}
+
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		trigger = { NOT = { has_character_flag = vassal_for_favor } }
+		name = EVTOPTAvassalreq106 # Excellent!
+		FROM = { set_defacto_liege = ROOT }
+		opinion = { modifier = opinion_vassal_transfer who = liege months = 120 }
+	}
+
+	option = {
+		trigger = { has_character_flag = vassal_for_favor }
+		name = EVTOPTAvassalreq106 # Excellent!
+		FROM = { set_defacto_liege = ROOT }
+		tooltip = { reverse_add_favor = liege }
+		clr_character_flag = vassal_for_favor
+	}
+}
+
+# vassalreq.107 The vassal gets a claim on the asker
+character_event = {
+	id = vassalreq.107
+	desc = EVTDESCvassalreq107
+
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq107 # I do so love intrigue!
+		FROM = { FROM = { primary_title = { add_pressed_claim = ROOT } } }
+	}
+}
+
+# vassalreq.110 Vassal asks liege to get rid of a rival
+character_event = {
+	id = vassalreq.110
+	desc = EVTDESCvassalreq110
+
+	picture = GFX_evt_shadowy_cabal
+	border = GFX_event_normal_frame_intrigue
+
+	only_rulers = yes
+	capable_only = yes
+	prisoner = no
+	min_age = 16
+
+	is_triggered_only = yes # on_five_year_pulse list vassal_requests (wh_on_actions.txt)
+
+	trigger = {
+		independent = no
+		NOT = { tier = BARON }
+		liege = { NOT = { character = ROOT } }
+		intrigue = 7
+		NOT = { has_character_flag = requested_rival_removal }
+		any_rival = {
+			NOT = { character = ROOT }
+			NOT = { character = liege }
+			age = 16
+			is_ruler = yes
+			same_liege = ROOT
+			prisoner = no
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 4 trait = deceitful }
+		modifier = { factor = 2 trait = paranoid }
+		modifier = { factor = 2 trait = arbitrary }
+		modifier = { factor = 0.25 trait = just }
+		modifier = { factor = 0.1 trait = honest }
+	}
+
+	option = {
+		name = EVTOPTAvassalreq110 # Inform my liege
+		ai_chance = { factor = 100 }
+		set_character_flag = requested_rival_removal
+		liege = { letter_event = { id = vassalreq.111 days = 14 tooltip = EVTTOOLTIPvassalreq111 } }
+
+		random = {
+			chance = 10
+			random_rival = {
+				limit = {
+					NOT = { character = ROOT }
+					NOT = { character = liege }
+					age = 16
+					is_ruler = yes
+					same_liege = ROOT
+					prisoner = no
+				}
+				character_event = { id = vassalreq.118 tooltip = EVTTOOLTIPvassalreq118 } # The target is tipped off
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTBvassalreq110 # It's a bad idea
+		ai_chance = { factor = 0 }
+	}
+}
+
+# vassalreq.111 The liege receives the information
+letter_event = {
+	id = vassalreq.111
+	desc = EVTDESCvassalreq111
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq111 # Imprison the traitor!
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 0.1 trait = just }
+			modifier = { factor = 2.0 trait = arbitrary }
+			modifier = { factor = 2.0 trait = paranoid }
+			modifier = { factor = 0 NOT = { opinion = { who = FROM value = -10 } } }
+			modifier = { factor = 2.0 opinion = { who = FROM value = 25 } }
+		}
+
+		random_vassal = {
+			limit = {
+				FROM = {
+					any_rival = {
+						NOT = { character = ROOT }
+						character = PREVPREV
+						age = 16
+						is_ruler = yes
+						vassal_of = ROOT
+						prisoner = no
+					}
+				}
+			}
+			hidden_tooltip = { character_event = { id = vassalreq.112 } }
+			opinion = { who = ROOT modifier = opinion_falsely_convicted years = 10 }
+			imprison = ROOT
+		}
+	}
+
+	option = {
+		name = EVTOPTBvassalreq111 # This is nonsense
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2.0 trait = just }
+			modifier = { factor = 0.5 trait = arbitrary }
+		}
+		reverse_opinion = { who = FROM modifier = opinion_irritated months = 24 }
+
+		FROM = { letter_event = { id = vassalreq.114 tooltip = EVTTOOLTIPvassalreq114 } }
+
+		hidden_tooltip = {
+			random_vassal = {
+				limit = {
+					age = 16
+					NOT = { character = ROOT }
+					NOT = { character = FROM }
+					has_character_flag = pleaded_innocence
+				}
+				opinion = { who = ROOT modifier = opinion_grateful years = 2 }
+				hidden_tooltip = { letter_event = { id = vassalreq.120 } }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTCvassalreq111 # Tip off the target
+		tooltip_info = intrigue
+		trigger = {
+			intrigue = 6
+			NOT = { any_vassal = { age = 16 has_character_flag = pleaded_innocence } }
+		}
+		ai_chance = { factor = 50 }
+		random_vassal = {
+			limit = {
+				FROM = {
+					any_rival = {
+						NOT = { character = ROOT }
+						character = PREVPREV
+						age = 16
+						is_ruler = yes
+						vassal_of = ROOT
+						prisoner = no
+					}
+				}
+			}
+			hidden_tooltip = { letter_event = { id = vassalreq.115 } }
+		}
+	}
+
+	option = {
+		name = EVTOPTDvassalreq111 # Imprison the asker instead
+		tooltip_info = intrigue
+		trigger = { intrigue = 10 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.1 trait = just }
+			modifier = { factor = 2.0 trait = arbitrary }
+			modifier = { factor = 2.0 trait = paranoid }
+			modifier = { factor = 0 dynasty = FROM }
+			modifier = { factor = 0 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 2.0 NOT = { opinion = { who = FROM value = -25 } } }
+		}
+		hidden_tooltip = {
+			any_vassal = {
+				limit = { has_character_flag = pleaded_innocence }
+				clr_character_flag = pleaded_innocence
+			}
+		}
+		FROM = {
+			imprison = ROOT
+			character_event = { id = vassalreq.117 tooltip = EVTTOOLTIPvassalreq117 }
+			opinion = { who = ROOT modifier = opinion_betrayed years = 10 multiplier = 2 }
+		}
+	}
+}
+
+# vassalreq.112 The victim is notified
+character_event = {
+	id = vassalreq.112
+	desc = EVTDESCvassalreq112
+
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq112 # Curse their name!
+		clr_character_flag = pleaded_innocence
+		FROM = {
+			FROM = {
+				reverse_opinion = { who = ROOT modifier = scheming_bastard years = 20 }
+				hidden_tooltip = { letter_event = { id = vassalreq.113 } }
+			}
+		}
+	}
+}
+
+# vassalreq.113 The accuser is satisfied
+letter_event = {
+	id = vassalreq.113
+	desc = EVTDESCvassalreq113
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq113
+		opinion = { who = FROM modifier = opinion_grateful years = 20 }
+	}
+}
+
+# vassalreq.114 The schemer is denied
+letter_event = {
+	id = vassalreq.114
+	desc = EVTDESCvassalreq114
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq114 # Bah, it was such a good scheme
+		prestige = -5
+	}
+}
+
+# vassalreq.115 The target is tipped off
+letter_event = {
+	id = vassalreq.115
+	desc = EVTDESCvassalreq115
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq115 # What a dick
+		FROM = { FROM = { letter_event = { id = vassalreq.116 tooltip = EVTTOOLTIPvassalreq116 } } }
+	}
+}
+
+# vassalreq.116 The schemer receives a threat
+letter_event = {
+	id = vassalreq.116
+	desc = EVTDESCvassalreq116
+
+	is_hostile = yes
+
+	border = GFX_event_letter_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq116 # Hah, let them try...
+		prestige = -5
+		opinion = { who = FROM modifier = opinion_furious years = 5 multiplier = 2 }
+		opinion = { who = liege modifier = opinion_dislike months = 36 }
+	}
+}
+
+# vassalreq.117 The schemer is imprisoned instead
+character_event = {
+	id = vassalreq.117
+	desc = EVTDESCvassalreq117
+
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq117 # What a dick
+	}
+}
+
+# vassalreq.118 The target is tipped off by the schemer's activities
+character_event = {
+	id = vassalreq.118
+	desc = EVTDESCvassalreq118
+
+	picture = GFX_evt_whispers
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq118 # Plead my innocence to my liege
+		set_character_flag = pleaded_innocence
+		liege = { letter_event = { id = vassalreq.119 days = 1 tooltip = EVTTOOLTIPvassalreq119 } }
+	}
+}
+
+# vassalreq.119 The liege receives the target's assurance of innocence
+letter_event = {
+	id = vassalreq.119
+	desc = EVTDESCvassalreq119
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq119 # An interesting case...
+	}
+}
+
+# vassalreq.120 The liege reassures the target that they do not believe the accusation
+letter_event = {
+	id = vassalreq.120
+	desc = EVTDESCvassalreq120
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq120 # Thank the Lord
+		clr_character_flag = pleaded_innocence
+		FROM = { FROM = { reverse_opinion = { modifier = opinion_furious who = ROOT years = 5 } } }
+	}
+}
+
+# vassalreq.130 Vassal complains of high troop maintenance costs
+character_event = {
+	id = vassalreq.130
+	desc = EVTDESCvassalreq130
+
+	picture = GFX_evt_crusaders
+	border = GFX_event_normal_frame_war
+
+	only_rulers = yes
+	capable_only = yes
+	prisoner = no
+	min_age = 16
+
+	is_triggered_only = yes # on_yearly_pulse list vassal_levy_complaints (wh_on_actions.txt)
+
+	trigger = {
+		independent = no
+		NOT = { wealth = 100 }
+		liege = { NOT = { character = ROOT } war = yes has_raised_levies = ROOT }
+		OR = {
+			NOT = { has_character_flag = requested_money_for_levies }
+			had_character_flag = { flag = requested_money_for_levies days = 3650 }
+		}
+		opinion_levy_raised_days = { who = liege days = 73 }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = greedy }
+		modifier = { factor = 2 NOT = { wealth = 0 } }
+		modifier = { factor = 0.5 wealth = 50 }
+		modifier = { factor = 0.2 trait = charitable }
+	}
+
+	option = {
+		name = EVTOPTAvassalreq130 # Ask my liege for money
+		ai_chance = { factor = 100 }
+		set_character_flag = requested_money_for_levies
+		liege = { letter_event = { id = vassalreq.131 days = 4 tooltip = EVTTOOLTIPvassalreq131 } }
+	}
+
+	option = {
+		name = EVTOPTBvassalreq130 # I'll endure
+		ai_chance = { factor = 0 }
+	}
+}
+
+# vassalreq.131 The liege is asked for recompense
+letter_event = {
+	id = vassalreq.131
+	desc = EVTDESCvassalreq131
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq131 # 30 Gold should do it
+		trigger = { wealth = 30 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.0 trait = greedy }
+			modifier = { factor = 3.0 trait = charitable }
+		}
+		wealth = -30
+		FROM = {
+			opinion = { modifier = opinion_grateful who = ROOT months = 24 }
+			hidden_tooltip = {
+				set_opinion_levy_raised_days = { who = ROOT days = 0 }
+				letter_event = { id = vassalreq.132 days = 2 }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBvassalreq131 # 15 Gold is enough
+		trigger = { wealth = 15 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.2 trait = greedy }
+			modifier = { factor = 1.5 trait = charitable }
+		}
+		wealth = -15
+		FROM = {
+			hidden_tooltip = {
+				set_opinion_levy_raised_days = { who = ROOT days = 0 }
+				letter_event = { id = vassalreq.133 days = 2 }
+			}
+		}
+	}
+	option = {
+		name = EVTOPTCvassalreq131 # Money? It is their duty!
+		trigger = { NOT = { diplomacy = 9 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2.0 trait = greedy }
+			modifier = { factor = 0.25 trait = charitable }
+			modifier = { factor = 2.0 trait = diligent }
+		}
+		FROM = {
+			opinion = { modifier = opinion_disgruntled who = ROOT months = 60 }
+			hidden_tooltip = { letter_event = { id = vassalreq.134 days = 2 } }
+		}
+	}
+	option = {
+		name = EVTOPTDvassalreq131 # Placate them with flattery
+		tooltip_info = diplomacy
+		trigger = { diplomacy = 9 }
+		ai_chance = { factor = 100 }
+		FROM = {
+			hidden_tooltip = {
+				set_opinion_levy_raised_days = { who = ROOT days = 0 }
+				letter_event = { id = vassalreq.135 days = 2 }
+			}
+		}
+	}
+}
+
+# vassalreq.132 Vassal receives 30 gold
+letter_event = {
+	id = vassalreq.132
+	desc = EVTDESCvassalreq132
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EXCELLENT
+		wealth = 30
+	}
+}
+
+# vassalreq.133 Vassal receives 15 gold
+letter_event = {
+	id = vassalreq.133
+	desc = EVTDESCvassalreq133
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq133 # I suppose that will do
+		wealth = 15
+	}
+}
+
+# vassalreq.134 Vassal request denied
+letter_event = {
+	id = vassalreq.134
+	desc = EVTDESCvassalreq134
+
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq134 # I shall be reduced to begging!
+	}
+}
+
+# vassalreq.135 Vassal is placated with empty words
+letter_event = {
+	id = vassalreq.135
+	desc = EVTDESCvassalreq135
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq135 # He is right, of course
+	}
+}
+
+# vassalreq.140 Vassal asks liege for a specific title
+character_event = {
+	id = vassalreq.140
+	desc = EVTDESCvassalreq140
+
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_diplomacy
+
+	only_playable = yes
+	capable_only = yes
+	prisoner = no
+	min_age = 16
+	ai = yes
+
+	is_triggered_only = yes # on_five_year_pulse list vassal_requests (wh_on_actions.txt)
+
+	trigger = {
+		independent = no
+		has_ambition = obj_gain_any_title
+		liege = {
+			has_regent = no
+			war = no
+			NOT = { has_opinion_modifier = { who = ROOT modifier = requested_land } }
+			NOT = { character = ROOT }
+			demesne_size = 3
+			any_demesne_title = {
+				can_be_given_away = yes
+				tier = COUNT
+				NOT = { location = { is_capital = yes } }
+			}
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = greedy }
+		modifier = { factor = 2 trait = envious }
+		modifier = { factor = 0.5 trait = kind }
+		modifier = { factor = 0.5 trait = charitable }
+		modifier = { factor = 0.5 trait = content }
+	}
+
+	immediate = {
+		liege = {
+			random_demesne_title = {
+				limit = {
+					can_be_given_away = yes
+					tier = COUNT
+					NOT = { location = { is_capital = yes } }
+				}
+				save_event_target_as = vassal_wanted_title
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAvassalreq140 # Ask for the Title
+		ai_chance = { factor = 100 }
+		liege = { opinion = { who = ROOT years = 15 modifier = requested_land } }
+		liege = { letter_event = { id = vassalreq.141 tooltip = EVTTOOLTIPvassalreq141 } }
+	}
+
+	option = {
+		name = EVTOPTBvassalreq140 # Better not
+		ai_chance = { factor = 0 }
+	}
+}
+
+# vassalreq.141 Liege receives the request
+letter_event = {
+	id = vassalreq.141
+	desc = EVTDESCvassalreq141
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		trigger = { has_dlc = "Zeus" NOT = { holds_favor_on = FROM } }
+		name = EVTOPTDvassalreq141 # Accept the request
+		ai_chance = { factor = 50 modifier = { factor = 0 trait = greedy } }
+
+		add_favor = FROM
+
+		event_target:vassal_wanted_title = { gain_title = FROM }
+
+		hidden_tooltip = { FROM = { letter_event = { id = vassalreq.142 days = 1 } } }
+	}
+
+	option = {
+		name = EVTOPTAvassalreq141 # Accept the request
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0 trait = greedy }
+			modifier = { factor = 0 NOT = { opinion = { who = FROM value = -20 } } }
+			modifier = { factor = 0.5 NOT = { opinion = { who = FROM value = 25 } } }
+			modifier = { factor = 0.5 NOT = { opinion = { who = FROM value = 50 } } }
+			modifier = { factor = 3 is_friend = FROM }
+		}
+
+		event_target:vassal_wanted_title = { gain_title = FROM }
+
+		hidden_tooltip = { FROM = { letter_event = { id = vassalreq.142 days = 1 } } }
+		reverse_opinion = { modifier = opinion_grateful who = FROM months = 120 }
+	}
+
+	option = {
+		name = EVTOPTBvassalreq141 # Deny the request
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 0.5 trait = charitable }
+			modifier = { factor = 0.75 opinion = { who = FROM value = 20 } }
+			modifier = { factor = 0.5 opinion = { who = FROM value = 50 } }
+		}
+		FROM = {
+			opinion = { modifier = opinion_disappointed who = ROOT months = 120 }
+			letter_event = { id = vassalreq.143 tooltip = EVTTOOLTIPvassalreq143 }
+		}
+	}
+
+	option = {
+		name = EVTOPTCvassalreq141 # Deny with superior diplomacy
+		tooltip_info = diplomacy
+		trigger = { diplomacy = 9 }
+		ai_chance = { factor = 100 }
+		FROM = { letter_event = { id = vassalreq.144 tooltip = EVTTOOLTIPvassalreq144 } }
+	}
+}
+
+# vassalreq.142 Vassal request granted
+letter_event = {
+	id = vassalreq.142
+	desc = EVTDESCvassalreq142
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EXCELLENT
+	}
+}
+
+# vassalreq.143 Vassal request denied
+letter_event = {
+	id = vassalreq.143
+	desc = EVTDESCvassalreq143
+
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq143
+	}
+
+	option = {
+		name = EVTOPTBvassalreq143
+		prestige = -100
+		custom_tooltip = { text = EVTOPTBvassalreq143_TOOLTIP }
+		set_character_flag = obj_gain_any_title_abandoned
+	}
+}
+
+# vassalreq.144 Vassal request denied with flattery
+letter_event = {
+	id = vassalreq.144
+	desc = EVTDESCvassalreq105 # The same as that event for now
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq144
+	}
+}
+
+# vassalreq.150 An imprisoned character asks a friend to intervene
+character_event = {
+	id = vassalreq.150
+	desc = EVTDESCvassalreq150
+	picture = GFX_evt_into_the_dungeon
+
+	prisoner = yes
+	min_age = 12
+	capable_only = yes
+
+	is_triggered_only = yes # on_decade_pulse random_events (00_on_actions.txt)
+
+	trigger = {
+		host = { is_liege_of = ROOT }
+		liege = {
+			any_vassal = {
+				prisoner = no
+				NOT = { trait = incapable }
+				NOT = { character = PREV }
+				OR = { is_friend = ROOT AND = { dynasty = ROOT NOT = { is_rival = ROOT } } }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAvassalreq150 # Send a message
+
+		liege = {
+			random_vassal = {
+				limit = {
+					prisoner = no
+					NOT = { trait = incapable }
+					NOT = { character = PREV }
+					OR = { is_friend = ROOT AND = { dynasty = ROOT NOT = { is_rival = ROOT } } }
+				}
+				letter_event = { id = vassalreq.151 days = 4 tooltip = EVTTOOLTIPvassalreq151 }
+			}
+		}
+	}
+}
+
+# vassalreq.151 The Vassal receives the plea from the imprisoned character
+letter_event = {
+	id = vassalreq.151
+	desc = EVTDESCvassalreq151
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq151 # Intercede on behalf of the prisoner
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 0.5
+				NOT = { trait = kind }
+				NOT = { opinion = { who = FROM value = 50 } }
+			}
+			modifier = {
+				factor = 0
+				NOT = { trait = kind }
+				NOT = { opinion = { who = FROM value = 0 } }
+			}
+		}
+		liege = { letter_event = { id = vassalreq.152 days = 4 tooltip = EVTTOOLTIPvassalreq152 } }
+	}
+
+	option = {
+		name = EVTOPTBvassalreq151 # Better not
+		ai_chance = { factor = 1 }
+	}
+}
+
+# vassalreq.152 Vassal requests the release of a prisoner
+letter_event = {
+	id = vassalreq.152
+	desc = EVTDESCvassalreq152
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq152 # Very well
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.1 NOT = { opinion = { who = FROM value = -20 } } }
+		}
+		FROM = {
+			show_scope_change = no
+			FROM = {
+				show_scope_change = no
+				character_event = { id = vassalreq.153 days = 1 tooltip = EVTTOOLTIPvassalreq153 }
+			}
+		}
+		show_portrait = FROMFROM
+	}
+	option = {
+		name = EVTOPTBvassalreq152 # Absolutely not!
+		ai_chance = { factor = 50 modifier = { factor = 0.5 opinion = { who = FROM value = 50 } } }
+
+		FROM = {
+			show_scope_change = no
+			opinion = { who = ROOT modifier = opinion_tyrant months = 120 }
+			hidden_tooltip = { letter_event = { id = vassalreq.154 } }
+		}
+	}
+
+	option = {
+		name = EVTOPTCvassalreq152 # How about you join them?
+		trigger = {
+			OR = {
+				trait = arbitrary
+				trait = cruel
+				trait = lunatic_3
+				trait = lunatic_2
+				trait = lunatic_1
+			}
+		}
+		ai_chance = { factor = 50 modifier = { factor = 0.1 opinion = { who = FROM value = 20 } } }
+		FROM = {
+			show_scope_change = no
+			opinion = { who = ROOT modifier = opinion_tyrant months = 240 multiplier = 5 }
+			character_event = { id = vassalreq.155 tooltip = EVTTOOLTIPvassalreq155 }
+		}
+	}
+	option = {
+		name = EVTOPTDvassalreq152 # Diplomatic NO
+		tooltip_info = diplomacy
+		trigger = { diplomacy = 9 }
+		ai_chance = { factor = 100 }
+		FROM = {
+			show_scope_change = no
+			letter_event = { id = vassalreq.156 tooltip = EVTTOOLTIPvassalreq156 }
+		}
+	}
+}
+
+# vassalreq.153 The prisoner is released
+character_event = {
+	id = vassalreq.153
+	desc = EVTDESCvassalreq153
+
+	is_friendly = yes
+
+	picture = GFX_evt_garden
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	immediate = {
+		prisoner = no
+	}
+
+	option = {
+		name = EVTOPTAvassalreq153 # Free at last!
+		FROM = {
+			FROM = {
+				reverse_opinion = { who = ROOT modifier = opinion_sprung_from_jail months = 240 }
+				letter_event = { id = vassalreq.157 tooltip = EVTTOOLTIPvassalreq157 }
+			}
+		}
+	}
+}
+
+# vassalreq.154 The request is denied
+letter_event = {
+	id = vassalreq.154
+	desc = EVTDESCvassalreq154
+
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq154 # Such a shame...
+	}
+}
+
+# vassalreq.155 The vassal is also imprisoned!
+character_event = {
+	id = vassalreq.155
+	desc = EVTDESCvassalreq155
+
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	immediate = {
+		imprison = FROM
+	}
+
+	option = {
+		name = EVTOPTAvassalreq155 # That's what you get for showing compassion
+	}
+}
+
+# vassalreq.156 Diplomatic NO
+letter_event = {
+	id = vassalreq.156
+	desc = EVTDESCvassalreq156
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq156 # Wise words
+	}
+}
+
+# vassalreq.157 Letter of gratitude
+letter_event = {
+	id = vassalreq.157
+	desc = EVTDESCvassalreq157
+
+	is_friendly = yes
+
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq157 # All is well that ends well
+		piety = 5
+	}
+}
+
+# vassalreq.160 A mayor asks for lower taxes
+character_event = {
+	id = vassalreq.160
+	desc = EVTDESCvassalreq160
+
+	picture = GFX_evt_carriage
+	border = GFX_event_normal_frame_economy
+
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	only_rulers = yes
+	lacks_dlc = "Conclave"
+
+	is_triggered_only = yes # on_five_year_pulse list vassal_requests (wh_on_actions.txt)
+
+	trigger = {
+		is_republic = yes
+		NOT = { wealth = 300 }
+		liege = { NOT = { character = ROOT } primary_title = { NOT = { has_law = city_tax_0 } } }
+
+		NOT = { has_opinion_modifier = { who = liege modifier = opinion_refused_city_tax_law } }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 NOT = { wealth = -10 } }
+		modifier = { factor = 2 NOT = { wealth = -100 } }
+		modifier = { factor = 2 trait = greedy }
+	}
+
+	option = {
+		name = EVTOPTAvassalreq160 # Request a vote for the law change
+		ai_chance = { factor = 100 }
+		liege = { letter_event = { id = vassalreq.161 days = 4 tooltip = EVTTOOLTIPvassalreq161 } }
+	}
+	option = {
+		name = EVTOPTBvassalreq160 # Better not
+		ai_chance = { factor = 0 }
+	}
+}
+
+# vassalreq.161 The mayor asks their liege
+letter_event = {
+	id = vassalreq.161
+	desc = EVTDESCvassalreq161
+
+	border = GFX_event_letter_frame_economy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq161 # Absurd!
+		FROM = { letter_event = { id = vassalreq.162 days = 1 tooltip = EVTTOOLTIPvassalreq162 } }
+		any_vassal = {
+			limit = { is_republic = yes }
+			opinion = { modifier = opinion_refused_city_tax_law who = ROOT months = 60 }
+		}
+	}
+	option = {
+		name = EVTOPTBvassalreq161 # Very well (Non-ormazd_gods_group)
+		trigger = { NOT = { religion_group = ormazd_gods_group } }
+		FROM = {
+			letter_event = { id = vassalreq.163 days = 1 tooltip = EVTTOOLTIPvassalreq163 }
+			opinion = { modifier = opinion_accepted_city_tax_law who = ROOT months = 60 }
+		}
+		if = {
+			limit = { primary_title = { has_law = city_tax_1 } }
+			primary_title = { approve_law = city_tax_0 }
+		}
+		if = {
+			limit = { primary_title = { has_law = city_tax_2 } }
+			primary_title = { approve_law = city_tax_1 }
+		}
+		if = {
+			limit = { primary_title = { has_law = city_tax_3 } }
+			primary_title = { approve_law = city_tax_2 }
+		}
+	}
+	option = {
+		name = EVTOPTBvassalreq161 # Very well (ormazd_gods_group)
+		trigger = { religion_group = ormazd_gods_group }
+		FROM = {
+			letter_event = { id = vassalreq.163 days = 1 tooltip = EVTTOOLTIPvassalreq163 }
+			opinion = { modifier = opinion_accepted_city_tax_law who = ROOT months = 60 }
+		}
+		if = {
+			limit = { primary_title = { has_law = city_tax_1 } }
+			primary_title = { add_law = city_tax_0 }
+		}
+		if = {
+			limit = { primary_title = { has_law = city_tax_2 } }
+			primary_title = { add_law = city_tax_1 }
+		}
+		if = {
+			limit = { primary_title = { has_law = city_tax_3 } }
+			primary_title = { add_law = city_tax_2 }
+		}
+	}
+	option = {
+		name = EVTOPTCvassalreq161 # Bribe them!
+		tooltip_info = stewardship
+		trigger = { stewardship = 9 }
+		FROM = { letter_event = { id = vassalreq.164 days = 1 tooltip = EVTTOOLTIPvassalreq164 } }
+		scaled_wealth = -0.5
+	}
+	option = {
+		name = EVTOPTDvassalreq161 # Impress them
+		tooltip_info = diplomacy
+		trigger = { diplomacy = 9 }
+		FROM = { letter_event = { id = vassalreq.165 days = 1 tooltip = EVTTOOLTIPvassalreq165 } }
+	}
+}
+
+# vassalreq.162 The mayor is refused
+letter_event = {
+	id = vassalreq.162
+	desc = EVTDESCvassalreq162
+
+	border = GFX_event_letter_frame_economy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq162 # Blast!
+		prestige = -5
+	}
+}
+
+# vassalreq.163 The mayor is notified of the law change
+letter_event = {
+	id = vassalreq.163
+	desc = EVTDESCvassalreq163
+
+	border = GFX_event_letter_frame_economy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq163 # Excellent
+		prestige = 5
+	}
+}
+
+# vassalreq.164 The mayor is bribed
+letter_event = {
+	id = vassalreq.164
+	desc = EVTDESCvassalreq164
+
+	border = GFX_event_letter_frame_economy
+
+	is_triggered_only = yes
+
+	option = {
+		name = OK
+		scaled_wealth = 0.5
+	}
+}
+
+# vassalreq.165 The mayor is impressed
+letter_event = {
+	id = vassalreq.165
+	desc = EVTDESCvassalreq165
+
+	border = GFX_event_letter_frame_economy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq165 # My liege is right
+	}
+}
+
+# vassalreq.200 A vassal is offered to become independent
+character_event = {
+	id = vassalreq.200
+	desc = EVTDESCvassalreq200
+
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	immediate = {
+		liege = { save_event_target_as = rightful_liege }
+	}
+
+	option = {
+		name = EVTOPTAvassalreq200 # Become independent
+		trigger = { liege = { independent = yes } }
+		ai_chance = {
+			factor = 50
+			modifier = {
+				factor = 0.25
+				OR = { is_tribal = yes is_nomadic = yes }
+				liege = { is_strong_trigger = yes }
+			}
+			modifier = {
+				factor = 4
+				OR = { is_tribal = yes is_nomadic = yes }
+				liege = { is_weak_trigger = yes }
+			}
+			modifier = { factor = 0.5 trait = just }
+			modifier = { factor = 0.5 trait = content }
+			modifier = { factor = 10.0 trait = greedy }
+			modifier = { factor = 10.0 trait = ambitious }
+			modifier = { factor = 10.0 religion_group = chaos_gods_group is_reformed_religion = no }
+			modifier = { factor = 0.2 NOT = { opinion = { who = liege value = 0 } } }
+			modifier = { factor = 0.2 NOT = { opinion = { who = liege value = 25 } } }
+		}
+		set_defacto_liege = THIS
+		reverse_opinion = {
+			who = event_target:rightful_liege
+			modifier = opinion_rightful_vassal
+			months = 60
+		}
+		event_target:rightful_liege = { character_event = { id = vassalreq.201 days = 4 } }
+	}
+	option = {
+		name = EVTOPTAvassalreq200 # Retract vassalage
+		trigger = { liege = { independent = no } }
+		ai_chance = {
+			factor = 50
+			modifier = {
+				factor = 0.25
+				OR = { is_tribal = yes is_nomadic = yes }
+				liege = { is_strong_trigger = yes }
+			}
+			modifier = {
+				factor = 4
+				OR = { is_tribal = yes is_nomadic = yes }
+				liege = { is_weak_trigger = yes }
+			}
+			modifier = { factor = 0.5 trait = just }
+			modifier = { factor = 0.5 trait = content }
+			modifier = { factor = 10.0 trait = greedy }
+			modifier = { factor = 10.0 trait = ambitious }
+			modifier = { factor = 10.0 religion_group = chaos_gods_group is_reformed_religion = no }
+			modifier = { factor = 0.2 NOT = { opinion = { who = liege value = 0 } } }
+			modifier = { factor = 0.2 NOT = { opinion = { who = liege value = 25 } } }
+		}
+		liege = { liege = { ROOT = { set_defacto_liege = PREV } } }
+		reverse_opinion = {
+			who = event_target:rightful_liege
+			modifier = opinion_rightful_vassal
+			months = 60
+		}
+		event_target:rightful_liege = { character_event = { id = vassalreq.201 days = 4 } }
+	}
+	option = {
+		name = EVTOPTBvassalreq200 # Swear fealty to new liege
+		ai_chance = { factor = 50 }
+		reverse_opinion = {
+			who = event_target:rightful_liege
+			modifier = opinion_loyal_vassal
+			months = 60
+		}
+		event_target:rightful_liege = { character_event = { id = vassalreq.202 days = 4 } }
+	}
+}
+
+# vassalreq.201 Liege is informed about leaving vassal
+character_event = {
+	id = vassalreq.201
+	desc = EVTDESCvassalreq201
+
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq201
+	}
+}
+
+# vassalreq.202 Liege is pleased about vassal staying
+character_event = {
+	id = vassalreq.202
+	desc = EVTDESCvassalreq202
+
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAvassalreq202
 	}
 }

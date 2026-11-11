@@ -1,0 +1,197 @@
+###############################################################################
+# Wonders: names, ruins and the life around great works
+# Namespace: wonder (was LT in the vanilla wonder files)
+# Faction: Generic
+#
+# Part 1: names and descriptions      wonder.1 - wonder.4
+#   (was LT.10000 - 10003 in LT_wonder_maintenance_events.txt)
+#
+# Fired from: on_wonder_stage_finish (1), on_wonder_upgrade_finish (2, 4)
+#   and on_wonder_stage_loot_finish (3) in 00_on_actions.txt.
+# Saved: event targets target_wonder, target_province,
+#   wonder_owner_original, upgrade_00, upgrade_01 (read by the
+#   wonder_name_text_update and wonder_desc_text_update custom loc).
+# Scripted effects: common/scripted_effects/WHG_wonder_effects.txt
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = wonder
+
+###############################################################################
+# Part 1: names and descriptions
+###############################################################################
+
+# wonder.1 A stage is finished
+# Hidden. A wonder that finished a stage takes its first builder's
+# description, unless it is a historical wonder, and gets a new name unless
+# the player renamed it. The name may draw on its finest upgrade.
+# Scope: ROOT is the owner, FROM the wonder, FROMFROM its province.
+character_event = {
+	id = wonder.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_wonder_stage_finish
+
+	immediate = {
+		FROM = {
+			save_event_target_as = target_wonder
+			original_wonder_owner = { save_event_target_as = wonder_owner_original }
+		}
+		FROMFROM = { save_event_target_as = target_province }
+		event_target:target_wonder = {
+			any_upgrade_on_wonder = { # vanilla way: the score picks the upgrade saved
+				limit = { is_active = yes NOT = { has_wonder_upgrade_flag = negative } }
+				score_value = { # A fine upgrade first
+					value = 10
+					fancy_upgrade_selection_score = yes
+				}
+				save_event_target_as = upgrade_00
+			}
+		}
+		wonder_stage_completion_sound_effect = yes
+		event_target:target_wonder = {
+			if = {
+				limit = {
+					NOR = {
+						has_wonder_flag = wonder_desc_1
+						has_wonder_flag = wonder_desc_2
+						has_wonder_flag = wonder_desc_3
+						has_wonder_flag = wonder_desc_4
+						has_wonder_flag = wonder_desc_5
+						has_wonder_flag = wonder_desc_6
+						has_wonder_flag = wonder_desc_7
+						has_wonder_flag = is_historical
+					}
+				}
+				set_wonder_flag = wonder_desc_1
+			}
+			set_description = wonder_desc_text_update
+			if = {
+				limit = { has_custom_name = no NOT = { has_wonder_flag = is_historical } }
+				wonder_rename_effect = yes
+			}
+		}
+	}
+}
+
+# wonder.2 An upgrade is finished
+# Hidden. Once a wonder has kept a name or a description long enough (15 to
+# 85 years by step), a new upgrade gives it the next one. The new name or
+# text may name this upgrade and one other.
+# Scope: ROOT is the owner, FROM the upgrade, FROMFROM the wonder,
+# FROMFROMFROM its province.
+character_event = {
+	id = wonder.2
+	hide_window = yes
+
+	is_triggered_only = yes # on_wonder_upgrade_finish
+
+	immediate = {
+		FROM = {
+			save_event_target_as = upgrade_00
+			original_wonder_owner = { save_event_target_as = wonder_owner_original }
+		}
+		FROMFROM = { save_event_target_as = target_wonder }
+		FROMFROMFROM = { save_event_target_as = target_province }
+		event_target:target_wonder = {
+			any_upgrade_on_wonder = { # vanilla way: the score picks the upgrade saved
+				limit = {
+					is_active = yes
+					NOT = { wonder_upgrade = event_target:upgrade_00 }
+					NOT = { has_wonder_upgrade_flag = negative }
+				}
+				score_value = { value = 10 fancy_upgrade_selection_score = yes }
+				save_event_target_as = upgrade_01
+			}
+			if = {
+				limit = {
+					has_custom_name = no
+					NOT = { has_wonder_flag = is_historical }
+					OR = {
+						had_flag = { flag = wonder_name_1 years = 55 }
+						had_flag = { flag = wonder_name_2 years = 65 }
+						had_flag = { flag = wonder_name_3 years = 75 }
+						had_flag = { flag = wonder_name_4 years = 85 }
+						had_flag = { flag = wonder_name_5 years = 75 }
+						had_flag = { flag = wonder_name_6 years = 75 }
+					}
+				}
+				wonder_rename_effect = yes
+			}
+			if = {
+				limit = {
+					OR = {
+						had_flag = { flag = wonder_desc_1 years = 15 }
+						had_flag = { flag = wonder_desc_2 years = 35 }
+						had_flag = { flag = wonder_desc_3 years = 35 }
+						had_flag = { flag = wonder_desc_4 years = 35 }
+						had_flag = { flag = wonder_desc_5 years = 35 }
+						had_flag = { flag = wonder_desc_6 years = 35 }
+					}
+				}
+				wonder_redescribe_effect = yes
+			}
+		}
+	}
+}
+
+# wonder.3 A stage is looted
+# Hidden. A looted wonder becomes "Ruins of ..." if it had reached its third
+# stage and was never renamed, or a "Destroyed ..." otherwise, with a ruined
+# description. The stage flags come from LT.20799 when looting starts.
+# Fixed: the second description sat in an else with a limit (never valid),
+# and the stage flags were cleared on the owner instead of the wonder, so a
+# restored and looted-again wonder kept both.
+# Scope: ROOT is the owner, FROM the wonder, FROMFROM its province.
+character_event = {
+	id = wonder.3
+	hide_window = yes
+
+	is_triggered_only = yes # on_wonder_stage_loot_finish
+
+	immediate = {
+		FROM = {
+			save_event_target_as = target_wonder
+			original_wonder_owner = { save_event_target_as = wonder_owner_original }
+		}
+		FROMFROM = { save_event_target_as = target_province }
+		event_target:target_wonder = {
+			if = {
+				limit = { has_wonder_flag = wonder_stage_3 }
+				if = {
+					limit = { NOT = { has_wonder_flag = was_renamed } }
+					set_name = ruins_of_wonder_name
+				}
+				set_description = ruined_wonder_desc_1
+			}
+			else_if = {
+				limit = { has_wonder_flag = wonder_stage_less_than_3 }
+				set_name = destroyed_wonder_type
+				set_description = ruined_wonder_desc_2
+			}
+			set_wonder_flag = was_renamed
+			clr_wonder_flag = wonder_stage_3
+			clr_wonder_flag = wonder_stage_less_than_3
+		}
+	}
+}
+
+# wonder.4 A statue of a god is raised
+# Hidden. Fixes the God Statue's description to one god of the owner's
+# faith, so the name does not change from month to month.
+# Scope: ROOT is the owner, FROM the upgrade.
+character_event = {
+	id = wonder.4
+	hide_window = yes
+
+	is_triggered_only = yes # on_wonder_upgrade_finish
+
+	immediate = {
+		FROM = {
+			if = {
+				limit = { has_wonder_upgrade = upgrade_statue_god }
+				set_description = upgrade_statue_god_desc
+			}
+		}
+	}
+}

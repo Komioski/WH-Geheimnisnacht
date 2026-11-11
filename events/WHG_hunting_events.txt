@@ -23,6 +23,8 @@
 #   (the hold_grand_hunt decision: a stag, a boar, a bear, the hounds, a
 #   plot in the woods, a courtier's kill, the deer park; was 36000 - 36999
 #   and 4075 in the vanilla hunting_events.txt)
+# Part 5: The great cat hunt           tigerhunt.1 - tigerhunt.45
+#   (hold_tiger_hunt in Araby and Lustria; was RoI.2000 - 2999)
 #
 # Fired from: on_focus_pulse in 00_on_actions.txt (hunting.1, .30, .40, .41,
 #   .42, .44, .45). hunting.6 is a scene of the grand hunt (hunting.101).
@@ -2339,5 +2341,744 @@ character_event = {
 
 	immediate = {
 		hunting_grand_end_effect = yes
+	}
+}
+
+###############################################################################
+# Part 5: The great cat hunt (namespace tigerhunt)
+# Namespace: tigerhunt (was RoI.2000 - RoI.2999 in roi_hunting_events.txt)
+# Faction: Generic
+# Serves: rulers of Araby and the colonies of Lustria
+#
+# A ruler whose capital lies in Araby or Lustria holds a tiger hunt
+# (hold_tiger_hunt, Rajas of India) and invites the vassals. Around the
+# camp fires the hunters drink, quarrel and gamble; in the jungle and the
+# scrub a tiger may spring on the party, or the scouts flush one out for
+# the host to spear. A slain tiger is good luck for the realm.
+#
+#   tigerhunt.1 - 3     Invitations
+#   tigerhunt.10 - 15   The hunt begins and ends; flags cleared
+#   tigerhunt.20 - 27   Around the camp: drink, friends, enemies, cards
+#   tigerhunt.30 - 33   A tiger springs on the party
+#   tigerhunt.40 - 45   The tiger is found: spear it yourself, or let the
+#                       soldiers do it
+#
+# Fixed: a tiger killed by a guest did not count, so the host's hunt
+#   "failed" (tigerhunt.12 now counts any hunter), and a failed hunt left
+#   the guests' killed_tiger flag behind for the next hunt.
+# New: a host who spears the tiger may, rarely, keep its pelt
+#   (great_cat_pelt in 40_artifacts_hunting.txt: 15%, once a lifetime,
+#   never beside another trophy).
+# Fired from: decisions/minor_decisions.txt (hold_tiger_hunt: 1).
+# Saved: character flags holding_tiger_hunt, hunting_tigers, killed_tiger,
+#   do_not_disturb (all cleared at the end); character modifiers hunt_timer,
+#   good_hunt.
+# Loc: localisation/00_WHG_hunting_events.csv
+###############################################################################
+
+namespace = tigerhunt
+
+# tigerhunt.1 Invite vassals to hunt
+character_event = {
+	id = tigerhunt.1
+	desc = EVTDESCtigerhunt1
+	picture = GFX_evt_throne_room
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt1
+		any_vassal = {
+			limit = {
+				is_adult = yes
+				NOR = {
+					war = yes
+					in_command = yes
+					prisoner = yes
+					trait = incapable
+					has_character_flag = do_not_disturb
+				}
+			}
+			letter_event = { id = tigerhunt.2 tooltip = EVTTOOLTIPtigerhunt1 }
+		}
+		hidden_tooltip = { character_event = { id = tigerhunt.11 days = 12 } } # Hunt begins
+		hidden_tooltip = { character_event = { id = tigerhunt.12 days = 42 } } # Hunt ends
+	}
+}
+
+# tigerhunt.2 Vassal receives invitation to hunt
+letter_event = {
+	id = tigerhunt.2
+	desc = EVTDESCtigerhunt2
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { is_inaccessible_trigger = yes }
+	}
+
+	option = {
+		name = EVTOPTAtigerhunt2 # Go
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 5 has_focus = focus_hunting }
+			modifier = { factor = 0.1 is_inaccessible_trigger = yes }
+			modifier = { factor = 2 opinion = { who = from value = -30 } }
+			modifier = { factor = 5 opinion = { who = from value = -15 } }
+			modifier = { factor = 5 opinion = { who = from value = 0 } }
+		}
+		set_character_flag = do_not_disturb
+
+		hidden_tooltip = { character_event = { id = tigerhunt.10 days = 12 } } # Hidden - arrives to hunt
+		hidden_tooltip = { character_event = { id = tigerhunt.15 days = 43 } } # Safety event for clearing all flags
+		custom_tooltip = { text = EVTTOOLTIPtigerhunt2 }
+	}
+	option = {
+		name = EVTOPTBtigerhunt2 # Don't go
+		ai_chance = {
+			factor = 1
+			modifier = {
+				factor = 0
+				opinion = { who = from value = 25 }
+				NOT = { is_inaccessible_trigger = yes }
+			}
+		}
+		FROM = { letter_event = { id = tigerhunt.3 days = 3 tooltip = EVTTOOLTIPtigerhunt2 } }
+	}
+}
+
+# tigerhunt.3 Vassal refuses to come to the hunt
+letter_event = {
+	id = tigerhunt.3
+	desc = EVTDESCtigerhunt3
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt3
+		opinion = { modifier = opinion_dislike who = FROM years = 2 }
+	}
+}
+
+# tigerhunt.10 Vassal arrives to hunt
+character_event = {
+	id = tigerhunt.10
+	desc = EVTDESCtigerhunt10
+	picture = GFX_evt_ruler_riding_elephant
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt10
+		set_character_flag = hunting_tigers
+		add_character_modifier = { name = hunt_timer duration = 395 hidden = yes }
+		hidden_tooltip = {
+			random_list = { # Check for social events
+				10 = { character_event = { id = tigerhunt.20 days = 7 random = 5 } } # Gain friend
+				10 = { character_event = { id = tigerhunt.22 days = 7 random = 5 } } # Gain rival
+				10 = { character_event = { id = tigerhunt.24 days = 7 random = 5 } } # Plays cards
+				50 = { } # No social event
+			}
+			random_list = { # Check for tiger events
+				10 = { character_event = { id = tigerhunt.30 days = 18 random = 7 } } # Tiger surprises hunter
+				10 = { character_event = { id = tigerhunt.40 days = 18 random = 7 } } # Finds tiger
+				10 = { } # No tiger event
+			}
+		}
+	}
+}
+
+# tigerhunt.11 Hunt begins
+character_event = {
+	id = tigerhunt.11
+	desc = EVTDESCtigerhunt11
+	picture = GFX_evt_ruler_riding_elephant
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt11
+		set_character_flag = hunting_tigers
+		add_character_modifier = { name = hunt_timer duration = 395 hidden = yes }
+		hidden_tooltip = {
+			random_list = { # Check for social events
+				10 = { character_event = { id = tigerhunt.20 days = 10 } } # Gain friend
+				10 = { character_event = { id = tigerhunt.22 days = 10 } } # Gain rival
+				10 = { character_event = { id = tigerhunt.24 days = 10 } } # Plays cards
+				50 = { } # No social event
+			}
+			random_list = { # Check for tiger events
+				10 = { character_event = { id = tigerhunt.30 days = 10 } } # Tiger surprises hunter
+				10 = { character_event = { id = tigerhunt.40 days = 10 } } # Tiger surprises hunter
+				10 = { } # No tiger event
+			}
+		}
+	}
+}
+
+# tigerhunt.12 Hunt ends
+character_event = {
+	id = tigerhunt.12
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = killed_tiger
+					any_vassal = {
+						has_character_flag = hunting_tigers
+						has_character_flag = killed_tiger
+					}
+				}
+			}
+			character_event = { id = tigerhunt.13 }
+			any_vassal = {
+				limit = { has_character_flag = hunting_tigers }
+				character_event = { id = tigerhunt.13 }
+			}
+		}
+		else = {
+			character_event = { id = tigerhunt.14 }
+			any_vassal = {
+				limit = { has_character_flag = hunting_tigers }
+				character_event = { id = tigerhunt.14 }
+			}
+		}
+	}
+}
+
+# tigerhunt.13 Got tiger
+character_event = {
+	id = tigerhunt.13
+	desc = EVTDESCtigerhunt13
+	picture = GFX_evt_india_temple
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt13
+		prestige = 20
+		clr_character_flag = holding_tiger_hunt
+		clr_character_flag = killed_tiger
+		clr_character_flag = hunting_tigers
+		clr_character_flag = do_not_disturb
+		add_character_modifier = { name = good_hunt days = 180 }
+	}
+}
+
+# tigerhunt.14 Didn't get tiger
+character_event = {
+	id = tigerhunt.14
+	desc = EVTDESCtigerhunt14
+	picture = GFX_evt_throne_room
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt14
+		prestige = -10
+		clr_character_flag = holding_tiger_hunt
+		clr_character_flag = hunting_tigers
+		clr_character_flag = killed_tiger
+		clr_character_flag = do_not_disturb
+	}
+}
+
+# tigerhunt.15 Clear all character flags and modifiers
+character_event = {
+	id = tigerhunt.15
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		clr_character_flag = holding_tiger_hunt
+		clr_character_flag = killed_tiger
+		clr_character_flag = hunting_tigers
+		clr_character_flag = do_not_disturb
+	}
+}
+
+# tigerhunt.20 Gets drunk and makes a friend
+character_event = {
+	id = tigerhunt.20
+	desc = EVTDESCtigerhunt20
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = temperate trait = shy }
+		NOT = { num_of_friends = 5 }
+		any_realm_character = {
+			ai = yes
+			has_character_flag = hunting_tigers
+			OR = { is_liege_of = ROOT liege = { is_liege_of = ROOT } ROOT = { is_liege_of = THIS } }
+			NOT = { is_friend = ROOT }
+		}
+	}
+
+	option = {
+		name = EVTOPTAtigerhunt20
+		random_realm_character = {
+			limit = {
+				ai = yes
+				has_character_flag = hunting_tigers
+				OR = {
+					is_liege_of = ROOT
+					liege = { is_liege_of = ROOT }
+					ROOT = { is_liege_of = THIS }
+				}
+				NOT = { is_friend = ROOT }
+			}
+			add_friend = ROOT
+			hidden_tooltip = { character_event = { id = tigerhunt.21 } }
+		}
+	}
+}
+
+# tigerhunt.21 New friend
+character_event = {
+	id = tigerhunt.21
+	desc = EVTDESCtigerhunt20
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt20
+		add_friend = FROM
+	}
+}
+
+# tigerhunt.22 Gets drunk and makes an enemy
+character_event = {
+	id = tigerhunt.22
+	desc = EVTDESCtigerhunt22
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { num_of_rivals = 5 }
+		OR = {
+			trait = drunkard
+			AND = {
+				NOT = { trait = temperate }
+				OR = { trait = wroth trait = paranoid trait = envious trait = zealous }
+			}
+		}
+		any_realm_character = {
+			has_character_flag = hunting_tigers
+			ai = yes
+			OR = { is_liege_of = ROOT liege = { is_liege_of = ROOT } ROOT = { is_liege_of = THIS } }
+			NOT = { is_rival = ROOT }
+		}
+	}
+
+	option = {
+		name = EVTOPTAtigerhunt22
+		random_realm_character = {
+			limit = {
+				ai = yes
+				has_character_flag = hunting_tigers
+				OR = {
+					is_liege_of = ROOT
+					liege = { is_liege_of = ROOT }
+					ROOT = { is_liege_of = THIS }
+				}
+			}
+			add_rival = ROOT
+			opinion = { modifier = grievously_offended who = ROOT years = 10 }
+			ROOT = { opinion = { modifier = grievously_offended who = PREV years = 10 } }
+			hidden_tooltip = { character_event = { id = tigerhunt.23 } }
+		}
+	}
+}
+
+# tigerhunt.23 New enemy
+character_event = {
+	id = tigerhunt.23
+	desc = EVTDESCtigerhunt22
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt22
+		tooltip = { add_rival = FROM }
+	}
+}
+
+# tigerhunt.24 Plays cards
+character_event = {
+	id = tigerhunt.24
+	desc = EVTDESCtigerhunt24
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = { # Play high stakes
+		name = EVTOPTAtigerhunt24
+		set_character_flag = cards_high_stakes
+		hidden_tooltip = {
+			if = {
+				limit = { OR = { trait = imbecile trait = inbred } }
+				character_event = { id = tigerhunt.25 } # Always loses
+			}
+			if = {
+				limit = { OR = { trait = slow trait = dull } }
+				random_list = {
+					50 = { character_event = { id = tigerhunt.25 } } # Loses
+					50 = { character_event = { id = tigerhunt.26 } } # Breaks even
+				}
+			}
+			if = {
+				limit = { is_dumb_trigger = no NOT = { trait = inbred } is_smart_trigger = no }
+				random_list = {
+					33 = { character_event = { id = tigerhunt.25 } } # Loses
+					33 = { character_event = { id = tigerhunt.26 } } # Breaks even
+					33 = { character_event = { id = tigerhunt.27 } } # Wins
+				}
+			}
+			if = {
+				limit = { OR = { trait = quick trait = shrewd } }
+				random_list = {
+					10 = { character_event = { id = tigerhunt.25 } } # Loses
+					30 = { character_event = { id = tigerhunt.26 } } # Breaks even
+					60 = { character_event = { id = tigerhunt.27 } } # Wins
+				}
+			}
+			if = {
+				limit = { trait = genius }
+				random_list = {
+					20 = { character_event = { id = tigerhunt.26 } } # Breaks even
+					80 = { character_event = { id = tigerhunt.27 } } # Wins
+				}
+			}
+		}
+	}
+	option = { # Play low stakes
+		name = EVTOPTBtigerhunt24
+		set_character_flag = cards_low_stakes
+		hidden_tooltip = {
+			if = {
+				limit = { OR = { trait = imbecile trait = inbred } }
+				character_event = { id = tigerhunt.25 } # Always loses
+			}
+			if = {
+				limit = { OR = { trait = slow trait = dull } }
+				random_list = {
+					50 = { character_event = { id = tigerhunt.25 } } # Loses
+					50 = { character_event = { id = tigerhunt.26 } } # Breaks even
+				}
+			}
+			if = {
+				limit = { NOT = { trait = inbred } is_dumb_trigger = no is_smart_trigger = no }
+				random_list = {
+					33 = { character_event = { id = tigerhunt.25 } } # Loses
+					33 = { character_event = { id = tigerhunt.26 } } # Breaks even
+					33 = { character_event = { id = tigerhunt.27 } } # Wins
+				}
+			}
+			if = {
+				limit = { OR = { trait = quick trait = shrewd } }
+				random_list = {
+					10 = { character_event = { id = tigerhunt.25 } } # Loses
+					30 = { character_event = { id = tigerhunt.26 } } # Breaks even
+					60 = { character_event = { id = tigerhunt.27 } } # Wins
+				}
+			}
+			if = {
+				limit = { trait = genius }
+				random_list = {
+					20 = { character_event = { id = tigerhunt.26 } } # Breaks even
+					80 = { character_event = { id = tigerhunt.27 } } # Wins
+				}
+			}
+		}
+	}
+}
+
+# tigerhunt.25 Loses at cards
+character_event = {
+	id = tigerhunt.25
+	desc = EVTDESCtigerhunt25
+	picture = GFX_evt_bad_news
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt25
+		if = { limit = { has_character_flag = cards_high_stakes } scaled_wealth = -0.5 }
+		if = { limit = { has_character_flag = cards_low_stakes } scaled_wealth = -0.2 }
+	}
+}
+
+# tigerhunt.26 Breaks even at cards
+character_event = {
+	id = tigerhunt.26
+	desc = EVTDESCtigerhunt26
+	picture = GFX_evt_throne_room
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt26
+	}
+}
+
+# tigerhunt.27 Wins at cards
+character_event = {
+	id = tigerhunt.27
+	desc = EVTDESCtigerhunt27
+	picture = GFX_evt_throne_room
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt27
+		if = { limit = { has_character_flag = cards_high_stakes } scaled_wealth = 0.5 }
+		if = { limit = { has_character_flag = cards_low_stakes } scaled_wealth = 0.2 }
+	}
+}
+
+# tigerhunt.30 Tiger surprises hunters
+character_event = {
+	id = tigerhunt.30
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = hunter }
+	}
+
+	immediate = {
+		random_list = {
+			30 = {
+				character_event = { id = tigerhunt.31 } # Tiger is killed by soldiers
+			}
+			10 = {
+				character_event = { id = tigerhunt.32 } # Tiger kills servant
+			}
+			10 = {
+				character_event = { id = tigerhunt.33 } # Tiger kills AI character
+			}
+		}
+	}
+}
+
+# tigerhunt.31 Tiger surprises hunters - tiger is killed by soldiers
+character_event = {
+	id = tigerhunt.31
+	desc = EVTDESCtigerhunt31
+	picture = GFX_evt_tiger
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt31
+		set_character_flag = killed_tiger
+	}
+}
+
+# tigerhunt.32 Tiger surprises hunters - tiger kills servant
+character_event = {
+	id = tigerhunt.32
+	desc = EVTDESCtigerhunt32
+	picture = GFX_evt_tiger
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt32
+		prestige = -10
+	}
+}
+
+# tigerhunt.33 Tiger surprises hunters - tiger kills AI character
+character_event = {
+	id = tigerhunt.33
+	desc = EVTDESCtigerhunt33
+	picture = GFX_evt_tiger
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt32
+		random_realm_character = { # Tiger kills AI character
+			limit = {
+				ai = yes
+				has_character_flag = hunting_tigers
+				OR = {
+					is_liege_of = ROOT
+					liege = { is_liege_of = ROOT }
+					ROOT = { is_liege_of = THIS }
+				}
+			}
+			death = { death_reason = death_accident_tiger }
+		}
+	}
+}
+
+# tigerhunt.40 Party finds tiger
+character_event = {
+	id = tigerhunt.40
+	desc = EVTDESCtigerhunt40
+	picture = GFX_evt_tiger
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt40 # Kill it myself
+		trigger = {
+			NOT = { trait = wounded }
+			NOT = { is_maimed_trigger = yes }
+			NOT = { trait = craven }
+		}
+		hidden_tooltip = {
+			if = {
+				limit = {
+					OR = {
+						trait = hunter
+						trait = duelist
+						is_strong_trigger = yes
+						trait = varangian
+						trait = berserker
+						has_character_modifier = killed_an_old_one
+					}
+				}
+				random_list = {
+					80 = { character_event = { id = tigerhunt.41 } } # Kills tiger
+					15 = { character_event = { id = tigerhunt.42 } } # Fails to kill tiger
+					5 = { character_event = { id = tigerhunt.43 } } # Wounded trying to kill tiger
+				}
+			}
+			if = {
+				limit = {
+					NOT = { trait = hunter }
+					NOT = { trait = duelist }
+					is_strong_trigger = no
+					NOT = { trait = varangian }
+					NOT = { trait = berserker }
+					NOT = { has_character_modifier = killed_an_old_one }
+				}
+				random_list = {
+					40 = { character_event = { id = tigerhunt.41 } } # Kills tiger
+					50 = { character_event = { id = tigerhunt.42 } } # Fails to kill tiger
+					10 = { character_event = { id = tigerhunt.43 } } # Wounded trying to kill tiger
+				}
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBtigerhunt40 # Let the soldiers do it
+		hidden_tooltip = {
+			random_list = {
+				80 = { character_event = { id = tigerhunt.44 } } # Soldiers kill tiger
+				20 = { character_event = { id = tigerhunt.45 } } # Soldiers fail to kill tiger
+			}
+		}
+	}
+}
+
+# tigerhunt.41 Kills tiger
+character_event = {
+	id = tigerhunt.41
+	desc = EVTDESCtigerhunt41
+	picture = GFX_evt_tiger
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt41
+		prestige = 30
+		if = {
+			limit = { NOT = { lifestyle_traits = 1 } NOT = { has_dlc = "Way of Life" } }
+			add_trait = hunter
+		}
+		set_character_flag = killed_tiger
+		add_blood_splatter_effect = yes
+		if = { # A rare trophy: once a lifetime, never beside another
+			limit = { hunting_trophy_allowed_trigger = yes }
+			random = {
+				chance = 15
+				set_character_flag = grand_hunt_trophy_given
+				add_artifact = great_cat_pelt
+			}
+		}
+		if = {
+			limit = { NOT = { has_character_flag = achievement_i_can_see_its_stripes } ai = no }
+			set_character_flag = achievement_i_can_see_its_stripes
+		}
+	}
+}
+
+# tigerhunt.42 Fails to kill tiger
+character_event = {
+	id = tigerhunt.42
+	desc = EVTDESCtigerhunt42
+	picture = GFX_evt_tiger
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt42
+		prestige = -10
+	}
+}
+
+# tigerhunt.43 Is wounded trying to kill tiger
+character_event = {
+	id = tigerhunt.43
+	desc = EVTDESCtigerhunt43
+	picture = GFX_evt_tiger
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt43
+		random_list = {
+			90 = { add_trait = wounded }
+			10 = { add_maimed_trait_effect = yes }
+		}
+	}
+}
+
+# tigerhunt.44 Soldiers kill tiger
+character_event = {
+	id = tigerhunt.44
+	desc = EVTDESCtigerhunt44
+	picture = GFX_evt_tiger
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt44
+		set_character_flag = killed_tiger
+	}
+}
+
+# tigerhunt.45 Soldiers fail to kill tiger
+character_event = {
+	id = tigerhunt.45
+	desc = EVTDESCtigerhunt45
+	picture = GFX_evt_tiger
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAtigerhunt45
 	}
 }

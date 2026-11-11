@@ -5,13 +5,19 @@
 #
 # Part 1: names and descriptions      wonder.1 - wonder.4
 #   (was LT.10000 - 10003 in LT_wonder_maintenance_events.txt)
+# Part 2: life around the wonders     wonder.50 - wonder.64
+#   (was LT.60001 - 60701 in LT_wonder_flavor_event_2.txt)
 #
-# Fired from: on_wonder_stage_finish (1), on_wonder_upgrade_finish (2, 4)
-#   and on_wonder_stage_loot_finish (3) in 00_on_actions.txt.
+# Fired from: on_wonder_stage_finish (1), on_wonder_upgrade_finish (2, 4,
+#   50), on_wonder_stage_loot_finish (3) and on_wonder_owner_change (58) in
+#   00_on_actions.txt; the on_yearly_pulse random_events there (52, 56, 60,
+#   62, 64); the fountain decision in wonder_decisions.txt (54).
 # Saved: event targets target_wonder, target_province,
 #   wonder_owner_original, upgrade_00, upgrade_01 (read by the
 #   wonder_name_text_update and wonder_desc_text_update custom loc).
-# Scripted effects: common/scripted_effects/WHG_wonder_effects.txt
+# Scripted triggers and effects: WHG_wonder_triggers.txt and
+#   WHG_wonder_effects.txt in common/scripted_triggers and scripted_effects.
+# Loc: localisation/00_WHG_wonder_events.csv
 # Full list with callers: docs/events/event_database.csv
 ###############################################################################
 
@@ -193,5 +199,448 @@ character_event = {
 				set_description = upgrade_statue_god_desc
 			}
 		}
+	}
+}
+
+###############################################################################
+# Part 2: life around the wonders
+###############################################################################
+
+# wonder.50 A town springs up
+# Fifty years after it was begun and with two upgrades, a wonder draws
+# traders and pilgrims who settle around it. Let them stay (a new holding
+# slot) or drive them off and keep what they carried. Once per province.
+# The AI no longer needs 50 gold to welcome them (the town costs nothing).
+# Scope: ROOT is the owner, FROM the upgrade, FROMFROM the wonder,
+# FROMFROMFROM its province.
+character_event = {
+	id = wonder.50
+	title = EVTNAMEwonder50
+	desc = EVTDESCwonder50
+	picture = GFX_evt_construction_site
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_wonder_upgrade_finish, delayed list
+	only_playable = yes
+
+	trigger = {
+		is_inaccessible_trigger = no
+		war = no
+		FROMFROM = { wonder_age = 50 num_of_wonder_upgrades = 2 }
+		FROMFROMFROM = {
+			NOR = { has_province_flag = had_event_LT_60001 num_of_max_settlements = 7 }
+		}
+	}
+
+	immediate = {
+		FROMFROM = { save_event_target_as = target_wonder }
+		FROMFROMFROM = {
+			set_province_flag = had_event_LT_60001
+			save_event_target_as = target_province
+		}
+	}
+
+	option = { # They may stay
+		name = EVTOPTAwonder50
+		event_target:target_province = { add_holding_slot = 1 }
+		ai_chance = { factor = 70 }
+	}
+	option = { # Drive them off
+		name = EVTOPTBwonder50
+		wealth = 40
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 1.5 trait = greedy }
+			modifier = { factor = 1.5 trait = cruel }
+		}
+	}
+}
+
+# wonder.52 The library's shelves
+# A ruler writing a book (WHG_book_events) has a Great Library in the realm;
+# the scribes find what they need there and the book will be finer.
+# Scope: ROOT is the writer.
+character_event = {
+	id = wonder.52
+	title = EVTNAMEwonder52
+	desc = EVTDESCwonder52
+	picture = GFX_evt_open_book_hf
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_yearly_pulse random_events (00_on_actions)
+	has_character_flag = currently_working_on_a_book
+
+	trigger = {
+		is_inaccessible_trigger = no
+		war = no
+		any_realm_wonder = { has_wonder = wonder_library }
+	}
+
+	immediate = {
+		random_realm_wonder = {
+			limit = { has_wonder = wonder_library }
+			save_event_target_as = target_wonder
+		}
+	}
+
+	option = {
+		name = EVTOPTAwonder52
+		custom_tooltip = { text = EVTTOOLTIPwonder52 }
+		custom_tooltip = { text = higher_quality_of_book_TT }
+		set_higher_quality_of_book_flags_effect = yes
+	}
+}
+
+# wonder.54 The fountain of youth
+# A ruler drinks from the fountain of the Magnificent Garden (decision,
+# once in ten years) and grows two years younger. A lunatic leaps in and
+# swallows the water the wrong way, and is two years older for it.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.54
+	title = EVTNAMEwonder54
+	desc = { trigger = { is_lunatic_trigger = no } text = EVTDESCwonder54 }
+	desc = { trigger = { is_lunatic_trigger = yes } text = EVTDESCwonder54b }
+	picture = GFX_evt_garden
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # decision in wonder_decisions.txt
+
+	immediate = {
+		random_realm_wonder = {
+			limit = { has_wonder = wonder_garden }
+			save_event_target_as = target_wonder
+		}
+	}
+
+	option = { # Drink
+		name = EVTOPTAwonder54
+		trigger = { is_lunatic_trigger = no }
+		add_age = -2
+	}
+	option = { # Leap in
+		name = EVTOPTBwonder54
+		trigger = { is_lunatic_trigger = yes }
+		add_age = 2
+	}
+}
+
+# wonder.56 An evening at the tavern
+# A stressed ruler with a tavern by one of the realm's wonders is asked out
+# by a friend or a favourite of the court. Drinking the night away lifts the
+# stress (and may start a habit, wonder.57); talking instead warms the
+# friendship.
+# Scope: ROOT is the ruler, event_target:drinking_buddy the companion.
+character_event = {
+	id = wonder.56
+	title = EVTNAMEwonder56
+	desc = EVTDESCwonder56
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_diplomacy
+	portrait = event_target:drinking_buddy
+
+	is_triggered_only = yes # on_yearly_pulse random_events (00_on_actions)
+	only_rulers = yes
+	trait = stressed
+
+	trigger = {
+		is_inaccessible_trigger = no
+		any_realm_wonder = { has_wonder_upgrade = upgrade_tavern }
+		OR = { any_friend = { is_landed = yes } any_courtier_or_vassal = { always = yes } }
+	}
+
+	immediate = {
+		save_drinking_character_effect = yes
+		random_realm_wonder = {
+			limit = { has_wonder_upgrade = upgrade_tavern }
+			save_event_target_as = target_wonder
+		}
+	}
+
+	option = { # Drink
+		name = EVTOPTAwonder56
+		remove_trait = stressed
+		if = {
+			limit = { NOT = { trait = drunkard } }
+			custom_tooltip = {
+				text = EVTTOOLTIPwonder56
+				random = { chance = 5 character_event = { id = wonder.57 days = 15 random = 30 } }
+			}
+		}
+	}
+	option = { # Talk instead
+		name = EVTOPTBwonder56
+		event_target:drinking_buddy = {
+			if = {
+				limit = { NOT = { is_friend = ROOT } }
+				opinion = { modifier = opinion_budding_friendship who = ROOT }
+			}
+			else = { opinion = { modifier = kind_pos who = ROOT } }
+		}
+	}
+}
+
+# wonder.57 One more round
+# The ruler keeps going back to the tavern and becomes a drunkard.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.57
+	title = EVTNAMEwonder57
+	desc = EVTDESCwonder57
+	picture = GFX_evt_drunk
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # wonder.56
+
+	trigger = {
+		NOT = { trait = drunkard }
+	}
+
+	option = {
+		name = EVTOPTAwonder57
+		add_trait = drunkard
+	}
+}
+
+# wonder.58 The traps of the old owner
+# Two weeks after a wonder with traps changes hands, two courtiers of the
+# new owner wander into its depths and die there (the more beloved first).
+# The old owner, if alive, hears of it (wonder.59). Lizardmen know the
+# traps of the old temples and are spared; a Lizardman owner gets no event.
+# Fixed: the old check looked for a Lizardman culture on the wonder itself.
+# Scope: ROOT is the new owner, FROM the wonder, FROMFROM the old owner.
+character_event = {
+	id = wonder.58
+	title = EVTNAMEwonder58
+	desc = EVTDESCwonder58
+	picture = GFX_evt_died_funeral
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_wonder_owner_change, delayed list
+
+	trigger = {
+		NOT = { culture_group = lizardman_group }
+		FROM = { has_wonder_upgrade = upgrade_traps }
+		any_courtier = { count = 2 wonder_trap_victim_trigger = yes }
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = target_wonder }
+		FROMFROM = { save_event_target_as = old_owner }
+		random_courtier = {
+			limit = { wonder_trap_victim_trigger = yes }
+			score_value = { value = 2 beloved_target_selection_score = yes }
+			save_event_target_as = target_courtier
+		}
+		random_courtier = {
+			limit = {
+				wonder_trap_victim_trigger = yes
+				NOT = { character = event_target:target_courtier }
+			}
+			save_event_target_as = target_courtier_2
+		}
+	}
+
+	option = { # Curse them
+		name = EVTOPTAwonder58
+		event_target:target_courtier = { death = { death_reason = death_accident_wonder_traps } }
+		event_target:target_courtier_2 = { death = { death_reason = death_accident_wonder_traps } }
+		if = {
+			limit = { event_target:old_owner = { is_alive = yes } }
+			event_target:old_owner = { character_event = { id = wonder.59 } }
+		}
+	}
+}
+
+# wonder.59 The traps did their work
+# The old owner hears that the traps have taken two of the new owner's
+# court.
+# Scope: ROOT is the old owner, FROM the new owner.
+character_event = {
+	id = wonder.59
+	title = EVTNAMEwonder58
+	desc = EVTDESCwonder59
+	picture = GFX_evt_died_funeral
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.58
+
+	option = {
+		name = EVTOPTAwonder59
+		prestige = 10
+	}
+}
+
+# wonder.60 The liege's praise
+# A vassal who holds a wonder gets a letter of praise from the liege. Thank
+# the liege (each comes to like the other, wonder.61) or take the credit
+# (prestige).
+# Fixed: the old event took the letter writer from the wonder's owner, who
+# is the vassal himself, so the vassal praised and thanked himself.
+# Scope: ROOT is the vassal, event_target:target_liege the liege.
+letter_event = {
+	id = wonder.60
+	desc = EVTDESCwonder60
+	border = GFX_event_letter_frame_diplomacy
+	portrait = event_target:target_liege
+
+	is_triggered_only = yes # on_yearly_pulse random_events (00_on_actions)
+	only_rulers = yes
+
+	trigger = {
+		independent = no
+		any_demesne_province = { has_wonder = yes }
+	}
+
+	immediate = {
+		save_event_target_as = target_vassal
+		liege = { save_event_target_as = target_liege }
+		random_demesne_wonder = { save_event_target_as = target_wonder }
+	}
+
+	option = { # Thank the liege
+		name = EVTOPTAwonder60
+		event_target:target_liege = {
+			opinion = { modifier = opinion_kind who = ROOT }
+			letter_event = { id = wonder.61 days = 3 }
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { # Take the credit
+		name = EVTOPTBwonder60
+		prestige = 50
+		ai_chance = { factor = 25 modifier = { factor = 4 trait = proud } }
+	}
+}
+
+# wonder.61 The vassal's thanks
+# Scope: ROOT is the liege, FROM the vassal.
+letter_event = {
+	id = wonder.61
+	desc = EVTDESCwonder61
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes # wonder.60
+
+	option = {
+		name = EVTOPTAwonder61
+		event_target:target_vassal = { opinion = { modifier = opinion_kind who = ROOT } }
+	}
+}
+
+# wonder.62 Crumbling stone
+# A piece falls from a destructible wonder a hundred years old. Pay for the
+# repairs (gold, prestige) or sell the pieces (gold, but people talk).
+# Scope: ROOT is the owner.
+character_event = {
+	id = wonder.62
+	title = EVTNAMEwonder62
+	desc = EVTDESCwonder62
+	picture = GFX_evt_leaning_tower
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_yearly_pulse random_events (00_on_actions)
+	only_rulers = yes
+
+	trigger = {
+		any_realm_wonder = { wonder_age = 100 has_wonder_flag = is_destructible }
+	}
+
+	immediate = {
+		random_realm_wonder = {
+			limit = { wonder_age = 100 has_wonder_flag = is_destructible }
+			save_event_target_as = target_wonder
+		}
+	}
+
+	option = { # Repair it
+		name = EVTOPTAwonder62
+		wealth = -50
+		prestige = 40
+		ai_chance = {
+			factor = 75
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 0 NOT = { wealth = 50 } }
+		}
+	}
+	option = { # Sell the pieces
+		name = EVTOPTBwonder62
+		wealth = 100
+		prestige = -20
+		ai_chance = { factor = 25 modifier = { factor = 3 trait = greedy } }
+	}
+}
+
+# wonder.64 A harvest from the wonder
+# A herb garden or deep mines in the realm yield one to three herbs or
+# precious ores (ingredient artifacts), unless the ruler already holds 15
+# ingredients.
+# Fixed: both options had the same name and the herb tooltip, which also
+# read the count after it had been spent (always 0).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.64
+	title = EVTNAMEwonder64
+	desc = EVTDESCwonder64
+	picture = GFX_evt_mysterious_forest
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_yearly_pulse random_events (00_on_actions)
+	only_rulers = yes
+
+	trigger = {
+		any_realm_wonder = {
+			OR = { has_wonder_upgrade = upgrade_deepmines has_wonder_upgrade = upgrade_herb_garden }
+		}
+		NOT = { any_artifact = { count = 15 has_artifact_flag = ingredient } }
+	}
+
+	immediate = {
+		random_realm_wonder = {
+			limit = {
+				OR = {
+					has_wonder_upgrade = upgrade_herb_garden
+					has_wonder_upgrade = upgrade_deepmines
+				}
+			}
+			save_event_target_as = target_wonder
+			location = { save_event_target_as = target_province }
+		}
+		random_list = {
+			10 = { set_variable = { which = gath_res value = 1 } }
+			10 = { set_variable = { which = gath_res value = 2 } }
+			10 = { set_variable = { which = gath_res value = 3 } }
+		}
+	}
+
+	option = { # Herbs
+		name = EVTOPTAwonder64
+		trigger = { any_realm_wonder = { has_wonder_upgrade = upgrade_herb_garden } }
+		sound_effect = hermetic_society_acquire_seed
+		custom_tooltip = { text = EVTTOOLTIPwonder64a }
+		hidden_effect = {
+			while = {
+				limit = { check_variable = { which = gath_res value = 1 } }
+				hermetic_add_herbal_ingredient_effect = yes
+				subtract_variable = { which = gath_res value = 1 }
+			}
+		}
+	}
+	option = { # Ore
+		name = EVTOPTBwonder64
+		trigger = { any_realm_wonder = { has_wonder_upgrade = upgrade_deepmines } }
+		sound_effect = hermetic_society_acquire_seed
+		custom_tooltip = { text = EVTTOOLTIPwonder64b }
+		hidden_effect = {
+			while = {
+				limit = { check_variable = { which = gath_res value = 1 } }
+				runesmith_add_misc_ingredient_effect = yes
+				subtract_variable = { which = gath_res value = 1 }
+			}
+		}
+	}
+	after = {
+		set_variable = { which = gath_res value = 0 }
 	}
 }

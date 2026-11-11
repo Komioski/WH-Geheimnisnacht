@@ -14,6 +14,8 @@
 #   400-420  Marshal: stirs disloyalty, protection racket
 #   500-540  Lord Spiritual: mission to the northern heathens, temple,
 #            secret sympathies, selling favours, cowardly missionary
+#   600-620  Councillors hand out the liege's surplus titles (was
+#            108000 - 108052 in councillor_events.txt)
 #
 # Most chains start from the yearly pulse random_events in 00_on_actions.
 ###############################################################################
@@ -1955,10 +1957,6 @@ character_event = {
 								male_can_hold_minor_title_trigger = yes
 								female_can_hold_minor_commander_title_trigger = yes
 							}
-							#OR = {
-							#	NOT = { religion = hindu }
-							#	trait = kshatriya
-							#}
 							is_adult = yes
 						}
 						has_character_flag = special_marshal
@@ -3155,5 +3153,222 @@ letter_event = {
 	option = {
 		name = EVTOPTCcouncil540 # Insist that he stays
 		job_spiritual = { opinion = { who = ROOT modifier = opinion_unhappy years = 5 } }
+	}
+}
+
+###############################################################################
+# Handing out the liege's titles
+# (was 108000 - 108052 in the vanilla councillor_events.txt)
+# A chancellor, steward or spiritual councillor offers to hand out the
+# titles a liege has piled up beyond the demesne limit, or the liege asks
+# the chancellor. While the help lasts, each new title is passed to the best,
+# second or third best candidate, an unknown noble, or, by a greedy,
+# ambitious, envious, deceitful or arbitrary councillor, to themselves.
+#
+# Callers: decisions/councillor_decision.txt (help_liege_manage_titles: 600;
+#   ask_help_to_manage_titles: 610, 605).
+# Saved: character flags getting_help_with_titles,
+#   refused_any_help_with_titles (both read by the decisions).
+###############################################################################
+
+# council.600 A councillor offers help with titles
+# Hidden. Passes the offer to the liege (council.601).
+# Scope: ROOT is the councillor.
+character_event = {
+	id = council.600
+	hide_window = yes
+	is_triggered_only = yes # help_liege_manage_titles decision
+
+	immediate = {
+		liege = { character_event = { id = council.601 } }
+	}
+}
+
+# council.601 Shall I see to your titles?
+# The liege accepts (the councillor starts at once, council.610), declines,
+# or tells the whole council to stop asking for two years.
+# Scope: ROOT is the liege, FROM the councillor.
+character_event = {
+	id = council.601
+	desc = {
+		trigger = { FROM = { has_job_title = job_chancellor } }
+		text = EVTDESCcouncil601_chancellor
+	}
+	desc = {
+		trigger = { FROM = { has_job_title = job_treasurer } }
+		text = EVTDESCcouncil601_steward
+	}
+	desc = {
+		trigger = { FROM = { has_job_title = job_spiritual } }
+		text = EVTDESCcouncil601_spiritual
+	}
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # council.600
+
+	option = { # Yes, please
+		name = EVTOPTAcouncil601
+		set_character_flag = getting_help_with_titles
+		hidden_effect = {
+			FROM = {
+				character_event = { id = council.610 }
+				character_event = { id = council.605 }
+			}
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { # No thanks
+		name = EVTOPTBcouncil601
+		hidden_effect = { FROM = { character_event = { id = council.606 } } }
+		ai_chance = { factor = 0 }
+	}
+	option = { # Stop bothering me
+		name = EVTOPTCcouncil601
+		set_character_flag = refused_any_help_with_titles
+		custom_tooltip = { text = EVTOPTCcouncil601_TT }
+		hidden_effect = { FROM = { character_event = { id = council.606 } } }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# council.605 The liege agrees
+# Scope: ROOT is the councillor, FROM the liege.
+character_event = {
+	id = council.605
+	desc = EVTDESCcouncil605
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # council.601, ask_help_to_manage_titles decision
+
+	option = { name = EVTOPTAcouncil605 }
+}
+
+# council.606 The liege refuses
+# Scope: ROOT is the councillor, FROM the liege.
+character_event = {
+	id = council.606
+	desc = EVTDESCcouncil606
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # council.601
+
+	option = { name = EVTOPTAcouncil606 }
+}
+
+# council.610 Seeing to the titles
+# Hidden. The councillor hands out one title (council.620) and checks again
+# (council.611), the next day for a player.
+# Scope: ROOT is the councillor.
+character_event = {
+	id = council.610
+	hide_window = yes
+	is_triggered_only = yes # council.601, council.611, ask_help_to_manage_titles
+
+	immediate = {
+		character_event = { id = council.620 }
+		if = {
+			limit = { ai = yes }
+			character_event = { id = council.611 }
+		}
+		else = { character_event = { id = council.611 days = 2 } }
+	}
+}
+
+# council.611 More titles to hand out?
+# Hidden. Loops back to council.610 while the liege still has new titles
+# over the demesne limit.
+# Scope: ROOT is the councillor.
+character_event = {
+	id = council.611
+	hide_window = yes
+	is_triggered_only = yes # council.610
+
+	trigger = {
+		liege = {
+			has_newly_acquired_titles = yes
+			over_max_demesne_size = 1
+		}
+	}
+
+	immediate = {
+		character_event = { id = council.610 days = 1 }
+	}
+}
+
+# council.620 A title to hand out
+# The councillor picks who gets one of the liege's surplus titles.
+# Scope: ROOT is the councillor.
+character_event = {
+	id = council.620
+	desc = EVTDESCcouncil620
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # council.610
+
+	option = { # The best candidate
+		name = EVTOPTAcouncil620
+		trigger = { liege = { title_to_get_rid_of = { num_fitting_characters_for_title = 1 } } }
+		liege = {
+			title_to_get_rid_of = {
+				best_fit_character_for_title = { title = PREV perspective = ROOT index = 1 grant_title = PREV }
+			}
+		}
+		ai_chance = { factor = 15 }
+	}
+	option = { # The second best
+		name = EVTOPTBcouncil620
+		trigger = { liege = { title_to_get_rid_of = { num_fitting_characters_for_title = 2 } } }
+		liege = {
+			title_to_get_rid_of = {
+				best_fit_character_for_title = { title = PREV perspective = ROOT index = 2 grant_title = PREV }
+			}
+		}
+		ai_chance = { factor = 10 }
+	}
+	option = { # The third best
+		name = EVTOPTCcouncil620
+		trigger = {
+			NOR = { trait = greedy trait = ambitious trait = envious trait = deceitful trait = arbitrary }
+			liege = { title_to_get_rid_of = { num_fitting_characters_for_title = 3 } }
+		}
+		liege = {
+			title_to_get_rid_of = {
+				best_fit_character_for_title = { title = PREV perspective = ROOT index = 3 grant_title = PREV }
+			}
+		}
+		ai_chance = { factor = 5 }
+	}
+	option = { # An unknown noble
+		name = EVTOPTDcouncil620
+		trigger = { liege = { title_to_get_rid_of = { NOT = { num_fitting_characters_for_title = 3 } } } }
+		liege = {
+			create_random_steward = {
+				random_traits = yes
+				dynasty = random
+				female = no
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Racial trait
+				liege = { title_to_get_rid_of = { grant_title = PREVPREV } }
+			}
+		}
+		ai_chance = { factor = 5 }
+	}
+	option = { # Keep it in the family: myself
+		name = EVTOPTEcouncil620
+		trigger = { OR = { trait = greedy trait = ambitious trait = envious trait = deceitful trait = arbitrary } }
+		liege = { title_to_get_rid_of = { grant_title = ROOT } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 2 trait = ambitious }
+			modifier = { factor = 2 trait = envious }
+			modifier = { factor = 2 trait = deceitful }
+			modifier = { factor = 2 trait = arbitrary }
+		}
 	}
 }

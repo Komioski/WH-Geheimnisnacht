@@ -42,6 +42,7 @@
 #   Part 8: The pilgrimage to Martek (namespace hajj)
 #   Part 9: The holy dogs (namespace holypet)
 #   Part 10: The judgement of the sun (namespace sunjudge)
+#   Part 11: The Califate of Ormazd (namespace califate)
 ###############################################################################
 
 namespace = holyfast
@@ -8656,5 +8657,985 @@ character_event = {
 		clr_character_flag = sunjudge_trial
 		host = { ROOT = { religion = PREV } }
 		character_event = { id = sunjudge.2 days = 30 }
+	}
+}
+
+
+###############################################################################
+# Part 11: The Califate of Ormazd (namespace califate)
+# Faction: Araby & Southlands
+# Serves: the faithful of Ormazd, the Kitabids and the descendants of the
+#   Prophet Mulhaed al-Quyat
+# (was ormazd.0 - ormazd.1 and ormazdian.3 - ormazdian.9 in
+#  CP_Ormazdian_events.txt)
+#
+# The children of a Sayyid are born Sayyid (from the father) or Mirza (from
+# the mother), and the title follows their faith. While no one is Calif, a
+# young Sayyid may rise in revolt to claim the Califate; if he wins, every
+# Ormazdic ruler must acknowledge him or join the Kitabids, and their
+# vassals choose in turn. Only a Sayyid may inherit the Califate.
+#
+# Sayyid and Mirza (hidden)      califate.1 - califate.2
+# The rising                     califate.10
+# Acknowledge or resist          califate.11 - califate.13
+# Succession of the Calif        califate.15 - califate.17
+#
+# Callers: on_birth (1), on_character_convert_religion (2), on_death (15)
+#   and on_decade_pulse ormazd_califate list (10) in wh_on_actions.txt;
+#   ormazd_caliphate_rising on_success in 00_cb_types.txt and the restore
+#   Califate decision in wh_general_decisions.txt (11).
+# Fixed: the rising set shia_* flags while the CB checks ormazd_* ones, so
+#   the war could never be declared and the revolt flag never cleared; a
+#   Sayyid mother of an Ormazdic child gave Sayyid instead of Mirza; a
+#   convert away from Ormazd kept the Ormazdic Sayyid trait; a won rising
+#   never asked the other rulers to acknowledge the Calif.
+# Saved: global flag ormazd_caliphate_revolt_ongoing (cleared by the CB);
+#   character flags ormazd_caliphate_pretender, ormazd_caliphate_revolt.
+###############################################################################
+
+namespace = califate
+
+# califate.1 Sayyid and Mirza at birth
+# Hidden. A child of a Sayyid father is a Sayyid, of a Sayyid mother a
+# Mirza; the Ormazdic or non-Ormazdic form follows the child's faith.
+# Scope: ROOT is the newborn.
+character_event = {
+	id = califate.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_birth
+	religion_group = ormazd_gods_group
+
+	trigger = {
+		NOR = {
+			trait = ormazd_sayyid
+			trait = non_ormazd_sayyid
+			trait = ormazd_mirza
+			trait = non_ormazd_mirza
+		}
+		OR = {
+			father_even_if_dead = { OR = { trait = ormazd_sayyid trait = non_ormazd_sayyid } }
+			mother_even_if_dead = { OR = { trait = ormazd_sayyid trait = non_ormazd_sayyid } }
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { father_even_if_dead = { OR = { trait = ormazd_sayyid trait = non_ormazd_sayyid } } }
+			if = {
+				limit = { religion = ormazd }
+				add_trait = ormazd_sayyid
+			}
+			else = { add_trait = non_ormazd_sayyid }
+		}
+		else = {
+			if = {
+				limit = { religion = ormazd }
+				add_trait = ormazd_mirza
+			}
+			else = { add_trait = non_ormazd_mirza }
+		}
+	}
+}
+
+# califate.2 Sayyid and Mirza after conversion
+# Hidden. Swaps the Ormazdic and non-Ormazdic forms to match the new faith.
+# Scope: ROOT is the convert.
+character_event = {
+	id = califate.2
+	hide_window = yes
+
+	is_triggered_only = yes # on_character_convert_religion
+
+	trigger = {
+		OR = {
+			trait = non_ormazd_sayyid
+			trait = ormazd_sayyid
+			trait = non_ormazd_mirza
+			trait = ormazd_mirza
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { religion = ormazd }
+			if = {
+				limit = { trait = non_ormazd_sayyid }
+				remove_trait = non_ormazd_sayyid
+				add_trait = ormazd_sayyid
+			}
+			if = {
+				limit = { trait = non_ormazd_mirza }
+				remove_trait = non_ormazd_mirza
+				add_trait = ormazd_mirza
+			}
+		}
+		else = {
+			if = {
+				limit = { trait = ormazd_sayyid }
+				remove_trait = ormazd_sayyid
+				add_trait = non_ormazd_sayyid
+			}
+			if = {
+				limit = { trait = ormazd_mirza }
+				remove_trait = ormazd_mirza
+				add_trait = non_ormazd_mirza
+			}
+		}
+	}
+}
+
+# califate.10 Rise of the Califate
+# While no one holds the Califate, a young Sayyid preacher rises in a
+# kingdom of an independent Ormazdic king or emperor with weak religious
+# authority and makes war for the title (ormazd_caliphate_rising). Every
+# player hears of it. The holy cities of al-Haikk, Lashiek and Martek in the
+# realm make it likelier; later centuries make it rarer.
+# Scope: ROOT is the ruler risen against.
+narrative_event = {
+	id = califate.10
+	picture = GFX_evt_bishop
+	border = GFX_event_narrative_frame_religion
+	title = EVTTITLEcalifate10
+	desc = EVTDESCcalifate10
+
+	major = yes
+
+	only_playable = yes
+	only_independent = yes
+
+	trigger = {
+		is_landed = yes
+		religion = ormazd
+		higher_tier_than = DUKE
+		k_caliph_al_umma = {
+			has_holder = no
+		}
+		NOT = { religion_authority = 0.8 }
+		NOT = { has_global_flag = ormazd_caliphate_revolt_ongoing }
+		any_realm_province = {
+			kingdom = {
+				OR = {
+					has_holder = no
+					holder_scope = {
+						character = ROOT
+					}
+				}
+				num_title_realm_provs = {
+					who = ROOT
+					value = 6
+				}
+			}
+		}
+	}
+
+	is_triggered_only = yes # on_decade_pulse ormazd_califate list (wh_on_actions.txt)
+
+	# Was mean time to happen 233 years; the old MTTH factors, inverted.
+	weight_multiplier = {
+		factor = 1
+		modifier = {
+			factor = 1.33
+			OR = {
+				b_al_haikk = {
+					holder_scope = {
+						same_realm = ROOT
+					}
+				}
+				b_lashiek = {
+					holder_scope = {
+						same_realm = ROOT
+					}
+				}
+				b_martek = {
+					holder_scope = {
+						same_realm = ROOT
+					}
+				}
+			}
+		}
+		modifier = {
+			factor = 2
+			NOT = { religion_authority = 0.5 }
+		}
+		modifier = {
+			factor = 0.25
+			NOT = { religion_authority = 0.2 }
+		}
+		modifier = {
+			factor = 0.5
+			year = 2100
+		}
+		modifier = {
+			factor = 0.5
+			year = 2200
+		}
+		modifier = {
+			factor = 0.5
+			year = 2300
+		}
+		modifier = {
+			factor = 0.25
+			year = 2400
+		}
+		modifier = {
+			factor = 2
+			ai = yes
+		}
+	}
+
+	immediate = {
+		set_character_flag = ormazd_caliphate_revolt
+		set_global_flag = ormazd_caliphate_revolt_ongoing
+
+		# decadence = -30 # Do not want to be hit with a decadence revolt as well!
+
+		random_realm_province = {
+			limit = {
+				kingdom = {
+					OR = {
+						has_holder = no
+						holder_scope = {
+							character = ROOT
+						}
+					}
+					num_title_realm_provs = {
+						who = ROOT
+						value = 6
+					}
+				}
+			}
+			ROOT = {
+				create_character = {
+					dynasty = random
+					religion = ormazd
+					culture = ROOT
+					female = no
+					age = 20
+					health = 6.5
+					fertility = 0.6
+					trait = ormazd_sayyid
+					trait = quick
+					trait = fair
+					random_traits = yes
+				}
+
+				new_character = {
+					# Set Racial Trait
+					character_event = {
+					  id = aiclean.31
+					}
+					set_character_flag = ormazd_caliphate_pretender
+					create_title = {
+						tier = DUKE
+						landless = yes
+						temporary = yes
+						culture = ROOT
+						name = ORMAZD_CALIF_REVOLT
+						holder = THIS
+					}
+					create_character = {
+						random_traits = yes
+						dynasty = none
+						religion = THIS
+						culture = THIS
+						female = no
+						age = 30
+						trait = brilliant_strategist
+					}
+					new_character = {
+						# Set Racial Trait
+						character_event = {
+						  id = aiclean.31
+						}
+						spawn_unit = {
+							province = PREVPREVPREV
+							home = PREVPREVPREV
+							owner = PREV
+							leader = THIS
+							match_character = PREVPREV
+							match_mult = 0.5
+							attrition = 0.5
+							cannot_inherit = yes
+						}
+					}
+					create_character = {
+						random_traits = yes
+						dynasty = none
+						religion = THIS
+						culture = THIS
+						female = no
+						age = 27
+						trait = brilliant_strategist
+					}
+					new_character = {
+						# Set Racial Trait
+						character_event = {
+						  id = aiclean.31
+						}
+						spawn_unit = {
+							province = PREVPREVPREV
+							home = PREVPREVPREV
+							owner = PREV
+							leader = THIS
+							match_character = PREVPREV
+							match_mult = 0.5
+							attrition = 0.5
+							cannot_inherit = yes
+						}
+					}
+					create_character = {
+						random_traits = yes
+						dynasty = none
+						religion = THIS
+						culture = THIS
+						female = no
+						age = 25
+						trait = skilled_tactician
+					}
+					new_character = {
+						# Set Racial Trait
+						character_event = {
+						  id = aiclean.31
+						}
+						spawn_unit = {
+							province = PREVPREVPREV
+							home = PREVPREVPREV
+							owner = PREV
+							leader = THIS
+							match_character = PREVPREV
+							match_mult = 0.5
+							attrition = 0.5
+							cannot_inherit = yes
+						}
+					}
+					create_character = {
+						random_traits = yes
+						dynasty = none
+						religion = THIS
+						culture = THIS
+						female = no
+						age = 23
+						trait = skilled_tactician
+					}
+					new_character = {
+						# Set Racial Trait
+						character_event = {
+						  id = aiclean.31
+						}
+						spawn_unit = {
+							province = PREVPREVPREV
+							home = PREVPREVPREV
+							owner = PREV
+							leader = THIS
+							match_character = PREVPREV
+							match_mult = 0.5
+							attrition = 0.5
+							cannot_inherit = yes
+						}
+					}
+					create_character = {
+						random_traits = yes
+						dynasty = none
+						religion = THIS
+						culture = THIS
+						female = no
+						age = 27
+						trait = skilled_tactician
+					}
+					new_character = {
+						# Set Racial Trait
+						character_event = {
+						  id = aiclean.31
+						}
+						spawn_unit = {
+							province = PREVPREVPREV
+							home = PREVPREVPREV
+							owner = PREV
+							leader = THIS
+							match_character = PREVPREV
+							match_mult = 0.5
+							attrition = 0.5
+							cannot_inherit = yes
+						}
+					}
+					war = {
+						target = ROOT
+						casus_belli = ormazd_caliphate_rising
+						thirdparty_title = PREVPREV
+						tier = KING
+					}
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAcalifate10
+		trigger = {
+			has_character_flag = ormazd_caliphate_revolt
+		}
+		clr_character_flag = ormazd_caliphate_revolt
+	}
+
+	option = {
+		name = EVTOPTBcalifate10
+		trigger = {
+			religion = ormazd
+		}
+	}
+	option = {
+		name = EVTOPTCcalifate10
+		trigger = {
+			religion_group = ormazd_gods_group
+			NOT = { religion = ormazd }
+			NOT = { has_character_flag = ormazd_caliphate_revolt }
+		}
+	}
+	option = {
+		name = EVTOPTDcalifate10
+		trigger = {
+			NOT = { religion_group = ormazd_gods_group }
+			NOT = { has_character_flag = ormazd_caliphate_revolt }
+		}
+	}
+}
+
+# califate.11 A new Calif
+# An independent Ormazdic ruler acknowledges the new Calif, or joins the
+# Kitabids who deny any one ruler the right to lead the faithful. Vassals
+# then choose (califate.12, califate.13).
+# Scope: ROOT is the ruler, FROM the Calif.
+long_character_event = {
+	id = califate.11
+	desc = EVTDESCcalifate11
+	picture = GFX_evt_bishop
+	border = GFX_event_long_frame_war
+
+	only_independent = yes
+
+	trigger = {
+		religion = FROM
+		independent = yes
+	}
+
+	is_triggered_only = yes
+
+	option = { #I will acknowledge the new Calif
+		name = EVTOPTAcalifate11
+		ai_chance = {
+			factor = 40
+			modifier = {
+				factor = 0
+				is_foe = FROM
+			}
+			modifier = {
+				factor = 1.5
+				real_tier = DUKE
+			}
+			modifier = {
+				factor = 2
+				real_tier = COUNT
+			}
+			modifier = {
+				factor = 5
+				real_tier = BARON
+			}
+			modifier = {
+				factor = 0.9
+				NOT = { opinion = { who = FROM value = -25 } }
+			}
+			modifier = {
+				factor = 0.9
+				NOT = { opinion = { who = FROM value = -75 } }
+			}
+			modifier = {
+				factor = 0.9
+				NOT = { opinion = { who = FROM value = -125 } }
+			}
+			modifier = {
+				factor = 0.9
+				NOT = { opinion = { who = FROM value = -175 } }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 25 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 50 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 75 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 100 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 125 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 150 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 175 }
+			}
+		}
+		any_vassal = { #Give vassal choice to not convert (ruler has not converted)
+			limit = { religion = ormazd }
+			character_event = { id = califate.12 }
+		}
+		any_courtier = {
+			limit = {
+				NOT = { character = ROOT }
+				NOT = { character = FROM }
+				is_ruler = no
+				religion = ormazd
+			}
+			random_list = {
+				80 = {
+					religion = ormazd
+				}
+				20 = {
+					religion = kitabid
+				}
+			}
+		}
+	}
+	option = { #I will never bow my head to this pretender!
+		name = EVTOPTBcalifate11
+		religion = kitabid
+		random_demesne_province = {
+			limit = {
+				religion = ormazd
+			}
+			random_list = {
+				80 = {
+					religion = kitabid
+				}
+				20 = {
+				}
+			}
+		}
+		any_vassal = {
+			limit = { religion = ormazd }
+			character_event = { id = califate.13 }
+		}
+		any_courtier = {
+			limit = {
+				NOT = { character = ROOT }
+				is_ruler = no
+				religion = ormazd
+			}
+			random_list = {
+				80 = {
+					religion = kitabid
+				}
+				20 = {
+				}
+			}
+		}
+	}
+}
+
+# califate.12 Your liege bows to the Calif
+# Scope: ROOT is an Ormazdic vassal, FROM the liege who acknowledged him.
+character_event = {
+	id = califate.12
+	desc = EVTDESCcalifate12
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_religion
+
+	trigger = {
+		is_ruler = yes
+	}
+
+	is_triggered_only = yes
+
+	option = {
+		ai_chance = {
+			factor = 70
+			modifier = {
+				factor = 0
+				is_foe = FROM
+			}
+			modifier = {
+				factor = 0.9
+				NOT = { opinion = { who = FROM value = -25 } }
+			}
+			modifier = {
+				factor = 0.9
+				NOT = { opinion = { who = FROM value = -75 } }
+			}
+			modifier = {
+				factor = 0.9
+				NOT = { opinion = { who = FROM value = -125 } }
+			}
+			modifier = {
+				factor = 0.9
+				NOT = { opinion = { who = FROM value = -175 } }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 25 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 50 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 75 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 100 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 125 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 150 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 175 }
+			}
+		}
+		name = EVTOPTAcalifate11
+		any_vassal = { #Give vassal choice to not convert (ruler has not converted)
+			limit = { religion = ormazd }
+			character_event = { id = califate.12 }
+		}
+		any_courtier = {
+			limit = {
+				is_ruler = no
+				NOT = { character = ROOT }
+				NOT = { character = FROM }
+				religion = ormazd
+			}
+			random_list = {
+				80 = {
+				}
+				20 = {
+					religion = kitabid
+				}
+			}
+		}
+	}
+	option = {
+		name = EVTOPTBcalifate11
+		religion = kitabid
+		random_demesne_province = {
+			limit = {
+				religion = ormazd
+			}
+			random_list = {
+				80 = {
+					religion = kitabid
+				}
+				20 = {
+				}
+			}
+		}
+		any_vassal = {
+			limit = { religion = ormazd }
+			character_event = { id = califate.13 }
+		}
+		any_courtier = {
+			limit = {
+				NOT = { character = ROOT }
+				NOT = { character = FROM }
+				is_landed = no
+				religion = ormazd
+			}
+			random_list = {
+				80 = {
+					religion = kitabid
+				}
+				20 = {
+				}
+			}
+		}
+	}
+}
+
+
+# califate.13 Your liege joins the Kitabids
+# Scope: ROOT is an Ormazdic vassal, FROM the liege who became Kitabid.
+character_event = {
+	id = califate.13
+	desc = EVTDESCcalifate13
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_religion
+
+	trigger = {
+		is_ruler = yes
+	}
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAcalifate11
+		any_vassal = { #Give vassal choice to not convert (ruler has not converted)
+			limit = { religion = ormazd }
+			character_event = { id = califate.12 }
+		}
+		any_courtier = {
+			limit = {
+				NOT = { character = ROOT }
+				NOT = { character = FROM }
+				is_landed = no
+				religion = ormazd
+			}
+			random_list = {
+				50 = {
+				}
+				50 = {
+					religion = kitabid
+				}
+			}
+		}
+	}
+	option = {
+		ai_chance = {
+			factor = 90
+			modifier = {
+				factor = 0
+				is_foe = FROM
+			}
+			modifier = {
+				factor = 0.9
+				NOT = { opinion = { who = FROM value = -25 } }
+			}
+			modifier = {
+				factor = 0.9
+				NOT = { opinion = { who = FROM value = -75 } }
+			}
+			modifier = {
+				factor = 0.9
+				NOT = { opinion = { who = FROM value = -125 } }
+			}
+			modifier = {
+				factor = 0.9
+				NOT = { opinion = { who = FROM value = -175 } }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 25 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 50 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 75 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 100 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 125 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 150 }
+			}
+			modifier = {
+				factor = 1.1
+				opinion = { who = FROM value = 175 }
+			}
+		}
+		name = EVTOPTBcalifate11
+		religion = kitabid
+		random_demesne_province = {
+			limit = {
+				religion = ormazd
+			}
+			random_list = {
+				80 = {
+					religion = kitabid
+				}
+				20 = {
+				}
+			}
+		}
+		any_vassal = {
+			limit = { religion = ormazd }
+			character_event = { id = califate.13 }
+		}
+		any_courtier = {
+			limit = {
+				NOT = { character = ROOT }
+				NOT = { character = FROM }
+				is_landed = no
+				religion = ormazd
+			}
+			random_list = {
+				80 = {
+					religion = kitabid
+				}
+			}
+		}
+	}
+}
+
+# califate.16 Only a Sayyid may be Calif
+# The heir of a dead Calif who is no Sayyid passes the title to a Sayyid
+# relative or courtier, or the Califate ends (califate.17).
+# Scope: ROOT is the heir.
+character_event = {
+	id = califate.16
+	desc = EVTDESCcalifate16
+	picture = GFX_evt_bishop
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes
+
+	trigger = {
+		k_caliph_al_umma = {
+			holder_scope = {
+				character = ROOT
+			}
+		}
+		NOT = {
+			trait = ormazd_sayyid
+		}
+	}
+
+	option = {
+		trigger = {
+			OR = {
+				any_close_relative = {
+					religion = ormazd
+					trait = ormazd_sayyid
+				}
+				any_courtier = {
+					religion = ormazd
+					trait = ormazd_sayyid
+				}
+			}
+		}
+		name = EVTOPTAcalifate16
+		if = {
+			limit = {
+				any_close_relative = {
+					religion = ormazd
+					trait = ormazd_sayyid
+				}
+			}
+			k_caliph_al_umma = {
+				ROOT = {
+					random_dynasty_member = {
+						limit = {
+							religion = ormazd
+							trait = ormazd_sayyid
+						}
+						PREV = {
+							grant_title = PREVPREVPREV
+						}
+					}
+				}
+			}
+		}
+		if = {
+			limit = {
+				any_courtier = {
+					religion = ormazd
+					trait = ormazd_sayyid
+				}
+				NOT = {
+					any_close_relative = {
+						religion = ormazd
+						trait = ormazd_sayyid
+					}
+				}
+			}
+			k_caliph_al_umma = {
+				ROOT = {
+					random_courtier = {
+						limit = {
+							religion = ormazd
+							trait = ormazd_sayyid
+						}
+						PREV = {
+							grant_title = PREVPREVPREV
+						}
+					}
+				}
+			}
+		}
+	}
+	option = {
+		name = EVTOPTAcalifate16
+		trigger = {
+			NOT = {
+				OR = {
+					any_courtier = {
+						religion = ormazd
+						trait = ormazd_sayyid
+					}
+					any_close_relative = {
+						religion = ormazd
+						trait = ormazd_sayyid
+					}
+				}
+			}
+		}
+		k_caliph_al_umma = {
+			unsafe_destroy_landed_title = THIS
+			ROOT = { narrative_event = { id = califate.17 } }
+		}
+	}
+}
+
+# califate.15 The Calif dies
+# Hidden. Sends the heir to califate.16.
+# Scope: ROOT is the dying Calif.
+character_event = {
+	id = califate.15
+	is_triggered_only = yes # on_death
+
+	hide_window = yes
+
+	trigger = {
+		k_caliph_al_umma = {
+			holder_scope = {
+				character = ROOT
+			}
+		}
+	}
+
+	immediate = {
+		current_heir = {
+			character_event = { id = califate.16 }
+		}
+	}
+}
+
+# califate.17 The last Calif
+# Scope: ROOT is the heir who could not keep the Califate.
+narrative_event = {
+	id = califate.17
+	title = EVTTITLEcalifate17
+	desc = EVTDESCcalifate17
+	picture = GFX_evt_bishop
+
+	major = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAcalifate17
 	}
 }

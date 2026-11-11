@@ -21,6 +21,7 @@
 # The rebel general                       cathayinv.40 - cathayinv.49
 # The west invades Cathay                 cathayinv.50 - cathayinv.53
 # Expeditions into Cathay                 cathayinv.54 - cathayinv.57
+# Expansionist Cathay                     cathayexp.1 - cathayexp.8
 #
 # Callers: common/on_actions/00_on_actions.txt: on_offmap_yearly_pulse (1,
 # 10, 11), on_offmap_ruler_changed (12), on_offmap_governor_changed (20),
@@ -2035,5 +2036,342 @@ narrative_event = {
 
 	option = {
 		name = EVTOPTAcathayinv57
+	}
+}
+
+###############################################################################
+# Expansionist Cathay (namespace cathayexp, ids kept; was cathay_expansion in
+#   wh_cathay_events.txt)
+# Faction: Cathay & the East
+#
+# What an Expansionist Cathay does in the west, at most once every two
+# years and never while it starves or sickens or while a Chaos usurper sits
+# on the Dragon Throne. It sends an army to a colony under attack (less
+# often when Cathay is beset at home), settlers to a colony at peace, or it
+# hunts the exiles who fled the Dragon Throne (rebel generals, displaced
+# princes, and anyone who sacked Cathay): a host is asked to hand the
+# exile over, and an exile with no host gets the jade assassins.
+#
+#   cathayexp.1        Expansionist Cathay looks west (hidden)
+#   cathayexp.2 - 3    The Dragon sends an army to a colony, and the news
+#   cathayexp.4        Settlers from Cathay
+#   cathayexp.5        The jade assassins strike (hidden)
+#   cathayexp.6        The Dragon Throne demands an exile back
+#   cathayexp.7 - 8    An exile slain (news), or one who survives
+#
+# Callers: on_offmap_yearly_pulse (1) in common/on_actions/00_on_actions.txt.
+# Shared code: cathay_colony_ruler_trigger, cathay_exile_trigger,
+#   leave_court_for_cathay_effect.
+# Loc: localisation/00_WHG_cathay_invasion_events.csv; the modifiers and
+#   tooltips stay in localisation/00_cathay_wars.csv.
+###############################################################################
+
+namespace = cathayexp
+
+# Expansionist Cathay looks west (hidden)
+character_event = {
+	id = cathayexp.1
+	hide_window = yes
+
+	has_dlc = "Jade Dragon"
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = {
+			is_offmap_tag = offmap_cathay
+			has_policy = cathay_expansionist
+			offmap_ruler = { NOT = { cathay_chaos_claimant_faith_trigger = yes } } # A Chaos usurper does not care for the colonies
+			NOR = { has_status = cathay_famine has_status = cathay_plague }
+			OR = {
+				NOT = { has_offmap_tmp_flag = cathay_expansion_acted }
+				had_offmap_tmp_flag = { flag = cathay_expansion_acted years = 2 }
+			}
+		}
+	}
+
+	immediate = {
+		random_list = {
+			40 = { # An army for a colony under attack
+				trigger = {
+					any_independent_ruler = {
+						cathay_colony_ruler_trigger = yes
+						war = yes
+						is_primary_war_defender = yes
+						NOT = { has_character_modifier = cathay_expedition_aid_cd }
+					}
+				}
+				modifier = { factor = 0.25 cathay_beset_trigger = yes }
+				random_independent_ruler = {
+					limit = {
+						cathay_colony_ruler_trigger = yes
+						war = yes
+						is_primary_war_defender = yes
+						NOT = { has_character_modifier = cathay_expedition_aid_cd }
+					}
+					character_event = { id = cathayexp.2 }
+				}
+				FROM = { set_offmap_tmp_flag = cathay_expansion_acted }
+			}
+			15 = { # Settlers for a colony at peace
+				trigger = {
+					any_independent_ruler = {
+						cathay_colony_ruler_trigger = yes
+						war = no
+						NOT = { has_character_modifier = cathay_settlers_cd }
+					}
+				}
+				random_independent_ruler = {
+					limit = {
+						cathay_colony_ruler_trigger = yes
+						war = no
+						NOT = { has_character_modifier = cathay_settlers_cd }
+					}
+					character_event = { id = cathayexp.4 }
+				}
+				FROM = { set_offmap_tmp_flag = cathay_expansion_acted }
+			}
+			25 = { # Hunt an exile
+				trigger = {
+					any_character = {
+						cathay_exile_trigger = yes
+						NOT = { has_character_modifier = cathay_hunted_cd }
+					}
+				}
+				modifier = { # The Dragon Emperor never forgets
+					factor = 2
+					dragon_emperor_reigns_trigger = yes
+				}
+				random_character = {
+					limit = {
+						cathay_exile_trigger = yes
+						NOT = { has_character_modifier = cathay_hunted_cd }
+					}
+					preferred_limit = { has_character_flag = cathay_sworn_vengeance }
+					add_character_modifier = { name = cathay_hunted_cd years = 5 hidden = yes }
+					save_event_target_as = cathay_hunted_exile
+					if = { # A guest at someone's court: demand them back
+						limit = { is_ruler = no host = { is_ruler = yes } }
+						host = { character_event = { id = cathayexp.6 } }
+					}
+					else = { # Send the jade assassins
+						ROOT = { character_event = { id = cathayexp.5 } }
+					}
+				}
+				FROM = { set_offmap_tmp_flag = cathay_expansion_acted }
+			}
+			20 = { }
+		}
+	}
+}
+
+# The Dragon sends aid. ROOT = colony ruler, FROM = governor
+character_event = {
+	id = cathayexp.2
+	title = EVTNAMEcathayexp2
+	desc = EVTDESCcathayexp2
+	picture = GFX_evt_china_invades
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_character_modifier = { name = cathay_expedition_aid_cd years = 5 hidden = yes }
+		capital_scope = { save_event_target_as = cathay_aid_landing }
+		spawn_unit = {
+			province = event_target:cathay_aid_landing
+			owner = ROOT
+			troops = {
+				light_infantry = { 1500 1500 }
+				heavy_infantry = { 1000 1000 }
+				archers = { 1500 1500 }
+				light_cavalry = { 500 500 }
+			}
+			earmark = cathay_dragon_host
+			disband_on_peace = yes
+			attrition = 1.0
+		}
+		if = {
+			limit = { offmap_cathay = { has_status = cathay_golden_age } }
+			spawn_unit = {
+				province = event_target:cathay_aid_landing
+				owner = ROOT
+				troops = { heavy_infantry = { 1500 1500 } }
+				earmark = cathay_dragon_host
+				disband_on_peace = yes
+				attrition = 1.0
+			}
+		}
+		any_player = {
+			limit = {
+				NOT = { character = ROOT }
+				has_offmap_news_enabled = offmap_cathay
+				is_within_diplo_range = ROOT
+			}
+			narrative_event = { id = cathayexp.3 }
+		}
+	}
+
+	option = {
+		name = EVTOPTAcathayexp2
+		custom_tooltip = { text = cathay_dragon_host_tt }
+		add_offmap_currency = { offmap = offmap_cathay value = 50 }
+	}
+}
+
+# News: Cathay sends an army west. ROOT = player, FROM = colony ruler
+narrative_event = {
+	id = cathayexp.3
+	title = NEWS_FROM_CATHAY
+	desc = EVTDESCcathayexp3
+	picture = GFX_evt_china_expansionist
+	portrait = offmap_cathay
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+
+	is_triggered_only = yes
+
+	option = {
+		name = INTERESTING
+	}
+}
+
+# Settlers from Cathay. ROOT = colony ruler, FROM = governor
+character_event = {
+	id = cathayexp.4
+	title = EVTNAMEcathayexp4
+	desc = EVTDESCcathayexp4
+	picture = GFX_evt_china_open
+
+	is_triggered_only = yes
+
+	immediate = {
+		add_character_modifier = { name = cathay_settlers_cd years = 10 hidden = yes }
+	}
+
+	option = {
+		name = EVTOPTAcathayexp4
+		wealth = 100
+		capital_scope = { add_province_modifier = { name = cathayan_settlers duration = 5475 } }
+	}
+}
+
+# The jade assassins strike (hidden). ROOT = governor
+character_event = {
+	id = cathayexp.5
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:cathay_hunted_exile = { is_alive = yes }
+	}
+
+	immediate = {
+		event_target:cathay_hunted_exile = {
+			random_list = {
+				30 = { # Slain
+					modifier = { # Rulers are well guarded
+						factor = 0.5
+						is_ruler = yes
+					}
+					modifier = { factor = 0.5 has_character_flag = cathay_sworn_vengeance }
+					modifier = { factor = 1.5 dragon_emperor_reigns_trigger = yes }
+					any_player = {
+						limit = {
+							NOT = { character = PREV }
+							OR = {
+								AND = {
+									has_offmap_news_enabled = offmap_cathay
+									is_within_diplo_range = PREV
+								}
+								any_courtier = { character = PREVPREV }
+							}
+						}
+						narrative_event = { id = cathayexp.7 }
+					}
+					death = { death_reason = death_murder killer = ROOT }
+				}
+				70 = { # Survived
+					add_character_modifier = { name = hunted_by_cathay years = 5 }
+					if = { limit = { ai = no } character_event = { id = cathayexp.8 } }
+				}
+			}
+		}
+	}
+}
+
+# The Dragon Throne demands an exile back. ROOT = host, FROM = governor
+character_event = {
+	id = cathayexp.6
+	title = EVTNAMEcathayexp6
+	desc = EVTDESCcathayexp6
+	picture = GFX_evt_chinese_bureaucrat
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:cathay_hunted_exile = { is_alive = yes host = { character = ROOT } }
+	}
+
+	option = { # Hand them over
+		name = EVTOPTAcathayexp6
+		event_target:cathay_hunted_exile = { leave_court_for_cathay_effect = yes }
+		add_offmap_currency = { offmap = offmap_cathay value = 150 }
+		ai_chance = {
+			factor = 60
+			modifier = {
+				factor = 2
+				is_tributary = { type = offmap suzerain = e_cathay_west_governor }
+			}
+			modifier = { factor = 0.2 event_target:cathay_hunted_exile = { dynasty = ROOT } }
+			modifier = {
+				factor = 0
+				event_target:cathay_hunted_exile = {
+					OR = { is_close_relative = ROOT is_married = ROOT }
+				}
+			}
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBcathayexp6
+		prestige = 25
+		event_target:cathay_hunted_exile = {
+			opinion = { who = ROOT modifier = opinion_saved_me years = 20 }
+		}
+		add_character_modifier = { name = angered_cathay_modifier years = 10 }
+		random = { chance = 50 FROM = { character_event = { id = cathayexp.5 days = 30 } } }
+		ai_chance = { factor = 40 }
+	}
+}
+
+# News: an exile is slain by Cathay's assassins. ROOT = player, FROM = governor
+narrative_event = {
+	id = cathayexp.7
+	title = NEWS_FROM_CATHAY
+	desc = EVTDESCcathayexp7
+	picture = GFX_evt_china_rebel_general
+	portrait = event_target:cathay_hunted_exile
+	window = EventWindowOffmap
+	background = GFX_event_window_news_from_china
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAcathayexp7
+	}
+}
+
+# The exile survives the jade assassins. ROOT = exile
+character_event = {
+	id = cathayexp.8
+	title = EVTNAMEcathayexp8
+	desc = EVTDESCcathayexp8
+	picture = GFX_evt_china_rebel_general
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAcathayexp8
 	}
 }

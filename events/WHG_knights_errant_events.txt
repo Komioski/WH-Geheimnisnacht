@@ -1,0 +1,392 @@
+###############################################################################
+# Knights Errant: young Bretonnian knights on the road, seeking deeds
+# Namespace: errant (was 71000 - 71006 in the vanilla hedge_knights_events.txt)
+# Faction: Bretonnia
+# Serves: rulers of the Lady of the Lake (grail and false grail)
+#
+# Part 1: The visit                                errant.1 - errant.9
+#   (a band of Knights Errant asks for hospitality; while they stay, one may
+#   be hurt in the lists, one may shine and be taken into service, a proud
+#   courtier may take offence, a girl of the court may be seduced; then they
+#   ride on)
+# Part 2: The marshal's prisoner                   errant.20
+#
+# Callers: errant.1 and errant.20 on the 00_on_actions yearly random_events
+#   list (weight 100 each). The visit runs as a chain: errant.9 picks the
+#   next scene every 20 - 40 days (was five events with MTTH of 20 - 100
+#   days polled every day while the knights stayed).
+# Scripted triggers: common/scripted_triggers/WHG_knights_errant_triggers.txt
+# Scripted effects: common/scripted_effects/WHG_knights_errant_effects.txt
+# Localisation: localisation/00_WHG_knights_errant_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = errant
+
+###############################################################################
+# Part 1: The visit
+###############################################################################
+
+# errant.1 Knights Errant at the gate
+# Yearly random_events (00_on_actions). A small court with a chancellor to
+# receive them is likelier; sick, mad or great rulers are less likely.
+# Scope: ROOT is a ruler of the Lady.
+character_event = {
+	id = errant.1
+	desc = EVTDESCerrant1
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # on_yearly_pulse random_events
+
+	only_playable = yes
+	min_age = 16
+	prisoner = no
+	war = no
+	religion_group = old_world_group
+
+	trigger = {
+		in_command = no
+		OR = { religion = grail religion = false_grail }
+		NOT = { has_character_flag = errant_visiting }
+		NOT = { has_character_flag = errant_hated }
+		NOT = { has_character_modifier = in_seclusion }
+		any_courtier = { has_job_title = job_chancellor }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.5 trait = gregarious }
+		modifier = { factor = 2.0 prestige = 100 }
+		modifier = { factor = 2.0 tier = COUNT }
+		modifier = { factor = 0.5 tier = KING }
+		modifier = { factor = 0.2 tier = EMPEROR }
+		modifier = { factor = 0.8 OR = { trait = stressed trait = depressed } }
+		modifier = {
+			factor = 0.5
+			OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 trait = possessed }
+		}
+		modifier = { factor = 0.7 is_ill = yes }
+		modifier = {
+			factor = 0.5
+			OR = { trait = leper trait = infirm trait = incapable trait = drunkard }
+		}
+		modifier = { factor = 0.8 OR = { trait = wounded is_maimed_trigger = yes } }
+	}
+
+	option = { # A lavish feast
+		name = EVTOPTAerrant1
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 2 trait = gregarious }
+			modifier = { factor = 2 trait = charitable }
+			modifier = { factor = 0 trait = greedy }
+			modifier = { factor = 0 trait = shy }
+		}
+		set_character_flag = errant_visiting
+		prestige = 10
+		if = { limit = { trait = greedy } scaled_wealth = -0.4 remove_trait = greedy }
+		else = { scaled_wealth = -0.2 }
+		if = {
+			limit = { NOT = { trait = gregarious } NOT = { trait = shy } }
+			add_trait = gregarious
+		}
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+	option = { # A cold welcome
+		name = EVTOPTBerrant1
+		ai_chance = {
+			factor = 10
+			modifier = {
+				factor = 0
+				OR = { trait = gregarious trait = proud trait = ambitious trait = charitable }
+			}
+		}
+		prestige = 1
+		scaled_wealth = -0.05
+		set_character_flag = errant_visiting
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+	option = { # Turn them away
+		name = EVTOPTCerrant1
+		ai_chance = { factor = 1 modifier = { factor = 0 NOT = { trait = greedy } } }
+		prestige = -5
+		any_courtier = { opinion = { modifier = tight_ruler who = ROOT } }
+	}
+}
+
+# errant.2 Hurt in the lists
+# A knight is injured in a friendly tilt; the visit ends.
+# Scope: ROOT is the host.
+character_event = {
+	id = errant.2
+	desc = EVTDESCerrant2
+	picture = GFX_evt_joust
+
+	is_triggered_only = yes # errant.9
+
+	immediate = {
+		errant_end_visit_effect = yes
+	}
+
+	option = { # Pay his way and send them on
+		name = EVTOPTAerrant2
+		scaled_wealth = -0.05
+		piety = 5
+	}
+	option = { # Let him heal here
+		name = EVTOPTBerrant2
+		prestige = -5
+		piety = 5
+		if = {
+			limit = {
+				NOT = { trait = just }
+				NOT = { trait = arbitrary }
+				NOT = { personality_traits = 5 }
+			}
+			add_trait = just
+		}
+	}
+}
+
+# errant.3 One knight shines
+# Players only: the host may take the young knight into service.
+# Scope: ROOT is the host.
+character_event = {
+	id = errant.3
+	desc = EVTDESCerrant3
+	picture = GFX_evt_joust
+
+	is_triggered_only = yes # errant.9
+
+	immediate = {
+		set_character_flag = errant_recruited
+	}
+
+	option = { # Take him into service
+		name = EVTOPTAerrant3
+		scaled_wealth = -0.1
+		create_character = {
+			random_traits = no
+			dynasty = random
+			female = no
+			age = 16
+			religion = ROOT
+			culture = ROOT
+			trait = brave
+			trait = ambitious
+			trait = humble
+			health = 10
+			attributes = { martial = 15 }
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # racial trait
+		}
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+	option = { # Praise him before the court
+		name = EVTOPTBerrant3
+		prestige = 5
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+}
+
+# errant.4 A courtier takes offence
+# A proud man of the court is mocked by the knights.
+# Scope: ROOT is the host; errant_offended is the courtier.
+character_event = {
+	id = errant.4
+	desc = EVTDESCerrant4
+	picture = GFX_evt_joust
+
+	is_triggered_only = yes # errant.9
+
+	immediate = {
+		random_courtier = {
+			limit = { errant_offended_trigger = yes }
+			score_value = { value = 10 interesting_courtier_selection_score = yes }
+			save_event_target_as = errant_offended
+		}
+	}
+
+	option = { # Throw them out
+		name = EVTOPTAerrant4
+		piety = -10
+		errant_end_visit_effect = yes
+	}
+	option = { # Ignore the complaint
+		name = EVTOPTBerrant4
+		event_target:errant_offended = {
+			opinion = { modifier = ruler_not_respect_rank who = ROOT months = 60 }
+		}
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+}
+
+# errant.5 A girl of the court is seduced
+# Players only. A young unwed woman of the court falls for one of the knights
+# and is with child.
+# Scope: ROOT is the host; errant_seduced is the woman.
+character_event = {
+	id = errant.5
+	desc = EVTDESCerrant5
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # errant.9
+
+	immediate = {
+		set_character_flag = errant_seduction
+		random_courtier = {
+			limit = { errant_seduced_trigger = yes }
+			score_value = { value = 10 interesting_courtier_selection_score = yes }
+			save_event_target_as = errant_seduced
+		}
+	}
+
+	option = { # Let it be
+		name = EVTOPTAerrant5
+		piety = -10
+		event_target:errant_seduced = { errant_seducer_effect = yes }
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+	option = { # Throw the knight in the dungeon
+		name = EVTOPTBerrant5
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 100 OR = { trait = cruel trait = zealous } }
+		}
+		event_target:errant_seduced = {
+			errant_seducer_effect = yes
+			new_character = { imprison = ROOT }
+		}
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+}
+
+# errant.6 The knights ride on
+# Scope: ROOT is the host.
+character_event = {
+	id = errant.6
+	desc = EVTDESCerrant6
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # errant.9
+
+	immediate = {
+		errant_end_visit_effect = yes
+	}
+
+	option = { # A farewell feast
+		name = EVTOPTAerrant6
+		prestige = 10
+		scaled_wealth = -0.05
+	}
+	option = { # Let them go quietly
+		name = EVTOPTBerrant6
+		prestige = -5
+	}
+}
+
+# errant.9 The visit goes on (hidden)
+# Picks the next scene. The knights stay for at most three scenes, then ride
+# on; a recruit makes them leave sooner (was MTTH 40 days, x0.1 with a recruit).
+# Scope: ROOT is the host.
+character_event = {
+	id = errant.9
+	hide_window = yes
+	is_triggered_only = yes # errant.1 - 5
+
+	trigger = {
+		has_character_flag = errant_visiting
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				OR = { prisoner = yes is_alive = no war = yes has_character_flag = errant_scene_3 }
+			}
+			character_event = { id = errant.6 }
+		}
+		else = {
+			if = {
+				limit = { has_character_flag = errant_scene_2 }
+				set_character_flag = errant_scene_3
+			}
+			else_if = {
+				limit = { has_character_flag = errant_scene_1 }
+				set_character_flag = errant_scene_2
+			}
+			else = { set_character_flag = errant_scene_1 }
+			random_list = {
+				30 = { # Hurt in the lists
+					trigger = { errant_first_scene_trigger = yes }
+					character_event = { id = errant.2 }
+				}
+				30 = { # One knight shines
+					trigger = { ai = no errant_first_scene_trigger = yes }
+					character_event = { id = errant.3 }
+				}
+				20 = { # A courtier takes offence
+					trigger = { any_courtier = { errant_offended_trigger = yes } }
+					modifier = { factor = 0.2 has_character_flag = errant_recruited }
+					modifier = { factor = 0.2 has_character_flag = errant_seduction }
+					character_event = { id = errant.4 }
+				}
+				20 = { # A girl of the court is seduced
+					trigger = {
+						ai = no
+						NOT = { has_character_flag = errant_seduction }
+						any_courtier = { errant_seduced_trigger = yes }
+					}
+					modifier = { factor = 0.2 has_character_flag = errant_recruited }
+					character_event = { id = errant.5 }
+				}
+				20 = { # They ride on
+					modifier = { factor = 10 has_character_flag = errant_recruited }
+					character_event = { id = errant.6 }
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# Part 2: The marshal's prisoner
+###############################################################################
+
+# errant.20 The marshal has arrested a Knight Errant
+# Yearly random_events (00_on_actions). Freeing him costs the marshal face;
+# leaving him makes the ruler hated by the knights, who stop visiting.
+# Scope: ROOT is a ruler of the Lady.
+character_event = {
+	id = errant.20
+	desc = EVTDESCerrant20
+	picture = GFX_evt_melee
+
+	is_triggered_only = yes # on_yearly_pulse random_events
+
+	only_playable = yes
+	prisoner = no
+	war = no
+	religion_group = old_world_group
+
+	trigger = {
+		in_command = no
+		OR = { religion = grail religion = false_grail }
+		NOT = { has_character_flag = errant_visiting }
+		any_courtier = { has_job_title = job_marshal }
+	}
+
+	option = { # Release him
+		name = EVTOPTAerrant20
+		job_marshal = { prestige = -25 opinion = { modifier = marshal_overruled who = ROOT } }
+		piety = 10
+		clr_character_flag = errant_hated
+	}
+	option = { # Not my concern
+		name = EVTOPTBerrant20
+		job_marshal = { prestige = 25 }
+		prestige = 25
+		piety = -10
+		set_character_flag = errant_hated
+	}
+}

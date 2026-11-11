@@ -1,0 +1,3324 @@
+###############################################################################
+# The game's own hooks: crimes, arrests, murders, diplomatic answers and
+# the other events the on_actions fire
+#
+# Was events/on_action_events.txt, the vanilla file of numbered events the
+# game's on_actions call (with the mod's own additions: the race checks on
+# marriage, the Lahmian Queen's trait, the AI marriage correction, the
+# destruction of cursed artifacts). Every one of them is called through an
+# on_action or another event, so all of them have names now.
+#
+# Part 1: message windows      message.1 - 2 (was 1 - 2)
+# Part 2: crimes found out     crime.1 - 2 (was 10 - 11), crime.10 (was 20)
+# Part 3: arrest and revolt    arrest.1 - 9 (was 150 - 155 and 40000 -
+#                              40002), arrest.11 - 15 (was 681 - 685)
+# Part 4: blades in the dark   murder.1 - 16 (was 156 - 163 and 40003 -
+#                              40010), murder.20 - 26 (was 40020 - 40026)
+# Part 5: diplomatic answers   response.<old id> (was 202 - 538), response.1
+#                              - 2 (was diploresponse.1 - 2), response.250 -
+#                              251 (was 41000 - 41001)
+#
+# Saved: character flags adultery_discovered (cleared at once),
+#   we_are_evil_assasinator (the plotter, cleared by murder.21),
+#   set_to_higher_liege; event targets target_victim, target_adulterer,
+#   kinslayer_target; character modifiers known_murderer, adulterer,
+#   adulteress, incestuous_adulterer/adulteress, adulterous_priest,
+#   known_sodomite(_pagan), cradle_robber.
+#
+# Callers: common/on_actions/00_on_actions.txt (the message, prison,
+#   assassination, revolt and interaction on_actions); crime.1 - 2 and
+#   crime.10 from the intrigue, vampire, bloodline, assassins, wonder,
+#   pregnancy, monastic and seduction events and plot_events.txt.
+# Loc: localisation/00_WHG_on_action_events.csv (Parts 3 and 4); the
+#   diplomatic answers keep the game's own texts.
+###############################################################################
+
+namespace = message
+namespace = crime
+namespace = arrest
+namespace = murder
+namespace = response
+
+###############################################################################
+# Part 1: Message windows
+###############################################################################
+
+# message.1 Message letter (on_letter_event_message). The game fills in the text
+# of message pop-ups shown as letters. Do not add text.
+letter_event = {
+	id = message.1
+
+	is_triggered_only = yes
+
+	#desc = "A"
+}
+
+# message.2 Message event (on_character_event_message). The same, shown as an
+# event window.
+character_event = {
+	id = message.2
+
+	is_triggered_only = yes
+
+	#desc = "B"
+}
+
+###############################################################################
+# Part 2: Crimes found out
+###############################################################################
+
+# crime.1 A murderer is found out (hidden). ROOT is the killer, the victim is
+# event_target:target_victim. Known murderer for 50 years, the kinslayer
+# trait if kin, the hatred of the victim's spouse, kin, liege, ruler
+# and faith head, and a Dawi grudge for a slain dwarf. Fired by
+# murder.15, intrigue.71, the vampire, bloodline and assassins events
+# and plot_events.
+character_event = {
+	id = crime.1
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { NOT = { has_character_modifier = known_murderer } }
+			add_character_modifier = { name = known_murderer years = 50 }
+		}
+
+		event_target:target_victim = { save_event_target_as = kinslayer_target }
+		add_kinslayer_trait_effect = yes
+
+		event_target:target_victim = {
+			any_spouse = { opinion = { who = ROOT modifier = opinion_spouse_slayer months = 60 } }
+			any_liege = {
+				if = {
+					limit = {
+						is_close_relative = PREV
+						NOT = { character = ROOT }
+						NOT = { is_close_relative = ROOT }
+					}
+					opinion = { who = ROOT modifier = opinion_regicide_traitor }
+				}
+			}
+
+			if = {
+				limit = { NOT = { dynasty = ROOT } }
+				any_dynasty_member = {
+					opinion = { who = ROOT modifier = opinion_dishonorable months = 60 }
+				}
+			}
+
+			top_liege = {
+				opinion = { who = ROOT modifier = opinion_dishonorable months = 60 }
+				any_realm_lord = {
+					opinion = { who = ROOT modifier = opinion_dishonorable months = 60 }
+				}
+			}
+			religion_head = { opinion = { who = ROOT modifier = opinion_dishonorable months = 60 } }
+
+			if = {
+				limit = { mother = { NOT = { character = ROOT } NOT = { is_mother = ROOT } } }
+				mother = {
+					opinion = { who = ROOT modifier = opinion_killed_close_kin months = 1200 }
+					add_rival = ROOT
+				}
+			}
+			if = {
+				limit = { father = { NOT = { character = ROOT } NOT = { is_father = ROOT } } }
+				father = {
+					opinion = { who = ROOT modifier = opinion_killed_close_kin months = 1200 }
+					add_rival = ROOT
+				}
+			}
+
+			any_child = {
+				limit = { NOT = { character = ROOT } NOT = { is_child_of = ROOT } }
+				opinion = { who = ROOT modifier = opinion_killed_close_kin months = 1200 }
+				add_rival = ROOT
+			}
+
+			any_sibling = {
+				limit = { NOT = { character = ROOT } NOT = { sibling = ROOT } }
+				opinion = { who = ROOT modifier = opinion_killed_close_kin months = 1200 }
+			}
+			if = { #If target was a landless Dwarf, get Grudged On by their dynastic head
+				limit = {
+					trait = creature_dwarf
+					religion_group = dwarf_gods_group
+					ROOT = {
+						NOR = {
+							trait = creature_orc
+							trait = creature_goblin
+							trait = creature_hobgoblin
+							trait = creature_skaven
+						}
+					}
+				}
+				random_dynasty_member = {
+					limit = { NOT = { character = event_target:target_victim } is_ruler = yes }
+					set_character_flag = dwarf_grudge_plot_discovered_dead_relative
+					character_event = { id = dawi.9 }
+				}
+			}
+		}
+	}
+}
+
+# crime.2 A murder attempt is found out (hidden). ROOT is the plotter, the
+# victim is event_target:target_victim. The victim, the victim's kin
+# and liege remember it; a Dawi victim's kin swear a grudge. Fired by
+# murder.7, 9, 11 and by the intrigue, vampire, bloodline, assassins
+# and wonder events and plot_events.
+character_event = {
+	id = crime.2
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		event_target:target_victim = {
+			opinion = { who = ROOT modifier = opinion_murder_attempt months = 600 }
+
+			any_liege = {
+				limit = {
+					is_close_relative = PREV
+					NOT = { character = ROOT }
+					NOT = { dynasty = ROOT }
+				}
+				opinion = { who = ROOT modifier = opinion_dishonorable months = 60 }
+			}
+
+			if = {
+				limit = { NOT = { dynasty = ROOT } }
+				any_dynasty_member = {
+					opinion = { who = ROOT modifier = opinion_dishonorable months = 60 }
+				}
+			}
+
+			if = {
+				limit = { mother = { NOT = { character = ROOT } NOT = { is_mother = ROOT } } }
+				mother = {
+					opinion = { who = ROOT modifier = attempted_murder_of_child months = 120 }
+				}
+			}
+			if = {
+				limit = { father = { NOT = { character = ROOT } NOT = { is_father = ROOT } } }
+				father = {
+					opinion = { who = ROOT modifier = attempted_murder_of_child months = 120 }
+				}
+			}
+
+			any_child = {
+				limit = { NOT = { character = ROOT } NOT = { is_child_of = ROOT } }
+				opinion = { who = ROOT modifier = attempted_murder_of_parent months = 120 }
+			}
+
+			any_sibling = {
+				limit = { NOT = { character = ROOT } NOT = { sibling = ROOT } }
+				opinion = { who = ROOT modifier = attempted_murder_of_sibling months = 60 }
+			}
+			if = { #If target is a Dwarf and plot is discovered, get Grudged On
+				limit = {
+					ROOT = {
+						NOR = {
+							trait = creature_orc
+							trait = creature_goblin
+							trait = creature_hobgoblin
+							trait = creature_skaven
+						}
+					}
+					trait = creature_dwarf
+					religion_group = dwarf_gods_group
+				}
+				set_character_flag = dwarf_grudge_plot_discovered
+				character_event = { id = dawi.9 }
+			}
+		}
+	}
+}
+
+# crime.10 Adultery is found out (hidden). ROOT is one of the lovers, the other
+# is event_target:target_adulterer; the event fires again for the
+# other. Nicknames, the adulterer and adulteress modifiers (none for
+# the Ormazd and Kitabid faiths, whose close-kin marriages are holy),
+# the cuckolded spouse's hatred, a priest's shame. Fired by the
+# pregnancy, monastic and seduction events.
+character_event = {
+	id = crime.10
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		set_character_flag = adultery_discovered
+		# Lovers who are married to each other are no scandal
+		if = {
+			limit = { NOT = { any_spouse = { character = event_target:target_adulterer } } }
+
+			if = {
+				limit = {
+					has_nickname = no
+					random = 95 # 5% chance
+				}
+				give_nickname = nick_the_unchaste
+			}
+
+			if = {
+				limit = {
+					religion_group = old_world_group
+					OR = { AND = { is_ruler = yes is_theocracy = yes } is_ascetic_trigger = yes }
+				}
+				add_character_modifier = { name = adulterous_priest years = 20 }
+				piety = -100
+			}
+
+			event_target:target_adulterer = {
+				ROOT = {
+					if = {
+						limit = {
+							is_woman_trigger = yes
+							PREV = { is_female = no } # No one cares if two women fool around
+						}
+
+						if = {
+							limit = { is_married = yes has_nickname = no random = 50 }
+							give_nickname = nick_the_unfaithful
+						}
+
+						if = {
+							limit = {
+								is_pregnant = yes
+								father_of_unborn_known = no
+								father_of_unborn = { character = PREV }
+							}
+							father_of_unborn_known = yes
+						}
+
+						if = {
+							limit = {
+								age_diff = { who = PREV years = 25 }
+								is_older_than = PREV
+								NOT = { has_character_modifier = cradle_robber }
+							}
+							add_character_modifier = { name = cradle_robber years = 5 }
+						}
+
+						any_consort = { # The lord of a concubine
+							limit = { NOT = { character = event_target:target_adulterer } }
+							opinion = { who = PREV modifier = opinion_unfaithful_wife months = 120 }
+							opinion = { who = PREVPREV modifier = opinion_cuckolded months = 120 }
+							if = {
+								limit = {
+									NOT = { is_rival = PREVPREV }
+									NOT = { is_lover = PREVPREV }
+									NOT = { is_friend = PREVPREV }
+									NOT = { trait = kind }
+									NOT = { trait = content }
+								}
+								add_rival = PREVPREV
+							}
+							if = { limit = { is_lover = PREV } remove_lover = PREV }
+							if = { limit = { is_lover = PREVPREV } remove_lover = PREVPREV }
+							if = { limit = { is_friend = PREVPREV } remove_friend = PREVPREV }
+						}
+
+						any_spouse = {
+							limit = { PREVPREV = { is_female = no } }
+							opinion = { who = PREV modifier = opinion_unfaithful_wife months = 120 }
+							opinion = { who = PREVPREV modifier = opinion_cuckolded months = 120 }
+							if = {
+								limit = {
+									NOT = { is_rival = PREVPREV }
+									NOT = { is_lover = PREVPREV }
+									NOT = { is_friend = PREVPREV }
+									NOT = { trait = kind }
+									NOT = { trait = content }
+								}
+								add_rival = PREVPREV
+							}
+							if = { limit = { is_lover = PREV } remove_lover = PREV }
+							if = { limit = { is_lover = PREVPREV } remove_lover = PREVPREV }
+							if = { limit = { is_friend = PREVPREV } remove_friend = PREVPREV }
+						}
+
+						if = {
+							limit = {
+								is_close_relative = PREV
+								NOT = { religion = ormazd }
+								NOT = { religion = kitabid }
+							}
+							add_character_modifier = { name = incestuous_adulteress years = 20 }
+						}
+						if = {
+							limit = {
+								OR = {
+									NOT = { is_close_relative = PREV }
+									religion = ormazd
+									religion = kitabid
+								}
+							}
+							add_character_modifier = { name = adulteress years = 10 }
+						}
+					}
+
+					if = {
+						limit = { is_female = no }
+
+						any_spouse = {
+							if = {
+								limit = { gender_equality_trigger = no }
+								opinion = {
+									who = PREV
+									modifier = opinion_unfaithful_husband
+									years = 10
+								}
+							}
+							if = {
+								limit = { gender_equality_trigger = yes }
+								opinion = {
+									who = PREV
+									modifier = opinion_unfaithful_husband_crime
+									years = 10
+								}
+							}
+							opinion = { who = PREVPREV modifier = slut_seductress months = 120 }
+							if = {
+								limit = {
+									NOT = { is_rival = PREVPREV }
+									NOT = { is_lover = PREVPREV }
+									NOT = { is_friend = PREVPREV }
+									NOT = { trait = kind }
+									NOT = { trait = content }
+								}
+								add_rival = PREVPREV
+							}
+
+							if = { limit = { is_lover = PREV } remove_lover = PREV }
+							if = { limit = { is_lover = PREVPREV } remove_lover = PREVPREV }
+							if = { limit = { is_friend = PREVPREV } remove_friend = PREVPREV }
+						}
+
+						if = {
+							limit = { same_sex = PREV }
+							if = {
+								limit = {
+									OR = {
+										religion = norscan_gods
+										religion = norscan_gods_reformed
+										religion = northern_gods
+										religion = northern_gods_reformed
+									}
+								}
+								add_character_modifier = { name = known_sodomite_pagan years = 20 }
+							}
+							if = {
+								limit = {
+									NOR = {
+										religion = norscan_gods
+										religion = norscan_gods_reformed
+										religion = northern_gods
+										religion = northern_gods_reformed
+									}
+								}
+								add_character_modifier = { name = known_sodomite years = 20 }
+							}
+						}
+
+						if = {
+							limit = {
+								is_close_relative = PREV
+								NOT = { religion = ormazd }
+								NOT = { religion = kitabid }
+							}
+							add_character_modifier = { name = incestuous_adulterer years = 20 }
+						}
+						if = {
+							limit = {
+								is_married = yes
+								OR = {
+									NOT = { is_close_relative = PREV }
+									religion = ormazd
+									religion = kitabid
+								}
+							}
+							if = {
+								limit = {
+									NOR = {
+										religion = norscan_gods
+										religion = norscan_gods_reformed
+										religion = northern_gods
+										religion = northern_gods_reformed
+									}
+								}
+								add_character_modifier = { name = adulterer years = 10 }
+							}
+						}
+					}
+				}
+
+				# Fire this event for the adulterer too
+				if = {
+					limit = {
+						NOT = { has_character_flag = adultery_discovered }
+						is_alive = yes
+						is_dying = no
+					}
+					ROOT = { save_event_target_as = target_adulterer }
+					character_event = { id = crime.10 }
+				}
+
+				#			log = "20: Adultery discovered between [Root.GetTitledName] and [This.GetTitledName]!"
+			}
+		}
+		clear_event_target = target_adulterer
+		clr_character_flag = adultery_discovered
+	}
+}
+
+###############################################################################
+# Part 3: Arrest, cell, exile and revolt
+###############################################################################
+
+# arrest.1 I escaped arrest and rose in revolt (on_avoided_imprison_started_war).
+# ROOT escaped, FROM is the liege who tried to seize ROOT.
+character_event = {
+	id = arrest.1
+	desc = EVTDESCarrest1
+	picture = "GFX_evt_burning_house"
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { character_event = { id = arrest.2 } }
+	}
+
+	option = {
+		name = EVTOPTAarrest1
+		chronicle = { entry = CHRONICLE_AVOID_IMPRISON_WAR portrait = [From.GetID] }
+	}
+}
+
+# arrest.2 The liege hears that the arrest failed and the vassal has risen.
+character_event = {
+	id = arrest.2
+	desc = EVTDESCarrest2
+	picture = GFX_evt_burning_house
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAarrest2
+		chronicle = { entry = CHRONICLE_FAILED_IMPRISON_WAR portrait = [From.GetID] }
+	}
+}
+
+# arrest.3 I am thrown in a cell (on_became_imprisoned). ROOT is the prisoner,
+# FROM the jailer, who gets the jailer's letter (4).
+character_event = {
+	id = arrest.3
+	desc = EVTDESCarrest3
+	picture = "GFX_evt_into_the_dungeon"
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_tooltip = {
+			opinion = { who = FROM modifier = opinion_arrest_attempt months = 120 }
+			FROM = { character_event = { id = arrest.4 } }
+		}
+	}
+
+	option = {
+		name = EVTOPTAarrest3
+	}
+}
+
+# arrest.4 The jailer hears that the prisoner is in the cell.
+character_event = {
+	id = arrest.4
+	desc = EVTDESCarrest4
+	picture = "GFX_evt_into_the_dungeon"
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = "EXCELLENT"
+	}
+}
+
+# arrest.5 I fled the realm before the guards came (on_avoided_imprison_fled_
+# country). ROOT fled, FROM the liege.
+character_event = {
+	id = arrest.5
+	desc = EVTDESCarrest5
+	picture = GFX_evt_burning_house
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_tooltip = {
+			opinion = { who = FROM modifier = opinion_arrest_attempt months = 120 }
+
+			FROM = { character_event = { id = arrest.6 } }
+		}
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# arrest.6 The liege hears that the quarry fled abroad.
+character_event = {
+	id = arrest.6
+	desc = EVTDESCarrest6
+	picture = GFX_evt_burning_house
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAarrest6
+	}
+}
+
+# arrest.7 I am released (on_released_from_prison). FROM let me go.
+character_event = {
+	id = arrest.7
+	desc = EVTDESCarrest7
+	picture = GFX_evt_recovery
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAarrest7
+		opinion = { who = FROM modifier = opinion_merciful months = 60 }
+	}
+}
+
+# arrest.8 I am executed (on_executed). FROM is the executioner; ROOT's spouse
+# hates the executioner, and kinslaying counts.
+character_event = {
+	id = arrest.8
+	desc = EVTDESCarrest8
+	picture = GFX_evt_beheading
+
+	is_triggered_only = yes
+
+	immediate = {
+		any_spouse = { opinion = { who = FROM modifier = opinion_spouse_slayer months = 60 } }
+		FROM = {
+			ROOT = { save_event_target_as = kinslayer_target }
+			add_kinslayer_trait_effect = yes
+		}
+	}
+
+	option = {
+		name = EVTOPTAarrest8
+	}
+}
+
+# arrest.9 I am exiled (on_exiled). FROM banished me.
+character_event = {
+	id = arrest.9
+	desc = EVTDESCarrest9
+	picture = GFX_evt_carriage
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAarrest9
+	}
+}
+
+# arrest.11 I refused to give up my title and rose in revolt
+# (on_revoke_attempted_started_war).
+character_event = {
+	id = arrest.11
+	desc = EVTDESCarrest11
+	picture = "GFX_evt_burning_house"
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAarrest1
+	}
+}
+
+# arrest.12 I refused to be handed to another liege and rose in revolt
+# (on_retract_vassal_attempted_started_war).
+character_event = {
+	id = arrest.12
+	desc = EVTDESCarrest12
+	picture = "GFX_evt_burning_house"
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAarrest1
+	}
+}
+
+# arrest.13 My clan refused to be absorbed and rose in revolt
+# (on_absorb_clan_attempted_started_war).
+character_event = {
+	id = arrest.13
+	desc = EVTDESCarrest13
+	picture = "GFX_evt_burning_house"
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAarrest1
+	}
+}
+
+# arrest.14 My clan refused to be split and rose in revolt
+# (on_split_clan_attempted_started_war).
+character_event = {
+	id = arrest.14
+	desc = EVTDESCarrest14
+	picture = "GFX_evt_burning_house"
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAarrest1
+	}
+}
+
+# arrest.15 A prisoner leaves hiding (hidden, on_become_imprisoned_any_reason).
+character_event = {
+	id = arrest.15
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		trait = in_hiding
+	}
+
+	immediate = {
+		remove_trait = in_hiding
+	}
+}
+
+###############################################################################
+# Part 4: Blades in the dark
+###############################################################################
+
+# murder.1 A blade in the dark misses (on_failed_assassination, weight 85). The
+# victim never learns who sent it.
+character_event = {
+	id = murder.1
+	desc = EVTDESCmurder1
+	picture = "GFX_evt_shadow"
+
+	hide_FROM = yes
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { character_event = { id = murder.2 } }
+	}
+
+	option = {
+		name = EVTOPTAmurder1
+	}
+}
+
+# murder.2 The plotter hears that the attempt failed, but no one knows who sent
+# the killer.
+character_event = {
+	id = murder.2
+	desc = EVTDESCmurder2
+	picture = "GFX_evt_shadow"
+
+	hide_FROM = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder2
+	}
+}
+
+# murder.3 A blade in the dark wounds me (on_failed_assassination, weight 10).
+character_event = {
+	id = murder.3
+	desc = EVTDESCmurder3
+	picture = "GFX_evt_shadow"
+
+	hide_FROM = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = wounded }
+		NOT = { is_maimed_trigger = yes }
+	}
+
+	immediate = {
+		FROM = { character_event = { id = murder.4 } }
+	}
+
+	option = {
+		name = EVTOPTAmurder3
+		add_trait = wounded
+	}
+}
+
+# murder.4 The plotter hears that the victim was only wounded.
+character_event = {
+	id = murder.4
+	desc = EVTDESCmurder2
+	picture = "GFX_evt_shadow"
+
+	hide_FROM = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder4
+	}
+}
+
+# murder.5 A blade in the dark maims me (on_failed_assassination, weight 5,
+# three times as likely if already wounded).
+character_event = {
+	id = murder.5
+	desc = EVTDESCmurder5
+	picture = "GFX_evt_shadow"
+
+	hide_FROM = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		can_be_maimed_trigger = yes
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 3 trait = wounded }
+	}
+
+	immediate = {
+		FROM = { character_event = { id = murder.6 } }
+	}
+
+	option = {
+		name = EVTOPTAmurder5
+		add_maimed_trait_effect = yes
+	}
+}
+
+# murder.6 The plotter hears that the victim was maimed.
+character_event = {
+	id = murder.6
+	desc = EVTDESCmurder2
+	picture = "GFX_evt_shadow"
+
+	hide_FROM = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder6
+	}
+}
+
+# murder.7 The killer failed and named the plotter (on_failed_assassination_
+# disc, weight 85). The plotter is found out (crime.2); the victim's
+# liege may act (murder.20).
+character_event = {
+	id = murder.7
+	desc = EVTDESCmurder7
+	picture = GFX_evt_shadow
+
+	is_triggered_only = yes
+
+	immediate = {
+		save_event_target_as = target_victim
+		FROM = { character_event = { id = crime.2 } character_event = { id = murder.8 } }
+		clear_event_target = target_victim
+	}
+
+	option = {
+		name = EVTOPTAmurder7
+
+		if = {
+			limit = {
+				host = { NOT = { character = FROM } }
+				job_spymaster = { NOT = { character = FROM } }
+			}
+			hidden_tooltip = { host = { character_event = { id = murder.20 days = 5 } } }
+		}
+	}
+}
+
+# murder.8 The plotter hears that the killer talked.
+character_event = {
+	id = murder.8
+	desc = EVTDESCmurder8
+	picture = GFX_evt_shadow
+
+	hide_FROM = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder8
+		piety = -50
+	}
+}
+
+# murder.9 Wounded, and the killer named the plotter (weight 10).
+character_event = {
+	id = murder.9
+	desc = EVTDESCmurder9
+	picture = "GFX_evt_shadow"
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = wounded }
+		NOT = { is_maimed_trigger = yes }
+	}
+
+	immediate = {
+		save_event_target_as = target_victim
+		FROM = { character_event = { id = crime.2 } character_event = { id = murder.10 } }
+		clear_event_target = target_victim
+	}
+
+	option = {
+		name = EVTOPTAmurder9
+		add_trait = wounded
+		if = {
+			limit = {
+				host = { NOT = { character = FROM } }
+				job_spymaster = { NOT = { character = FROM } }
+			}
+			hidden_tooltip = { host = { character_event = { id = murder.20 days = 5 } } }
+		}
+	}
+}
+
+# murder.10 The plotter hears that the killer talked.
+character_event = {
+	id = murder.10
+	desc = EVTDESCmurder8
+	picture = GFX_evt_shadow
+
+	hide_FROM = yes
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder10
+		piety = -50
+	}
+}
+
+# murder.11 Maimed, and the killer named the plotter (weight 5). With Reapers
+# the victim loses an eye; without it, the old maimed trait.
+character_event = {
+	id = murder.11
+	desc = EVTDESCmurder11
+	picture = "GFX_evt_shadow"
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = maimed }
+		NOT = { trait = one_eyed }
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 3 trait = wounded }
+	}
+
+	immediate = {
+		save_event_target_as = target_victim
+		FROM = { character_event = { id = crime.2 } character_event = { id = murder.12 } }
+		clear_event_target = target_victim
+	}
+
+	option = {
+		name = EVTOPTAmurder11
+		if = {
+			limit = { NOT = { has_dlc = "Reapers" } }
+			add_trait = maimed
+			character_event = { id = 38281 }
+		}
+		if = {
+			limit = { has_dlc = "Reapers" }
+			add_trait = one_eyed
+			add_trait = severely_injured
+			hidden_tooltip = {
+				character_event = { id = maimed.1 } #Notify one-eyed
+				resolve_severely_injured_effect = yes
+			}
+		}
+		if = {
+			limit = {
+				host = { NOT = { character = FROM } }
+				job_spymaster = { NOT = { character = FROM } }
+			}
+			hidden_tooltip = { host = { character_event = { id = murder.20 days = 5 } } }
+		}
+	}
+}
+
+# murder.12 The plotter hears that the killer talked.
+character_event = {
+	id = murder.12
+	desc = EVTDESCmurder8
+	picture = GFX_evt_shadow
+
+	hide_FROM = yes
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder12
+		piety = -50
+	}
+}
+
+# murder.13 Murdered in the dark (on_assassination). The victim dies, no one
+# knows who did it.
+character_event = {
+	id = murder.13
+	picture = GFX_evt_shadow
+	desc = EVTDESCmurder13
+
+	hide_FROM = yes
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder13
+		hidden_tooltip = { FROM = { character_event = { id = murder.14 } } }
+		death = { death_reason = death_murder_unknown killer = FROM }
+	}
+}
+
+# murder.14 The plotter hears that the deed is done.
+character_event = {
+	id = murder.14
+	desc = EVTDESCmurder14
+	picture = "GFX_evt_shadow"
+
+	hide_FROM = yes
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder14
+	}
+}
+
+# murder.15 Murdered, and the killer is known (on_assassination_disc). The
+# plotter is found out (crime.1); if someone else paid for it, the
+# victim's heir may act (murder.20).
+character_event = {
+	id = murder.15
+	desc = EVTDESCmurder15
+	picture = "GFX_evt_shadow"
+
+	is_triggered_only = yes
+
+	immediate = {
+		save_event_target_as = target_victim
+		FROM = { character_event = { id = crime.1 } }
+		clear_event_target = target_victim
+
+		if = {
+			limit = {
+				employer = {
+					NOT = { character = FROM }
+					NOT = { character = ROOT }
+					job_spymaster = { NOT = { character = FROM } }
+				}
+			}
+			FROM = { set_character_flag = we_are_evil_assasinator }
+			employer = { character_event = { id = murder.20 days = 5 } }
+		}
+		FROM = { character_event = { id = murder.16 } }
+	}
+
+	option = {
+		name = EVTOPTAmurder15
+		death = { death_reason = death_murder killer = FROM }
+	}
+}
+
+# murder.16 The plotter is known as a murderer: the lords of the realm and the
+# head of the faith think worse of them.
+character_event = {
+	id = murder.16
+	desc = EVTDESCmurder16
+	picture = "GFX_evt_shadow"
+
+	hide_FROM = yes
+	is_triggered_only = yes
+
+	immediate = {
+		if = {
+			limit = { same_realm = FROM }
+			any_realm_lord = {
+				limit = { NOT = { character = FROM } }
+				opinion = { who = ROOT modifier = opinion_dishonorable months = 60 }
+			}
+		}
+		religion_head = { opinion = { who = ROOT modifier = opinion_dishonorable months = 60 } }
+	}
+
+	option = {
+		name = EVTOPTAmurder16
+		piety = -50
+	}
+}
+
+# murder.20 Someone tried to kill me. What now? ROOT is the victim or the
+# victim's ruler, FROMFROM the plotter. Ask the realm's ruler for
+# justice, expose the ruler who did it, try to arrest the plotter,
+# send a killer in return, behead a plotter already in my dungeon, or
+# do nothing.
+character_event = {
+	id = murder.20
+	desc = EVTDESCmurder20
+	picture = GFX_evt_shadow
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder20 #Inside same realm, go to top liege.
+		trigger = {
+			same_realm = FROMFROM
+			independent = no
+			NOT = { top_liege = { character = FROMFROM } }
+		}
+		ai_chance = { factor = 1000 }
+		top_liege = {
+			character_event = {
+				id = murder.21
+				tooltip = EVTTOOLTIPmurder21 #ask liege for help.
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTFmurder20 #Inside same realm, but its my top liege!
+		trigger = { same_realm = FROMFROM independent = no top_liege = { character = FROMFROM } }
+		ai_chance = { factor = 1000 }
+		top_liege = {
+			character_event = {
+				id = murder.26
+				days = 2
+				tooltip = EVTTOOLTIPmurder26 #will be exposed.
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTBmurder20 #Are we his liege?
+		trigger = { same_realm = FROMFROM independent = yes FROM = { FROM = { prisoner = no } } }
+		ai_chance = { factor = 1000 }
+		if = {
+			limit = { realm_intrigue = 16 }
+			random = { chance = 70 reverse_imprison = FROMFROM }
+		}
+		if = {
+			limit = { realm_intrigue = 9 NOT = { realm_intrigue = 16 } }
+			random = { chance = 50 reverse_imprison = FROMFROM }
+		}
+		if = {
+			limit = { NOT = { realm_intrigue = 9 } }
+			random = { chance = 30 reverse_imprison = FROMFROM }
+		}
+	}
+	option = {
+		name = EVTOPTCmurder20 #slay him, he is someone elses prisoner
+		trigger = {
+			same_realm = FROMFROM
+			independent = yes
+			FROMFROM = {
+				prisoner = yes
+				NOT = { host = { character = ROOT } }
+				NOT = { has_opinion_modifier = { who = ROOT modifier = i_attempted_murder } }
+			}
+		}
+		ai_chance = { factor = 1000 }
+		FROM = { FROM = { opinion = { who = ROOT modifier = i_attempted_murder months = 2 } } }
+
+		send_assassin = FROMFROM
+	}
+	option = {
+		name = EVTOPTEmurder20 #slay him, he is prisoner
+		trigger = {
+			same_realm = FROMFROM
+			independent = yes
+			FROMFROM = { prisoner = yes host = { character = ROOT } }
+		}
+		ai_chance = { factor = 1000 }
+		FROMFROM = { death = { death_reason = death_execution killer = ROOT } }
+	}
+	option = {
+		trigger = {
+			NOT = { same_realm = FROMFROM }
+			FROMFROM = {
+				NOT = { has_opinion_modifier = { who = ROOT modifier = i_attempted_murder } }
+			}
+		}
+		name = EVTOPTCmurder20 # Someone in another realm.
+		ai_chance = { factor = 1000 }
+
+		FROMFROM = { opinion = { who = ROOT modifier = i_attempted_murder months = 2 } }
+
+		send_assassin = FROMFROM
+	}
+	option = {
+		name = EVTOPTDmurder20 #we dont dare do anything..  (player option, incase of worry.)
+		ai_chance = { factor = 1 }
+		piety = 5
+	}
+}
+
+# murder.21 A vassal asks the ruler for justice after a murder attempt by
+# another vassal: grant a claim on the plotter's title, try to
+# arrest the plotter, or do nothing.
+character_event = {
+	id = murder.21
+	desc = EVTDESCmurder21
+	picture = GFX_evt_shadow
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder21 # give claim
+		ai_chance = { factor = 2 modifier = { factor = 50 opinion = { who = FROM value = 50 } } }
+		hidden_tooltip = { FROM = { character_event = { id = murder.23 days = 1 } } }
+		random_realm_character = {
+			limit = { has_character_flag = we_are_evil_assasinator }
+			primary_title = { add_claim = FROM }
+			hidden_tooltip = { character_event = { id = murder.22 days = 1 } }
+			clr_character_flag = we_are_evil_assasinator
+			opinion = { modifier = opinion_betrayed who = ROOT years = 2 }
+		}
+	}
+	option = {
+		name = EVTOPTBmurder21 # attempt to imprison
+		trigger = {
+			any_realm_character = { has_character_flag = we_are_evil_assasinator prisoner = no }
+		}
+		ai_chance = { factor = 5 modifier = { factor = 100 trait = just } }
+		any_realm_character = {
+			limit = { has_character_flag = we_are_evil_assasinator }
+			opinion = { modifier = opinion_betrayed who = FROM years = 2 }
+			reverse_opinion = { who = ROOT modifier = evil_murderer years = 5 }
+		}
+		hidden_tooltip = { FROM = { character_event = { id = murder.24 days = 1 random = 2 } } }
+		if = {
+			limit = { realm_intrigue = 16 }
+			random_list = {
+				70 = {
+					random_realm_character = {
+						limit = { has_character_flag = we_are_evil_assasinator prisoner = no }
+						imprison = yes
+						clr_character_flag = we_are_evil_assasinator
+					}
+				}
+				30 = {
+					random_realm_character = {
+						limit = { has_character_flag = we_are_evil_assasinator prisoner = no }
+						clr_character_flag = we_are_evil_assasinator
+					}
+				}
+			}
+		}
+		if = {
+			limit = { realm_intrigue = 9 NOT = { realm_intrigue = 16 } }
+			random_list = {
+				50 = {
+					random_realm_character = {
+						limit = { has_character_flag = we_are_evil_assasinator prisoner = no }
+						imprison = yes
+						clr_character_flag = we_are_evil_assasinator
+					}
+				}
+				50 = {
+					random_realm_character = {
+						limit = { has_character_flag = we_are_evil_assasinator prisoner = no }
+						clr_character_flag = we_are_evil_assasinator
+					}
+				}
+			}
+		}
+		if = {
+			limit = { NOT = { realm_intrigue = 9 } }
+			random_list = {
+				30 = {
+					random_realm_character = {
+						limit = { has_character_flag = we_are_evil_assasinator prisoner = no }
+						imprison = yes
+						clr_character_flag = we_are_evil_assasinator
+					}
+				}
+				70 = {
+					random_realm_character = {
+						limit = { has_character_flag = we_are_evil_assasinator prisoner = no }
+						clr_character_flag = we_are_evil_assasinator
+					}
+				}
+			}
+		}
+	}
+	option = {
+		name = EVTOPTDmurder21 # do nothing
+		ai_chance = { factor = 1 modifier = { factor = 100 trait = arbitrary } }
+		reverse_opinion = { who = FROM modifier = not_supportive_liege years = 2 }
+		hidden_tooltip = { FROM = { character_event = { id = murder.25 days = 3 random = 5 } } }
+		piety = -10
+		random_realm_character = {
+			limit = { has_character_flag = we_are_evil_assasinator }
+			clr_character_flag = we_are_evil_assasinator
+		}
+	}
+}
+
+# murder.22 The plotter hears that the ruler gave the victim a claim on the
+# plotter's title.
+character_event = {
+	id = murder.22
+	desc = EVTDESCmurder22
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder22 # ok
+		prestige = -10
+		reverse_opinion = { who = FROM modifier = evil_murderer years = 5 }
+	}
+}
+
+# murder.23 The victim hears that the ruler granted a claim.
+character_event = {
+	id = murder.23
+	desc = EVTDESCmurder23
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder23 # ok
+		prestige = 5
+	}
+}
+
+# murder.24 The victim hears that the ruler tried to arrest the plotter.
+character_event = {
+	id = murder.24
+	desc = EVTDESCmurder24
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder24 # ok
+		prestige = 5
+	}
+}
+
+# murder.25 The victim hears that the ruler will do nothing.
+character_event = {
+	id = murder.25
+	desc = EVTDESCmurder25
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder25 # ok
+		prestige = -5
+	}
+}
+
+# murder.26 The ruler is exposed as the one who sent the killer: kindness,
+# justice and honesty are gone, and the vassals despise the ruler.
+character_event = {
+	id = murder.26
+	desc = EVTDESCmurder26
+	picture = GFX_evt_scandal
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAmurder26
+		if = { limit = { trait = kind } remove_trait = kind }
+		if = { limit = { trait = just } remove_trait = just }
+		if = { limit = { trait = honest } remove_trait = honest }
+		prestige = -100
+		any_vassal = { opinion = { who = ROOT modifier = black_honor years = 5 } }
+	}
+}
+
+###############################################################################
+# Part 5: Diplomatic responses
+###############################################################################
+
+# Each one answers an interaction on_action of the same name in
+# 00_on_actions.txt. The texts are the game's own (EVTDESC202 and the
+# rest, vanilla localisation): plain notices of an answer, with nothing
+# of the real world in them.
+
+# response.1 Alliance accepted (FORM_ALLIANCE_INTERACTION_ACCEPT_EVENT).
+diploresponse_event = {
+	id = response.1
+	desc = "EVTDESCdiploresponse.1"
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.2 Alliance refused (FORM_ALLIANCE_INTERACTION_DECLINE_EVENT).
+diploresponse_event = {
+	id = response.2
+	desc = "EVTDESCdiploresponse.2"
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.202 DEMAND_RELIGIOUS_CONVERSION_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.202
+	desc = EVTDESCresponse202
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.203 DEMAND_RELIGIOUS_CONVERSION_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.203
+	desc = EVTDESCresponse203
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.204 REVOKE_TITLE_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.204
+	desc = EVTDESCresponse204
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.205 REVOKE_TITLE_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.205
+	desc = EVTDESCresponse205
+
+	is_triggered_only = yes
+	major = no
+	is_hostile = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.206 OFFER_PEACE_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.206
+	desc = EVTDESCresponse206
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.207 OFFER_PEACE_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.207
+	desc = EVTDESCresponse207
+
+	is_triggered_only = yes
+	major = no
+	is_hostile = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.208 SEND_GIFT_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.208
+	desc = EVTDESCresponse208
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.209 SEND_GIFT_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.209
+	desc = "EVTDESC209"
+
+	is_triggered_only = yes
+	major = no
+	is_hostile = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.210 OFFER_VASSALIZATION_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.210
+	desc = EVTDESCresponse210
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+	option = {
+		name = "OK"
+	}
+}
+
+# response.211 OFFER_VASSALIZATION_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.211
+	desc = EVTDESCresponse211
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.212 ARRANGE_BETROTHAL_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+# Marriages across races are undone here (Silfae): elves, dwarfs,
+# greenskins and the other races only marry their own kind.
+diploresponse_event = {
+	id = response.212
+	desc = "EVTDESC212"
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.213 ARRANGE_BETROTHAL_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.213
+	desc = EVTDESCresponse213
+
+	major = no
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+	}
+	option = {
+		name = "OK"
+	}
+}
+
+# response.214 OFFER_SUCCESSION_MARRIGE_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+# Marriages across races are undone here (Silfae): elves, dwarfs,
+# greenskins and the other races only marry their own kind.
+diploresponse_event = {
+	id = response.214
+	desc = "EVTDESC214"
+
+	major = no
+	is_friendly = yes
+	is_triggered_only = yes
+
+	option = {
+		name = "OK" #Married
+		trigger = {
+			NOR = {
+				trait = creature_snotling
+				FROM = { trait = creature_snotling }
+				trait = creature_goblin
+				FROM = { trait = creature_goblin }
+				trait = creature_hobgoblin
+				FROM = { trait = creature_hobgoblin }
+				trait = creature_orc
+				FROM = { trait = creature_orc }
+				trait = creature_hobgoblin
+				FROM = { trait = creature_hobgoblin }
+			}
+			OR = {
+				AND = {
+					OR = {
+						AND = {
+							trait = creature_human
+							has_global_flag = mists_of_albion
+							NOT = { location = { region = world_albion } }
+						}
+						AND = { trait = creature_human NOT = { has_global_flag = mists_of_albion } }
+						trait = creature_amazon
+						NOT = { religion = hashut }
+						AND = { trait = creature_beastman religion_group = chaos_gods_group }
+					}
+					FROM = {
+						OR = {
+							AND = {
+								trait = creature_human
+								has_global_flag = mists_of_albion
+								NOT = { location = { region = world_albion } }
+							}
+							AND = {
+								trait = creature_human
+								NOT = { has_global_flag = mists_of_albion }
+							}
+							trait = creature_amazon
+							AND = {
+								trait = creature_beastman
+								NOT = { religion = hashut }
+								religion_group = chaos_gods_group
+							}
+						}
+					}
+				}
+				AND = { trait = creature_elf FROM = { trait = creature_elf } }
+				AND = { trait = creature_halfling FROM = { trait = creature_halfling } }
+				AND = {
+					OR = { trait = creature_dwarf trait = creature_chaos_dwarf }
+					FROM = { OR = { trait = creature_dwarf trait = creature_chaos_dwarf } }
+				}
+				AND = { trait = khemri_tomb_king FROM = { trait = khemri_tomb_king } }
+				AND = { trait = khemri_liche_priest FROM = { trait = khemri_liche_priest } }
+				AND = { trait = creature_ogre FROM = { trait = creature_ogre } }
+				AND = {
+					ROOT = {
+						trait = creature_human
+						has_global_flag = mists_of_albion
+						location = { region = world_albion }
+					}
+					FROM = {
+						trait = creature_human
+						has_global_flag = mists_of_albion
+						location = { region = world_albion }
+					}
+				}
+				# AND = { trait = creature_skaven
+				#	 FROM = { trait = creature_skaven } }
+			}
+		}
+		hidden_tooltip = {
+			letter_event = { id = intermarriage.001 }
+			ROOT = {
+				set_character_flag = about_to_marry
+				character_event = { id = elfwed.70 days = 1 }
+			}
+		}
+	}
+	option = {
+		name = "OK" #Not married
+		trigger = {
+			OR = {
+				trait = creature_snotling
+				FROM = { trait = creature_snotling }
+				trait = creature_goblin
+				FROM = { trait = creature_goblin }
+				trait = creature_hobgoblin
+				FROM = { trait = creature_hobgoblin }
+				trait = creature_orc
+				FROM = { trait = creature_orc }
+				trait = creature_hobgoblin
+				FROM = { trait = creature_hobgoblin }
+			}
+			NOR = {
+				AND = {
+					OR = {
+						AND = {
+							trait = creature_human
+							has_global_flag = mists_of_albion
+							NOT = { location = { region = world_albion } }
+						}
+						AND = { trait = creature_human NOT = { has_global_flag = mists_of_albion } }
+						trait = creature_amazon
+						AND = {
+							trait = creature_beastman
+							NOT = { religion = hashut }
+							religion_group = chaos_gods_group
+						}
+					}
+					FROM = {
+						OR = {
+							AND = {
+								trait = creature_human
+								has_global_flag = mists_of_albion
+								NOT = { location = { region = world_albion } }
+							}
+							AND = {
+								trait = creature_human
+								NOT = { has_global_flag = mists_of_albion }
+							}
+							trait = creature_amazon
+							AND = {
+								trait = creature_beastman
+								NOT = { religion = hashut }
+								religion_group = chaos_gods_group
+							}
+						}
+					}
+				}
+				AND = { trait = creature_elf FROM = { trait = creature_elf } }
+				AND = { trait = creature_halfling FROM = { trait = creature_halfling } }
+				AND = {
+					OR = { trait = creature_dwarf trait = creature_chaos_dwarf }
+					FROM = { OR = { trait = creature_dwarf trait = creature_chaos_dwarf } }
+				}
+				AND = { trait = khemri_tomb_king FROM = { trait = khemri_tomb_king } }
+				AND = { trait = khemri_liche_priest FROM = { trait = khemri_liche_priest } }
+				AND = { trait = creature_ogre FROM = { trait = creature_ogre } }
+				AND = {
+					ROOT = {
+						has_global_flag = mists_of_albion
+						trait = creature_human
+						location = { region = world_albion }
+					}
+					FROM = {
+						has_global_flag = mists_of_albion
+						trait = creature_human
+						location = { region = world_albion }
+					}
+				}
+				#AND = { trait = creature_skaven
+				#	 FROM = { trait = creature_skaven } }
+			}
+		}
+		hidden_tooltip = {
+			letter_event = { id = intermarriage.002 }
+			FROM = { ROOT = { spouse = { remove_spouse = ROOT move_character = PREVPREV } } }
+		}
+	}
+}
+
+# response.215 OFFER_SUCCESSION_MARRIGE_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.215
+	desc = EVTDESCresponse215
+
+	major = no
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.216 OFFER_MARRIGE_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+# Marriages across races are undone here (Silfae): elves, dwarfs,
+# greenskins and the other races only marry their own kind.
+diploresponse_event = {
+	id = response.216
+	desc = "EVTDESC216"
+
+	major = no
+	is_friendly = yes
+	is_triggered_only = yes
+
+	immediate = {
+		opinion = { who = FROM modifier = opinion_recent_marriage months = 1 }
+		reverse_opinion = { who = FROM modifier = opinion_recent_marriage months = 1 }
+	}
+
+	option = {
+		name = "OK" #Married
+		trigger = {
+			OR = {
+				AND = {
+					ROOT = {
+						OR = {
+							AND = {
+								trait = creature_human
+								has_global_flag = mists_of_albion
+								NOT = { location = { region = world_albion } }
+							}
+							AND = {
+								trait = creature_human
+								NOT = { has_global_flag = mists_of_albion }
+							}
+							trait = creature_amazon
+							AND = {
+								trait = creature_beastman
+								NOT = { religion = hashut }
+								religion_group = chaos_gods_group
+							}
+						}
+					}
+					new_character = {
+						OR = {
+							AND = {
+								trait = creature_human
+								has_global_flag = mists_of_albion
+								NOT = { location = { region = world_albion } }
+							}
+							AND = {
+								trait = creature_human
+								NOT = { has_global_flag = mists_of_albion }
+							}
+							trait = creature_amazon
+							AND = {
+								trait = creature_beastman
+								NOT = { religion = hashut }
+								religion_group = chaos_gods_group
+							}
+						}
+					}
+				}
+				AND = { ROOT = { trait = creature_elf } new_character = { trait = creature_elf } }
+				AND = {
+					ROOT = { trait = creature_halfling }
+					new_character = { trait = creature_halfling }
+				}
+				AND = {
+					ROOT = { OR = { trait = creature_dwarf trait = creature_chaos_dwarf } }
+					new_character = { OR = { trait = creature_dwarf trait = creature_chaos_dwarf } }
+				}
+				AND = {
+					ROOT = { trait = khemri_tomb_king }
+					new_character = { trait = khemri_tomb_king }
+				}
+				AND = {
+					ROOT = { trait = khemri_liche_priest }
+					new_character = { trait = khemri_liche_priest }
+				}
+				AND = { ROOT = { trait = creature_ogre } new_character = { trait = creature_ogre } }
+				AND = {
+					ROOT = { trait = creature_skaven }
+					new_character = { trait = creature_skaven }
+				}
+				AND = {
+					ROOT = {
+						has_global_flag = mists_of_albion
+						trait = creature_human
+						location = { region = world_albion }
+					}
+					new_character = {
+						has_global_flag = mists_of_albion
+						trait = creature_human
+						location = { region = world_albion }
+					}
+				}
+			}
+		}
+		hidden_tooltip = {
+			letter_event = { id = intermarriage.001 }
+			ROOT = { set_character_flag = about_to_marry }
+		}
+	}
+	option = {
+		name = "OK" #Not married
+		trigger = {
+			NOR = {
+				AND = {
+					ROOT = {
+						OR = {
+							AND = {
+								trait = creature_human
+								has_global_flag = mists_of_albion
+								NOT = { location = { region = world_albion } }
+							}
+							AND = {
+								trait = creature_human
+								NOT = { has_global_flag = mists_of_albion }
+							}
+							trait = creature_amazon
+							AND = {
+								trait = creature_beastman
+								NOT = { religion = hashut }
+								religion_group = chaos_gods_group
+							}
+						}
+					}
+					new_character = {
+						OR = {
+							AND = {
+								trait = creature_human
+								has_global_flag = mists_of_albion
+								NOT = { location = { region = world_albion } }
+							}
+							AND = {
+								trait = creature_human
+								NOT = { has_global_flag = mists_of_albion }
+							}
+							trait = creature_amazon
+							AND = {
+								trait = creature_beastman
+								NOT = { religion = hashut }
+								religion_group = chaos_gods_group
+							}
+						}
+					}
+				}
+				AND = { ROOT = { trait = creature_elf } new_character = { trait = creature_elf } }
+				AND = {
+					ROOT = { trait = creature_halfling }
+					new_character = { trait = creature_halfling }
+				}
+				AND = {
+					ROOT = { OR = { trait = creature_dwarf trait = creature_chaos_dwarf } }
+					new_character = { OR = { trait = creature_dwarf trait = creature_chaos_dwarf } }
+				}
+				AND = {
+					ROOT = { trait = khemri_tomb_king }
+					new_character = { trait = khemri_tomb_king }
+				}
+				AND = {
+					ROOT = { trait = khemri_liche_priest }
+					new_character = { trait = khemri_liche_priest }
+				}
+				AND = { ROOT = { trait = creature_ogre } new_character = { trait = creature_ogre } }
+				AND = {
+					ROOT = { trait = creature_skaven }
+					new_character = { trait = creature_skaven }
+				}
+				AND = {
+					ROOT = {
+						has_global_flag = mists_of_albion
+						trait = creature_human
+						location = { region = world_albion }
+					}
+					new_character = {
+						has_global_flag = mists_of_albion
+						trait = creature_human
+						location = { region = world_albion }
+					}
+				}
+			}
+		}
+		hidden_tooltip = {
+			letter_event = { id = intermarriage.002 }
+			FROM = { ROOT = { spouse = { remove_spouse = ROOT move_character = PREVPREV } } }
+		}
+	}
+}
+
+# response.217 OFFER_MARRIGE_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.217
+	desc = EVTDESCresponse217
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.218 RANSOM_CHARACTER_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.218
+	desc = EVTDESCresponse218
+
+	major = no
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.219 RANSOM_CHARACTER_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.219
+	desc = EVTDESCresponse219
+
+	major = no
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.220 EDUCATE_CHARACTER_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.220
+	desc = EVTDESCresponse220
+
+	major = no
+	is_friendly = yes
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.221 EDUCATE_CHARACTER_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.221
+	desc = EVTDESCresponse221
+
+	major = no
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.222 ABANDON_AMBITION_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.222
+	desc = EVTDESCresponse222
+
+	major = no
+	is_friendly = yes
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.223 ABANDON_AMBITION_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.223
+	desc = EVTDESCresponse223
+
+	major = no
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.224 STOP_BACKING_AMBITION_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.224
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse224
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.225 STOP_BACKING_AMBITION_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.225
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse225
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.226 JOIN_AMBITION_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.226
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse226
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.227 JOIN_AMBITION_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.227
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse227
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.228 GRANT_LANDED_TITLE_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+# A daemon, forest spirit, toad, pig or Khemri soldier who is given
+# land abdicates at once (daemon.253).
+diploresponse_event = {
+	id = response.228
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	immediate = {
+		if = {
+			limit = {
+				OR = {
+					is_daemon_race_trigger = yes
+					trait = creature_forestspirit
+					trait = creature_toad
+					trait = creature_pig
+					trait = khemri_soldier
+				}
+			}
+			abdicate = yes
+			character_event = { id = daemon.253 days = 1 }
+		}
+	}
+
+	desc = EVTDESCresponse228
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.230 APPOINT_TO_OFFICE_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.230
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse230
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.231 APPOINT_TO_OFFICE_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.231
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse231
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.232 ASK_FOR_INVASION_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.232
+
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse232
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.233 ASK_FOR_INVASION_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.233
+
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse233
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.234 ASK_FOR_DIVORCE_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.234
+
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse234
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.235 ASK_FOR_DIVORCE_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.235
+
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse235
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.236 ASK_FOR_EXCOMMUNICATION_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+# Old World faiths read the Grand Theogonist text, others the plain one.
+diploresponse_event = {
+	id = response.236
+
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = { text = EVTDESCresponse236 trigger = { religion_group = old_world_group } }
+	desc = { text = EVTDESCresponse236_NC trigger = { NOT = { religion_group = old_world_group } } }
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.237 ASK_FOR_EXCOMMUNICATION_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.237
+
+	border = GFX_event_letter_frame_religion
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse237
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.238 CALL_ALLY_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.238
+
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+	is_friendly = yes
+	ai = no
+
+	trigger = {
+		NOT = { is_liege_of = FROM }
+	}
+
+	desc = EVTDESCresponse238
+
+	option = {
+		name = OK
+	}
+}
+
+# response.239 CALL_ALLY_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.239
+
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+		NOT = { is_liege_of = FROM }
+	}
+
+	desc = EVTDESCresponse239
+
+	option = {
+		name = OK
+	}
+}
+
+# response.240 DECLARE_WAR_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.240
+
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+	major = no
+	is_hostile = yes
+
+	trigger = {
+		ai = no
+		OR = {
+			FROM = { independent = yes }
+			NOT = { liege = { OR = { character = ROOT character = FROM } } }
+		}
+	}
+
+	desc = EVTDESCresponse240
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.241 DECLARE_WAR_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.241
+
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes
+	major = no
+	is_hostile = yes
+
+	trigger = {
+		ai = no
+		FROM = { independent = no }
+		liege = { OR = { character = ROOT character = FROM } }
+	}
+
+	desc = EVTDESCresponse241
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.250 A tribal vassal answers the call to arms
+# (CALL_ALLY_INTERACTION_ACCEPT_EVENT, the vassal case of 238).
+diploresponse_event = {
+	id = response.250
+
+	border = GFX_event_letter_frame_war
+
+	notification = yes
+
+	is_triggered_only = yes
+	is_friendly = yes
+	ai = no
+	trigger = {
+		is_liege_of = FROM
+	}
+
+	desc = EVTDESCresponse238
+
+	option = {
+		name = OK
+	}
+}
+
+# response.251 A tribal vassal refuses the call to arms
+# (CALL_ALLY_INTERACTION_DECLINE_EVENT, the vassal case of 239).
+diploresponse_event = {
+	id = response.251
+
+	border = GFX_event_letter_frame_war
+
+	notification = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+		is_liege_of = FROM
+	}
+
+	desc = EVTDESCresponse239
+
+	option = {
+		name = OK
+	}
+}
+
+# response.274 RETRACT_VASSAL_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.274
+	desc = EVTDESCresponse274
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.275 RETRACT_VASSAL_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.275
+	desc = EVTDESCresponse275
+
+	is_triggered_only = yes
+	major = no
+	is_hostile = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.280 INVITE_TO_COURT_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.280
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse280
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.281 INVITE_TO_COURT_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.281
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse281
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.282 ASK_FOR_VASSALIZATION_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.282
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse282
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.283 ASK_FOR_VASSALIZATION_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.283
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse283
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.284 ASK_TO_LIFT_EXCOMMUNICATION_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.284
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse284
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.285 ASK_TO_LIFT_EXCOMMUNICATION_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.285
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse285
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.286 ASK_TO_RANSOM_CHARACTER_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.286
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse286
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.287 ASK_TO_RANSOM_CHARACTER_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.287
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse287
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.288 SETTLE_ADVENTURER_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.288
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse288
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.289 SETTLE_ADVENTURER_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.289
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse289
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.293 ASK_TO_JOIN_WAR_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.293
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse293
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.294 ASK_TO_JOIN_WAR_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.294
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse294
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.295 ASK_TO_EMBARGO_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.295
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse295
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.296 ASK_TO_EMBARGO_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.296
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse296
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.297 ASK_TO_EMBARGO_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.297
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse297
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.298 ASK_TO_EMBARGO_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.298
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse298
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.330 ARRANGE_SUCC_BETROTHAL_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+# Marriages across races are undone here (Silfae): elves, dwarfs,
+# greenskins and the other races only marry their own kind.
+diploresponse_event = {
+	id = response.330
+	desc = "EVTDESC330"
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.331 ARRANGE_SUCC_BETROTHAL_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.331
+	desc = EVTDESCresponse331
+
+	major = no
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+	}
+	option = {
+		name = "OK"
+	}
+}
+
+# response.503 ABSORB_CLAN_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.503
+	desc = EVTDESCresponse503
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.504 ABSORB_CLAN_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.504
+	desc = EVTDESCresponse504
+
+	is_triggered_only = yes
+	major = no
+	is_hostile = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.505 FORM_BLOOD_OATH_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.505
+	desc = EVTDESCresponse505
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.506 FORM_BLOOD_OATH_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.506
+	desc = EVTDESCresponse506
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.507 SETTLE_FEUD_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.507
+	desc = EVTDESCresponse507
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = EVTOPTAresponse507
+	}
+}
+
+# response.508 SETTLE_FEUD_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.508
+	desc = EVTDESCresponse508
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = EVTOPTAresponse508
+	}
+}
+
+# response.509 SPLIT_CLAN_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.509
+	desc = EVTDESCresponse509
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.510 SPLIT_CLAN_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.510
+	desc = EVTDESCresponse510
+
+	is_triggered_only = yes
+	major = no
+	is_hostile = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.520 BUY_FAVOR_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.520
+	desc = EVTDESCresponse520
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = EVTOPTAresponse520
+	}
+}
+
+# response.521 BUY_FAVOR_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.521
+	desc = EVTDESCresponse521
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = EVTOPTAresponse521
+	}
+}
+
+# response.522 REQUEST_SUPPORT_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.522
+	desc = EVTDESCresponse522
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = EVTOPTAresponse522
+	}
+}
+
+# response.523 REQUEST_SUPPORT_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.523
+	desc = EVTDESCresponse523
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = EVTOPTAresponse523
+	}
+}
+
+# response.524 FORM_NON_AGGRESSION_PACT_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.524
+	desc = EVTDESCresponse524
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = EVTOPTAresponse524
+	}
+}
+
+# response.525 FORM_NON_AGGRESSION_PACT_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.525
+	desc = EVTDESCresponse525
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = EVTOPTAresponse525
+	}
+}
+
+# response.526 ASK_COUNCIL_POSITION_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.526
+	desc = EVTDESCresponse526
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+		custom_tooltip = { text = EVT527_TOOLTIP }
+	}
+}
+
+# response.527 ASK_COUNCIL_POSITION_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.527
+	desc = EVTDESCresponse527
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.528 ASK_REALM_PEACE_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.528
+	desc = EVTDESCresponse528
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.529 ASK_REALM_PEACE_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.529
+	desc = EVTDESCresponse529
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.530 FORCE_JOIN_FACTION_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.530
+	desc = EVTDESCresponse530
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.531 FORCE_JOIN_FACTION_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.531
+	desc = EVTDESCresponse531
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.535 ASK_TO_JOIN_AMBITION_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.535
+
+	is_triggered_only = yes
+	major = no
+	is_friendly = yes
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse535
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.536 ASK_TO_JOIN_AMBITION_INTERACTION_DECLINE_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.536
+
+	is_triggered_only = yes
+	major = no
+
+	trigger = {
+		ai = no
+	}
+
+	desc = EVTDESCresponse536
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.537 OFFER_CONSORT_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.537
+	desc = EVTDESC537
+
+	major = no
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}
+
+# response.538 GIVE_ARTIFACT_INTERACTION_ACCEPT_EVENT (on_action of the same name).
+diploresponse_event = {
+	id = response.538
+	desc = EVTDESCresponse538
+
+	major = no
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = "OK"
+	}
+}

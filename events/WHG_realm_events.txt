@@ -80,6 +80,7 @@
 #   Part 9: Brief pacts (namespace pact)
 #   Part 10: Civil war (namespace civilwar)
 #   Part 11: Debt (namespace debt)
+#   Part 12: Elective leagues (namespace league)
 ###############################################################################
 
 namespace = realm
@@ -6252,6 +6253,265 @@ character_event = {
 		if = {
 			limit = { debt_lender_dawi_trigger = yes }
 			prestige = -150
+		}
+	}
+}
+
+###############################################################################
+# Part 12: Elective leagues
+# Namespace: league (was DR_misc.1030 - 1046 in DR_misc_events.txt,
+#   adapted from the Elective Leagues mod by JRuderman, all credit to him)
+# Faction: Border Princes
+# Serves: the small feudal lords of the Border Princes and anywhere else
+#   that the faith allows elective rule
+#
+# Neighbouring free lords of equal rank may band together into a league:
+# one founds a new duchy, kingdom or empire with feudal elective
+# succession, and the neighbours whose lands touch the founder's (or touch
+# another cofounder's) join as its electors. An AI league keeps inviting
+# smaller free neighbours to join; a refusal sours the league's lord for a
+# while.
+#
+# Founding a league                    league.1 - league.5
+# Inviting a neighbour                 league.10 - league.11
+#
+# Callers: league.1 from on_yearly_pulse (00_on_actions.txt), league.2 also
+#   from the decision create_elective_league (wh_general_decisions.txt);
+#   league.10 from on_yearly_pulse (wh_on_actions.txt; was MTTH 1 year).
+#   Triggers in wh_elective_leagues_scripted_triggers.txt, effects in
+#   wh_elective_leagues.txt.
+# Saved: variable num_cofounders; opinion modifiers opinion_cofounder and
+#   rejected_league_prop.
+# Loc: localisation/00_elective_leagues.csv
+###############################################################################
+
+namespace = league
+
+# league.1 A league of equals
+# Hidden. An AI count, duke or king of a faith that allows elective rule
+# tries to found a league (league.2). Players use the decision.
+# Scope: ROOT is an AI feudal ruler. Fired by on_yearly_pulse.
+character_event = {
+	id = league.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_yearly_pulse
+
+	ai = yes
+	only_independent = yes
+
+	trigger = {
+		OR = {
+			real_tier = KING
+			real_tier = DUKE
+			real_tier = COUNT
+		}
+		is_feudal = yes
+		league_potential_trigger = yes
+		religion_allows_feudal_elective_trigger = yes
+	}
+
+	immediate = {
+		character_event = { id = league.2 }
+	}
+}
+
+# league.2 Counting the cofounders
+# Hidden. Counts the neighbours who would join (league.3), then offers the
+# founder the new title (league.5).
+# Scope: ROOT is the founder (league.1 or create_elective_league).
+character_event = {
+	id = league.2
+	hide_window = yes
+
+	is_triggered_only = yes # league.1, decision create_elective_league
+
+	immediate = {
+		set_variable = { which = num_cofounders value = 0 }
+		character_event = { id = league.3 }
+		character_event = { id = league.5 }
+	}
+}
+
+# league.3 The neighbours
+# Hidden. Every free lord of the same rank whose lands touch the founder's
+# and who could join is marked as a cofounder.
+# Scope: ROOT is the founder (league.2).
+character_event = {
+	id = league.3
+	hide_window = yes
+
+	is_triggered_only = yes # league.2
+
+	immediate = {
+		any_independent_ruler = {
+			limit = {
+				NOT = { character = ROOT }
+				NOT = { reverse_has_opinion_modifier = { who = ROOT modifier = opinion_cofounder } }
+				THIS_and_PREV_same_rank_trigger = yes
+				THIS_can_join_PREV_league_trigger = yes
+				THIS_and_ROOT_are_adjacent_trigger = yes
+			}
+			ROOT = { change_variable = { which = num_cofounders value = 1 } }
+			reverse_opinion = { who = ROOT modifier = opinion_cofounder }
+		}
+	}
+}
+
+# league.5 A league is founded
+# With at least one cofounder, the founder may raise a title one rank above
+# their own, with elective succession, and the cofounders become its
+# electors (create_league_effect); or let the idea go.
+# Scope: ROOT is the founder (league.2).
+character_event = {
+	id = league.5
+	desc = ElectiveLeagues_event_35_DESC
+	picture = GFX_evt_coronation
+
+	is_triggered_only = yes # league.2
+
+	option = {
+		name = ElectiveLeagues_event_35_DUCHY
+		trigger = {
+			tier = COUNT
+			check_variable = { which = num_cofounders value = 1 }
+		}
+		primary_title = {
+			create_title = {
+				tier = DUKE
+				landless = no
+				temporary = no
+				custom_created = yes
+				culture = ROOT
+				holder = ROOT
+				base_title = THIS
+				copy_title_laws = yes
+				name = ELECTIVE_REALM_NAME_DUKE
+			}
+		}
+		create_league_effect = yes
+		ai_chance = { factor = 90 }
+	}
+	option = {
+		name = ElectiveLeagues_event_35_KINGDOM
+		trigger = {
+			tier = DUKE
+			check_variable = { which = num_cofounders value = 1 }
+		}
+		primary_title = {
+			create_title = {
+				tier = KING
+				landless = no
+				temporary = no
+				custom_created = yes
+				culture = ROOT
+				holder = ROOT
+				base_title = THIS
+				copy_title_laws = yes
+				name = ELECTIVE_REALM_NAME_KING
+			}
+		}
+		create_league_effect = yes
+		ai_chance = { factor = 90 }
+	}
+	option = {
+		name = ElectiveLeagues_event_35_EMPIRE
+		trigger = {
+			tier = KING
+			check_variable = { which = num_cofounders value = 1 }
+		}
+		primary_title = {
+			create_title = {
+				tier = EMPEROR
+				landless = no
+				temporary = no
+				custom_created = yes
+				culture = ROOT
+				holder = ROOT
+				base_title = THIS
+				copy_title_laws = yes
+				name = ELECTIVE_REALM_NAME_EMPEROR
+			}
+		}
+		create_league_effect = yes
+		ai_chance = { factor = 90 }
+	}
+	option = {
+		name = ElectiveLeagues_event_35_NEVER_MIND
+		any_opinion_modifier_target = {
+			limit = { reverse_has_opinion_modifier = { who = PREV modifier = opinion_cofounder } }
+			hidden_tooltip = { reverse_remove_opinion = { who = PREV modifier = opinion_cofounder } }
+		}
+		ai_chance = { factor = 10 }
+	}
+}
+
+# league.10 The league grows
+# Hidden. The AI lord of an elective league invites every smaller free
+# neighbour who could join and has not refused lately (league.11).
+# Scope: ROOT is an AI lord of a titular elective realm. Fired by
+#   on_yearly_pulse (wh_on_actions).
+character_event = {
+	id = league.10
+	hide_window = yes
+
+	is_triggered_only = yes # on_yearly_pulse
+
+	ai = yes
+	only_independent = yes
+
+	trigger = {
+		higher_real_tier_than = COUNT
+		in_revolt = no
+		primary_title = {
+			has_law = succ_feudal_elective
+			is_titular = yes
+		}
+	}
+
+	immediate = {
+		any_independent_ruler = {
+			limit = {
+				NOT = { character = ROOT }
+				league_potential_trigger = yes
+				lower_real_tier_than = PREV
+				THIS_can_be_elector_of_PREV_trigger = yes
+				THIS_can_join_PREV_league_trigger = yes
+				THIS_and_ROOT_are_adjacent_trigger = yes
+				NOT = { has_opinion_modifier = { who = ROOT modifier = opinion_granted_independence } }
+				NOT = { reverse_has_opinion_modifier = { who = ROOT modifier = rejected_league_prop } }
+			}
+			character_event = { id = league.11 }
+		}
+	}
+}
+
+# league.11 Join the league?
+# A free neighbour is asked to join an elective league as an elector, or to
+# refuse (the league's lord resents it for six months, and will not ask
+# again until then). Players use the targeted decision
+# vassalize_new_elector instead to ask.
+# Scope: ROOT is the neighbour. FROM: the league's lord (league.10).
+character_event = {
+	id = league.11
+	desc = WELCOME_TO_EXISTING_LEAGUE
+	picture = GFX_evt_coronation
+
+	is_triggered_only = yes # league.10
+
+	option = {
+		name = OK
+		add_THIS_to_FROM_existing_league_effect = yes
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		name = NOT_NOW
+		FROM = { opinion = { modifier = rejected_league_prop who = ROOT } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 2 trait = ambitious }
+			modifier = { factor = 0.5 opinion = { who = FROM value = 25 } }
 		}
 	}
 }

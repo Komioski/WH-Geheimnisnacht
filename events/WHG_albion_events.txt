@@ -1,0 +1,511 @@
+###############################################################################
+# The Mists of Albion: the lost fleets, the guides and the Ogham stones
+# Namespace: albion (was DR_misc.1002 - 1003 and DR_misc.103 in
+#   DR_misc_events.txt)
+# Faction: Generic
+# Serves: every ruler who sends a fleet towards Albion, and the tribes,
+#   Truthsayers and Fimir of the island itself
+#
+# Albion lies hidden in the mists of the Great Ocean, off the western coast
+# of Norsca. The Old Ones raised the Ogham stones across the island, and the
+# stones weave the mists that hide it. While the mists hang (global flag
+# mists_of_albion, set at game start unless the game rule
+# warhammer_mists_of_albion is off), any army that sails into the misty sea
+# zones is lost to the last man: the ships drift on, the crews are gone.
+# The tribes of Albion and the Fimir of its fens know the way through the
+# outer mists, but nobody passes the innermost one. An outsider may find a
+# guide: a Truthsayer, servant of the Old Ones, leads those who would keep
+# the stones, and a Dark Emissary leads those who serve the Dark Masters.
+# Either may be a fraud. The tribes find the wrecks of those who sailed
+# without one.
+#
+# The Ogham stones are Albion's places of power (active_place_of_power_man
+# and corrupt_place_of_power_man, set in WHG_maintenance_events.txt). The
+# corrupt_pop and restore_pop title decisions (wh_magic_decisions.txt)
+# topple and raise them. When six of them stand dark, the mists fail. They
+# also fail in 2305, or when the doom of the world runs very high.
+#
+# Lost in the mists                    albion.1 - albion.2
+# The mists lift                       albion.9 - albion.10
+# A guide through the mists            albion.20 - albion.21
+# The Ogham stones                     albion.30 - albion.33
+# Wrecks on the shore                  albion.40
+#
+# Callers: albion.1 from on_unit_entering_province (nb_on_actions.txt);
+#   albion.9 from on_yearly_pulse and albion.40 from the yearly list
+#   albion_wrecks (wh_on_actions.txt; the old lifting event had no caller,
+#   so the mists never lifted); albion.20 - 21 from the
+#   albion_seek_mist_guide decision (wh_albion_decisions.txt); albion.30 -
+#   31 from corrupt_pop and restore_pop (wh_magic_decisions.txt).
+# Scripted triggers: common/scripted_triggers/wh_albion_triggers.txt
+# Scripted effects: common/scripted_effects/wh_albion_effects.txt
+# Event modifiers: common/event_modifiers/wh_albion_modifiers.txt
+# Saved: global flags mists_of_albion and mists_of_albion_cleared;
+#   character flags pleasestopalbionwarning (no more warnings),
+#   albion_seeking_guide, albion_stone_oath (swore to a Truthsayer) and
+#   albion_wreck_found (cooldown); character variable albion_dark_stones
+#   (the count of dark stones, for the texts).
+# Loc: localisation/00_WHG_albion_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = albion
+
+###############################################################################
+# Lost in the mists
+###############################################################################
+
+# albion.1 Lost in the mists
+# Hidden. A unit enters a misty sea zone. In the innermost mist (1868)
+# every army of the commander and his liege is lost. In the outer mists
+# they are lost unless the commander is of Albion or the Fimir, or he or
+# his liege has a guide (albion_mist_pilot). The commander, if he lives,
+# comes back shaken. A player owner, and a player liege, hear of it
+# (albion.2).
+# Scope: ROOT is a commander whose unit entered a province.
+character_event = {
+	id = albion.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_unit_entering_province
+
+	has_global_flag = mists_of_albion
+
+	trigger = {
+		location = { albion_mist_province_trigger = yes }
+		OR = {
+			location = { albion_inner_mist_province_trigger = yes }
+			AND = {
+				albion_native_trigger = no
+				albion_mist_guided_trigger = no
+			}
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				OR = {
+					albion_native_trigger = yes
+					albion_mist_guided_trigger = yes
+				}
+			}
+			any_army = {
+				limit = { location = { albion_inner_mist_province_trigger = yes } }
+				troops = -1.00
+			}
+			liege = {
+				any_army = {
+					limit = { location = { albion_inner_mist_province_trigger = yes } }
+					troops = -1.00
+				}
+			}
+		}
+		else = {
+			any_army = {
+				limit = { location = { albion_mist_province_trigger = yes } }
+				troops = -1.00
+			}
+			liege = {
+				any_army = {
+					limit = { location = { albion_mist_province_trigger = yes } }
+					troops = -1.00
+				}
+			}
+		}
+		if = {
+			limit = { NOT = { trait = stressed } }
+			random = {
+				chance = 50
+				add_trait = stressed
+			}
+		}
+		save_event_target_as = albion_lost_commander
+		if = {
+			limit = {
+				ai = no
+				NOT = { has_character_flag = pleasestopalbionwarning }
+			}
+			character_event = { id = albion.2 }
+		}
+		liege = {
+			if = {
+				limit = {
+					NOT = { character = ROOT }
+					ai = no
+					NOT = { has_character_flag = pleasestopalbionwarning }
+				}
+				character_event = { id = albion.2 }
+			}
+		}
+	}
+}
+
+# albion.2 Swallowed by the mists
+# A player hears the fleet came back empty, and may turn the warning off.
+# Scope: ROOT is a player (albion.1). Event target albion_lost_commander.
+character_event = {
+	id = albion.2
+	desc = EVTDESCalbion2
+	picture = GFX_evt_ship_storm
+
+	is_triggered_only = yes # albion.1
+
+	option = {
+		name = EVTOPTAalbion2
+	}
+	option = {
+		name = EVTOPTBalbion2
+		set_character_flag = pleasestopalbionwarning
+	}
+}
+
+###############################################################################
+# The mists lift
+###############################################################################
+
+# albion.9 The mists thin
+# Hidden. In 2305, or when the doom of the world runs very high, the mists
+# fail (albion_mists_lift_effect).
+# Scope: ROOT is a player. Fired by on_yearly_pulse (wh_on_actions).
+character_event = {
+	id = albion.9
+	hide_window = yes
+
+	is_triggered_only = yes # on_yearly_pulse
+
+	ai = no
+	only_playable = yes
+	has_global_flag = mists_of_albion
+
+	trigger = {
+		OR = {
+			year = 2305
+			is_doom_very_high_trigger = yes
+		}
+	}
+
+	immediate = {
+		albion_mists_lift_effect = yes
+	}
+}
+
+# albion.10 The Mists of Albion
+# Every player learns that the mists are gone and Albion lies open. The
+# tribes, the servants of the Dark Masters and outsiders each hear it in
+# their own words.
+# Scope: ROOT is a player (albion_mists_lift_effect).
+narrative_event = {
+	id = albion.10
+	title = EVTTITLEalbion10
+	desc = {
+		text = EVTDESCalbion10_native
+		trigger = {
+			albion_native_trigger = yes
+			albion_dark_path_trigger = no
+		}
+	}
+	desc = {
+		text = EVTDESCalbion10_dark
+		trigger = { albion_dark_path_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCalbion10
+		trigger = {
+			albion_native_trigger = no
+			albion_dark_path_trigger = no
+		}
+	}
+	picture = GFX_evt_albion_discovered
+
+	is_triggered_only = yes # albion_mists_lift_effect
+
+	option = {
+		name = EVTOPTAalbion10
+		trigger = {
+			albion_native_trigger = yes
+			albion_dark_path_trigger = no
+		}
+	}
+	option = {
+		name = EVTOPTBalbion10
+		trigger = { albion_dark_path_trigger = yes }
+	}
+	option = {
+		name = EVTOPTCalbion10
+		trigger = {
+			albion_native_trigger = no
+			albion_dark_path_trigger = no
+		}
+	}
+}
+
+###############################################################################
+# A guide through the mists
+###############################################################################
+
+# albion.20 A guide from the mists
+# The guide sought with albion_seek_mist_guide arrives: a Truthsayer for
+# those who would keep the stones, a Dark Emissary for the servants of the
+# Dark Masters. The Truthsayer asks an oath never to defile the stones; the
+# Dark Emissary asks a life. Either way the lord's fleets may pass the
+# outer mists for five years (albion_mist_pilot).
+# Scope: ROOT is the lord who sought the guide.
+character_event = {
+	id = albion.20
+	desc = {
+		text = EVTDESCalbion20_truthsayer
+		trigger = { albion_dark_path_trigger = no }
+	}
+	desc = {
+		text = EVTDESCalbion20_emissary
+		trigger = { albion_dark_path_trigger = yes }
+	}
+	picture = GFX_evt_pagan
+
+	is_triggered_only = yes # albion_seek_mist_guide
+
+	immediate = {
+		clr_character_flag = albion_seeking_guide
+	}
+
+	# Truthsayer: swear the oath
+	option = {
+		name = EVTOPTAalbion20
+		trigger = { albion_dark_path_trigger = no }
+		set_character_flag = albion_stone_oath
+		add_character_modifier = { name = albion_mist_pilot years = 5 }
+		ai_chance = { factor = 90 }
+	}
+	# Truthsayer: refuse the oath; the guide leaves
+	option = {
+		name = EVTOPTBalbion20
+		trigger = { albion_dark_path_trigger = no }
+		prestige = 25
+		ai_chance = { factor = 10 }
+	}
+	# Dark Emissary: give a prisoner to the Dark Masters
+	option = {
+		name = EVTOPTCalbion20
+		trigger = {
+			albion_dark_path_trigger = yes
+			any_prisoner = { is_ruler = no }
+		}
+		random_prisoner = {
+			limit = { is_ruler = no }
+			death = { death_reason = death_sacrificed killer = ROOT }
+		}
+		piety = 25
+		add_character_modifier = { name = albion_mist_pilot years = 5 }
+		ai_chance = { factor = 70 }
+	}
+	# Dark Emissary: give one of your own warriors
+	option = {
+		name = EVTOPTDalbion20
+		trigger = { albion_dark_path_trigger = yes }
+		add_character_modifier = { name = albion_mist_pilot years = 5 }
+		add_character_modifier = { name = albion_blood_price years = 1 }
+		ai_chance = { factor = 30 }
+	}
+}
+
+# albion.21 The guide vanishes
+# The guide was a fraud, or the mists took them on the way. The price is
+# gone and the lord may seek another.
+# Scope: ROOT is the lord who sought the guide.
+character_event = {
+	id = albion.21
+	desc = EVTDESCalbion21
+	picture = GFX_evt_beastmen_mist
+
+	is_triggered_only = yes # albion_seek_mist_guide
+
+	immediate = {
+		clr_character_flag = albion_seeking_guide
+	}
+
+	option = {
+		name = EVTOPTAalbion21
+	}
+}
+
+###############################################################################
+# The Ogham stones
+###############################################################################
+
+# albion.30 The stone falls
+# A servant of the Dark Masters has toppled one of Albion's Ogham stones
+# (corrupt_pop). The dark stones are counted; at six the mists fail. A lord
+# who swore to a Truthsayer is cursed for it (albion.33), and the tribes of
+# Albion who play hear of it (albion.32).
+# Scope: ROOT is the lord who toppled the stone. Event target albion_stone
+# is the stone's province.
+character_event = {
+	id = albion.30
+	desc = EVTDESCalbion30
+	picture = GFX_evt_beastmen_herdstone
+
+	is_triggered_only = yes # corrupt_pop
+
+	immediate = {
+		albion_count_dark_stones_effect = yes
+		any_player = {
+			limit = {
+				NOT = { character = ROOT }
+				albion_native_trigger = yes
+				albion_dark_path_trigger = no
+			}
+			character_event = { id = albion.32 }
+		}
+	}
+
+	option = {
+		name = EVTOPTAalbion30
+		if = {
+			limit = { has_character_flag = albion_stone_oath }
+			clr_character_flag = albion_stone_oath
+			character_event = { id = albion.33 days = 7 random = 7 }
+		}
+		if = {
+			limit = {
+				has_global_flag = mists_of_albion
+				albion_mists_broken_trigger = yes
+			}
+			custom_tooltip = { text = albion_mists_will_fail_tt }
+			hidden_effect = { albion_mists_lift_effect = yes }
+		}
+	}
+}
+
+# albion.31 The stone sings again
+# A keeper of the old ways has raised a fallen Ogham stone (restore_pop).
+# The tribes honour the lord who did it.
+# Scope: ROOT is the lord who raised the stone. Event target albion_stone.
+character_event = {
+	id = albion.31
+	desc = EVTDESCalbion31
+	picture = GFX_evt_runestone_raising_oldgods
+
+	is_triggered_only = yes # restore_pop
+
+	immediate = {
+		albion_count_dark_stones_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAalbion31
+		prestige = 100
+		if = {
+			limit = { culture_group = albion_group }
+			piety = 50
+		}
+	}
+}
+
+# albion.32 A stone has fallen
+# A player of the tribes hears that a stone has fallen, and how many stand
+# dark.
+# Scope: ROOT is a player of Albion. FROM is the lord who toppled it. Event
+# target albion_stone.
+character_event = {
+	id = albion.32
+	desc = EVTDESCalbion32
+	picture = GFX_evt_beastmen_mist
+
+	is_triggered_only = yes # albion.30
+
+	immediate = {
+		albion_count_dark_stones_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAalbion32
+		opinion = { modifier = opinion_albion_stone_breaker who = FROM years = 20 }
+	}
+}
+
+# albion.33 The Truthsayer's curse
+# The lord swore to a Truthsayer never to defile the stones, and has
+# broken the oath. The mists will no longer part for his fleets, and the
+# curse eats at him.
+# Scope: ROOT is the oathbreaker (albion.30).
+character_event = {
+	id = albion.33
+	desc = EVTDESCalbion33
+	picture = GFX_evt_witch
+
+	is_triggered_only = yes # albion.30
+
+	option = {
+		name = EVTOPTAalbion33
+		remove_character_modifier = albion_mist_pilot
+		add_character_modifier = { name = albion_truthsayer_curse years = 10 }
+	}
+}
+
+###############################################################################
+# Wrecks on the shore
+###############################################################################
+
+# albion.40 A wreck on the shore
+# While the mists hang, a lord of Albion with a coast finds the wreck of a
+# ship that sailed in without a guide: empty, its cargo whole. He may keep
+# the cargo, give the dead to the stones, or, if he serves the Dark
+# Masters, give them to the fens. At most once in five years.
+# Scope: ROOT is a ruler of Albion. Fired by the yearly list albion_wrecks
+# (wh_on_actions).
+character_event = {
+	id = albion.40
+	desc = EVTDESCalbion40
+	picture = GFX_evt_ship_storm
+
+	is_triggered_only = yes # on_yearly_pulse, albion_wrecks
+
+	only_playable = yes
+	has_global_flag = mists_of_albion
+
+	trigger = {
+		albion_native_trigger = yes
+		OR = {
+			NOT = { has_character_flag = albion_wreck_found }
+			had_character_flag = { flag = albion_wreck_found days = 1825 }
+		}
+		capital_scope = {
+			port = yes
+			region = world_albion
+		}
+	}
+
+	immediate = {
+		clr_character_flag = albion_wreck_found
+		set_character_flag = albion_wreck_found
+	}
+
+	# Keep the cargo
+	option = {
+		name = EVTOPTAalbion40
+		scaled_wealth = 0.5
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+	# Give the dead to the stones
+	option = {
+		name = EVTOPTBalbion40
+		trigger = { albion_dark_path_trigger = no }
+		piety = 50
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = zealous }
+		}
+	}
+	# Give them to the fens, for the Dark Masters
+	option = {
+		name = EVTOPTCalbion40
+		trigger = { albion_dark_path_trigger = yes }
+		piety = 40
+		prestige = 20
+		ai_chance = { factor = 50 }
+	}
+}

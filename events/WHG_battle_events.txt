@@ -1,7 +1,8 @@
 ###############################################################################
 # Battle events
 # Namespace: battle (was HFP.10997 - HFP.11051, HFP.30200 and HFP.400 - 402
-#   in HF_battle_events.txt)
+#   in HF_battle_events.txt; battle.100 - 104 were 250 - 252 and 260 - 267
+#   in battle_events.txt)
 # Faction: Generic
 # Serves: every army commander of every race; Khornates, Nurglings, warbands,
 #   warrior lodges and berserkers get their own outcomes
@@ -10,6 +11,10 @@
 # outcome for him: death, a wound or a trophy, a duel with the enemy
 # commander, a rescue, new commander traits, a nickname, a skull, a rival or
 # a friend. The scars may come back later as the Wounds Within (battle.26).
+# After the fight, battle.100 - 104 tell of heroism, a soldier from the
+# ranks, capture and the death of the enemy war leader. The old vanilla
+# combat pulse events (242 - 249, 253, 255 - 256, 270 - 273, 96500 - 96503)
+# were already remade in the tombola and are gone.
 #
 # The tombola                      battle.1
 # Death on the field               battle.10 - battle.14
@@ -20,17 +25,24 @@
 # Glory and trophies               battle.60 - battle.73
 # Duelist and strategist           battle.80 - battle.82
 # Housekeeping                     battle.90 - battle.91
+# After the battle                 battle.100 - battle.104
 #
 # Callers: battle.1 from on_combat_pulse, battle.90 from on_startup and
 #   battle.91 from on_death (00_on_actions); battle.26, 31, 32, 33, 35 and 36
 #   from the duel effects (01_scripted_effects_duels.txt, wh_scripted_effects);
 #   battle.80 - 82 from the duel and battle experience effects.
+#   battle.100 and 102 from on_battle_won, battle.103 from on_battle_lost
+#   (00_on_actions); battle.104 as a letter from the CB leader-death blocks
+#   (00_cb_types, wh_cb_types, cb_types_chaos) and on_warleader_death.
 # Saved: event targets home_commander, enemy_commander, enemy_liege,
 #   battlefield_location, home_capital_province, combatant_1, combatant_2,
 #   commander_to_the_rescue, my_fellow_commander; flags battle_event_in_progess
 #   (the tombola lock, now cleared after 30 days at the latest), has_PTSD,
 #   denied_duelist_trait,
-#   denied_strategist_trait, commanders_have_died_for_me.
+#   denied_strategist_trait, commanders_have_died_for_me, asrai_tree_kin_rebirth
+#   (battle.10, then asrai.30); battle_heroism_1 - 6
+#   (battle.100 - 101, cleared at once); event targets soldier_target,
+#   captured_commander.
 #
 # Also in this file (each part keeps its own header and namespace):
 #   Part 2: Comrades and rivals on campaign (namespace campaign, was
@@ -740,6 +752,14 @@ character_event = {
 				save_event_target_as = random_rival_target #For loc and extra fun
 			}
 			randomize_ABC_desc_flag_effect = yes #picks a desc-text flag...
+			if = { # 30%: the Weave takes a fallen Asrai back as tree kin (asrai.30)
+				limit = {
+					trait = creature_elf
+					religion = asrai_cadai
+					NOR = { trait = avatar_isha trait = avatar_kurnous }
+				}
+				random = { chance = 30 set_character_flag = asrai_tree_kin_rebirth }
+			}
 
 			#Sets up weapons for localization...
 			set_dueling_weapon_effect = yes
@@ -843,6 +863,11 @@ character_event = {
 				set_character_flag = is_battlefield_duel
 				debug_battle_death_counter_effect = yes #for debug purposes
 				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else_if = { # A fallen Asrai of the Cadai may return from a deadwood as tree kin
+					limit = { has_character_flag = asrai_tree_kin_rebirth }
+					clr_character_flag = asrai_tree_kin_rebirth
+					character_event = { id = asrai.30 days = 1 }
+				}
 				else_if = {
 					limit = { #The enemy commander cannot have struck the blow
 						OR = {
@@ -987,6 +1012,11 @@ character_event = {
 		if = {
 			limit = { multiplayer = no }
 			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else_if = { # A fallen Asrai of the Cadai may return from a deadwood as tree kin
+				limit = { has_character_flag = asrai_tree_kin_rebirth }
+				clr_character_flag = asrai_tree_kin_rebirth
+				character_event = { id = asrai.30 days = 1 }
+			}
 			else_if = {
 				limit = { #The enemy commander cannot have struck the blow
 					OR = {
@@ -5839,6 +5869,427 @@ character_event = {
 	immediate = {
 		log = "BATTLE EVENTS: Commanders dead for ME (during my lifetime): [Root.my_commander_deaths_in_battle.GetValue] individual characters."
 		log = "BATTLE EVENTS: Commanders dead, in TOTAL: [global_deaths_in_battle.GetValue] individual characters."
+	}
+}
+
+
+###############################################################################
+# After the battle (was 250 - 252 and 260 - 267 in battle_events.txt)
+###############################################################################
+
+# battle.100 Heroism roll
+# Hidden. Picks which tale of heroism the commander hears and fires
+# battle.101. The weights are the old vanilla ones: brave, strong and clever
+# commanders shine more often, the sick and the maimed less.
+# Scope: a commander on the winning side (not the army leader). FROM is the
+#   enemy army leader. Fired by on_battle_won.
+character_event = {
+	id = battle.100
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.5 trait = brave }
+		modifier = { factor = 1.5 martial = 10 }
+		modifier = { factor = 1.2 trait = genius }
+		modifier = { factor = 1.1 OR = { trait = quick trait = shrewd } }
+		modifier = { factor = 0.9 OR = { trait = slow trait = dull } }
+		modifier = { factor = 0.2 trait = imbecile }
+		modifier = { factor = 0.2 trait = inbred }
+		modifier = { factor = 1.5 is_strong_trigger = yes }
+		modifier = { factor = 0.8 is_weak_trigger = yes }
+		modifier = { factor = 0.8 trait = stressed }
+		modifier = { factor = 0.8 trait = depressed }
+		modifier = { factor = 0.5 trait = lunatic_3 }
+		modifier = { factor = 0.75 trait = lunatic_2 }
+		modifier = { factor = 0.95 trait = lunatic_1 }
+		modifier = { factor = 0.75 trait = possessed }
+		modifier = { factor = 0.9 is_ill = yes }
+		modifier = { factor = 0.8 trait = pneumonic }
+		modifier = { factor = 0.8 trait = syphilitic }
+		modifier = { factor = 0.5 trait = leper }
+		modifier = { factor = 0.9 trait = wounded }
+		modifier = { factor = 0.8 is_maimed_trigger = yes }
+		modifier = { factor = 0.5 trait = infirm }
+		modifier = { factor = 0.4 trait = incapable }
+		modifier = { factor = 0.5 trait = drunkard }
+		modifier = { factor = 0.5 trait = has_tuberculosis }
+		modifier = { factor = 0.5 trait = has_typhoid_fever }
+		modifier = { factor = 0.5 trait = has_typhus }
+		modifier = { factor = 0.5 trait = has_bubonic_plague }
+		modifier = { factor = 0.5 trait = has_measles }
+		modifier = { factor = 0.5 trait = has_small_pox }
+		modifier = { factor = 0.5 trait = has_tomb_rot }
+	}
+
+	immediate = {
+		random_list = {
+			10 = { set_character_flag = battle_heroism_1 }
+			10 = { set_character_flag = battle_heroism_2 }
+			10 = { set_character_flag = battle_heroism_3 }
+			10 = { set_character_flag = battle_heroism_4 }
+			10 = { set_character_flag = battle_heroism_5 }
+			10 = { set_character_flag = battle_heroism_6 }
+		}
+		character_event = { id = battle.101 }
+	}
+}
+
+# battle.101 Heroism shown
+# One of six tales of the commander's courage, with its own versions for
+# dawi and greenskins. Khorne's faithful offer the slaughter to their god.
+# Scope: the commander from battle.100, with one battle_heroism_N flag.
+character_event = {
+	id = battle.101
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	desc = {
+		trigger = { has_character_flag = battle_heroism_1 culture_group = dwarf_group }
+		text = EVTDESCbattle101_dwarf_a
+	}
+	desc = {
+		trigger = { has_character_flag = battle_heroism_2 culture_group = dwarf_group }
+		text = EVTDESCbattle101_dwarf_b
+	}
+	desc = {
+		trigger = { has_character_flag = battle_heroism_1 OR = { culture_group = orc_group culture_group = goblin_group } }
+		text = EVTDESCbattle101_greenskin_a
+	}
+	desc = {
+		trigger = { has_character_flag = battle_heroism_2 OR = { culture_group = orc_group culture_group = goblin_group } }
+		text = EVTDESCbattle101_greenskin_b
+	}
+	desc = {
+		trigger = {
+			has_character_flag = battle_heroism_1
+			NOR = { culture_group = dwarf_group culture_group = orc_group culture_group = goblin_group }
+		}
+		text = EVTDESCbattle101_1
+	}
+	desc = {
+		trigger = {
+			has_character_flag = battle_heroism_2
+			NOR = { culture_group = dwarf_group culture_group = orc_group culture_group = goblin_group }
+		}
+		text = EVTDESCbattle101_2
+	}
+	desc = {
+		trigger = { has_character_flag = battle_heroism_3 }
+		text = EVTDESCbattle101_3
+	}
+	desc = {
+		trigger = { has_character_flag = battle_heroism_4 }
+		text = EVTDESCbattle101_4
+	}
+	desc = {
+		trigger = { has_character_flag = battle_heroism_5 }
+		text = EVTDESCbattle101_5
+	}
+	desc = {
+		trigger = { has_character_flag = battle_heroism_6 }
+		text = EVTDESCbattle101_6
+	}
+
+	option = {
+		name = EVTOPTAbattle101
+		trigger = { NOT = { religion = khorne } }
+		prestige = 100
+	}
+	option = {
+		name = EVTOPTBbattle101 # Blood for the Blood God
+		trigger = { religion = khorne }
+		prestige = 75
+		piety = 25
+	}
+
+	after = {
+		clr_character_flag = battle_heroism_1
+		clr_character_flag = battle_heroism_2
+		clr_character_flag = battle_heroism_3
+		clr_character_flag = battle_heroism_4
+		clr_character_flag = battle_heroism_5
+		clr_character_flag = battle_heroism_6
+	}
+}
+
+# battle.102 A soldier distinguishes himself
+# A fighter from the ranks catches the player's eye and joins the court with
+# his share of the glory. A vampire's soldier may be a necromancer in the
+# making or a vampire himself. With a battle omen from a seer (Mystics) the
+# soldier proves the vision right or wrong.
+# Scope: a player commander on the winning side. Fired by on_battle_won.
+character_event = {
+	id = battle.102
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	hide_from = yes
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = creature_nehekharan }
+		NOT = { culture_group = daemonic_group }
+		is_alive = yes
+		ai = no # Creates a character; the AI does not need the extra courtiers
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.5 trait = patient }
+		modifier = { factor = 1.5 trait = just }
+		modifier = { factor = 1.5 trait = diligent }
+		modifier = { factor = 0.2 trait = deceitful }
+		modifier = { factor = 0.2 trait = arbitrary }
+		modifier = { factor = 2 has_character_modifier = good_battle_omen }
+		modifier = { factor = 0.9 has_character_modifier = bad_battle_omen }
+	}
+
+	immediate = {
+		create_random_soldier = {
+			random_traits = yes
+			dynasty = random
+			female = no
+			religion = ROOT
+			culture = ROOT
+			attributes = {
+				martial = 8
+				stewardship = 3
+				diplomacy = 3
+				learning = 3
+				intrigue = 3
+			}
+		}
+		new_character = {
+			if = {
+				limit = {
+					ROOT = {
+						is_vampire_trigger = yes
+						trait = vampire_carstein_visible
+					}
+				}
+				random_list = {
+					10 = {
+						add_trait = lore_necromancy
+						add_magic_potential_effect = yes
+						magic_power_random_effect = yes
+						enable_magic_xp_effect = yes
+						random_lore_effect = yes
+						set_character_flag = special_marshal
+						add_age = 14
+						clear_education_trait = yes
+						change_learning = 4
+						change_martial = 2
+						add_random_education_trait = learning
+					}
+					5 = {
+						set_graphical_culture = generic_vampire
+						add_age = 34
+						change_diplomacy = 2
+						change_intrigue = 2
+						change_martial = 4
+					}
+					90 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					ROOT = {
+						is_vampire_trigger = yes
+						trait = vampire_blood_visible
+					}
+				}
+				random_list = {
+					20 = {
+						add_trait = lore_necromancy
+						add_magic_potential_effect = yes
+						magic_power_random_effect = yes
+						enable_magic_xp_effect = yes
+						set_character_flag = special_marshal
+						add_age = 20
+						clear_education_trait = yes
+						change_learning = 3
+						change_martial = 2
+						change_intrigue = 2
+						add_random_education_trait = learning
+					}
+					10 = {
+						add_trait = vampire_blood_visible
+						set_graphical_culture = blood_vampire
+						add_age = 18
+						change_diplomacy = 2
+						change_martial = 5
+					}
+					70 = { }
+				}
+			}
+			else_if = {
+				limit = {
+					ROOT = { is_vampire_trigger = yes }
+				}
+				random_list = {
+					20 = {
+						add_trait = lore_necromancy
+						add_magic_potential_effect = yes
+						magic_power_random_effect = yes
+						enable_magic_xp_effect = yes
+						set_character_flag = special_marshal
+						add_age = 20
+					}
+					80 = { }
+				}
+			}
+			add_blood_splatter_effect = yes
+			remove_trait = craven
+			save_event_target_as = soldier_target
+			character_event = { id = aiclean.31 } # Sets the racial trait
+		}
+	}
+
+	desc = {
+		trigger = {
+			NOR = {
+				has_character_modifier = good_battle_omen
+				has_character_modifier = bad_battle_omen
+			}
+		}
+		text = EVTDESCbattle102
+	}
+	desc = {
+		trigger = {
+			has_dlc = "Mystics"
+			has_character_modifier = good_battle_omen
+		}
+		text = EVTDESCbattle102_good_omen
+	}
+	desc = {
+		trigger = {
+			has_dlc = "Mystics"
+			has_character_modifier = bad_battle_omen
+		}
+		text = EVTDESCbattle102_bad_omen
+	}
+
+	option = {
+		name = EVTOPTAbattle102
+		trigger = {
+			NOR = {
+				has_character_modifier = good_battle_omen
+				has_character_modifier = bad_battle_omen
+			}
+		}
+		event_target:soldier_target = { prestige = 50 }
+	}
+	option = {
+		name = EVTOPTBbattle102
+		trigger = {
+			has_dlc = "Mystics"
+			has_character_modifier = good_battle_omen
+		}
+		event_target:soldier_target = { prestige = 50 }
+		upgrade_seer_modifier_effect = yes
+	}
+	option = {
+		name = EVTOPTCbattle102
+		trigger = {
+			has_dlc = "Mystics"
+			has_character_modifier = bad_battle_omen
+		}
+		event_target:soldier_target = { prestige = 50 }
+		downgrade_seer_modifier_effect = yes
+	}
+
+	after = {
+		remove_scrying_omen_modifiers_effect = yes
+	}
+}
+
+# battle.103 Captured in battle
+# The commander is taken alive when the battle is lost. The enemy leader is
+# told (50020 in imprisoned_events.txt). Norscan war leaders, fearsome
+# bloodlines and high warrior lodge ranks take more captives; hidden
+# passageways in a realm wonder help a commander slip away.
+# Scope: a commander on the losing side (not the army leader). FROM is the
+#   enemy army leader. Fired by on_battle_lost.
+character_event = {
+	id = battle.103
+	title = captured_in_battle
+	desc = EVTDESCbattle103
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		prisoner = no
+		NOT = { character = FROM }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		bad_soldier_outcome_score = yes
+		title_tier_reduction_score = yes
+		modifier = {
+			factor = 1.5
+			FROM = { trait = norse_leader }
+		}
+		modifier = {
+			factor = 2 # The enemy leader has a fearsome bloodline
+			FROM = {
+				any_owned_bloodline = { has_bloodline_flag = bloodline_fearsome }
+			}
+		}
+		modifier = {
+			factor = 3 # The enemy leader is a warrior lodge member of rank 2 or higher
+			FROM = {
+				is_member_of_any_warrior_lodge_trigger = yes
+				society_rank > 1
+			}
+		}
+		modifier = {
+			factor = 0.5 # Hidden passageways make it easier to run away
+			any_realm_wonder = { has_wonder_upgrade = upgrade_hidden_passageways }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = captured_commander
+		location = { save_event_target_as = battlefield_location }
+		FROM = { save_event_target_as = enemy_liege }
+		imprison = event_target:enemy_liege # ROOT is imprisoned by the enemy leader
+	}
+
+	option = {
+		name = CURSES
+		hidden_tooltip = {
+			FROM = { character_event = { id = 50020 } } # The enemy leader hears of the capture
+		}
+	}
+}
+
+# battle.104 The enemy war leader is dead
+# A letter for the player when the leader of the other side dies and the war
+# ends with him.
+# Scope: a player in the war. Fired as a letter by the CB on_attacker_leader_death
+#   and on_defender_leader_death blocks (00_cb_types, wh_cb_types,
+#   cb_types_chaos) and listed in on_warleader_death.
+letter_event = {
+	id = battle.104
+	desc = EVTDESCbattle104
+	border = GFX_event_letter_frame_war
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+	}
+
+	option = {
+		name = OK
 	}
 }
 

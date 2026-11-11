@@ -14,7 +14,7 @@
 # Twisting                     slaanesh.100 - slaanesh.122
 # Quirking                     slaanesh.200 - slaanesh.332
 # Polymorph                    slaanesh.400 - slaanesh.425
-# Changed by Slaanesh          slaanesh.450 - slaanesh.462
+# Changed by Slaanesh          slaanesh.450 - slaanesh.463
 # Valka the Serpent            slaanesh.470
 #
 # Fired from common/on_actions/wh_on_actions.txt: on_bi_yearly_pulse
@@ -25,6 +25,10 @@
 # (slaanesh.400), each with a chance of a gift (slaanesh.70);
 # hide_deformity_spells in wh_magic_decisions.txt fires slaanesh.90. The
 # concubine events and Skaven births also call in.
+#
+# A second part further down, namespace thrall, is the pet consort menu
+# (decision manage_pet_consort, was consort.0012 - 0026 in
+# S_concubine_events.txt).
 # Scripted effects and triggers: wh_slaanesh_effects.txt,
 # wh_slaanesh_triggers.txt
 # Artifacts: common/artifacts/26_artifacts_slaanesh.txt
@@ -11308,7 +11312,7 @@ character_event = {
 
 # slaanesh.460 A child after all
 # A changed woman whose wife is fertile can still conceive with her
-# (consort.0009). Only characters with the slaanesh_gender_swapped flag are
+# (slaanesh.463). Only characters with the slaanesh_gender_swapped flag are
 # checked.
 # Scope: ROOT is the changed character.
 character_event = {
@@ -11484,7 +11488,7 @@ character_event = {
 }
 
 # slaanesh.461 Tell the spouse
-# Passes the pregnancy on (consort.0009).
+# Passes the pregnancy on (slaanesh.463).
 # Scope: ROOT is the spouse, FROM the changed character.
 character_event = {
 	id = slaanesh.461
@@ -11493,7 +11497,23 @@ character_event = {
 	is_triggered_only = yes
 
 	immediate = {
-		FROM = { character_event = { id = consort.0009 } }
+		FROM = { character_event = { id = slaanesh.463 } }
+	}
+}
+
+# slaanesh.463 The changed wife conceives by her spouse
+# Hidden. Pinged from slaanesh.460 via slaanesh.461 (was consort.0009).
+# Scope: ROOT is the changed character, FROM the spouse.
+character_event = {
+	id = slaanesh.463
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = { is_pregnant = no }
+
+	immediate = {
+		impregnate = FROM
 	}
 }
 
@@ -13109,5 +13129,287 @@ letter_event = {
 	option = {
 		name = EVTOPTApleasure62
 		clr_character_flag = pleasure_knife_exposed
+	}
+}
+
+###############################################################################
+# The pet consort (namespace thrall)
+# Namespace: thrall (was consort.0012 - 0026 in S_concubine_events.txt)
+# Faction: Chaos
+# Serves: rulers of Slaanesh, the Cult of Pleasure, Atharti and the Amazons
+#
+# A player ruler of the pleasure faiths (decision manage_pet_consort in
+# wh_chaos_decisions.txt, 10 prestige, every 90 days per consort) has an
+# adult consort brought before them: release, geld, kill, or, for the
+# faithful of Slaanesh, a "special treatment" in the private dungeon (a new
+# face, the needles and hooks, the bloodletting, the painting). Each one may
+# draw the eye of the Dark Prince (slaanesh.70).
+#
+#   thrall.1   Hidden ping to the ruler
+#   thrall.2   What to do with this consort?
+#   thrall.3   Hidden ping back to the ruler
+#   thrall.4   The special treatment
+#   thrall.5   A new face
+#   thrall.6   The needles and hooks
+#   thrall.7   The bloodletting
+#   thrall.8   The painting
+#
+# Fixed: killing the consort angered the dead consort's lovers and friends
+#   at the consort, not the killer; the Amazon options never showed, as the
+#   decision only took the Slaaneshi faiths; the consort is checked with
+#   is_woman_trigger; the death `break` is an if/else.
+# Dropped: the children's branch (the decision now needs an adult consort)
+#   and the stable outcome (thrall.17, 25, 26 in the old numbering).
+# Saved: character flag handling_consort (on the ruler, cleared by every
+#   ending); modifier consort_cooldown (90 days, on the consort).
+# Loc: localisation/00_WHG_slaanesh_events.csv
+###############################################################################
+
+namespace = thrall
+
+# thrall.1 Hidden: pings the ruler.
+# Scope: ROOT is the consort, FROMFROM the ruler. Fired by manage_pet_consort.
+character_event = {
+	id = thrall.1
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROMFROM = { character_event = { id = thrall.2 } }
+	}
+}
+
+# thrall.2 What to do with this consort?
+# Scope: ROOT is the ruler, FROM the consort.
+character_event = {
+	id = thrall.2
+	desc = EVTDESCthrall2
+	picture = GFX_evt_slave_whipped
+
+	is_triggered_only = yes
+
+	option = { # Release
+		name = EVTOPTAthrall2
+		piety = -50
+		clr_character_flag = amazon_exception
+		clr_character_flag = handling_consort
+		FROM = {
+			remove_lover = ROOT
+			remove_consort = ROOT
+			recalc_succession = yes
+		}
+	}
+	option = { # Geld
+		name = EVTOPTBthrall2
+		trigger = {
+			FROM = {
+				is_woman_trigger = no
+				NOT = { trait = eunuch }
+			}
+		}
+		clr_character_flag = handling_consort
+		FROM = { add_trait = eunuch }
+	}
+	option = { # Kill
+		name = EVTOPTCthrall2
+		trigger = {
+			OR = {
+				FROM = { is_woman_trigger = no }
+				NOT = { trait = creature_amazon } # Amazons do not kill other Amazons
+			}
+		}
+		clr_character_flag = handling_consort
+		FROM = {
+			if = {
+				limit = { is_invincible_trigger = yes }
+				antideath_effect = yes
+			}
+			else = {
+				death = { death_reason = death_murder killer = ROOT }
+				hidden_tooltip = {
+					mother = { opinion = { who = ROOT modifier = evil_murderer } }
+					father = { opinion = { who = ROOT modifier = evil_murderer } }
+					any_child = {
+						limit = {
+							NOT = { character = ROOT }
+							NOT = { has_character_flag = evil_murderer }
+						}
+						opinion = { who = ROOT modifier = evil_murderer }
+					}
+					any_spouse = {
+						limit = {
+							NOT = { character = ROOT }
+							opinion = { who = PREV value = -25 }
+						}
+						opinion = { who = ROOT modifier = evil_murderer }
+					}
+					any_lover = {
+						limit = { NOT = { character = ROOT } }
+						opinion = { who = ROOT modifier = evil_murderer }
+					}
+					any_friend = {
+						limit = { NOT = { character = ROOT } }
+						opinion = { who = ROOT modifier = evil_murderer }
+					}
+					any_dynasty_member = {
+						limit = {
+							is_close_relative = PREV
+							NOT = { character = ROOT }
+						}
+						opinion = { who = ROOT modifier = evil_murderer }
+					}
+				}
+			}
+		}
+	}
+	option = { # Something special
+		name = EVTOPTDthrall2
+		trigger = { NOT = { religion = amazon } }
+		FROM = { character_event = { id = thrall.3 } }
+	}
+	option = { # Bored
+		name = EVTOPTEthrall2
+		trigger = { religion = amazon }
+		clr_character_flag = handling_consort
+	}
+}
+
+# thrall.3 Hidden: pings the ruler back.
+# Scope: ROOT is the consort, FROM the ruler.
+character_event = {
+	id = thrall.3
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { character_event = { id = thrall.4 } }
+	}
+}
+
+# thrall.4 The special treatment
+# Scope: ROOT is the ruler, FROM the consort.
+character_event = {
+	id = thrall.4
+	desc = EVTDESCthrall4
+	picture = GFX_evt_slave_whipped
+
+	is_triggered_only = yes
+
+	option = { # A new face
+		name = EVTOPTAthrall4
+		trigger = { FROM = { NOT = { trait = disfigured } } }
+		hidden_tooltip = {
+			random = {
+				chance = 25
+				character_event = { id = slaanesh.70 days = 40 random = 20 }
+			}
+		}
+		piety = 25
+		clr_character_flag = handling_consort
+		character_event = { id = thrall.5 }
+		FROM = { add_trait = disfigured }
+	}
+	option = { # Something really special
+		name = EVTOPTBthrall4
+		hidden_tooltip = {
+			random = {
+				chance = 30
+				character_event = { id = slaanesh.70 days = 40 random = 20 }
+			}
+			random_list = {
+				34 = {
+					character_event = { id = thrall.6 }
+					FROM = { add_trait = wounded }
+				}
+				33 = {
+					character_event = { id = thrall.7 }
+					FROM = { add_trait = is_malnourished }
+				}
+				33 = {
+					modifier = { factor = 0 FROM = { trait = blinded } }
+					character_event = { id = thrall.8 }
+					FROM = { add_trait = blinded }
+				}
+			}
+		}
+	}
+	option = { # Bored
+		name = EVTOPTCthrall4
+		clr_character_flag = handling_consort
+		piety = -20
+	}
+}
+
+# thrall.5 A new face
+# Scope: ROOT is the ruler.
+character_event = {
+	id = thrall.5
+	desc = EVTDESCthrall5
+	picture = GFX_evt_slave_whipped
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAthrall5
+		clr_character_flag = handling_consort
+		piety = 10
+		prestige = 10
+	}
+}
+
+# thrall.6 The needles and hooks
+# Scope: ROOT is the ruler.
+character_event = {
+	id = thrall.6
+	desc = EVTDESCthrall6
+	picture = GFX_evt_slave_whipped
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAthrall6
+		clr_character_flag = handling_consort
+		random = {
+			chance = 50
+			add_trait = lustful
+		}
+		piety = 10
+		prestige = 10
+	}
+}
+
+# thrall.7 The bloodletting
+# Scope: ROOT is the ruler.
+character_event = {
+	id = thrall.7
+	desc = EVTDESCthrall7
+	picture = GFX_evt_slave_whipped
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAthrall7
+		clr_character_flag = handling_consort
+		piety = 10
+		prestige = 10
+	}
+}
+
+# thrall.8 The painting
+# Scope: ROOT is the ruler.
+character_event = {
+	id = thrall.8
+	desc = EVTDESCthrall8
+	picture = GFX_evt_slave_whipped
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAthrall8
+		clr_character_flag = handling_consort
+		piety = 10
+		prestige = 10
 	}
 }

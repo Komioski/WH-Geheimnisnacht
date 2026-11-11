@@ -22,6 +22,9 @@
 # The First Mate                       pirate.30 - pirate.31
 # The plunder fleet                    pirate.39 - pirate.48
 #
+# Also in this file (each part keeps its own header and namespace):
+#   Part 2: Sacking a holding (namespace pillage)
+#
 # Callers: pirate.1 from on_loot_settlement, pirate.10 from the five-year
 #   pirate_raids list (was MTTH 100 years), pirate.20 from on_bi_yearly_pulse
 #   (was DR_pirates.106 - 107), pirate.30 from on_new_holder_inheritance (all
@@ -373,6 +376,7 @@ character_event = {
 	id = pirate.20
 	hide_window = yes
 	is_triggered_only = yes
+	only_rulers = yes
 
 	trigger = {
 		OR = {
@@ -868,5 +872,292 @@ letter_event = {
 			}
 		}
 		clr_character_flag = plunder_fleet_patron
+	}
+}
+
+###############################################################################
+# Part 2: Sacking a holding
+# Namespace: pillage (was DoWA.1 - 3 in DoW_Adventurers.txt)
+# Faction: Tilea, Estalia & Sartosa
+# Serves: pirate lords, the Druchii, the Ogres and the Norscans of the old
+#   gods
+#
+# A raider who storms a rich holding (four buildings or more) asks
+# whether his men may plunder it: the spoils depend on the holding, and
+# the temple-cities of the Lizardmen hold the Old Ones' knowledge. Or he
+# takes hostages for ransom instead. Where the slavers have already carried
+# off the people (slaves_taken, slave.5), raiders come back to put what is
+# left to the torch.
+#
+# Plunder or hostages                  pillage.1
+# Put to the torch                     pillage.2 - pillage.3
+#
+# Callers: the adventurers_events list of on_siege_over_winner
+#   (wh_on_actions.txt). Slaves are taken by slave.4 - 5
+#   (WHG_slavery_events.txt), not here.
+# Saved: province modifiers slaves_taken (read) and
+#   recently_burnt_the_land_not_owner; holding modifier sacked.
+#   Triggers pillage_raider_trigger and pillage_temple_city_trigger in
+#   wh_pirate_triggers.txt.
+# Loc: localisation/00_WHG_pirate_events.csv
+###############################################################################
+
+namespace = pillage
+
+# pillage.1 Sack the holding
+# The raider's men want to plunder a stormed holding. Plunder it: gold by
+# the holding (a city 50 and some learning, a temple 40 and piety, a castle
+# 30 and prestige, a tribe 15), a Lizardmen temple-city more learning and
+# gold; a building burns and the holder and his liege are furious. Or take
+# the holder's people as hostages: courtiers in the holding are taken or
+# killed, the holder taken half the time.
+# Scope: ROOT is the winner. FROM is the holding title.
+character_event = {
+	id = pillage.1
+	desc = {
+		text = EVTDESCpillage1
+		trigger = { FROM = { NOT = { culture_group = lizardman_group } } }
+	}
+	desc = {
+		text = EVTDESCpillage1_lizardmen
+		trigger = { FROM = { culture_group = lizardman_group } }
+	}
+	picture = {
+		picture = GFX_evt_lizardmen_temple_fire
+		trigger = { FROM = { culture_group = lizardman_group } }
+	}
+	picture = {
+		picture = GFX_evt_norscan_raid
+		trigger = {
+			FROM = { NOT = { culture_group = lizardman_group } }
+			culture_group = norscan_group
+		}
+	}
+	picture = {
+		picture = GFX_evt_ogre_raiders
+		trigger = {
+			FROM = { NOT = { culture_group = lizardman_group } }
+			culture_group = ogre_group
+		}
+	}
+	picture = {
+		picture = GFX_evt_questing_ocean
+		trigger = {
+			FROM = { NOT = { culture_group = lizardman_group } }
+			culture_group = druchii_group
+		}
+	}
+	picture = {
+		picture = GFX_evt_pirate_crew
+		trigger = {
+			FROM = { NOT = { culture_group = lizardman_group } }
+			NOR = {
+				culture_group = norscan_group
+				culture_group = ogre_group
+				culture_group = druchii_group
+			}
+		}
+	}
+	border = GFX_event_normal_frame_war
+	portrait = event_target:pillage_top_liege
+
+	is_triggered_only = yes # on_siege_over_winner, adventurers_events
+
+	only_playable = yes
+	prisoner = no
+
+	trigger = {
+		pillage_raider_trigger = yes
+		FROM = {
+			OR = {
+				holding_type = city
+				holding_type = temple
+				holding_type = castle
+				holding_type = tribal
+			}
+			num_of_buildings = 4
+			location = { NOT = { has_province_modifier = slaves_taken } }
+			holder_scope = { NOT = { character = ROOT } }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			location = { save_event_target_as = pillage_province }
+			holder_scope = {
+				save_event_target_as = pillage_holder
+				top_liege = { save_event_target_as = pillage_top_liege }
+			}
+		}
+	}
+
+	# Plunder it
+	option = {
+		name = EVTOPTApillage1
+		show_portrait = event_target:pillage_holder
+		if = {
+			limit = { FROM = { holding_type = city } }
+			wealth = 50
+			custom_tooltip = {
+				text = pillage_learning_tt
+				hidden_effect = {
+					random_list = {
+						10 = { military_techpoints = 5 }
+						10 = { economy_techpoints = 5 }
+						10 = { culture_techpoints = 5 }
+					}
+				}
+			}
+		}
+		else_if = {
+			limit = { FROM = { holding_type = temple } }
+			wealth = 40
+			piety = 25
+		}
+		else_if = {
+			limit = { FROM = { holding_type = castle } }
+			wealth = 30
+			prestige = 15
+		}
+		else = {
+			wealth = 15
+		}
+		if = {
+			limit = {
+				FROM = { culture_group = lizardman_group }
+				event_target:pillage_province = { pillage_temple_city_trigger = yes }
+			}
+			wealth = 25
+			custom_tooltip = {
+				text = pillage_learning_tt
+				hidden_effect = {
+					random_list = {
+						10 = { military_techpoints = 10 }
+						10 = { economy_techpoints = 10 }
+						10 = { culture_techpoints = 10 }
+					}
+				}
+			}
+		}
+		FROM = { destroy_random_building = yes }
+		event_target:pillage_holder = {
+			opinion = { modifier = opinion_furious who = ROOT years = 3 }
+		}
+		event_target:pillage_top_liege = {
+			if = {
+				limit = { NOT = { character = event_target:pillage_holder } }
+				opinion = { modifier = opinion_furious who = ROOT years = 3 }
+			}
+		}
+		ai_chance = { factor = 90 }
+	}
+	# Take hostages
+	option = {
+		name = EVTOPTBpillage1
+		show_portrait = event_target:pillage_holder
+		event_target:pillage_holder = {
+			random_courtier = {
+				limit = { at_location = event_target:pillage_province }
+				random_list = {
+					35 = { imprison = ROOT }
+					25 = {
+						if = {
+							limit = { is_invincible_trigger = yes }
+							antideath_effect = yes
+						}
+						else = {
+							death = { death_reason = death_murder killer = ROOT }
+						}
+					}
+					40 = { }
+				}
+			}
+			if = {
+				limit = { at_location = event_target:pillage_province }
+				random = {
+					chance = 50
+					imprison = ROOT
+				}
+			}
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 trait = greedy }
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+}
+
+# pillage.2 Put to the torch
+# Hidden. Raiders storm a holding whose people the slavers already carried
+# off, and burn what is left: a building, the holding sacked for a year, the
+# land burnt for ten (the Norscans and Druchii burn it again), and the doom
+# of the world rises a little. The raider is told (pillage.3).
+# Scope: ROOT is the winner. FROM is the holding title.
+character_event = {
+	id = pillage.2
+	hide_window = yes
+
+	is_triggered_only = yes # on_siege_over_winner, adventurers_events
+
+	only_playable = yes
+
+	trigger = {
+		pillage_raider_trigger = yes
+		FROM = {
+			OR = {
+				holding_type = city
+				holding_type = temple
+				holding_type = castle
+				holding_type = tribal
+			}
+			has_any_building = yes
+			NOT = { has_holding_modifier = sacked }
+			NOT = { has_holding_modifier = burned }
+			location = {
+				has_province_modifier = slaves_taken
+				OR = {
+					NOT = { has_province_modifier = recently_burnt_the_land_not_owner }
+					ROOT = {
+						OR = {
+							culture_group = norscan_group
+							culture_group = druchii_group
+						}
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		FROM = {
+			destroy_random_building = yes
+			add_holding_modifier = { modifier = sacked months = 12 }
+			location = {
+				add_province_modifier = { name = recently_burnt_the_land_not_owner years = 10 }
+			}
+		}
+		add_doom_progress_tiny_effect = yes
+		if = {
+			limit = { ai = no }
+			character_event = { id = pillage.3 }
+		}
+	}
+}
+
+# pillage.3 Put to the torch
+# The raider hears what his men did.
+# Scope: ROOT is the winner. FROM is the holding title (pillage.2).
+character_event = {
+	id = pillage.3
+	desc = EVTDESCpillage3
+	picture = GFX_evt_siege
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # pillage.2
+	notification = yes
+
+	option = {
+		name = EVTOPTApillage3
 	}
 }

@@ -37,6 +37,7 @@
 #
 # Also in this file (each part keeps its own header and namespace):
 #   Part 2: Offmap currencies (namespace offmapgen)
+#   Part 3: The house customiser (namespace customhouse)
 ###############################################################################
 
 namespace = aiclean
@@ -3332,5 +3333,548 @@ character_event = {
 				}
 			}
 		}
+	}
+}
+
+###############################################################################
+# Part 3: The house customiser (namespace customhouse)
+# Namespace: customhouse (was wh_custom_houses in
+#   wh_customizer_houses_events.txt; ids kept)
+# Faction: Generic
+# Serves: players who made a character with the ruler designer
+#
+# A designed character with the house_customizer trait may, within 50 days,
+# pick any character of an existing house through the diplomacy menu
+# (decision in wh_utility_decisions.txt). customhouse.3 then asks how they
+# are related, sets the right father or mother (the spouse of that parent
+# becomes the other parent, 399), joins their bloodlines, and makes a
+# bastard link, or one across a vampire or Chaos divide, a cadet house (5,
+# 6). Nomads cannot use it (engine limit).
+#
+# Fixes: the nephew/niece option needed ROOT to be both bastard and
+#   legitimised bastard (its other checks were commented out), so it never
+#   showed; the great-nephew and cousin options had the same AND. The line
+#   of descent check is back and the bastard test is an OR. A designed woman
+#   of a race without women no longer gets neither parent set (set_mother
+#   is the else of set_father). Commented-out extinct-house and nomad clan
+#   code dropped.
+# Fired from: on_chronicle_start in wh_on_actions.txt (customhouse.1, which
+#   had no caller, so the trait never ran out); decisions/
+#   wh_utility_decisions.txt (customhouse.3).
+# Loc: localisation/00_maintenance_events.csv
+###############################################################################
+
+namespace = customhouse
+
+# customhouse.1 The house customiser picks a house (or learns that nomads cannot)
+character_event = {
+	id = customhouse.1
+	picture = GFX_evt_throne_room
+
+	is_triggered_only = yes
+	hide_from = yes
+
+	trigger = {
+		ai = no
+		trait = house_customizer
+	}
+
+	desc = { text = EVTDESCcustomhouse1 trigger = { NOT = { is_nomadic = yes } } }
+	desc = { text = EVTDESCcustomhouse1B trigger = { is_nomadic = yes } }
+
+	option = {
+		name = EVTOPTAcustomhouse1 #Current House
+		trigger = { NOT = { is_nomadic = yes } }
+		custom_tooltip = { text = TOOLTIPhouse_customizerA }
+		hidden_tooltip = { character_event = { id = customhouse.4 days = 50 } } #valid for 50 days
+	}
+
+	option = {
+		name = OK
+		trigger = { is_nomadic = yes }
+		remove_trait = house_customizer
+	}
+}
+# customhouse.3 How am I related to the chosen character? Link the parents
+character_event = {
+	id = customhouse.3
+	desc = EVTDESCcustomhouse3
+	picture = GFX_evt_throne_room
+
+	is_triggered_only = yes
+
+	trigger = {
+		ai = no
+		dynasty = FROM
+	}
+
+	immediate = {
+		character_event = { id = customhouse.7 days = 1 } #Patrician/Clan maintenance
+	}
+
+	option = {
+		name = {
+			text = EVTOPTAcustomhouse3 #Child
+			trigger = { NOR = { trait = bastard trait = legit_bastard } }
+		}
+		name = {
+			text = EVTOPTGcustomhouse3 #Bastard child
+			trigger = { OR = { trait = bastard trait = legit_bastard } }
+		}
+		trigger = { FROM = { could_be_parent_of = ROOT } }
+		FROM = {
+			show_portrait = yes
+			if = { limit = { is_female = no } ROOT = { set_father = PREV } }
+			else = { ROOT = { set_mother = PREV } }
+			recalc_succession = yes
+		}
+		hidden_tooltip = { character_event = { id = customhouse.399 } } #locate second parent
+		recalc_succession = yes
+		if = {
+			limit = { OR = { trait = bastard trait = legit_bastard } }
+			hidden_tooltip = { character_event = { id = customhouse.5 } }
+		}
+	}
+
+	option = {
+		name = {
+			text = EVTOPTBcustomhouse3 #Sibling (father)
+			trigger = { NOR = { trait = bastard trait = legit_bastard } }
+		}
+		name = {
+			text = EVTOPTFcustomhouse3 #Bastard child
+			trigger = { OR = { trait = bastard trait = legit_bastard } }
+		}
+		trigger = { FROM = { father_even_if_dead = { dynasty = ROOT could_be_parent_of = ROOT } } }
+		FROM = { father_even_if_dead = { show_portrait = yes ROOT = { set_father = PREV } } }
+		hidden_tooltip = { character_event = { id = customhouse.399 } } #locate second parent
+		recalc_succession = yes
+		if = {
+			limit = { OR = { trait = bastard trait = legit_bastard } }
+			hidden_tooltip = { character_event = { id = customhouse.5 } }
+		}
+	}
+
+	option = {
+		name = {
+			text = EVTOPTBcustomhouse3 #Sibling (father)
+			trigger = { NOR = { trait = bastard trait = legit_bastard } }
+		}
+		name = {
+			text = EVTOPTFcustomhouse3 #Bastard child
+			trigger = { OR = { trait = bastard trait = legit_bastard } }
+		}
+		trigger = {
+			FROM = {
+				mother_even_if_dead = { dynasty = ROOT could_be_parent_of = ROOT }
+				NOT = { father_even_if_dead = { dynasty = ROOT could_be_parent_of = ROOT } }
+			}
+		}
+		FROM = { mother_even_if_dead = { show_portrait = yes ROOT = { set_mother = PREV } } }
+		hidden_tooltip = { character_event = { id = customhouse.399 } } #locate second parent
+		recalc_succession = yes
+		if = {
+			limit = { OR = { trait = bastard trait = legit_bastard } }
+			hidden_tooltip = { character_event = { id = customhouse.5 } }
+		}
+	}
+
+	option = { #Uncle (Pat Grandfather)
+		name = { text = EVTOPTCcustomhouse3 trigger = { is_woman_trigger = no } }
+		name = { text = EVTOPTCcustomhouse3AUNT trigger = { is_woman_trigger = yes } }
+		trigger = {
+			FROM = {
+				father_even_if_dead = {
+					dynasty = ROOT
+					father_even_if_dead = { dynasty = ROOT could_be_parent_of = ROOT }
+				}
+			}
+		}
+		FROM = {
+			father_even_if_dead = {
+				father_even_if_dead = { show_portrait = yes ROOT = { set_father = PREV } }
+			}
+		}
+		hidden_tooltip = { character_event = { id = customhouse.399 } } #locate second parent
+		recalc_succession = yes
+	}
+	option = { #Uncle (Mat Grandfather)
+		name = { text = EVTOPTCcustomhouse3 trigger = { is_woman_trigger = no } }
+		name = { text = EVTOPTCcustomhouse3AUNT trigger = { is_woman_trigger = yes } }
+		trigger = {
+			FROM = {
+				mother_even_if_dead = {
+					dynasty = ROOT
+					father_even_if_dead = { dynasty = ROOT could_be_parent_of = ROOT }
+				}
+			}
+		}
+		FROM = {
+			mother_even_if_dead = {
+				father_even_if_dead = { show_portrait = yes ROOT = { set_father = PREV } }
+			}
+		}
+		hidden_tooltip = { character_event = { id = customhouse.399 } } #locate second parent
+		recalc_succession = yes
+	}
+	option = { #Uncle (Mat Grandmother)
+		name = { text = EVTOPTCcustomhouse3 trigger = { is_woman_trigger = no } }
+		name = { text = EVTOPTCcustomhouse3AUNT trigger = { is_woman_trigger = yes } }
+		trigger = {
+			FROM = {
+				mother_even_if_dead = {
+					dynasty = ROOT
+					mother_even_if_dead = { dynasty = ROOT could_be_parent_of = ROOT }
+				}
+			}
+		}
+		FROM = {
+			mother_even_if_dead = {
+				mother_even_if_dead = { show_portrait = yes ROOT = { set_mother = PREV } }
+			}
+		}
+		hidden_tooltip = { character_event = { id = customhouse.399 } } #locate second parent
+		recalc_succession = yes
+	}
+	option = { #Uncle (Pat Grandmother)
+		name = { text = EVTOPTCcustomhouse3 trigger = { is_woman_trigger = no } }
+		name = { text = EVTOPTCcustomhouse3AUNT trigger = { is_woman_trigger = yes } }
+		trigger = {
+			FROM = {
+				father_even_if_dead = {
+					dynasty = ROOT
+					mother_even_if_dead = { dynasty = ROOT could_be_parent_of = ROOT }
+				}
+			}
+		}
+		FROM = {
+			father_even_if_dead = {
+				mother_even_if_dead = { show_portrait = yes ROOT = { set_mother = PREV } }
+			}
+		}
+		hidden_tooltip = { character_event = { id = customhouse.399 } } #locate second parent
+		recalc_succession = yes
+	}
+
+	option = { #Great Uncle
+		name = { text = EVTOPTDcustomhouse3 trigger = { is_woman_trigger = no } }
+		name = { text = EVTOPTDcustomhouse3AUNT trigger = { is_woman_trigger = yes } }
+		trigger = {
+			FROM = {
+				father_even_if_dead = {
+					dynasty = ROOT
+					father_even_if_dead = {
+						dynasty = ROOT
+						father_even_if_dead = { dynasty = ROOT could_be_parent_of = ROOT }
+					}
+				}
+			}
+		}
+		FROM = {
+			father_even_if_dead = {
+				father_even_if_dead = {
+					father_even_if_dead = { show_portrait = yes ROOT = { set_father = PREV } }
+				}
+			}
+		}
+		hidden_tooltip = { character_event = { id = customhouse.399 } } #locate second parent
+		recalc_succession = yes
+	}
+	option = { #Nephew/Niece
+		name = EVTOPTKcustomhouse3
+		trigger = {
+			FROM = {
+				any_sibling_even_if_dead = {
+					dynasty = ROOT
+					could_be_parent_of = ROOT
+					OR = {
+						AND = { is_woman_trigger = yes is_married_matrilineally = yes }
+						AND = {
+							is_female = no
+							OR = { is_married_matrilineally = no is_married = no }
+						}
+						ROOT = { OR = { trait = bastard trait = legit_bastard } }
+					}
+				}
+			}
+		}
+		FROM = {
+			random_sibling_even_if_dead = {
+				limit = {
+					dynasty = ROOT
+					could_be_parent_of = ROOT
+					OR = {
+						AND = { is_woman_trigger = yes is_married_matrilineally = yes }
+						AND = {
+							is_female = no
+							OR = { is_married_matrilineally = no is_married = no }
+						}
+						ROOT = { OR = { trait = bastard trait = legit_bastard } }
+					}
+				}
+				show_portrait = yes
+				if = { limit = { is_female = no } ROOT = { set_father = PREV } }
+				else = { ROOT = { set_mother = PREV } }
+			}
+		}
+		hidden_tooltip = { character_event = { id = customhouse.399 } } #locate second parent
+		recalc_succession = yes
+		if = {
+			limit = { OR = { trait = bastard trait = legit_bastard } }
+			hidden_tooltip = { character_event = { id = customhouse.5 } }
+		}
+	}
+	option = { #Great Nephew/Niece
+		name = EVTOPTLcustomhouse3
+		trigger = {
+			FROM = {
+				any_dynasty_member_even_if_dead = {
+					OR = {
+						father_even_if_dead = { sibling = ROOT_FROM }
+						mother_even_if_dead = { sibling = ROOT_FROM }
+					}
+					dynasty = ROOT
+					could_be_parent_of = ROOT
+					OR = {
+						AND = { is_woman_trigger = yes is_married_matrilineally = yes }
+						AND = {
+							is_female = no
+							OR = { is_married_matrilineally = no is_married = no }
+						}
+						ROOT = { OR = { trait = bastard trait = legit_bastard } }
+					}
+				}
+			}
+		}
+		FROM = {
+			random_dynasty_member_even_if_dead = {
+				limit = {
+					OR = {
+						father_even_if_dead = { sibling = ROOT_FROM }
+						mother_even_if_dead = { sibling = ROOT_FROM }
+					}
+					dynasty = ROOT
+					could_be_parent_of = ROOT
+					OR = {
+						AND = { is_woman_trigger = yes is_married_matrilineally = yes }
+						AND = {
+							is_female = no
+							OR = { is_married_matrilineally = no is_married = no }
+						}
+						ROOT = { OR = { trait = bastard trait = legit_bastard } }
+					}
+				}
+				show_portrait = yes
+				if = { limit = { is_female = no } ROOT = { set_father = PREV } }
+				else = { ROOT = { set_mother = PREV } }
+			}
+		}
+		hidden_tooltip = { character_event = { id = customhouse.399 } } #locate second parent
+		recalc_succession = yes
+		if = {
+			limit = { OR = { trait = bastard trait = legit_bastard } }
+			hidden_tooltip = { character_event = { id = customhouse.5 } }
+		}
+	}
+	option = { #Random Cousin
+		name = EVTOPTJcustomhouse3
+		trigger = {
+			FROM = {
+				any_dynasty_member_even_if_dead = {
+					dynasty = ROOT
+					could_be_parent_of = ROOT
+					NOR = { character = PREV is_parent_of = PREV is_grandparent_of = PREV }
+					OR = {
+						AND = { is_woman_trigger = yes is_married_matrilineally = yes }
+						AND = {
+							is_female = no
+							OR = { is_married_matrilineally = no is_married = no }
+						}
+						ROOT = { OR = { trait = bastard trait = legit_bastard } }
+					}
+				}
+			}
+		}
+		FROM = {
+			random_dynasty_member_even_if_dead = {
+				limit = {
+					dynasty = ROOT
+					could_be_parent_of = ROOT
+					NOR = { character = PREV is_parent_of = PREV is_grandparent_of = PREV }
+					OR = {
+						AND = { is_woman_trigger = yes is_married_matrilineally = yes }
+						AND = {
+							is_female = no
+							OR = { is_married_matrilineally = no is_married = no }
+						}
+						ROOT = { OR = { trait = bastard trait = legit_bastard } }
+					}
+				}
+				show_portrait = yes
+				if = { limit = { is_female = no } ROOT = { set_father = PREV } }
+				else = { ROOT = { set_mother = PREV } }
+			}
+		}
+		hidden_tooltip = { character_event = { id = customhouse.399 } } #locate second parent
+		recalc_succession = yes
+	}
+
+	option = { #No relation
+		name = EVTOPTEcustomhouse3
+		custom_tooltip = { text = TOOLTIPCUSTOMISERWARNING }
+	}
+
+	after = {
+		father_even_if_dead = { any_owned_bloodline = { add_bloodline_member = ROOT } }
+		character_event = { id = customhouse.8 } #check mother bloodlines
+
+		if = {
+			limit = { FROM = { is_vampire_trigger = yes } ROOT = { is_vampire_trigger = no } }
+			add_trait = bastard
+			hidden_tooltip = { character_event = { id = customhouse.5 } }
+		}
+		if = {
+			limit = {
+				FROM = { open_follower_of_any_chaos_gods = yes }
+				ROOT = { open_follower_of_any_chaos_gods = no }
+			}
+			add_trait = bastard
+			hidden_tooltip = { character_event = { id = customhouse.5 } }
+		}
+		if = {
+			limit = {
+				FROM = { open_follower_of_any_chaos_gods = no }
+				ROOT = { open_follower_of_any_chaos_gods = yes }
+			}
+			add_trait = bastard
+			hidden_tooltip = { character_event = { id = customhouse.5 } }
+		}
+	}
+}
+# customhouse.399 The new parent's spouse becomes the other parent (hidden)
+character_event = {
+	id = customhouse.399
+	picture = GFX_evt_throne_room
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	trigger = {
+		ai = no
+		NOT = { trait = bastard }
+		NOT = { trait = legit_bastard }
+		NOT = { trait = child_of_consort }
+	}
+
+	immediate = {
+		mother_even_if_dead = {
+			if = {
+				limit = { dynasty = ROOT }
+				random_spouse_even_if_dead = {
+					limit = { could_be_parent_of = ROOT }
+					if = { limit = { is_female = no } ROOT = { set_father = PREV } }
+					else = { ROOT = { set_mother = PREV } }
+				}
+			}
+		}
+		father_even_if_dead = {
+			if = {
+				limit = { dynasty = ROOT }
+				random_spouse_even_if_dead = {
+					limit = { could_be_parent_of = ROOT }
+					if = { limit = { is_female = no } ROOT = { set_father = PREV } }
+					else = { ROOT = { set_mother = PREV } }
+				}
+			}
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+# customhouse.4 The customiser trait runs out after 50 days (hidden)
+character_event = {
+	id = customhouse.4
+	picture = GFX_evt_throne_room
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	trigger = {
+		trait = house_customizer
+	}
+
+	immediate = {
+		remove_trait = house_customizer
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# customhouse.5 A bastard link founds a cadet house (hidden)
+character_event = {
+	id = customhouse.5
+	desc = EVTDESCcustomhouse5
+	picture = GFX_evt_throne_room
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	immediate = {
+		dynasty = mother_bastard
+		recalc_succession = yes
+		any_child = { character_event = { id = customhouse.6 days = 1 } }
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# customhouse.6 The customised character's children follow into the cadet house (hidden)
+character_event = {
+	id = customhouse.6
+	is_triggered_only = yes
+	hide_window = yes
+	immediate = {
+		dynasty = FROM
+	}
+	option = {
+		name = OK
+	}
+}
+
+# customhouse.7 A patrician gets a fresh family palace, to avoid a crash (hidden)
+character_event = {
+	id = customhouse.7
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	immediate = {
+		if = {
+			limit = { is_patrician = yes }
+			family_palace = { destroy_settlement = THIS }
+			create_family_palace = yes
+		}
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# customhouse.8 Ruler designer: join the bloodlines of the newly linked mother (hidden)
+character_event = {
+	id = customhouse.8
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		mother_even_if_dead = { any_owned_bloodline = { add_bloodline_member = ROOT } }
 	}
 }

@@ -1,0 +1,1354 @@
+###############################################################################
+# Wyrdstone: the race for Mordheim, veins, meteors, mines and the shadow market
+# Namespace: warpstone (was DoW_blackstone in dow_blackstone_events.txt)
+# Faction: Generic
+# Serves: every lord who covets wyrdstone: Imperial, Bretonnian and
+#   Marienburger counts, the Skaven warlords, the Dark Lords of the undead,
+#   and the dabblers in dark magic who trade in the shadow market
+#
+# Since the twin-tailed comet struck Mordheim, the City of the Damned lies
+# under a mist, and its ruins are thick with wyrdstone. A lord may fund an
+# expedition into it: a commander leads an army to seize a county of
+# d_mordheim, or an agent slips into the ruins to bring stone home until
+# luck or a monster ends the work. Once the mists lift, the lands of
+# Mordheim are open to any war. Elsewhere, wyrdstone is found in the
+# mountains and the deep places, or falls from Morrslieb as a meteor. A
+# mine on a vein or a meteor yields stone each year until it is
+# exhausted, and the shadow market buys and sells it.
+#
+# The race for Mordheim             warpstone.1 - warpstone.19
+#   An expedition is funded           warpstone.1 - warpstone.6
+#   The agent in the ruins            warpstone.10 - warpstone.13
+#   Wyrdstone from Mordheim           warpstone.15 - warpstone.16
+#   The mists lift                    warpstone.18 - warpstone.19
+# Wyrdstone in the earth            warpstone.20 - warpstone.28
+#   A vein is found                   warpstone.20 - warpstone.21
+#   A meteor falls                    warpstone.22 - warpstone.24
+#   The mines                         warpstone.25 - warpstone.28
+# The shadow market                 warpstone.30 - warpstone.32
+#
+# Callers: warpstone.1 from the fund_mordheim_expedition decision,
+#   warpstone.30 from the warpstone_blackmarket decision
+#   (wh_blackstone_decisions.txt); warpstone.15 and warpstone.25 every year
+#   and the yearly mordheim_mist list (warpstone.18), the decade lists
+#   warpstone_veins and warpstone_meteors (warpstone.20, 22), all in
+#   wh_on_actions.txt. The war is the race_for_mordheim CB
+#   (cb_types_dow_blackstone.txt), which clears maintaining_agents when it
+#   ends. The mines are the blackstone_mine buildings (00_blackstone.txt).
+# Saved: global flags clean_mordheim (the mists have lifted, read by many
+#   CBs) and blackstone_meteor_spotted (22-year cooldown); character flags
+#   maintaining_agents, mordheim_patron, martial_agent_mordheim,
+#   intrigue_agent_mordheim, mercenary_agent_mordheim,
+#   shadow_warpstone_dealings; province flags warpstone_vein,
+#   warpstone_meteor and warpstone_yield_1 - 3; province variable
+#   blackstone_mining_progress; event targets mordheim_target,
+#   mordheim_title, mordheim_beneficiary, mordheim_agent and the_mine.
+# Triggers in wh_warpstone_triggers.txt. Loc:
+#   localisation/00_WHG_warpstone_events.csv (decision, CB and tooltip loc
+#   stay in 00_blackstone.csv).
+###############################################################################
+
+namespace = warpstone
+
+###############################################################################
+# The race for Mordheim: an expedition is funded
+###############################################################################
+
+# warpstone.1 The holder of the target county
+# Hidden. Saves the holder of the Mordheim county as the target and asks
+# the patron to choose who leads the expedition (warpstone.2).
+# Scope: ROOT is the county's holder. FROM: the county title. FROMFROM: the
+#   patron who took the decision fund_mordheim_expedition.
+character_event = {
+	id = warpstone.1
+	hide_window = yes
+	is_triggered_only = yes # decision fund_mordheim_expedition
+
+	immediate = {
+		save_event_target_as = mordheim_target
+		FROMFROM = { character_event = { id = warpstone.2 } }
+	}
+}
+
+# warpstone.2 Who leads the expedition?
+# The patron sends a skilled commander with an army, a skilled agent into
+# the ruins, or, with no one fit at court, hires a captain for 75 gold.
+# Scope: ROOT is the patron. FROM: the target's holder (warpstone.1).
+#   FROMFROM: the county title.
+character_event = {
+	id = warpstone.2
+	title = EVTNAMEwarpstone
+	desc = EVTDESCwarpstone2
+	picture = GFX_evt_mordheim
+
+	is_triggered_only = yes # warpstone.1
+
+	immediate = {
+		FROMFROM = { save_event_target_as = mordheim_title }
+		save_event_target_as = mordheim_beneficiary
+	}
+
+	option = { # A commander
+		name = EVTOPTAwarpstone2
+		trigger = {
+			any_courtier = {
+				warpstone_mordheim_agent_trigger = yes
+				martial = 12
+			}
+		}
+		random_courtier = {
+			limit = {
+				warpstone_mordheim_agent_trigger = yes
+				martial = 12
+			}
+			set_character_flag = martial_agent_mordheim
+			save_event_target_as = mordheim_agent
+			character_event = { id = warpstone.3 days = 224 }
+		}
+		ai_chance = { factor = 50 }
+	}
+	option = { # An agent
+		name = EVTOPTBwarpstone2
+		trigger = {
+			any_courtier = {
+				warpstone_mordheim_agent_trigger = yes
+				intrigue = 12
+			}
+		}
+		random_courtier = {
+			limit = {
+				warpstone_mordheim_agent_trigger = yes
+				intrigue = 12
+			}
+			set_character_flag = intrigue_agent_mordheim
+			save_event_target_as = mordheim_agent
+			character_event = { id = warpstone.3 days = 150 }
+		}
+		ai_chance = { factor = 50 }
+	}
+	option = { # Hire a captain
+		name = EVTOPTCwarpstone2
+		trigger = {
+			wealth = 75
+			NOT = {
+				any_courtier = {
+					warpstone_mordheim_agent_trigger = yes
+					OR = {
+						martial = 12
+						intrigue = 12
+					}
+				}
+			}
+		}
+		wealth = -75
+		create_random_soldier = {
+			female = no
+			religion = ROOT
+			culture = ROOT
+			attributes = {
+				martial = 8
+				diplomacy = 4
+				stewardship = 3
+				intrigue = 12
+				learning = 4
+			}
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			set_character_flag = mercenary_agent_mordheim
+			save_event_target_as = mordheim_agent
+			character_event = { id = warpstone.3 days = 200 }
+		}
+		ai_chance = { factor = 50 }
+	}
+	option = { # Call it off
+		name = EVTOPTDwarpstone2
+		trigger = {
+			NOT = { wealth = 75 }
+			NOT = {
+				any_courtier = {
+					warpstone_mordheim_agent_trigger = yes
+					OR = {
+						martial = 12
+						intrigue = 12
+					}
+				}
+			}
+		}
+		clr_character_flag = maintaining_agents
+	}
+}
+
+# warpstone.3 Into the City of the Damned
+# The chosen one sets out. A commander marches on Mordheim (warpstone.4);
+# an agent slips into the ruins (warpstone.10); a hired captain does
+# either, as his skills lean. The patron checks a year on that the leader
+# still lives (warpstone.6).
+# Scope: ROOT is the leader. FROM: the patron (warpstone.2).
+character_event = {
+	id = warpstone.3
+	title = EVTNAMEwarpstone
+	desc = EVTDESCwarpstone3
+	picture = GFX_evt_mordheim
+
+	is_triggered_only = yes # warpstone.2
+
+	option = {
+		name = EVTOPTAwarpstone3
+		add_trait = travelling
+		if = {
+			limit = { has_character_flag = martial_agent_mordheim }
+			character_event = { id = warpstone.4 days = 364 }
+		}
+		else_if = {
+			limit = { has_character_flag = intrigue_agent_mordheim }
+			FROM = { character_event = { id = warpstone.10 days = 100 } }
+		}
+		else = {
+			random_list = {
+				50 = {
+					modifier = { factor = 0.5 martial = 15 }
+					modifier = { factor = 1.5 intrigue = 15 }
+					FROM = { character_event = { id = warpstone.10 days = 225 } }
+				}
+				50 = {
+					modifier = { factor = 1.5 martial = 15 }
+					modifier = { factor = 0.5 intrigue = 15 }
+					character_event = { id = warpstone.4 days = 225 }
+				}
+			}
+		}
+		FROM = { character_event = { id = warpstone.6 days = 400 } }
+	}
+}
+
+# warpstone.4 The expedition marches
+# Hidden. The leader raises the Expeditionary Force, an army that follows
+# the patron's people (Bretonnian knights, Marienburg pikes, Imperial
+# state troops, a Skaven horde, the walking dead or free companies), and
+# goes to war for the county (race_for_mordheim). The leader becomes the
+# patron's Mordheim tributary. If the county changed hands on the way, the
+# war goes to its new holder.
+# Scope: ROOT is the leader. FROM: the leader (warpstone.3). FROMFROM: the
+#   patron.
+character_event = {
+	id = warpstone.4
+	hide_window = yes
+	is_triggered_only = yes # warpstone.3
+
+	trigger = {
+		event_target:mordheim_title = { has_holder = yes }
+	}
+
+	immediate = {
+		event_target:mordheim_title = {
+			holder_scope = { save_event_target_as = mordheim_target }
+		}
+		create_title = {
+			tier = DUKE
+			name = MORDHEIM_EXPEDITION
+			holder = THIS
+			ruler = CAPTAIN
+			ruler_female = CAPTAIN
+			temporary = yes
+			culture = ROOT
+			landless = yes
+		}
+		random_list = {
+			1 = { # Bretonnian knights
+				modifier = { factor = 1.5 event_target:mordheim_beneficiary = { culture_group = bretonnian_group } }
+				modifier = { factor = 0 event_target:mordheim_beneficiary = { culture_group = imperial_group } }
+				modifier = { factor = 1.5 event_target:mordheim_beneficiary = { trait = creature_human } }
+				modifier = { factor = 0 event_target:mordheim_beneficiary = { trait = creature_skaven } }
+				spawn_unit = {
+					owner = ROOT
+					province = 334
+					home = ROOT
+					troops = {
+						archers = { 200 350 }
+						light_infantry = { 100 200 }
+						light_cavalry = { 75 125 }
+						horse_archers = { 75 125 }
+						knights = { 200 200 }
+					}
+					reinforces = yes
+					attrition = 1.0
+					disband_on_peace = yes
+					maintenance_multiplier = 0.5
+				}
+			}
+			1 = { # Marienburg pikes
+				modifier = { factor = 1.5 event_target:mordheim_beneficiary = { culture = westerlander } }
+				modifier = {
+					factor = 0
+					event_target:mordheim_beneficiary = {
+						OR = {
+							culture_group = bretonnian_group
+							AND = {
+								culture_group = imperial_group
+								NOT = { culture = westerlander }
+							}
+						}
+					}
+				}
+				modifier = { factor = 1.5 event_target:mordheim_beneficiary = { trait = creature_human } }
+				modifier = { factor = 0 event_target:mordheim_beneficiary = { trait = creature_skaven } }
+				spawn_unit = {
+					owner = ROOT
+					province = 333
+					home = ROOT
+					troops = {
+						archers = { 200 350 }
+						light_infantry = { 300 450 }
+						pikemen = { 75 100 }
+						light_cavalry = { 75 125 }
+					}
+					reinforces = yes
+					attrition = 1.0
+					disband_on_peace = yes
+					maintenance_multiplier = 0.5
+				}
+			}
+			1 = { # Imperial state troops
+				modifier = { factor = 1.5 event_target:mordheim_beneficiary = { culture_group = imperial_group } }
+				modifier = {
+					factor = 0
+					event_target:mordheim_beneficiary = {
+						OR = {
+							culture_group = bretonnian_group
+							culture = westerlander
+						}
+					}
+				}
+				modifier = { factor = 1.5 event_target:mordheim_beneficiary = { trait = creature_human } }
+				modifier = { factor = 0 event_target:mordheim_beneficiary = { trait = creature_skaven } }
+				spawn_unit = {
+					owner = ROOT
+					province = 932
+					home = ROOT
+					troops = {
+						archers = { 125 200 }
+						light_infantry = { 300 450 }
+						pikemen = { 75 100 }
+						light_cavalry = { 75 125 }
+						knights = { 50 75 }
+						heavy_infantry = { 125 150 }
+					}
+					reinforces = yes
+					attrition = 1.0
+					disband_on_peace = yes
+					maintenance_multiplier = 0.5
+				}
+			}
+			1 = { # A Skaven horde
+				modifier = { factor = 100 event_target:mordheim_beneficiary = { trait = creature_skaven } }
+				modifier = { factor = 0 event_target:mordheim_beneficiary = { NOT = { trait = creature_skaven } } }
+				spawn_unit = {
+					owner = ROOT
+					province = 2381
+					home = ROOT
+					troops = {
+						archers = { 125 200 }
+						light_infantry = { 500 750 }
+						pikemen = { 75 100 }
+					}
+					reinforces = yes
+					attrition = 1.0
+					disband_on_peace = yes
+					maintenance_multiplier = 0.5
+				}
+			}
+			1 = { # The walking dead
+				modifier = {
+					factor = 100
+					event_target:mordheim_beneficiary = {
+						OR = {
+							is_vampire_trigger = yes
+							religion_group = necromantic_group
+						}
+					}
+				}
+				spawn_unit = {
+					owner = ROOT
+					province = 379
+					home = ROOT
+					troops = {
+						light_infantry = { 300 300 }
+						knights = { 75 100 }
+						undead_horde = { 700 1000 }
+					}
+					reinforces = yes
+					attrition = 1.0
+					disband_on_peace = yes
+					maintenance_multiplier = 0.5
+				}
+			}
+			1 = { # Free companies
+				modifier = { factor = 1.1 always = yes }
+				spawn_unit = {
+					owner = ROOT
+					province = 371
+					home = ROOT
+					troops = {
+						archers = { 200 300 }
+						light_infantry = { 300 500 }
+						heavy_infantry = { 300 500 }
+						knights = { 75 100 }
+					}
+					reinforces = yes
+					attrition = 1.0
+					disband_on_peace = yes
+					maintenance_multiplier = 0.5
+				}
+			}
+		}
+		unsafe_war = {
+			target = event_target:mordheim_target
+			casus_belli = race_for_mordheim
+			thirdparty_title = event_target:mordheim_title
+			tier = COUNT
+		}
+		event_target:mordheim_beneficiary = {
+			make_tributary = { who = ROOT tributary_type = mordheim }
+			set_character_flag = mordheim_patron
+		}
+		opinion = { modifier = opinion_funded_expedition who = event_target:mordheim_beneficiary years = 10 }
+		event_target:mordheim_beneficiary = { character_event = { id = warpstone.5 days = 1 } }
+	}
+}
+
+# warpstone.5 The camp outside Mordheim
+# The patron hears that the army has reached the ruins and dug in. The
+# commander gains a sergeant.
+# Scope: ROOT is the patron. FROM: the leader (warpstone.4).
+character_event = {
+	id = warpstone.5
+	title = EVTNAMEwarpstone
+	desc = EVTDESCwarpstone5
+	picture = GFX_evt_adventurers_mordheim
+
+	is_triggered_only = yes # warpstone.4
+
+	option = {
+		name = EVTOPTAwarpstone5
+		FROM = {
+			remove_trait = travelling
+			create_random_soldier = {
+				female = no
+				religion = ROOT
+				culture = ROOT
+				attributes = { martial = 9 }
+			}
+		}
+	}
+}
+
+# warpstone.6 Lost on the road
+# Hidden. If the leader died before reaching Mordheim, the patron may fund
+# another expedition.
+# Scope: ROOT is the patron (warpstone.3).
+character_event = {
+	id = warpstone.6
+	hide_window = yes
+	is_triggered_only = yes # warpstone.3
+
+	trigger = {
+		has_character_flag = maintaining_agents
+		event_target:mordheim_agent = { is_alive = no }
+	}
+
+	immediate = {
+		clr_character_flag = maintaining_agents
+	}
+}
+
+###############################################################################
+# The race for Mordheim: the agent in the ruins
+###############################################################################
+
+# warpstone.10 The agent's search
+# The patron's agent goes looking for wyrdstone. A shrewd, patient, brave
+# and ruthless agent does better, a craven, shy or slothful one worse; a
+# kind agent leaves stone for others. The roll comes back a week later
+# (warpstone.11). If the agent is already dead, the patron is free to fund
+# another expedition.
+# Scope: ROOT is the patron. FROM: the agent (warpstone.3, 12 or 13).
+character_event = {
+	id = warpstone.10
+	title = EVTNAMEwarpstone
+	desc = {
+		trigger = { event_target:mordheim_agent = { is_alive = yes } }
+		text = EVTDESCwarpstone10
+	}
+	desc = {
+		trigger = { event_target:mordheim_agent = { is_alive = no } }
+		text = EVTDESCwarpstone10_dead
+	}
+	picture = GFX_evt_mordheim
+
+	is_triggered_only = yes # warpstone.3, 12, 13
+
+	option = { # Let's hope
+		name = EVTOPTAwarpstone10
+		trigger = { event_target:mordheim_agent = { is_alive = yes } }
+		random_list = {
+			19 = {
+				custom_tooltip = {
+					text = failure_tip
+					event_target:mordheim_agent = { set_character_flag = mark_for_fail }
+				}
+				modifier = { factor = 1.1 event_target:mordheim_agent = { NOT = { intrigue = 15 } } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { NOT = { intrigue = 13 } } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { NOT = { stewardship = 6 } } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { NOT = { stewardship = 8 } } }
+				modifier = { factor = 1.3 event_target:mordheim_agent = { NOT = { trait = wroth } } }
+				modifier = { factor = 1.2 event_target:mordheim_agent = { NOT = { trait = cruel } } }
+				modifier = { factor = 1.2 event_target:mordheim_agent = { trait = craven } }
+				modifier = { factor = 0.8 event_target:mordheim_agent = { trait = patient } }
+				modifier = { factor = 1.5 event_target:mordheim_agent = { trait = shy } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { trait = arbitrary } }
+			}
+			12 = {
+				custom_tooltip = {
+					text = failure_tip
+					event_target:mordheim_agent = { set_character_flag = mark_for_fail2 }
+				}
+				modifier = { factor = 1.1 event_target:mordheim_agent = { NOT = { intrigue = 15 } } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { NOT = { intrigue = 13 } } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { NOT = { stewardship = 6 } } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { NOT = { stewardship = 8 } } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { trait = arbitrary } }
+			}
+			29 = {
+				custom_tooltip = {
+					text = critical_failure_tip
+					event_target:mordheim_agent = { set_character_flag = marked_for_death }
+				}
+				modifier = { factor = 0.9 event_target:mordheim_agent = { NOT = { intrigue = 15 } } }
+				modifier = { factor = 0.9 event_target:mordheim_agent = { NOT = { intrigue = 13 } } }
+				modifier = { factor = 0.8 event_target:mordheim_agent = { NOT = { stewardship = 6 } } }
+				modifier = { factor = 0.8 event_target:mordheim_agent = { NOT = { stewardship = 8 } } }
+				modifier = { factor = 1.5 event_target:mordheim_agent = { trait = craven } }
+				modifier = { factor = 1.5 event_target:mordheim_agent = { trait = shy } }
+				modifier = { factor = 2 event_target:mordheim_agent = { trait = slothful } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { trait = arbitrary } }
+			}
+			40 = {
+				custom_tooltip = {
+					text = success_tip
+					event_target:mordheim_agent = { set_character_flag = marked_for_success }
+				}
+				modifier = { factor = 1.1 event_target:mordheim_agent = { intrigue = 15 } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { intrigue = 17 } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { intrigue = 18 } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { intrigue = 19 } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { intrigue = 21 } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { intrigue = 23 } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { stewardship = 8 } }
+				modifier = { factor = 0.8 event_target:mordheim_agent = { stewardship = 12 } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { trait = patient } }
+				modifier = { factor = 0.6 event_target:mordheim_agent = { trait = kind } }
+				modifier = { factor = 0.7 event_target:mordheim_agent = { trait = craven } }
+				modifier = { factor = 0.7 event_target:mordheim_agent = { trait = slothful } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { trait = brave } }
+				modifier = { factor = 1.1 event_target:mordheim_agent = { trait = arbitrary } }
+			}
+		}
+		event_target:mordheim_agent = { character_event = { id = warpstone.11 days = 7 } }
+	}
+	option = { # The agent is lost
+		name = EVTOPTBwarpstone10
+		trigger = { event_target:mordheim_agent = { is_alive = no } }
+		clr_character_flag = maintaining_agents
+	}
+}
+
+# warpstone.11 Word from the ruins
+# Hidden. The agent sends word home: the stone (warpstone.13) or bad news
+# (warpstone.12).
+# Scope: ROOT is the agent. FROM: the patron (warpstone.10).
+character_event = {
+	id = warpstone.11
+	hide_window = yes
+	is_triggered_only = yes # warpstone.10
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = marked_for_success }
+			FROM = { character_event = { id = warpstone.13 days = 1 } }
+		}
+		else = {
+			FROM = { character_event = { id = warpstone.12 days = 1 } }
+		}
+	}
+}
+
+# warpstone.12 Nothing but trouble
+# The agent found nothing, found nothing but promises more coin would help,
+# or was slain in the streets. The patron mourns them, pays, recalls them
+# or sends them back to work.
+# Scope: ROOT is the patron. FROM: the agent (warpstone.11).
+character_event = {
+	id = warpstone.12
+	title = EVTNAMEwarpstone
+	desc = {
+		trigger = { FROM = { is_alive = yes has_character_flag = mark_for_fail } }
+		text = EVTDESCwarpstone12_a
+	}
+	desc = {
+		trigger = { FROM = { is_alive = yes has_character_flag = mark_for_fail2 } }
+		text = EVTDESCwarpstone12_b
+	}
+	desc = {
+		trigger = {
+			OR = {
+				FROM = { is_alive = no }
+				FROM = { has_character_flag = marked_for_death }
+			}
+		}
+		text = EVTDESCwarpstone12_c
+	}
+	picture = {
+		trigger = {
+			OR = {
+				FROM = { is_alive = no }
+				FROM = { has_character_flag = marked_for_death }
+			}
+		}
+		picture = GFX_evt_adventurers_mordheim_ominous
+	}
+	picture = {
+		trigger = {
+			FROM = {
+				is_alive = yes
+				NOT = { has_character_flag = marked_for_death }
+			}
+		}
+		picture = GFX_evt_adventurers_mordheim_fail
+	}
+
+	is_triggered_only = yes # warpstone.11
+
+	option = { # Curses
+		name = EVTOPTAwarpstone12
+		trigger = {
+			OR = {
+				FROM = { is_alive = no }
+				FROM = { has_character_flag = marked_for_death }
+			}
+		}
+		FROM = {
+			clr_character_flag = mark_for_fail
+			clr_character_flag = mark_for_fail2
+			clr_character_flag = marked_for_death
+			if = {
+				limit = { is_alive = no }
+			}
+			else_if = {
+				limit = { is_invincible_trigger = yes }
+				antideath_effect = yes
+			}
+			else = {
+				clr_character_flag = intrigue_agent_mordheim
+				remove_trait = travelling
+				death = { death_reason = death_murder_unknown }
+			}
+		}
+		clr_character_flag = maintaining_agents
+	}
+	option = { # Pay more
+		name = EVTOPTBwarpstone12
+		trigger = {
+			FROM = {
+				is_alive = yes
+				has_character_flag = mark_for_fail2
+			}
+			scaled_wealth = 0.5
+		}
+		FROM = { clr_character_flag = mark_for_fail2 }
+		scaled_wealth = -0.5
+		character_event = { id = warpstone.10 days = 140 random = 30 tooltip = DEFAULT_SENDEVENT_EVENTOPTION_TOOLTIP }
+	}
+	option = { # Recall
+		name = EVTOPTCwarpstone12
+		trigger = {
+			FROM = {
+				is_alive = yes
+				NOT = { has_character_flag = marked_for_death }
+			}
+		}
+		FROM = {
+			clr_character_flag = mark_for_fail
+			clr_character_flag = mark_for_fail2
+			clr_character_flag = intrigue_agent_mordheim
+			remove_trait = travelling
+		}
+		clr_character_flag = maintaining_agents
+	}
+	option = { # Back to work
+		name = EVTOPTDwarpstone12
+		trigger = {
+			FROM = {
+				is_alive = yes
+				has_character_flag = mark_for_fail
+			}
+		}
+		FROM = { clr_character_flag = mark_for_fail }
+		character_event = { id = warpstone.10 days = 160 random = 30 tooltip = DEFAULT_SENDEVENT_EVENTOPTION_TOOLTIP }
+	}
+}
+
+# warpstone.13 Wyrdstone from the ruins
+# The agent brings home wyrdstone dust or a shard (a shard more often for a
+# just, generous, honest or humble patron the agent likes, dust for a
+# greedy or grasping one), and goes back for more.
+# Scope: ROOT is the patron. FROM: the agent (warpstone.11).
+character_event = {
+	id = warpstone.13
+	title = EVTNAMEwarpstone
+	desc = EVTDESCwarpstone13
+	picture = GFX_evt_warpstone_human
+
+	is_triggered_only = yes # warpstone.11
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	option = { # Splendid
+		name = EVTOPTAwarpstone13
+		FROM = { clr_character_flag = marked_for_success }
+		random_list = {
+			50 = {
+				modifier = { factor = 0.8 NOT = { stewardship = 6 } }
+				modifier = { factor = 0.8 NOT = { stewardship = 8 } }
+				modifier = { factor = 0.5 trait = greedy }
+				modifier = { factor = 0.5 trait = ambitious }
+				modifier = { factor = 0.9 trait = deceitful }
+				modifier = { factor = 0.2 FROM = { NOT = { opinion = { who = ROOT value = 25 } } } }
+				add_artifact = warpstone_dust
+			}
+			50 = {
+				modifier = { factor = 1.1 stewardship = 8 }
+				modifier = { factor = 1.1 stewardship = 13 }
+				modifier = { factor = 1.1 stewardship = 15 }
+				modifier = { factor = 1.1 stewardship = 18 }
+				modifier = { factor = 1.5 trait = just }
+				modifier = { factor = 1.2 trait = charitable }
+				modifier = { factor = 1.1 trait = honest }
+				modifier = { factor = 1.2 trait = humble }
+				modifier = { factor = 1.2 FROM = { opinion = { who = ROOT value = 25 } } }
+				add_artifact = warpstone_shard
+			}
+		}
+		character_event = { id = warpstone.10 days = 120 random = 100 tooltip = DEFAULT_SENDEVENT_EVENTOPTION_TOOLTIP }
+	}
+}
+
+###############################################################################
+# The race for Mordheim: wyrdstone from Mordheim
+###############################################################################
+
+# warpstone.15 Plunder from the City of the Damned
+# Hidden. Once a year a patron whose Mordheim captain now holds a county in
+# Mordheim is sent wyrdstone (warpstone.16), less often in time of war.
+# Once no captain of the patron's is left, the patron is no longer one.
+# Until the mists lift.
+# Scope: ROOT is a character with the flag mordheim_patron. Fired every
+#   year from on_yearly_pulse (wh_on_actions; was MTTH 1 year on every
+#   character).
+character_event = {
+	id = warpstone.15
+	hide_window = yes
+	is_triggered_only = yes # on_yearly_pulse
+
+	trigger = {
+		has_character_flag = mordheim_patron
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				OR = {
+					has_global_flag = clean_mordheim
+					NOT = {
+						any_independent_ruler = {
+							warpstone_mordheim_captain_trigger = yes
+						}
+					}
+				}
+			}
+			clr_character_flag = mordheim_patron
+		}
+		else_if = {
+			limit = {
+				any_independent_ruler = {
+					warpstone_mordheim_captain_trigger = yes
+					any_demesne_title = {
+						tier = COUNT
+						de_jure_liege = d_mordheim
+					}
+				}
+			}
+			random_independent_ruler = {
+				limit = {
+					warpstone_mordheim_captain_trigger = yes
+					any_demesne_title = {
+						tier = COUNT
+						de_jure_liege = d_mordheim
+					}
+				}
+				save_event_target_as = mordheim_agent
+			}
+			random_list = {
+				60 = { character_event = { id = warpstone.16 } }
+				40 = {
+					modifier = { factor = 0 war = no }
+				}
+			}
+		}
+	}
+}
+
+# warpstone.16 Plunder from the City of the Damned
+# The captain's yearly share of the ruins: a shard, two shards, dust or,
+# rarely, a cluster.
+# Scope: ROOT is the patron (warpstone.15).
+character_event = {
+	id = warpstone.16
+	title = EVTNAMEwarpstone
+	desc = EVTDESCwarpstone16
+	picture = GFX_evt_warpstone_human
+
+	is_triggered_only = yes # warpstone.15
+
+	option = {
+		name = EVTOPTAwarpstone16
+		show_portrait = event_target:mordheim_agent
+		random_list = {
+			50 = { add_artifact = warpstone_shard }
+			15 = { add_artifact = warpstone_dust }
+			25 = {
+				add_artifact = warpstone_shard
+				add_artifact = warpstone_shard
+			}
+			10 = { add_artifact = warpstone_cluster }
+		}
+	}
+}
+
+###############################################################################
+# The race for Mordheim: the mists lift
+###############################################################################
+
+# warpstone.18 The mists lift
+# Hidden. From the year 2040 the mists over Mordheim may lift (global flag
+# clean_mordheim): the race for Mordheim ends, and its lands are open to
+# every war. All players hear of it (warpstone.19).
+# Scope: ROOT is a player. Fired by the yearly mordheim_mist list
+#   (wh_on_actions; was MTTH 50 years).
+character_event = {
+	id = warpstone.18
+	hide_window = yes
+	is_triggered_only = yes # mordheim_mist list
+
+	trigger = {
+		ai = no
+		year = 2040
+		NOT = { has_global_flag = clean_mordheim }
+	}
+
+	immediate = {
+		set_global_flag = clean_mordheim
+		any_player = { narrative_event = { id = warpstone.19 } }
+	}
+}
+
+# warpstone.19 The mists over Mordheim lift
+# News for every player.
+# Scope: ROOT is a player (warpstone.18).
+narrative_event = {
+	id = warpstone.19
+	title = EVTNAMEwarpstone19
+	desc = EVTDESCwarpstone19
+	picture = GFX_evt_mordheim
+
+	is_triggered_only = yes # warpstone.18
+
+	option = {
+		name = EVTOPTAwarpstone19
+	}
+}
+
+###############################################################################
+# Wyrdstone in the earth: a vein is found
+###############################################################################
+
+# warpstone.20 Digging deep
+# Hidden. Once a decade a ruler's miners may strike wyrdstone in a
+# mountain or deep-delving province of the demesne (warpstone.21). The
+# Dark Gods' faithful, the Skaven, the greenskins and the dabblers in
+# dark magic dig for it; the elves, the Dawi, the Lizardmen and the pious
+# of the Old World do not. The Karaz Ankor and the Under-Empire are
+# richest.
+# Scope: ROOT is a landed ruler. Fired by the decade warpstone_veins list
+#   (wh_on_actions; was a province MTTH of 120 years).
+character_event = {
+	id = warpstone.20
+	hide_window = yes
+	is_triggered_only = yes # warpstone_veins list
+
+	trigger = {
+		is_landed = yes
+		any_demesne_province = { warpstone_vein_site_trigger = yes }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.1 warpstone_seeker_trigger = yes }
+		modifier = { factor = 0.67 warpstone_shunner_trigger = yes }
+		modifier = {
+			factor = 1.4
+			warpstone_seeker_trigger = yes
+			capital_scope = { region = world_karaz_ankor }
+		}
+		modifier = {
+			factor = 1.25
+			warpstone_seeker_trigger = yes
+			capital_scope = {
+				OR = {
+					region = world_drak_ankor
+					region = world_norsca_central
+				}
+			}
+		}
+		modifier = {
+			factor = 1.4
+			capital_scope = { region = world_underempire }
+		}
+	}
+
+	immediate = {
+		random_demesne_province = {
+			limit = { warpstone_vein_site_trigger = yes }
+			preferred_limit = {
+				OR = {
+					region = world_karaz_ankor
+					region = world_underempire
+					region = world_drak_ankor
+					region = world_norsca_central
+					region = world_troll_country
+				}
+			}
+			province_event = { id = warpstone.21 }
+		}
+	}
+}
+
+# warpstone.21 A vein of wyrdstone
+# Wyrdstone is found in the province. The ruler may leave it, pay 250 gold
+# to open a mine at once, or (in the Old World faiths) call the witch
+# hunters (whunter.2).
+# Scope: ROOT is the province. Fired by warpstone.20.
+province_event = {
+	id = warpstone.21
+	desc = EVTDESCwarpstone21
+	picture = GFX_evt_warpstone_vein
+
+	is_triggered_only = yes # warpstone.20
+
+	immediate = {
+		set_province_flag = warpstone_vein
+		add_province_modifier = { name = warpstone_vein duration = -1 }
+		set_variable = { which = blackstone_mining_progress value = 0 }
+	}
+
+	option = { # Leave it
+		name = EVTOPTAwarpstone21
+	}
+	option = { # Mine it
+		name = EVTOPTBwarpstone21
+		trigger = { owner = { wealth = 250 } }
+		owner = { wealth = -250 }
+		warpstone_open_mine_effect = yes
+	}
+	option = { # The witch hunters
+		name = EVTOPTCwarpstone21
+		trigger = { owner = { religion_group = old_world_group } }
+		owner = {
+			save_event_target_as = whunter_client # the ruler whunter.3 goes to
+			random_realm_character = {
+				limit = {
+					religion = ROOT
+					is_witch_hunter_trigger = yes
+					NOT = { trait = on_witch_hunt }
+				}
+				character_event = { id = whunter.2 }
+			}
+		}
+	}
+}
+
+###############################################################################
+# Wyrdstone in the earth: a meteor falls
+###############################################################################
+
+# warpstone.22 A shard of Morrslieb
+# Hidden. Once a decade, rarely, a meteor of wyrdstone falls into a
+# ruler's lands (warpstone.23), most often in the Dark Lands and the
+# north, never in Lustria, Nehekhara, Araby, Ulthuan or the Under-Empire.
+# No more than one in 22 years. Players nearby see it fall (warpstone.24).
+# Scope: ROOT is a landed ruler. Fired by the decade warpstone_meteors list
+#   (wh_on_actions; was a province MTTH of 1200 years with a world-wide
+#   cooldown).
+character_event = {
+	id = warpstone.22
+	hide_window = yes
+	is_triggered_only = yes # warpstone_meteors list
+
+	trigger = {
+		is_landed = yes
+		OR = {
+			NOT = { has_global_flag = blackstone_meteor_spotted }
+			had_global_flag = { flag = blackstone_meteor_spotted years = 22 }
+		}
+		any_demesne_province = { warpstone_meteor_site_trigger = yes }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 capital_scope = { region = world_darklands } }
+		modifier = {
+			factor = 1.4
+			capital_scope = {
+				OR = {
+					region = world_norsca
+					region = world_chaos_wastes
+					region = world_troll_country
+				}
+			}
+		}
+		modifier = {
+			factor = 1.25
+			capital_scope = {
+				OR = {
+					region = world_old_world_empire_east
+					region = world_old_world_kislev
+				}
+			}
+		}
+		modifier = { factor = 0.83 warpstone_shunner_trigger = yes }
+	}
+
+	immediate = {
+		clr_global_flag = blackstone_meteor_spotted
+		set_global_flag = blackstone_meteor_spotted
+		random_demesne_province = {
+			limit = { warpstone_meteor_site_trigger = yes }
+			save_event_target_as = warpstone_meteor_site
+			province_event = { id = warpstone.23 }
+		}
+		any_player = {
+			limit = {
+				NOT = { character = ROOT }
+				capital_scope = {
+					NOT = { distance = { where = event_target:warpstone_meteor_site value = 750 } }
+				}
+			}
+			narrative_event = { id = warpstone.24 days = 1 }
+		}
+	}
+}
+
+# warpstone.23 A meteor falls
+# A meteor of wyrdstone strikes the province. The ruler may leave it, pay
+# 250 gold to mine it, or (in the Old World faiths) call the witch hunters
+# (whunter.2).
+# Scope: ROOT is the province. Fired by warpstone.22.
+province_event = {
+	id = warpstone.23
+	desc = EVTDESCwarpstone23
+	picture = GFX_evt_comet
+
+	is_triggered_only = yes # warpstone.22
+
+	immediate = {
+		set_province_flag = warpstone_meteor
+		add_province_modifier = { name = warpstone_meteor duration = -1 }
+		set_variable = { which = blackstone_mining_progress value = 0 }
+	}
+
+	option = { # Leave it
+		name = EVTOPTAwarpstone23
+	}
+	option = { # Mine it
+		name = EVTOPTBwarpstone23
+		trigger = { owner = { wealth = 250 } }
+		owner = { wealth = -250 }
+		warpstone_open_mine_effect = yes
+	}
+	option = { # The witch hunters
+		name = EVTOPTCwarpstone23
+		trigger = { owner = { religion_group = old_world_group } }
+		owner = {
+			save_event_target_as = whunter_client # the ruler whunter.3 goes to
+			random_realm_character = {
+				limit = {
+					religion = ROOT
+					is_witch_hunter_trigger = yes
+					NOT = { trait = on_witch_hunt }
+				}
+				character_event = { id = whunter.2 }
+			}
+		}
+	}
+}
+
+# warpstone.24 A green star falls
+# News for the players near the landing site.
+# Scope: ROOT is a player. FROM: the ruler of the landing site (warpstone.22).
+narrative_event = {
+	id = warpstone.24
+	title = EVTNAMEwarpstone24
+	desc = EVTDESCwarpstone24
+	picture = GFX_evt_comet
+
+	is_triggered_only = yes # warpstone.22
+
+	option = {
+		name = EVTOPTAwarpstone24
+	}
+}
+
+###############################################################################
+# Wyrdstone in the earth: the mines
+###############################################################################
+
+# warpstone.25 The mines are worked
+# Hidden. Once a year each wyrdstone mine of the ruler's demesne on a vein
+# or a meteor is worked (warpstone.26).
+# Scope: ROOT is a landed ruler. Fired every year from on_yearly_pulse
+#   (wh_on_actions; was a province MTTH of 1 year on every province).
+character_event = {
+	id = warpstone.25
+	hide_window = yes
+	is_triggered_only = yes # on_yearly_pulse
+
+	trigger = {
+		is_landed = yes
+		any_demesne_province = { warpstone_mine_trigger = yes }
+	}
+
+	immediate = {
+		any_demesne_province = {
+			limit = { warpstone_mine_trigger = yes }
+			province_event = { id = warpstone.26 }
+		}
+	}
+}
+
+# warpstone.26 A year in the mine
+# Hidden. The mine yields one shard, two shards or a cluster (better from a
+# meteor, worse from an improved mine on a thin vein), and the owner is
+# told (warpstone.27). Once fifteen yields are dug, the vein is exhausted
+# (warpstone.28).
+# Scope: ROOT is the mine's province (warpstone.25).
+province_event = {
+	id = warpstone.26
+	hide_window = yes
+	is_triggered_only = yes # warpstone.25
+
+	immediate = {
+		save_event_target_as = the_mine
+		if = {
+			limit = { check_variable = { which = blackstone_mining_progress value = 15 } }
+			province_event = { id = warpstone.28 days = 7 }
+		}
+		else = {
+			random_list = {
+				50 = {
+					modifier = { factor = 0.8 warpstone_improved_mine_trigger = yes }
+					modifier = { factor = 1.1 has_province_modifier = warpstone_meteor }
+					change_variable = { which = blackstone_mining_progress value = 2 }
+					set_province_flag = warpstone_yield_2
+				}
+				25 = {
+					modifier = { factor = 1.1 warpstone_improved_mine_trigger = yes }
+					modifier = { factor = 1.1 has_province_modifier = warpstone_meteor }
+					change_variable = { which = blackstone_mining_progress value = 3 }
+					set_province_flag = warpstone_yield_3
+				}
+				25 = {
+					modifier = { factor = 0.8 warpstone_improved_mine_trigger = yes }
+					modifier = { factor = 0.8 has_province_modifier = warpstone_meteor }
+					change_variable = { which = blackstone_mining_progress value = 1 }
+					set_province_flag = warpstone_yield_1
+				}
+			}
+			owner = { character_event = { id = warpstone.27 days = 7 } }
+		}
+	}
+}
+
+# warpstone.27 Green treasure
+# The owner takes the year's yield from the mine.
+# Scope: ROOT is the owner. FROM: the mine's province (warpstone.26).
+character_event = {
+	id = warpstone.27
+	title = EVTNAMEwarpstone27
+	desc = EVTDESCwarpstone27
+	picture = GFX_evt_warpstone_market
+
+	is_triggered_only = yes # warpstone.26
+
+	option = {
+		name = EVTOPTAwarpstone27
+		if = {
+			limit = { FROM = { has_province_flag = warpstone_yield_3 } }
+			add_artifact = warpstone_cluster
+		}
+		else_if = {
+			limit = { FROM = { has_province_flag = warpstone_yield_2 } }
+			add_artifact = warpstone_shard
+			add_artifact = warpstone_shard
+		}
+		else = {
+			add_artifact = warpstone_shard
+		}
+		FROM = {
+			clr_province_flag = warpstone_yield_1
+			clr_province_flag = warpstone_yield_2
+			clr_province_flag = warpstone_yield_3
+		}
+	}
+}
+
+# warpstone.28 The vein runs dry
+# The mine is exhausted: the vein or meteor is gone, and the last of it is
+# swept up as dust. The mine is idle until new stone is found here.
+# Scope: ROOT is the mine's province (warpstone.26).
+province_event = {
+	id = warpstone.28
+	desc = EVTDESCwarpstone28
+	picture = GFX_evt_warpstone_market
+
+	is_triggered_only = yes # warpstone.26
+
+	option = {
+		name = EVTOPTAwarpstone28
+		remove_province_modifier = warpstone_vein
+		remove_province_modifier = warpstone_meteor
+		owner = { add_artifact = warpstone_dust }
+		set_variable = { which = blackstone_mining_progress value = 0 }
+	}
+}
+
+###############################################################################
+# The shadow market
+###############################################################################
+
+# warpstone.30 The shadow market
+# The ruler's go-betweens reach the Wyrdstone Emporium: sell stone
+# (warpstone.31) or buy it (warpstone.32).
+# Scope: ROOT is the ruler who took the decision warpstone_blackmarket.
+character_event = {
+	id = warpstone.30
+	title = EVTNAMEwarpstone30
+	desc = EVTDESCwarpstone30
+	picture = GFX_evt_warpstone_market
+
+	is_triggered_only = yes # decision warpstone_blackmarket
+	has_character_flag = shadow_warpstone_dealings
+
+	option = { # Sell
+		name = EVTOPTAwarpstone30
+		trigger = { warpstone_holds_stone_trigger = yes }
+		character_event = { id = warpstone.31 }
+	}
+	option = { # Buy
+		name = EVTOPTBwarpstone30
+		character_event = { id = warpstone.32 }
+	}
+	option = { # Never mind
+		name = EVTOPTCwarpstone30
+		clr_character_flag = shadow_warpstone_dealings
+	}
+}
+
+# warpstone.31 Selling wyrdstone
+# Dust fetches 80 gold, a shard 200, a cluster 300.
+# Scope: ROOT is the seller (warpstone.30).
+character_event = {
+	id = warpstone.31
+	title = EVTNAMEwarpstone30
+	desc = EVTDESCwarpstone31
+	picture = GFX_evt_warpstone_market
+
+	is_triggered_only = yes # warpstone.30
+	has_character_flag = shadow_warpstone_dealings
+
+	option = {
+		name = EVTOPTAwarpstone31
+		trigger = { any_artifact = { artifact_type = warpstone_dust } }
+		unsafe_destroy_artifact = warpstone_dust
+		wealth = 80
+	}
+	option = {
+		name = EVTOPTBwarpstone31
+		trigger = { any_artifact = { artifact_type = warpstone_shard } }
+		unsafe_destroy_artifact = warpstone_shard
+		wealth = 200
+	}
+	option = {
+		name = EVTOPTCwarpstone31
+		trigger = { any_artifact = { artifact_type = warpstone_cluster } }
+		unsafe_destroy_artifact = warpstone_cluster
+		wealth = 300
+	}
+	option = {
+		name = EVTOPTCwarpstone30
+	}
+
+	after = {
+		clr_character_flag = shadow_warpstone_dealings
+	}
+}
+
+# warpstone.32 Buying wyrdstone
+# Dust costs 100 gold, a shard 200, a cluster 300.
+# Scope: ROOT is the buyer (warpstone.30).
+character_event = {
+	id = warpstone.32
+	title = EVTNAMEwarpstone30
+	desc = EVTDESCwarpstone32
+	picture = GFX_evt_warpstone_market
+
+	is_triggered_only = yes # warpstone.30
+	has_character_flag = shadow_warpstone_dealings
+
+	option = {
+		name = EVTOPTAwarpstone32
+		trigger = { wealth = 100 }
+		wealth = -100
+		add_artifact = warpstone_dust
+	}
+	option = {
+		name = EVTOPTBwarpstone32
+		trigger = { wealth = 200 }
+		wealth = -200
+		add_artifact = warpstone_shard
+	}
+	option = {
+		name = EVTOPTCwarpstone32
+		trigger = { wealth = 300 }
+		wealth = -300
+		add_artifact = warpstone_cluster
+	}
+	option = {
+		name = EVTOPTCwarpstone30
+	}
+
+	after = {
+		clr_character_flag = shadow_warpstone_dealings
+	}
+}

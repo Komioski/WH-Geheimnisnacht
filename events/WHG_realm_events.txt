@@ -5577,22 +5577,27 @@ character_event = {
 # (and may be cast out of the faith for it), or is offered gold by a rich
 # vassal for one of the liege's lesser titles. Unpaid mercenaries and
 # holy orders send their letters from the engine's on_actions.
+# Or the ruler borrows from the moneylenders: the banking houses of
+# Marienburg, the Dawi lending-clans or the merchants of Araby, and must
+# repay with interest in five years (the loans 38000 - 38002, switched off
+# by Paradox in patch 2.00, revived here with the mod's lenders).
 # The vanilla mean-time-to-happen checks now roll in the yearly pulse.
-# Dropped: the moneylender loans (38000 - 38002), switched off by Paradox
-# in patch 2.00; nothing called them.
 #
 # Leaning on a vassal           debt.1 - debt.5
 # Temple lands seized           debt.10 - debt.12
 # A vassal buys a title         debt.20 - debt.22
 # Mercenaries and holy orders   debt.30 - debt.34
+# The moneylenders              debt.40 - debt.42
 #
-# Callers: on_yearly_pulse in_the_red list (wh_on_actions.txt: 1, 10, 20);
+# Callers: on_yearly_pulse in_the_red list (wh_on_actions.txt: 1, 10, 20,
+#   40);
 #   on_merc_rampage, on_merc_leave, on_merc_turn_coat_from/_to and
 #   on_holy_order_leave (00_on_actions.txt: 30 - 34); rumours_events.txt and
 #   pope_free_investiture.txt (12).
 # Saved: character flags took_extra_tax, large/medium/small_payment_from_vassal,
-#   stolen_church_properties, offered_to_buy_liege_titles; event target
-#   title_for_sale.
+#   stolen_church_properties, offered_to_buy_liege_titles, loan_taken,
+#   loan_refused; event target title_for_sale; character modifier
+#   offended_moneylenders.
 ###############################################################################
 
 namespace = debt
@@ -6095,4 +6100,158 @@ letter_event = {
 	is_triggered_only = yes # on_holy_order_leave
 	trigger = { ai = no }
 	option = { name = EVTOPTAdebt34 }
+}
+
+###############################################################################
+# The moneylenders
+###############################################################################
+
+# debt.40 The moneylenders
+# A ruler more than 50 gold in debt, with no loan and no refusal in the
+# last year, may borrow 200 gold for five years: at 25% with stewardship 8
+# or more (debt.41), at 50% without (debt.42). The lenders are the banking
+# houses of Marienburg, the Dawi lending-clans or the merchants of Araby.
+# Scope: ROOT is the ruler. Fired by the yearly in_the_red list
+#   (wh_on_actions; vanilla 38000, which was MTTH 1 month).
+character_event = {
+	id = debt.40
+	desc = {
+		trigger = { debt_lender_dawi_trigger = yes }
+		text = EVTDESCdebt40_dawi
+	}
+	desc = {
+		trigger = { debt_lender_araby_trigger = yes }
+		text = EVTDESCdebt40_araby
+	}
+	desc = {
+		trigger = {
+			debt_lender_dawi_trigger = no
+			debt_lender_araby_trigger = no
+		}
+		text = EVTDESCdebt40
+	}
+	picture = GFX_evt_council
+
+	is_triggered_only = yes # on_yearly_pulse in_the_red list
+	only_playable = yes
+	prisoner = no
+
+	trigger = {
+		NOT = { wealth = -50 }
+		debt_has_lender_trigger = yes
+		NOT = { has_character_flag = loan_taken }
+		NOT = { has_character_modifier = offended_moneylenders }
+		OR = {
+			NOT = { has_character_flag = loan_refused }
+			had_character_flag = { flag = loan_refused days = 365 }
+		}
+	}
+
+	option = { # Good terms
+		name = EVTOPTAdebt40
+		tooltip_info = stewardship
+		trigger = { stewardship = 8 }
+		wealth = 200
+		set_character_flag = loan_taken
+		clr_character_flag = loan_refused
+		character_event = { id = debt.41 days = 1825 tooltip = EVTTOOLTIPdebt40_a }
+	}
+	option = { # Bad terms
+		name = EVTOPTBdebt40
+		trigger = { NOT = { stewardship = 8 } }
+		wealth = 200
+		set_character_flag = loan_taken
+		clr_character_flag = loan_refused
+		character_event = { id = debt.42 days = 1825 tooltip = EVTTOOLTIPdebt40_b }
+	}
+	option = { # No
+		name = EVTOPTCdebt40
+		clr_character_flag = loan_refused
+		set_character_flag = loan_refused
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+}
+
+# debt.41 The loan is due
+# Repay 250 gold, or ask for more time, which costs 300 a year later
+# (debt.42).
+# Scope: ROOT is the borrower (debt.40).
+character_event = {
+	id = debt.41
+	desc = EVTDESCdebt41
+	picture = GFX_evt_council
+
+	is_triggered_only = yes # debt.40
+
+	option = { # Pay
+		name = EVTOPTAdebt41
+		trigger = { wealth = 250 }
+		wealth = -250
+		clr_character_flag = loan_taken
+	}
+	option = { # More time
+		name = EVTOPTBdebt41
+		trigger = { NOT = { wealth = 250 } }
+		character_event = { id = debt.42 days = 365 tooltip = EVTTOOLTIPdebt41 }
+	}
+}
+
+# debt.42 The moneylenders are back
+# Repay 300 gold; or, unable to pay, lose face (more among the Dawi, who
+# write down every unpaid debt) and be asked again next year; or, if wroth
+# or mad, drive the lenders off, which closes every counting-house to the
+# ruler for five years (offended_moneylenders).
+# Scope: ROOT is the borrower (debt.40, 41 or 42).
+character_event = {
+	id = debt.42
+	desc = {
+		trigger = { debt_lender_dawi_trigger = yes }
+		text = EVTDESCdebt42_dawi
+	}
+	desc = {
+		trigger = { debt_lender_dawi_trigger = no }
+		text = EVTDESCdebt42
+	}
+	picture = GFX_evt_council
+
+	is_triggered_only = yes # debt.40, 41, 42
+
+	option = { # Pay
+		name = EVTOPTAdebt42
+		trigger = { wealth = 300 }
+		wealth = -300
+		clr_character_flag = loan_taken
+	}
+	option = { # Come back later
+		name = EVTOPTBdebt42
+		trigger = { NOT = { wealth = 300 } }
+		if = {
+			limit = { debt_lender_dawi_trigger = yes }
+			prestige = -75
+		}
+		else = {
+			prestige = -25
+		}
+		character_event = { id = debt.42 days = 365 tooltip = EVTTOOLTIPdebt41 }
+	}
+	option = { # Drive them off
+		name = EVTOPTCdebt42
+		trigger = {
+			OR = {
+				trait = wroth
+				is_lunatic_trigger = yes
+				trait = possessed
+			}
+		}
+		add_character_modifier = { name = offended_moneylenders duration = 1825 }
+		clr_character_flag = loan_taken
+		if = {
+			limit = { debt_lender_dawi_trigger = yes }
+			prestige = -150
+		}
+	}
 }

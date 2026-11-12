@@ -19,6 +19,7 @@
 # The Slann wakes for war       lizardmen.85 - lizardmen.94
 # Investigating alignment plot  lizardmen.100 - lizardmen.115
 # Debug                         lizardmen.120
+# The host crosses the sea      lizardmen.130 - lizardmen.133
 #
 # Fired from common/on_actions/wh_on_actions.txt (pulses, on_death, wars,
 # sieges), common/cb_types/cb_types_lizardman.txt, decisions/wh_lustria_decisions.txt,
@@ -3036,14 +3037,17 @@ long_character_event = {
 		trigger = { event_target:tablet_kingdom = { always = yes } }
 		piety = 50
 		set_character_flag = sanctioned_by_slann
-		spawn_fleet = {
-			province = closest
-			owner = ROOT
-			match_character = ROOT
-			match_mult = 2
-			match_min = 100
-			disband_on_peace = yes
-			earmark = liz_fleet
+		if = { # The AI sails with the host instead (lizardmen.130)
+			limit = { ai = no }
+			spawn_fleet = {
+				province = closest
+				owner = ROOT
+				match_character = ROOT
+				match_mult = 2
+				match_min = 100
+				disband_on_peace = yes
+				earmark = liz_fleet
+			}
 		}
 		war = {
 			casus_belli = tablet_search
@@ -3102,16 +3106,9 @@ long_character_event = {
 		name = EVTOPTAlizardmen83
 		piety = 50
 		decadence = -1
-		spawn_fleet = {
-			province = closest
-			owner = ROOT
-			match_character = ROOT
-			match_mult = 2
-			match_min = 50
-			disband_on_peace = yes
-			earmark = liz_fleet
-		}
 		join_attacker_wars = FROM
+		event_target:tablet_holder = { save_event_target_as = liz_crossing_enemy }
+		liz_crossing_joiner_effect = yes
 		ai_chance = {
 			factor = 75
 			modifier = { factor = 10 trait = creature_slann }
@@ -4609,6 +4606,118 @@ character_event = {
 			modifier = { factor = 3 trait = kind }
 			modifier = { factor = 3 event_target:alignment_target = { is_friend = ROOT } }
 		}
+	}
+}
+
+###############################################################################
+# The host crosses the sea
+# A Lustrian ruler of the Old Ones at war with a realm beyond the New World
+# cannot reach it on foot, and the AI never boards the fleets it is given.
+# So the host sails on its own: some two to three months after the war
+# starts it comes ashore at a port of the enemy, sized by the ruler's rank.
+# The AI always sends it; a player may send it or sail with the fleet
+# decision instead. Rulers who join the jade war or the tablet war get the
+# same crossing.
+###############################################################################
+
+# lizardmen.130 The host takes ship
+# Hidden, on_war_started. Sends the crossing to the attacker (AI) or asks
+# the player (lizardmen.132).
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = lizardmen.130
+	hide_window = yes
+	is_triggered_only = yes # on_war_started
+
+	trigger = {
+		liz_crossing_enemy_trigger = yes
+		FROM = {
+			liz_crossing_ruler_trigger = yes
+			NOT = { has_character_flag = liz_crossing_at_sea }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = liz_crossing_enemy
+		FROM = {
+			if = {
+				limit = { ai = yes }
+				set_character_flag = liz_crossing_at_sea
+				character_event = { id = lizardmen.131 days = 60 random = 30 }
+			}
+			else = {
+				letter_event = { id = lizardmen.132 }
+			}
+		}
+	}
+}
+
+# lizardmen.131 The host comes ashore
+# Hidden. If the war with the enemy still runs, the host lands at the
+# enemy's port nearest their capital (liz_crossing_land_host_effect) and
+# the enemy is told (lizardmen.133).
+# Scope: ROOT is the Old Ones ruler; event_target:liz_crossing_enemy the
+# enemy.
+character_event = {
+	id = lizardmen.131
+	hide_window = yes
+	is_triggered_only = yes # lizardmen.130, lizardmen.132, liz_crossing_joiner_effect (lizardmen.83, jade.4)
+
+	immediate = {
+		clr_character_flag = liz_crossing_at_sea
+		if = {
+			limit = {
+				is_alive = yes
+				event_target:liz_crossing_enemy = {
+					is_alive = yes
+					is_landed = yes
+					war_with = ROOT
+				}
+			}
+			liz_crossing_land_host_effect = yes
+			event_target:liz_crossing_enemy = {
+				character_event = { id = lizardmen.133 }
+			}
+		}
+	}
+}
+
+# lizardmen.132 Across the Great Ocean
+# A player of the Old Ones at war beyond the New World sends the host by
+# sea, landing in two to three months, or sails it with the fleet decision.
+# Scope: ROOT is the player; event_target:liz_crossing_enemy the enemy.
+letter_event = {
+	id = lizardmen.132
+	title = EVTTITLElizardmen132
+	desc = EVTDESClizardmen132
+	picture = GFX_evt_lizardmen_saurus
+	is_triggered_only = yes # lizardmen.130
+
+	option = { # Send the host
+		name = EVTOPTAlizardmen132
+		set_character_flag = liz_crossing_at_sea
+		custom_tooltip = { text = EVTTOOLTIPlizardmen132 }
+		character_event = { id = lizardmen.131 days = 60 random = 30 }
+	}
+	option = { # We will sail ourselves
+		name = EVTOPTBlizardmen132
+	}
+}
+
+# lizardmen.133 They come from the sea
+# The enemy learns the host has landed.
+# Scope: ROOT is the enemy, FROM the Old Ones ruler.
+character_event = {
+	id = lizardmen.133
+	title = EVTTITLElizardmen133
+	desc = EVTDESClizardmen133
+	picture = GFX_evt_lizardmen_saurus
+	is_triggered_only = yes # lizardmen.131
+
+	trigger = { ai = no }
+
+	option = {
+		name = EVTOPTAlizardmen133
 	}
 }
 
@@ -7939,6 +8048,8 @@ character_event = {
 	option = { # Join the attack
 		name = EVTOPTAjade4
 		join_attacker_wars = FROM
+		event_target:jade_keeper = { save_event_target_as = liz_crossing_enemy }
+		liz_crossing_joiner_effect = yes
 		piety = 250
 		ai_chance = { factor = 1 modifier = { factor = 0.2 trait = cynical } }
 	}

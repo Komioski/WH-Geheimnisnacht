@@ -1,0 +1,1209 @@
+###############################################################################
+# The Venturers: expeditions, charts and colonies
+# Namespace: venture
+# Faction: Generic
+#
+# The colonial half of the naval game (the other half is the pirate and
+# raider societies of events/WHG_sea_*). The Venturers (adventurers_the_
+# league) are the merchant adventurers, explorers and colonists of every
+# people that sends ships past the edge of the charts: Marienburg's houses,
+# Nordland's Second Fleet, the merchant princes of Tilea, the conquistadores
+# of Magritta, Brionne and L'Anguille, Araby, the Sea Wardens of Cothique,
+# the Dawi of Barak Varr, the East and the Norse who follow Losteriksson.
+#
+# An expedition is a risk and meant to be one. The Lustrian chapter of the
+# Old World's own records puts the odds plainly: of every hundred ventures,
+# more than half are never heard from again. Gold, guides, charts and a
+# good captain shift the odds; the choices on the way shift them again.
+#
+# The expedition is planned                 venture.1 - 3
+# The reckoning (hidden)                    venture.4
+# On the way: what the jungle sends         venture.10 - 18
+# Outcomes                                  venture.20 - 25
+# Charting a coast                          venture.30 - 32
+#
+# Fired from: venture.1 from the decisions venture_sponsor_expedition and
+# venture_lead_expedition (decisions/WHG_venture_decisions.txt); venture.30
+# from venture_chart_coast. The game rule warhammer_venture_lead decides
+# whether players may lead in person (on by default).
+# Scripted triggers: common/scripted_triggers/WHG_venture_triggers.txt
+# Scripted effects: common/scripted_effects/WHG_venture_effects.txt
+# Voices: localisation/customizable_localisation/WHG_venture_voices.txt
+# Modifiers: common/event_modifiers/WHG_venture_modifiers.txt
+# Artifacts: common/artifacts/WHG_venture_artifacts.txt
+# Saved: the expedition's flags and the variable venture_odds (see
+#   WHG_venture_effects.txt), cleared by venture_clear_effect; the
+#   variables venture_deeds (for the Great Voyage) and venture_slann_wrath
+#   (temple-cities plundered); the province flag venture_surveyed and the
+#   character flag venture_has_survey (a colony site for a charter).
+# Loc: localisation/00_WHG_venture_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = venture
+
+###############################################################################
+# The expedition is planned
+###############################################################################
+
+# venture.1 Where away?
+# The Venturer picks the destination: the coast of Lustria, a temple-city
+# of the Slann (Pathfinders and up), the Southlands or the cold coasts of
+# Naggaroth. Or calls it off.
+# Scope: ROOT is the Venturer.
+narrative_event = {
+	id = venture.1
+	title = EVTNAMEventure1
+	desc = {
+		trigger = { venture_leading_trigger = yes }
+		text = EVTDESCventure1_lead
+	}
+	desc = {
+		trigger = { venture_leading_trigger = no }
+		text = EVTDESCventure1_sponsor
+	}
+	picture = GFX_evt_merchant_ship_at_sea_republic
+
+	is_triggered_only = yes # venture_sponsor_expedition, venture_lead_expedition
+
+	option = { # The coast of Lustria
+		name = EVTOPTAventure1
+		set_character_flag = venture_dest_coast
+		character_event = { id = venture.2 }
+		ai_chance = { factor = 40 }
+	}
+	option = { # A temple-city
+		name = EVTOPTBventure1
+		trigger = { society_rank >= 2 }
+		set_character_flag = venture_dest_temple
+		custom_tooltip = { text = venture_temple_tt }
+		character_event = { id = venture.2 }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.3 trait = craven }
+		}
+	}
+	option = { # The Southlands
+		name = EVTOPTCventure1
+		set_character_flag = venture_dest_southlands
+		character_event = { id = venture.2 }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 venture_voice_araby_trigger = yes }
+			modifier = { factor = 2 venture_voice_tilean_trigger = yes }
+		}
+	}
+	option = { # The coasts of Naggaroth
+		name = EVTOPTDventure1
+		set_character_flag = venture_dest_naggaroth
+		character_event = { id = venture.2 }
+		ai_chance = {
+			factor = 15
+			modifier = { factor = 3 venture_voice_asur_trigger = yes }
+			modifier = { factor = 3 venture_voice_norse_trigger = yes }
+			modifier = { factor = 2 venture_voice_dawi_trigger = yes }
+		}
+	}
+	option = { # Not this year
+		name = EVTOPTEventure1
+		clr_character_flag = venture_leading
+		ai_chance = { factor = 5 }
+	}
+}
+
+# venture.2 The stake
+# How much gold goes into the venture: more gold, more ships, more powder
+# and better odds. The stake is lost if the venture is.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.2
+	desc = EVTDESCventure2
+	picture = GFX_evt_adventurers
+
+	is_triggered_only = yes # venture.1
+
+	option = { # A modest purse
+		name = EVTOPTAventure2
+		trigger = { wealth = 100 }
+		set_character_flag = venture_stake_small
+		wealth = -100
+		character_event = { id = venture.3 }
+		ai_chance = { factor = 30 }
+	}
+	option = { # A proper fleet
+		name = EVTOPTBventure2
+		trigger = { wealth = 250 }
+		set_character_flag = venture_stake_medium
+		wealth = -250
+		custom_tooltip = { text = venture_stake_medium_tt }
+		character_event = { id = venture.3 }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 0 NOT = { wealth = 500 } }
+		}
+	}
+	option = { # Everything it takes
+		name = EVTOPTCventure2
+		trigger = { wealth = 500 }
+		set_character_flag = venture_stake_large
+		wealth = -500
+		custom_tooltip = { text = venture_stake_large_tt }
+		character_event = { id = venture.3 }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 0 NOT = { wealth = 1200 } }
+			modifier = { factor = 2 trait = ambitious }
+		}
+	}
+	option = { # Think again
+		name = EVTOPTDventure2
+		clr_character_flag = venture_leading
+		clr_character_flag = venture_dest_coast
+		clr_character_flag = venture_dest_temple
+		clr_character_flag = venture_dest_southlands
+		clr_character_flag = venture_dest_naggaroth
+		ai_chance = { factor = 0 }
+	}
+}
+
+# venture.3 The ships sail (hidden)
+# Sets the odds, finds the captain of a sponsored venture, puts a leader
+# on the ships, and sends what the jungle sends: one letter from the
+# captain, or two trials for a Venturer who leads in person. The reckoning
+# (venture.4) comes some eight to ten months out.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.3
+	hide_window = yes
+
+	is_triggered_only = yes # venture.2
+
+	immediate = {
+		set_character_flag = venture_expedition_out
+		add_character_modifier = { name = venture_expedition_cd years = 5 }
+		if = {
+			limit = { venture_leading_trigger = no }
+			venture_pick_captain_effect = yes
+		}
+		else = {
+			add_character_modifier = { name = venture_on_expedition days = 330 }
+		}
+		venture_set_odds_effect = yes
+		character_event = { id = venture.10 days = 45 random = 45 }
+		if = {
+			limit = { venture_leading_trigger = yes }
+			character_event = { id = venture.10 days = 140 random = 40 }
+		}
+		character_event = { id = venture.4 days = 240 random = 60 }
+	}
+}
+
+###############################################################################
+# The reckoning
+###############################################################################
+
+# venture.4 The reckoning (hidden)
+# Rolls the outcome. Out of a hundred ventures with nothing to help them,
+# about 55 are lost, 25 come home with a few survivors, 15 succeed and 5
+# make their backers rich. Every point of venture_odds (stake, guides,
+# charts, a seasoned leader, the choices on the way) shifts the roll; a
+# temple-city is deadlier and richer, Naggaroth only deadlier. A sponsored
+# venture whose captain is dead is lost.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.4
+	hide_window = yes
+
+	is_triggered_only = yes # venture.3
+
+	trigger = {
+		has_character_flag = venture_expedition_out
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				venture_leading_trigger = no
+				event_target:venture_captain = { is_alive = no }
+			}
+			character_event = { id = venture.20 }
+		}
+		else = {
+			random_list = {
+				55 = { # Lost
+					modifier = { factor = 0.8 check_variable = { which = venture_odds value = 2 } }
+					modifier = { factor = 0.8 check_variable = { which = venture_odds value = 4 } }
+					modifier = { factor = 0.8 check_variable = { which = venture_odds value = 6 } }
+					modifier = { factor = 0.8 check_variable = { which = venture_odds value = 8 } }
+					modifier = { factor = 1.3 NOT = { check_variable = { which = venture_odds value = 0 } } }
+					modifier = { factor = 1.3 NOT = { check_variable = { which = venture_odds value = -2 } } }
+					modifier = { factor = 1.3 has_character_flag = venture_dest_temple }
+					modifier = { factor = 1.15 has_character_flag = venture_dest_naggaroth }
+					if = {
+						limit = { venture_leading_trigger = yes }
+						random_list = {
+							60 = { character_event = { id = venture.20 } }
+							40 = { character_event = { id = venture.21 } }
+						}
+					}
+					else = {
+						character_event = { id = venture.20 }
+					}
+				}
+				25 = { # A few survivors
+					character_event = { id = venture.22 }
+				}
+				15 = { # Success
+					modifier = { factor = 1.25 check_variable = { which = venture_odds value = 2 } }
+					modifier = { factor = 1.25 check_variable = { which = venture_odds value = 4 } }
+					modifier = { factor = 1.25 check_variable = { which = venture_odds value = 6 } }
+					modifier = { factor = 1.25 check_variable = { which = venture_odds value = 8 } }
+					modifier = { factor = 0.7 NOT = { check_variable = { which = venture_odds value = 0 } } }
+					modifier = { factor = 1.2 venture_leading_trigger = yes }
+					if = {
+						limit = { has_character_flag = venture_dest_temple }
+						character_event = { id = venture.25 }
+					}
+					else = {
+						character_event = { id = venture.23 }
+					}
+				}
+				5 = { # A fortune
+					modifier = { factor = 1.4 check_variable = { which = venture_odds value = 2 } }
+					modifier = { factor = 1.4 check_variable = { which = venture_odds value = 4 } }
+					modifier = { factor = 1.4 check_variable = { which = venture_odds value = 6 } }
+					modifier = { factor = 1.4 check_variable = { which = venture_odds value = 8 } }
+					modifier = { factor = 0.5 NOT = { check_variable = { which = venture_odds value = 0 } } }
+					modifier = { factor = 2 has_character_flag = venture_dest_temple }
+					modifier = { factor = 1.3 venture_leading_trigger = yes }
+					set_character_flag = venture_fortune
+					if = {
+						limit = { has_character_flag = venture_dest_temple }
+						character_event = { id = venture.25 }
+					}
+					else = {
+						character_event = { id = venture.24 }
+					}
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# On the way
+###############################################################################
+
+# venture.10 What the jungle sends (hidden)
+# Picks one trial that fits the destination and has not come yet on this
+# venture: fever, a Stegadon stampede, mutiny, a shrine, new friends,
+# Druchii riders, ice, a madman's map.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.10
+	hide_window = yes
+
+	is_triggered_only = yes # venture.3
+
+	trigger = {
+		has_character_flag = venture_expedition_out
+	}
+
+	immediate = {
+		random_list = {
+			20 = {
+				trigger = {
+					venture_jungle_trigger = yes
+					NOT = { has_character_flag = venture_hz_fever }
+				}
+				set_character_flag = venture_hz_fever
+				character_event = { id = venture.11 }
+			}
+			15 = {
+				trigger = {
+					OR = {
+						has_character_flag = venture_dest_coast
+						has_character_flag = venture_dest_temple
+					}
+					NOT = { has_character_flag = venture_hz_stampede }
+				}
+				set_character_flag = venture_hz_stampede
+				character_event = { id = venture.12 }
+			}
+			15 = {
+				trigger = { NOT = { has_character_flag = venture_hz_mutiny } }
+				set_character_flag = venture_hz_mutiny
+				character_event = { id = venture.13 }
+			}
+			15 = {
+				trigger = {
+					venture_jungle_trigger = yes
+					NOT = { has_character_flag = venture_hz_shrine }
+				}
+				set_character_flag = venture_hz_shrine
+				character_event = { id = venture.14 }
+			}
+			15 = {
+				trigger = {
+					venture_jungle_trigger = yes
+					NOT = { has_character_flag = venture_hz_friends }
+				}
+				set_character_flag = venture_hz_friends
+				character_event = { id = venture.15 }
+			}
+			25 = {
+				trigger = {
+					has_character_flag = venture_dest_naggaroth
+					NOT = { has_character_flag = venture_hz_druchii }
+				}
+				set_character_flag = venture_hz_druchii
+				character_event = { id = venture.16 }
+			}
+			25 = {
+				trigger = {
+					has_character_flag = venture_dest_naggaroth
+					NOT = { has_character_flag = venture_hz_ice }
+				}
+				set_character_flag = venture_hz_ice
+				character_event = { id = venture.17 }
+			}
+			10 = {
+				trigger = { NOT = { has_character_flag = venture_hz_map } }
+				set_character_flag = venture_hz_map
+				character_event = { id = venture.18 }
+			}
+		}
+	}
+}
+
+# venture.11 The fever
+# The green sickness runs through the camp: men sweat, rave and die in a
+# night. Press on and bury the dead on the march, or spend on physick.
+# Scope: ROOT is the Venturer. Leading in person, or a letter from the
+# captain (event_target:venture_captain).
+character_event = {
+	id = venture.11
+	desc = {
+		trigger = { venture_leading_trigger = yes }
+		text = EVTDESCventure11_lead
+	}
+	desc = {
+		trigger = { venture_leading_trigger = no }
+		text = EVTDESCventure11_letter
+	}
+	picture = GFX_evt_illness
+
+	is_triggered_only = yes # venture.10
+
+	option = { # Press on
+		name = EVTOPTAventure11
+		venture_odds_down_effect = yes
+		if = {
+			limit = { venture_leading_trigger = yes }
+			random = { chance = 30 add_trait = ill }
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 NOT = { wealth = 100 } }
+		}
+	}
+	option = { # Spend on physick
+		name = EVTOPTBventure11
+		trigger = { wealth = 50 }
+		wealth = -50
+		custom_tooltip = { text = venture_fever_passes_tt }
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 0.5 trait = greedy }
+		}
+	}
+}
+
+# venture.12 The stampede
+# A herd of Stegadons comes through the camp like a landslide. Hold the
+# line with the guns (a hard commander makes it a feast; a soft one buries
+# half his men), or scatter into the trees and lose the baggage.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.12
+	desc = {
+		trigger = { venture_leading_trigger = yes }
+		text = EVTDESCventure12_lead
+	}
+	desc = {
+		trigger = { venture_leading_trigger = no }
+		text = EVTDESCventure12_letter
+	}
+	picture = GFX_evt_lustria_dinosaur
+
+	is_triggered_only = yes # venture.10
+
+	option = { # Hold the line
+		name = EVTOPTAventure12
+		if = {
+			limit = {
+				OR = {
+					AND = {
+						venture_leading_trigger = yes
+						martial = 12
+					}
+					AND = {
+						venture_leading_trigger = no
+						event_target:venture_captain = { martial = 12 }
+					}
+				}
+			}
+			custom_tooltip = { text = venture_stampede_held_tt }
+			venture_odds_up_effect = yes
+			prestige = 25
+		}
+		else = {
+			custom_tooltip = { text = venture_stampede_broke_tt }
+			venture_odds_down_effect = yes
+			venture_odds_down_effect = yes
+			if = {
+				limit = { venture_leading_trigger = yes }
+				random = { chance = 40 add_trait = wounded }
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 martial = 12 }
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.3 trait = craven }
+		}
+	}
+	option = { # Scatter
+		name = EVTOPTBventure12
+		venture_odds_down_effect = yes
+		ai_chance = { factor = 50 }
+	}
+}
+
+# venture.13 Mutineers
+# Half the crew has had enough: they want the ships and the way home. Hang
+# the ringleaders and lose the hands, buy them back with double pay, or
+# (in person, with the tongue for it) talk them round.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.13
+	desc = {
+		trigger = { venture_leading_trigger = yes }
+		text = EVTDESCventure13_lead
+	}
+	desc = {
+		trigger = { venture_leading_trigger = no }
+		text = EVTDESCventure13_letter
+	}
+	picture = GFX_evt_pirate_crew
+
+	is_triggered_only = yes # venture.10
+
+	option = { # Hang them
+		name = EVTOPTAventure13
+		venture_odds_down_effect = yes
+		prestige = 15
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 2 trait = wroth }
+		}
+	}
+	option = { # Double pay
+		name = EVTOPTBventure13
+		trigger = { wealth = 75 }
+		wealth = -75
+		custom_tooltip = { text = venture_mutiny_bought_tt }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 0.3 trait = greedy }
+		}
+	}
+	option = { # Talk them round
+		name = EVTOPTCventure13
+		trigger = {
+			venture_leading_trigger = yes
+			diplomacy = 12
+		}
+		venture_odds_up_effect = yes
+		prestige = 10
+		ai_chance = { factor = 80 }
+	}
+}
+
+# venture.14 The shrine in the green
+# A shrine of the Old Ones, or of the gods of the jungle men, stands in a
+# clearing with its gold still on it. Strip it (gold, a rare idol, and the
+# jungle turning against the venture; the Slann remember) or leave an
+# offering and go quietly.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.14
+	desc = {
+		trigger = { venture_leading_trigger = yes }
+		text = EVTDESCventure14_lead
+	}
+	desc = {
+		trigger = { venture_leading_trigger = no }
+		text = EVTDESCventure14_letter
+	}
+	picture = GFX_evt_jungle_ruins
+
+	is_triggered_only = yes # venture.10
+
+	option = { # Strip the gold
+		name = EVTOPTAventure14
+		wealth = 75
+		venture_odds_down_effect = yes
+		set_character_flag = venture_plundered
+		hidden_effect = { change_variable = { which = venture_slann_wrath value = 1 } }
+		custom_tooltip = { text = venture_wrath_tt }
+		random = {
+			chance = 10
+			venture_idol_effect = yes
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 0.3 trait = zealous }
+		}
+	}
+	option = { # Leave an offering
+		name = EVTOPTBventure14
+		venture_odds_up_effect = yes
+		piety = 10
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = humble }
+			modifier = { factor = 2 trait = paranoid }
+		}
+	}
+}
+
+# venture.15 New friends
+# Skink traders in Lustria, tribesmen in the Southlands: they watch from
+# the trees, then come out with fruit and questions. Trade steel for
+# guidance, or drive them off.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.15
+	desc = {
+		trigger = { has_character_flag = venture_dest_southlands }
+		text = EVTDESCventure15_south
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = venture_dest_southlands } }
+		text = EVTDESCventure15_lustria
+	}
+	picture = {
+		trigger = { has_character_flag = venture_dest_southlands }
+		picture = GFX_evt_desert
+	}
+	picture = {
+		trigger = { NOT = { has_character_flag = venture_dest_southlands } }
+		picture = GFX_evt_lizardman_skink
+	}
+
+	is_triggered_only = yes # venture.10
+
+	option = { # Trade for guidance
+		name = EVTOPTAventure15
+		trigger = { wealth = 25 }
+		wealth = -25
+		venture_odds_up_effect = yes
+		venture_odds_up_effect = yes
+		ai_chance = { factor = 70 }
+	}
+	option = { # Drive them off
+		name = EVTOPTBventure15
+		venture_odds_down_effect = yes
+		prestige = 10
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 2 trait = paranoid }
+		}
+	}
+}
+
+# venture.16 Riders on the shore
+# Druchii dark riders shadow the landing party along the black shingle of
+# Naggaroth. Fight them on the beach, or hide in the fog and wait.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.16
+	desc = {
+		trigger = { venture_leading_trigger = yes }
+		text = EVTDESCventure16_lead
+	}
+	desc = {
+		trigger = { venture_leading_trigger = no }
+		text = EVTDESCventure16_letter
+	}
+	picture = GFX_evt_dark_elf_soldiers
+
+	is_triggered_only = yes # venture.10
+
+	option = { # Fight
+		name = EVTOPTAventure16
+		if = {
+			limit = {
+				OR = {
+					AND = {
+						venture_leading_trigger = yes
+						martial = 12
+					}
+					AND = {
+						venture_leading_trigger = no
+						event_target:venture_captain = { martial = 12 }
+					}
+				}
+			}
+			custom_tooltip = { text = venture_riders_beaten_tt }
+			venture_odds_up_effect = yes
+			prestige = 30
+		}
+		else = {
+			custom_tooltip = { text = venture_riders_won_tt }
+			venture_odds_down_effect = yes
+			venture_odds_down_effect = yes
+			if = {
+				limit = { venture_leading_trigger = yes }
+				random = { chance = 40 add_trait = wounded }
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 martial = 12 }
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 2 venture_voice_asur_trigger = yes }
+		}
+	}
+	option = { # Hide in the fog
+		name = EVTOPTBventure16
+		venture_odds_down_effect = yes
+		ai_chance = { factor = 50 }
+	}
+}
+
+# venture.17 Ice in the rigging
+# The pack ice closes behind the ships. Push north through the floes for
+# the hidden bay the old charts promise, or winter in a fjord and pay for
+# it.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.17
+	desc = {
+		trigger = { venture_leading_trigger = yes }
+		text = EVTDESCventure17_lead
+	}
+	desc = {
+		trigger = { venture_leading_trigger = no }
+		text = EVTDESCventure17_letter
+	}
+	picture = GFX_evt_elf_winter
+
+	is_triggered_only = yes # venture.10
+
+	option = { # Push north
+		name = EVTOPTAventure17
+		random_list = {
+			50 = {
+				custom_tooltip = { text = venture_ice_bay_tt }
+				venture_odds_up_effect = yes
+				venture_odds_up_effect = yes
+			}
+			50 = {
+				custom_tooltip = { text = venture_ice_crush_tt }
+				venture_odds_down_effect = yes
+				venture_odds_down_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+	option = { # Winter in a fjord
+		name = EVTOPTBventure17
+		trigger = { wealth = 50 }
+		wealth = -50
+		custom_tooltip = { text = venture_ice_wait_tt }
+		ai_chance = { factor = 60 }
+	}
+}
+
+# venture.18 The madman's map
+# A survivor of an older venture, half-mad and missing fingers, sells a
+# map scratched on hide. It may lead to the treasure he swears he buried;
+# it may lead into a swamp.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.18
+	desc = {
+		trigger = { venture_leading_trigger = yes }
+		text = EVTDESCventure18_lead
+	}
+	desc = {
+		trigger = { venture_leading_trigger = no }
+		text = EVTDESCventure18_letter
+	}
+	picture = GFX_evt_treasure_madness
+
+	is_triggered_only = yes # venture.10
+
+	option = { # Follow it
+		name = EVTOPTAventure18
+		random_list = {
+			50 = {
+				custom_tooltip = { text = venture_map_true_tt }
+				venture_odds_up_effect = yes
+				venture_odds_up_effect = yes
+			}
+			50 = {
+				custom_tooltip = { text = venture_map_false_tt }
+				venture_odds_down_effect = yes
+				venture_odds_down_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 2 trait = adventurer }
+		}
+	}
+	option = { # Burn it
+		name = EVTOPTBventure18
+		ai_chance = { factor = 60 }
+	}
+}
+
+###############################################################################
+# Outcomes
+###############################################################################
+
+# venture.20 Lost
+# The venture is never heard from again. A Venturer who led it dies in the
+# green (or the ice); a sponsor loses the stake and the captain.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.20
+	desc = {
+		trigger = { venture_leading_trigger = yes }
+		text = EVTDESCventure20_lead
+	}
+	desc = {
+		trigger = { venture_leading_trigger = no }
+		text = EVTDESCventure20_sponsor
+	}
+	picture = {
+		trigger = { has_character_flag = venture_dest_naggaroth }
+		picture = GFX_evt_ship_storm
+	}
+	picture = {
+		trigger = { NOT = { has_character_flag = venture_dest_naggaroth } }
+		picture = GFX_evt_lustria_jungle
+	}
+
+	is_triggered_only = yes # venture.4
+
+	option = {
+		name = {
+			trigger = { venture_leading_trigger = yes }
+			text = EVTOPTAventure20_lead
+		}
+		name = {
+			trigger = { venture_leading_trigger = no }
+			text = EVTOPTAventure20_sponsor
+		}
+		if = {
+			limit = { venture_leading_trigger = yes }
+			venture_clear_effect = yes
+			death = { death_reason = death_missing }
+		}
+		else = {
+			prestige = -25
+			if = {
+				limit = { event_target:venture_captain = { is_alive = yes } }
+				event_target:venture_captain = {
+					clr_character_flag = venture_captain
+					death = { death_reason = death_missing }
+				}
+			}
+			venture_clear_effect = yes
+		}
+	}
+}
+
+# venture.21 Out of the green, alone
+# The venture is lost, but its leader comes out of the jungle months
+# later, alone, fevered and changed.
+# Scope: ROOT is the Venturer who led it.
+character_event = {
+	id = venture.21
+	desc = EVTDESCventure21
+	picture = GFX_evt_lustria_jungle
+
+	is_triggered_only = yes # venture.4
+
+	option = {
+		name = EVTOPTAventure21
+		random_list = {
+			50 = { add_trait = wounded }
+			50 = { add_trait = ill }
+		}
+		if = {
+			limit = { NOT = { trait = adventurer } }
+			add_trait = adventurer
+		}
+		add_character_modifier = { name = venture_jungle_haunted years = 10 }
+		prestige = 50
+		venture_deed_effect = yes
+		venture_clear_effect = yes
+	}
+}
+
+# venture.22 A few survivors
+# One ship of the fleet comes home with a third of the crew and enough in
+# the hold to pay back half the stake. Not a triumph, but a story.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.22
+	desc = {
+		trigger = { venture_leading_trigger = yes }
+		text = EVTDESCventure22_lead
+	}
+	desc = {
+		trigger = { venture_leading_trigger = no }
+		text = EVTDESCventure22_sponsor
+	}
+	picture = GFX_evt_pirate_ship
+
+	is_triggered_only = yes # venture.4
+
+	option = {
+		name = EVTOPTAventure22
+		if = {
+			limit = { has_character_flag = venture_stake_large }
+			wealth = 250
+		}
+		else_if = {
+			limit = { has_character_flag = venture_stake_medium }
+			wealth = 125
+		}
+		else = {
+			wealth = 50
+		}
+		prestige = 50
+		add_society_currency_minor_effect = yes
+		if = {
+			limit = { venture_leading_trigger = yes }
+			random = { chance = 30 add_trait = ill }
+		}
+		venture_clear_effect = yes
+	}
+}
+
+# venture.23 The venture comes home
+# Gold, spices, furs, strange beasts in cages and a coast marked for a
+# colony. The stake comes back twice over. A rare idol or compass may come
+# with it.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.23
+	desc = {
+		trigger = { has_character_flag = venture_dest_southlands }
+		text = EVTDESCventure23_south
+	}
+	desc = {
+		trigger = { has_character_flag = venture_dest_naggaroth }
+		text = EVTDESCventure23_naggaroth
+	}
+	desc = {
+		trigger = { has_character_flag = venture_dest_coast }
+		text = EVTDESCventure23_lustria
+	}
+	picture = GFX_evt_adventurers
+
+	is_triggered_only = yes # venture.4
+
+	option = {
+		name = EVTOPTAventure23
+		if = {
+			limit = { has_character_flag = venture_stake_large }
+			wealth = 1000
+		}
+		else_if = {
+			limit = { has_character_flag = venture_stake_medium }
+			wealth = 500
+		}
+		else = {
+			wealth = 200
+		}
+		prestige = 150
+		add_society_currency_medium_effect = yes
+		venture_deed_effect = yes
+		venture_survey_site_effect = yes
+		if = {
+			limit = { venture_leading_trigger = yes }
+			add_character_modifier = { name = venture_famed_explorer years = 10 }
+		}
+		random = {
+			chance = 15
+			if = {
+				limit = { has_character_flag = venture_dest_naggaroth }
+				venture_compass_effect = yes
+			}
+			else = {
+				venture_idol_effect = yes
+			}
+		}
+		venture_clear_effect = yes
+	}
+}
+
+# venture.24 A fortune
+# The venture comes home low in the water: four times the stake, two
+# deeds, a coast for a colony and a fair chance of an idol or a compass.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.24
+	desc = {
+		trigger = { has_character_flag = venture_dest_southlands }
+		text = EVTDESCventure24_south
+	}
+	desc = {
+		trigger = { has_character_flag = venture_dest_naggaroth }
+		text = EVTDESCventure24_naggaroth
+	}
+	desc = {
+		trigger = { has_character_flag = venture_dest_coast }
+		text = EVTDESCventure24_lustria
+	}
+	picture = GFX_evt_adventurers
+
+	is_triggered_only = yes # venture.4
+
+	option = {
+		name = EVTOPTAventure24
+		if = {
+			limit = { has_character_flag = venture_stake_large }
+			wealth = 2000
+		}
+		else_if = {
+			limit = { has_character_flag = venture_stake_medium }
+			wealth = 1000
+		}
+		else = {
+			wealth = 400
+		}
+		prestige = 300
+		add_society_currency_major_effect = yes
+		venture_deed_effect = yes
+		venture_deed_effect = yes
+		venture_survey_site_effect = yes
+		if = {
+			limit = { venture_leading_trigger = yes }
+			add_character_modifier = { name = venture_famed_explorer years = 20 }
+		}
+		random = {
+			chance = 40
+			if = {
+				limit = { has_character_flag = venture_dest_naggaroth }
+				venture_compass_effect = yes
+			}
+			else = {
+				venture_idol_effect = yes
+			}
+		}
+		clr_character_flag = venture_fortune
+		venture_clear_effect = yes
+	}
+}
+
+# venture.25 At the gates of the temple-city
+# The venture stands before a temple-city of the Slann, its pyramids
+# plated in gold. Plunder it (three times the stake, six for a fortune; a
+# chance of temple gold, very rarely the Slann's own; and the Slann will
+# remember) or parley, as Marco Colombo did at Tlax (the stake back, a
+# treaty that makes later ventures and colonies safer).
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.25
+	desc = EVTDESCventure25
+	picture = GFX_evt_lizardmen_temples
+
+	is_triggered_only = yes # venture.4
+
+	option = { # Plunder
+		name = EVTOPTAventure25
+		if = {
+			limit = { has_character_flag = venture_fortune }
+			if = {
+				limit = { has_character_flag = venture_stake_large }
+				wealth = 3000
+			}
+			else_if = {
+				limit = { has_character_flag = venture_stake_medium }
+				wealth = 1500
+			}
+			else = {
+				wealth = 600
+			}
+			add_society_currency_major_effect = yes
+			if = {
+				limit = { NOT = { has_global_flag = venture_slann_gold_taken } }
+				random = {
+					chance = 20
+					set_global_flag = venture_slann_gold_taken
+					add_artifact = slann_gold
+				}
+			}
+		}
+		else = {
+			if = {
+				limit = { has_character_flag = venture_stake_large }
+				wealth = 1500
+			}
+			else_if = {
+				limit = { has_character_flag = venture_stake_medium }
+				wealth = 750
+			}
+			else = {
+				wealth = 300
+			}
+			add_society_currency_medium_effect = yes
+		}
+		if = {
+			limit = { NOT = { has_character_flag = venture_found_temple_gold } }
+			random = {
+				chance = 25
+				set_character_flag = venture_found_temple_gold
+				add_artifact = temple_city_gold
+			}
+		}
+		prestige = 200
+		venture_deed_effect = yes
+		set_character_flag = venture_plundered
+		hidden_effect = { change_variable = { which = venture_slann_wrath value = 2 } }
+		custom_tooltip = { text = venture_wrath_tt }
+		clr_character_flag = venture_fortune
+		venture_clear_effect = yes
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 2 trait = cruel }
+			modifier = { factor = 0.3 trait = just }
+		}
+	}
+	option = { # Parley
+		name = EVTOPTBventure25
+		if = {
+			limit = { has_character_flag = venture_stake_large }
+			wealth = 500
+		}
+		else_if = {
+			limit = { has_character_flag = venture_stake_medium }
+			wealth = 250
+		}
+		else = {
+			wealth = 100
+		}
+		add_character_modifier = { name = venture_slann_treaty years = 20 }
+		prestige = 150
+		piety = 50
+		add_society_currency_medium_effect = yes
+		venture_deed_effect = yes
+		if = {
+			limit = { has_character_flag = venture_fortune }
+			venture_deed_effect = yes
+		}
+		venture_survey_site_effect = yes
+		clr_character_flag = venture_fortune
+		venture_clear_effect = yes
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = just }
+			modifier = { factor = 2 trait = humble }
+			modifier = { factor = 2 trait = paranoid }
+		}
+	}
+}
+
+###############################################################################
+# Charting a coast
+###############################################################################
+
+# venture.30 The charting ship (hidden)
+# Comes home with charts two times in three; the other time it does not
+# come home at all.
+# Scope: ROOT is the Venturer (venture_chart_coast).
+character_event = {
+	id = venture.30
+	hide_window = yes
+
+	is_triggered_only = yes # venture_chart_coast
+
+	immediate = {
+		clr_character_flag = venture_charting
+		random_list = {
+			65 = {
+				modifier = { factor = 1.3 has_artifact = venture_navigators_compass }
+				character_event = { id = venture.31 }
+			}
+			35 = { character_event = { id = venture.32 } }
+		}
+	}
+}
+
+# venture.31 The coast is charted
+# The charts are good. Keep them for the Venturer's own expeditions (ten
+# years of better odds, and maybe a navigator's compass) or sell copies to
+# the merchant houses.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.31
+	desc = EVTDESCventure31
+	picture = GFX_evt_questing_ocean
+
+	is_triggered_only = yes # venture.30
+
+	option = { # Keep them
+		name = EVTOPTAventure31
+		add_character_modifier = { name = venture_fresh_charts years = 10 }
+		custom_tooltip = { text = venture_charts_tt }
+		venture_deed_effect = yes
+		random = {
+			chance = 10
+			venture_compass_effect = yes
+		}
+		ai_chance = { factor = 60 }
+	}
+	option = { # Sell copies
+		name = EVTOPTBventure31
+		wealth = 150
+		prestige = 25
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+}
+
+# venture.32 The charting ship is lost
+# The ship never comes back: storm, reef, Druchii or worse.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.32
+	desc = EVTDESCventure32
+	picture = GFX_evt_ship_storm
+
+	is_triggered_only = yes # venture.30
+
+	option = {
+		name = EVTOPTAventure32
+		prestige = -10
+	}
+}

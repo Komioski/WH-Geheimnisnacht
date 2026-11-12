@@ -1,0 +1,348 @@
+###############################################################################
+# The doom engine: the Winds of Chaos and the End Times
+# Namespace: doom
+# Faction: Chaos
+# Serves: every realm (the doom counter is read world-wide)
+#
+# The doom counter is the variable global_doom_counter of province 1 (the
+# Chaos Realms). It rises when the servants of Chaos raid and win their wars
+# and with every Everchosen, daemon prince, chosen, champion and daemon alive,
+# and it falls when Chaos loses its wars and while the Great Vortex of
+# Ulthuan holds. Each year doom.1 turns it into the five doom flags
+# (doom_very_low ... doom_very_high, read by is_doom_*_trigger), which the
+# rest of the mod reads. A slower counter, endtimes_counter, creeps towards
+# the End Times; it climbs faster the higher the doom and once the Slann are
+# gone.
+#
+#   doom.0     The engine starts (on_startup, new games)
+#   doom.1     The yearly reckoning (province 1, repeats itself)
+#   doom.2     A Chaos raid feeds the Winds
+#   doom.3     A won war feeds or starves the Winds
+#   doom.4     The priests read the omens (players, each decade)
+#   doom.5     The End Times draw closer (province 1)
+#   doom.6     The End Times
+#
+# Was z_doom_counter.txt (same ids).
+# Fixed: doom.3 had its two outcomes the wrong way round: a Chaos lord who
+#   won a war lowered the doom and a lord who beat Chaos raised it. doom.5
+#   was an MTTH province event checked on every province of the map for the
+#   one province it can fire in; doom.1 now rolls it once a year (one in
+#   ten, the old MTTH of 10 years). doom.6 was fired at a province and so
+#   never reached anyone; it goes to every player once, behind the global
+#   flag end_times_come, and its deaths now really kill the player's dynasty
+#   (both deaths used death_cause, which CK2 does not read, and the
+#   dynasty's lacked the death = { } around it). chaos_crusades_unlocked is
+#   set whenever the doom stands at 500 or more, not only inside the medium
+#   band, so a jump straight to high doom unlocks the Chaos crusades too.
+# Dropped: doom.6 gave every demesne title of the player gavelkind
+#   succession just before the whole dynasty died, which only threw errors
+#   on titles that cannot hold that law.
+# Callers: on_startup (doom.0) in common/on_actions/wh_rulerdesigner_system.txt,
+#   on_loot_settlement (doom.2) and on_war_ended_victory (doom.3) in the same
+#   file, on_decade_pulse (doom.4) in common/on_actions/wh_on_actions.txt.
+#   doom.1 fires beastmen.85 (the Chaos moon) every year.
+# Effects and triggers: common/scripted_effects/wh_doom_engine_scripted_effects.txt,
+#   common/scripted_triggers/ (is_doom_*_trigger).
+# Saved: global flags doom_engine_started, vortex_exists, doom_very_low,
+#   doom_low, doom_medium, doom_high, doom_very_high, chaos_crusades_unlocked
+#   (set once the doom first reaches 500, never cleared), end_times_come;
+#   province 1 variables global_doom_counter, endtimes_counter.
+# Loc: localisation/00_WHG_doom_events.csv.
+###############################################################################
+
+namespace = doom
+
+# doom.0 The engine starts
+# On a new game, starts the yearly reckoning in province 1 and gives
+# Malekith, son of Aenarion, the bloodline of his father (his history has no
+# father, so the game does not give it).
+# Scope: ROOT is the host player.
+character_event = {
+	id = doom.0
+	hide_window = yes
+
+	is_triggered_only = yes # on_startup
+
+	ai = no
+	only_playable = yes
+
+	trigger = {
+		is_save_game = no
+		is_multiplayer_host_character = yes
+		NOT = { has_global_flag = doom_engine_started }
+	}
+
+	immediate = {
+		c_90000 = { # Malekith
+			any_bloodline = {
+				limit = { has_bloodline_flag = aenarion_bloodline }
+				add_bloodline_member = PREV
+			}
+		}
+		set_global_flag = doom_engine_started
+		1 = { province_event = { id = doom.1 } }
+	}
+}
+
+# doom.1 The yearly reckoning
+# Every year, in province 1: the Great Vortex siphons doom away while it
+# holds (it holds while Gaen Vale, province 1509 on the Inner Sea of Ulthuan,
+# is under Asur rule or the Everqueen sits in Avelorn), every great servant of Chaos
+# alive adds to it, and the counter is turned into the doom flags. Then the
+# Chaos moon waxes or wanes (beastmen.85) and the End Times may draw closer
+# (doom.5).
+# Scope: ROOT is province 1.
+province_event = {
+	id = doom.1
+	hide_window = yes
+
+	is_triggered_only = yes # doom.0, then itself
+
+	trigger = {
+		province_id = 1
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { check_variable = { which = global_doom_counter value = 1 } } }
+			set_variable = { which = global_doom_counter value = 1 }
+		}
+		# The Vortex siphons the Winds away (the counter never goes below 0)
+		if = {
+			limit = {
+				has_global_flag = vortex_exists
+				check_variable = { which = global_doom_counter value = 50 }
+			}
+			random_list = {
+				40 = { reduce_doom_progress_minor_effect = yes }
+				35 = { reduce_doom_progress_medium_effect = yes }
+				15 = { reduce_doom_progress_major_effect = yes }
+				10 = { reduce_doom_progress_massive_effect = yes }
+			}
+		}
+		# Does the Vortex still hold?
+		if = {
+			limit = {
+				OR = {
+					1509 = { owner = { religion = cadai top_liege = { religion = cadai } } }
+					k_avelorn = { owner = { trait = everqueen } }
+				}
+			}
+			set_global_flag = vortex_exists
+		}
+		else = { clr_global_flag = vortex_exists }
+		# The great servants of Chaos feed the Winds
+		any_character = {
+			limit = {
+				OR = {
+					trait = everchosen
+					is_chaos_champion_chosen_or_prince_trigger = yes
+					is_basic_daemon_trigger = yes
+				}
+			}
+			if = { limit = { trait = everchosen } add_doom_everchosen_effect = yes }
+			else_if = { limit = { is_daemon_prince_trigger = yes } add_doom_prince_effect = yes }
+			else_if = { limit = { is_chaos_chosen_trigger = yes } add_doom_chosen_effect = yes }
+			else_if = { limit = { is_chaos_champion_trigger = yes } add_doom_champion_effect = yes }
+			else_if = {
+				limit = { is_basic_daemon_trigger = yes }
+				add_doom_basic_daemon_effect = yes
+			}
+		}
+		# The counter becomes the doom flags
+		clr_global_flag = doom_very_low
+		clr_global_flag = doom_low
+		clr_global_flag = doom_medium
+		clr_global_flag = doom_high
+		clr_global_flag = doom_very_high
+		if = {
+			limit = { check_variable = { which = global_doom_counter value = 1500 } }
+			set_global_flag = doom_very_high
+		}
+		else_if = {
+			limit = { check_variable = { which = global_doom_counter value = 1000 } }
+			set_global_flag = doom_high
+		}
+		else_if = {
+			limit = { check_variable = { which = global_doom_counter value = 500 } }
+			set_global_flag = doom_medium
+		}
+		else_if = {
+			limit = { check_variable = { which = global_doom_counter value = 250 } }
+			set_global_flag = doom_low
+		}
+		else = { set_global_flag = doom_very_low }
+		if = {
+			limit = { check_variable = { which = global_doom_counter value = 500 } }
+			set_global_flag = chaos_crusades_unlocked
+		}
+		province_event = { id = beastmen.85 } # The Chaos moon
+		random = { chance = 10 province_event = { id = doom.5 } }
+		repeat_event = { id = doom.1 years = 1 }
+	}
+}
+
+# doom.2 A Chaos raid feeds the Winds
+# A follower of the Chaos gods who loots the holding of a lord outside Chaos
+# (and outside the Norscan gods, Hashut and the Horned Rat) adds a little
+# doom.
+# Scope: ROOT is the raider. FROM is the looted holding.
+character_event = {
+	id = doom.2
+	desc = EVTDESCdoom2
+	notification = yes
+
+	is_triggered_only = yes # on_loot_settlement
+
+	religion_group = chaos_gods_group
+
+	trigger = {
+		open_follower_of_any_chaos_gods = yes
+		FROM = {
+			holder_scope = {
+				open_follower_of_any_chaos_gods = no
+				NOR = {
+					religion = norscan_gods
+					religion = norscan_gods_reformed
+					religion = hashut
+					religion_group = horned_rat_god_group
+				}
+			}
+		}
+	}
+
+	immediate = {
+		add_doom_progress_tiny_effect = yes
+	}
+
+	option = {
+		name = OK
+	}
+}
+
+# doom.3 A won war feeds or starves the Winds
+# When a follower of Chaos wins a war against a lord outside Chaos (and
+# outside the Norscan gods, Hashut and the Horned Rat), the doom rises; when
+# such a lord wins against Chaos, it falls.
+# Scope: ROOT is the winning attacker. FROM is the defender.
+character_event = {
+	id = doom.3
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_ended_victory
+
+	immediate = {
+		if = {
+			limit = {
+				open_follower_of_any_chaos_gods = yes
+				FROM = {
+					open_follower_of_any_chaos_gods = no
+					NOR = {
+						religion = norscan_gods
+						religion = norscan_gods_reformed
+						religion = hashut
+						religion_group = horned_rat_god_group
+					}
+				}
+			}
+			add_doom_progress_minor_effect = yes
+		}
+		else_if = {
+			limit = {
+				open_follower_of_any_chaos_gods = no
+				NOR = {
+					religion = norscan_gods
+					religion = norscan_gods_reformed
+					religion = hashut
+					religion_group = horned_rat_god_group
+				}
+				FROM = { open_follower_of_any_chaos_gods = yes }
+			}
+			reduce_doom_progress_minor_effect = yes
+		}
+	}
+}
+
+# doom.4 The priests read the omens
+# Once a decade every player hears how strong the Winds of Chaos blow.
+# Scope: ROOT is the player.
+character_event = {
+	id = doom.4
+	desc = { trigger = { is_doom_very_low_trigger = yes } text = EVTDESCdoom4 }
+	desc = { trigger = { is_doom_low_trigger = yes } text = EVTDESCdoom4b }
+	desc = { trigger = { is_doom_medium_trigger = yes } text = EVTDESCdoom4c }
+	desc = { trigger = { is_doom_high_trigger = yes } text = EVTDESCdoom4d }
+	desc = { trigger = { is_doom_very_high_trigger = yes } text = EVTDESCdoom4e }
+	notification = yes
+
+	is_triggered_only = yes # on_decade_pulse
+
+	only_playable = yes
+	ai = no
+
+	trigger = {
+		1 = { check_variable = { which = global_doom_counter value = 1 } }
+	}
+
+	option = {
+		name = EVTOPTAdoom4
+	}
+}
+
+# doom.5 The End Times draw closer
+# Three times in ten the End Times counter climbs a step; more often as the
+# doom rises, and once the last Slann is dead. At 50 steps the End Times come
+# (doom.6). That takes many centuries even under the darkest skies.
+# Scope: ROOT is province 1.
+province_event = {
+	id = doom.5
+	hide_window = yes
+
+	is_triggered_only = yes # doom.1, one year in ten
+
+	trigger = {
+		province_id = 1
+		NOT = { has_global_flag = end_times_come }
+	}
+
+	immediate = {
+		random_list = {
+			30 = { change_variable = { which = endtimes_counter value = 1 } }
+			70 = {
+				modifier = { factor = 0.75 is_doom_medium_trigger = yes }
+				modifier = { factor = 0.5 is_doom_high_trigger = yes }
+				modifier = { factor = 0.25 is_doom_very_high_trigger = yes }
+				modifier = { factor = 0.25 has_global_flag = all_slann_dead }
+			}
+		}
+		if = {
+			limit = { check_variable = { which = endtimes_counter value = 50 } }
+			set_global_flag = end_times_come
+			any_player = { narrative_event = { id = doom.6 } }
+		}
+	}
+}
+
+# doom.6 The End Times
+# The Vortex fails and the Warp floods the world: the game ends. The player
+# and every member of his dynasty are consumed.
+# Scope: ROOT is a player.
+narrative_event = {
+	id = doom.6
+	title = EVTNAMEdoom6
+	desc = EVTDESCdoom6
+	picture = GFX_evt_chaos_hordes
+
+	is_triggered_only = yes # doom.5
+
+	option = {
+		name = EVTOPTAdoom6
+		hidden_tooltip = {
+			any_dynasty_member = {
+				limit = { NOT = { character = ROOT } }
+				death = { death_reason = death_vanished }
+			}
+			death = { death_reason = death_vanished }
+		}
+	}
+}

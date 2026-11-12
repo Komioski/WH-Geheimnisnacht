@@ -1,0 +1,1311 @@
+###############################################################################
+# The castaway's saga
+# Namespace: castaway
+# Faction: Generic
+#
+# A rare, player-only story over three to eight years. A storm that feels
+# wrong (or a mutiny) leaves a count or duke for drowned. The lands go to
+# the heir, the castaway washes up on a small island, survives on it, meets
+# the exiled sorcerer who raised the storm, cleans the island's hall of the
+# thing that haunts it and its mother in the mere, and at last sees a sail:
+# go home, stay as Lord of the Isle, or send for the family. All the while a
+# grey stranger plays them at chess, one move per act, and the score decides
+# how the story ends. Beowulf, The Tempest, Robinson Crusoe and the knight's
+# game with Death, told in the voices of the island's waters.
+#
+# Rules: players only, once per game (global flag castaway_saga_begun);
+# count or duke, seat on the coast; mortal Men, Dawi, elves and orcs; never
+# one who has already played Death at chess (chess_with_death, which the
+# saga also sets, so the chess chain in WHG_death_events never fires for
+# them). The companion, the sorcerer and his daughter are generated. A lost
+# game shortens life, it does not end it (Komi, 2026-11-12).
+#
+# The wreck                                castaway.1-3
+# Washed ashore, presumed drowned          castaway.4-7
+# Survival                                 castaway.10-12
+# The sorcerer of the far shore            castaway.20-23
+# The hall and the mere                    castaway.30-32
+# A sail on the horizon                    castaway.40-44
+# The last move                            castaway.50
+# The dragon of the isle (a drawn game)    castaway.60-61
+#
+# Fired from: castaway.1 by naval.1 (a player leading an army at sea, about
+# one sea tile in three hundred, WHG_naval_events.txt), seas.21 (a storm on
+# a Set Out voyage) and seas.23 (a mutiny), WHG_sea_events.txt. The rest is
+# the chain.
+# Scripted triggers: common/scripted_triggers/WHG_sea_triggers.txt
+# Scripted effects: common/scripted_effects/WHG_sea_effects.txt
+# Loc: localisation/00_WHG_castaway_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = castaway
+
+###############################################################################
+# The wreck
+###############################################################################
+
+# castaway.1 The saga begins (hidden)
+# Finds a free island for the castaway (castaway_pick_island_effect). With
+# none the saga does not start. A mutiny goes to castaway.3, anything else
+# to the storm and the stranger (castaway.2).
+# Scope: ROOT is the castaway. The caller has checked
+# castaway_candidate_trigger and set castaway_by_mutiny for a mutiny.
+character_event = {
+	id = castaway.1
+	hide_window = yes
+
+	is_triggered_only = yes # naval.1, seas.21, seas.23
+
+	trigger = {
+		castaway_candidate_trigger = yes
+	}
+
+	immediate = {
+		if = {
+			limit = { any_province = { castaway_island_trigger = yes } }
+			set_global_flag = castaway_saga_begun
+			set_character_flag = castaway_saga
+			set_character_flag = chess_with_death
+			castaway_pick_island_effect = yes
+			if = {
+				limit = { has_character_flag = castaway_by_mutiny }
+				character_event = { id = castaway.3 }
+			}
+			else = {
+				narrative_event = { id = castaway.2 }
+			}
+		}
+		else = {
+			clr_character_flag = castaway_by_mutiny
+		}
+	}
+}
+
+# castaway.2 The grey stranger
+# The fleet breaks up in a storm that feels wrong. In the wreck (or on the
+# mutineers' sandbar) a grey stranger sits at a board: "Play me, and I give
+# you time." Accepting starts the game (variable castaway_game). Refusing
+# is allowed: Death only watches, and the end is harsher. The stranger
+# speaks to Dawi and elves in their own way.
+# Scope: ROOT is the castaway.
+narrative_event = {
+	id = castaway.2
+	title = EVTNAMEcastaway2
+	desc = {
+		trigger = {
+			has_character_flag = castaway_by_mutiny
+		}
+		text = EVTDESCcastaway2_mutiny
+	}
+	desc = {
+		trigger = {
+			NOT = { has_character_flag = castaway_by_mutiny }
+			trait = creature_dwarf
+		}
+		text = EVTDESCcastaway2_dawi
+	}
+	desc = {
+		trigger = {
+			NOT = { has_character_flag = castaway_by_mutiny }
+			trait = creature_elf
+		}
+		text = EVTDESCcastaway2_elf
+	}
+	desc = {
+		trigger = {
+			NOT = { has_character_flag = castaway_by_mutiny }
+			NOR = { trait = creature_dwarf trait = creature_elf }
+		}
+		text = EVTDESCcastaway2
+	}
+	picture = GFX_evt_death
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # castaway.1, castaway.3
+
+	option = { # Set up the pieces
+		name = EVTOPTAcastaway2
+		set_character_flag = castaway_playing
+		set_variable = { which = castaway_game value = 0 }
+		custom_tooltip = { text = castaway_game_begins_tt }
+		character_event = { id = castaway.4 days = 3 }
+	}
+	option = { # I do not play with you
+		name = EVTOPTBcastaway2
+		set_character_flag = castaway_refused
+		set_variable = { which = castaway_game value = 0 }
+		custom_tooltip = { text = castaway_game_refused_tt }
+		character_event = { id = castaway.4 days = 3 }
+	}
+}
+
+# castaway.3 The sandbar
+# For a sea captain the end comes from their own deck: the first mate takes
+# the flagship (and a Black Ark goes back to the Witch King's reserve) and
+# leaves the captain on a sandbar with a pistol, one shot and a bottle.
+# The mutineer sails home with the news of a drowning. Then the stranger.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.3
+	desc = EVTDESCcastaway3
+	picture = GFX_evt_pirate_crew
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # castaway.1
+
+	immediate = {
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			culture = ROOT
+			religion = ROOT
+			female = no
+			age = 35
+			attributes = { martial = 9 intrigue = 9 }
+			trait = ambitious
+			trait = deceitful
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			set_character_flag = castaway_mutineer
+			save_event_target_as = castaway_mutineer
+		}
+	}
+
+	option = { # Curse his name to the deep
+		name = EVTOPTAcastaway3
+		any_artifact = {
+			limit = {
+				OR = {
+					artifact_type = small_flagship
+					artifact_type = regular_flagship
+					artifact_type = enormous_flagship
+				}
+			}
+			unsafe_destroy_artifact = yes
+		}
+		if = {
+			limit = { sea_has_black_ark_trigger = yes }
+			sea_return_arks_effect = yes
+		}
+		narrative_event = { id = castaway.2 days = 2 }
+	}
+}
+
+###############################################################################
+# Washed ashore, presumed drowned
+###############################################################################
+
+# castaway.4 Presumed drowned (hidden)
+# Everything at home goes to the heir as on a death; the castaway takes the
+# island the same day (castaway_wash_ashore_effect). The spouse hears the
+# news (castaway.6), the mutineer goes home to the heir's court.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.4
+	hide_window = yes
+
+	is_triggered_only = yes # castaway.2
+
+	immediate = {
+		castaway_wash_ashore_effect = yes
+		if = {
+			limit = { has_character_flag = castaway_by_mutiny }
+			event_target:castaway_mutineer = { move_character = event_target:castaway_heir }
+		}
+		any_spouse = {
+			limit = { ai = yes }
+			character_event = { id = castaway.6 days = 30 }
+		}
+		character_event = { id = castaway.5 }
+	}
+}
+
+# castaway.5 Washed ashore
+# The castaway wakes on the sand of an island in the island's own waters
+# (the Norse skerries, the isles off Albion, the southern islands, the
+# Lustrian keys, the outer isles of Ulthuan). At home, a funeral without a
+# body; the heir rules now.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.5
+	desc = {
+		trigger = { has_character_flag = castaway_north }
+		text = EVTDESCcastaway5_north
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_albion }
+		text = EVTDESCcastaway5_albion
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_south }
+		text = EVTDESCcastaway5_south
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_lustria }
+		text = EVTDESCcastaway5_lustria
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_ulthuan }
+		text = EVTDESCcastaway5_ulthuan
+	}
+	picture = GFX_evt_ship_storm
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # castaway.4
+
+	option = { # Alive. Still alive.
+		name = EVTOPTAcastaway5
+		custom_tooltip = { text = castaway_presumed_drowned_tt }
+		character_event = { id = castaway.10 days = 20 random = 20 }
+	}
+}
+
+# castaway.6 A funeral without a body (hidden)
+# The castaway's spouse hears of the drowning and mourns. In two to four
+# years they may stop waiting (castaway.7).
+# Scope: ROOT is the spouse.
+character_event = {
+	id = castaway.6
+	hide_window = yes
+
+	is_triggered_only = yes # castaway.4
+
+	immediate = {
+		character_event = { id = castaway.7 days = 730 random = 730 }
+	}
+}
+
+# castaway.7 The widow's veil comes off (hidden)
+# Half the time the spouse stops waiting and the marriage to the drowned
+# lord is ended, so they may wed again: Penelope does not always weave.
+# A spouse with no women's roles in the race, or one already wed again, is
+# left alone.
+# Scope: ROOT is the spouse.
+character_event = {
+	id = castaway.7
+	hide_window = yes
+
+	is_triggered_only = yes # castaway.6
+
+	trigger = {
+		has_character_flag = castaway_spouse
+		any_spouse = { has_character_flag = castaway_saga }
+	}
+
+	immediate = {
+		random = {
+			chance = 50
+			modifier = { factor = 1.5 trait = lustful }
+			modifier = { factor = 0.5 trait = chaste }
+			modifier = { factor = 0.5 trait = patient }
+			random_spouse = {
+				limit = { has_character_flag = castaway_saga }
+				save_event_target_as = castaway_lost_spouse
+			}
+			remove_spouse = event_target:castaway_lost_spouse
+			set_character_flag = castaway_spouse_moved_on
+		}
+	}
+}
+
+###############################################################################
+# Survival
+###############################################################################
+
+# castaway.10 What the sea gave back
+# The wreck lies on the reef at low tide. Swim out and salvage what can be
+# saved (gold, tools, and the battered flagship, if there was one, stays
+# the castaway's), or keep a great fire burning on the headland for a
+# rescue that does not come. Survival or pride: Death moves a piece.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.10
+	desc = EVTDESCcastaway10
+	picture = GFX_evt_pirate_ship
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # castaway.5
+
+	option = { # Swim out to the wreck
+		name = EVTOPTAcastaway10
+		wealth = 75
+		castaway_good_move_effect = yes
+		character_event = { id = castaway.11 days = 60 random = 60 }
+	}
+	option = { # Keep the beacon burning
+		name = EVTOPTBcastaway10
+		prestige = 25
+		castaway_bad_move_effect = yes
+		character_event = { id = castaway.11 days = 60 random = 60 }
+	}
+}
+
+# castaway.11 Notches on a post
+# A notch for every day. The castaway builds a stockade and a shelter, or
+# goes to live off the island's hunting like the beasts do.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.11
+	desc = EVTDESCcastaway11
+	picture = GFX_evt_explore_forest
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # castaway.10
+
+	option = { # Build a stockade
+		name = EVTOPTAcastaway11
+		apprentice_learning_small_effect = yes
+		castaway_good_move_effect = yes
+		character_event = { id = castaway.12 days = 90 random = 90 }
+	}
+	option = { # Live off the hunt
+		name = EVTOPTBcastaway11
+		random = {
+			chance = 50
+			if = {
+				limit = { NOT = { trait = hunter } }
+				add_trait = hunter
+			}
+		}
+		random = { chance = 20 add_trait = wounded }
+		character_event = { id = castaway.12 days = 90 random = 90 }
+	}
+}
+
+# castaway.12 Footprints in the sand
+# A bare footprint on the beach that is not the castaway's: the companion
+# (castaway_make_companion_effect), a native of the island's waters. Take
+# them as a friend, as a servant, or hide until they leave.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.12
+	desc = {
+		trigger = { has_character_flag = castaway_north }
+		text = EVTDESCcastaway12_north
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_albion }
+		text = EVTDESCcastaway12_albion
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_south }
+		text = EVTDESCcastaway12_south
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_lustria }
+		text = EVTDESCcastaway12_lustria
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_ulthuan }
+		text = EVTDESCcastaway12_ulthuan
+	}
+	picture = GFX_evt_explore_forest
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # castaway.11
+
+	immediate = {
+		castaway_make_companion_effect = yes
+	}
+
+	option = { # A friend at last
+		name = EVTOPTAcastaway12
+		add_friend = event_target:castaway_companion
+		castaway_good_move_effect = yes
+		character_event = { id = castaway.20 days = 180 random = 180 }
+	}
+	option = { # They will serve
+		name = EVTOPTBcastaway12
+		prestige = 25
+		event_target:castaway_companion = {
+			opinion = { who = ROOT modifier = opinion_angry years = 10 }
+		}
+		castaway_bad_move_effect = yes
+		character_event = { id = castaway.20 days = 180 random = 180 }
+	}
+}
+
+###############################################################################
+# The sorcerer of the far shore
+###############################################################################
+
+# castaway.20 The sorcerer of the far shore
+# On the far side of the island lives an exiled magister (off Ulthuan, an
+# exiled mage of Saphery) with his daughter. He keeps an air spirit bound
+# in a split pine, and the misshapen son of the witch who ruled the island
+# before him serves him in chains. The twist: he raised the storm, to drag
+# a ship to his shore. Ally with him (a tutor in magic, and his daughter's
+# hand for a son or the companion), free the spirit (a blessing, and his
+# anger), or side with the witch's son (an uprising against him).
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.20
+	desc = EVTDESCcastaway20
+	picture = GFX_evt_wandering_mage
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # castaway.12
+
+	immediate = {
+		castaway_make_magister_effect = yes
+		any_courtier = {
+			limit = { has_character_flag = castaway_companion }
+			save_event_target_as = castaway_companion
+		}
+	}
+
+	option = { # Ally with the sorcerer
+		name = EVTOPTAcastaway20
+		castaway_magister_tutor_effect = yes
+		event_target:castaway_magister = {
+			opinion = { who = ROOT modifier = opinion_grateful years = 20 }
+		}
+		castaway_good_move_effect = yes
+		if = {
+			limit = {
+				OR = {
+					any_child = { castaway_can_wed_daughter_trigger = yes }
+					event_target:castaway_companion = { castaway_can_wed_daughter_trigger = yes }
+				}
+			}
+			character_event = { id = castaway.21 days = 30 random = 30 }
+		}
+		else = {
+			character_event = { id = castaway.30 days = 150 random = 120 }
+		}
+		ai_chance = { factor = 40 }
+	}
+	option = { # Split the pine and free the spirit
+		name = EVTOPTBcastaway20
+		add_character_modifier = { name = castaway_spirit_blessing years = 30 }
+		event_target:castaway_magister = {
+			opinion = { who = ROOT modifier = opinion_furious years = 20 }
+		}
+		random = {
+			chance = 30
+			add_trait = wounded
+		}
+		castaway_good_move_effect = yes
+		castaway_good_move_effect = yes
+		character_event = { id = castaway.30 days = 150 random = 120 }
+		ai_chance = { factor = 30 }
+	}
+	option = { # Strike off the witch's son's chains
+		name = EVTOPTCcastaway20
+		character_event = { id = castaway.23 days = 7 }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = wroth }
+		}
+	}
+}
+
+# castaway.21 The sorcerer's daughter
+# The magister offers his daughter's hand: to one of the castaway's sons
+# (an unwed grown son of her race, castaway_can_wed_daughter_trigger), to
+# the companion, or to no one, and she stays at the castaway's hall.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.21
+	desc = EVTDESCcastaway21
+	picture = GFX_evt_wandering_mage
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # castaway.20
+
+	option = { # To my son
+		name = EVTOPTAcastaway21
+		trigger = {
+			any_child = { castaway_can_wed_daughter_trigger = yes }
+		}
+		random_child = {
+			limit = { castaway_can_wed_daughter_trigger = yes }
+			save_event_target_as = castaway_groom
+		}
+		event_target:castaway_daughter = {
+			add_spouse = event_target:castaway_groom
+			move_character = event_target:castaway_groom
+		}
+		character_event = { id = castaway.30 days = 150 random = 120 }
+	}
+	option = { # To the companion
+		name = EVTOPTBcastaway21
+		trigger = {
+			event_target:castaway_companion = { castaway_can_wed_daughter_trigger = yes }
+		}
+		event_target:castaway_daughter = {
+			add_spouse = event_target:castaway_companion
+		}
+		event_target:castaway_companion = {
+			opinion = { who = ROOT modifier = opinion_grateful years = 20 }
+		}
+		character_event = { id = castaway.30 days = 150 random = 120 }
+	}
+	option = { # She chooses for herself
+		name = EVTOPTCcastaway21
+		piety = 15
+		character_event = { id = castaway.30 days = 150 random = 120 }
+	}
+}
+
+# castaway.23 The witch's son
+# The castaway strikes off the chains and the island rises with the
+# witch's son against the magister. Most of the time the sorcerer falls,
+# his daughter stays at the castaway's hall and the son serves the new lord
+# of the island. Sometimes the spirit fights for its master and the storm
+# comes back. Blood on the board either way.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.23
+	desc = EVTDESCcastaway23
+	picture = GFX_evt_troll_country
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # castaway.20
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = castaway_ulthuan }
+			create_character = {
+				random_traits = yes
+				dynasty = none
+				culture = caledori
+				religion = cadai
+				female = no
+				age = 30
+				attributes = { martial = 10 }
+				trait = ugly
+				trait = wroth
+			}
+		}
+		else_if = {
+			limit = { has_character_flag = castaway_north }
+			create_character = {
+				random_traits = yes
+				dynasty = none
+				culture = fjarmann
+				religion = norscan_gods
+				female = no
+				age = 30
+				attributes = { martial = 10 }
+				trait = ugly
+				trait = wroth
+			}
+		}
+		else_if = {
+			limit = { has_character_flag = castaway_albion }
+			create_character = {
+				random_traits = yes
+				dynasty = none
+				culture = albion_albany
+				religion = old_faith
+				female = no
+				age = 30
+				attributes = { martial = 10 }
+				trait = ugly
+				trait = wroth
+			}
+		}
+		else_if = {
+			limit = { has_character_flag = castaway_lustria }
+			create_character = {
+				random_traits = yes
+				dynasty = none
+				culture = sartosan_tilean
+				religion = stromfels
+				female = no
+				age = 30
+				attributes = { martial = 10 }
+				trait = ugly
+				trait = wroth
+			}
+		}
+		else = {
+			create_character = {
+				random_traits = yes
+				dynasty = none
+				culture = bayaji
+				religion = akghan
+				female = no
+				age = 30
+				attributes = { martial = 10 }
+				trait = ugly
+				trait = wroth
+			}
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			set_character_flag = castaway_witchson
+			save_event_target_as = castaway_witchson
+		}
+	}
+
+	option = { # Down with the sorcerer
+		name = EVTOPTAcastaway23
+		random_list = {
+			65 = {
+				modifier = { factor = 1.3 martial = 12 }
+				modifier = { factor = 1.3 trait = brave }
+				event_target:castaway_magister = {
+					death = { death_reason = death_murder killer = event_target:castaway_witchson }
+				}
+				event_target:castaway_witchson = {
+					opinion = { who = ROOT modifier = opinion_grateful years = 20 }
+				}
+				prestige = 50
+			}
+			35 = {
+				add_trait = wounded
+				event_target:castaway_witchson = {
+					death = { death_reason = death_battle }
+				}
+			}
+		}
+		castaway_bad_move_effect = yes
+		character_event = { id = castaway.30 days = 150 random = 120 }
+	}
+}
+
+###############################################################################
+# The hall and the mere
+###############################################################################
+
+# castaway.30 The thing in the night
+# The island's old hall is plagued every night by a fen-thing that drags
+# off whoever sleeps nearest the door: a troll in the north, a Fimir-like
+# horror off Albion, a ghul of the reefs in the south, a cold-blooded beast
+# of the swamps in Lustria, a mist-wight of the old elf wars off Ulthuan.
+# Hold the hall in person, send the companion, or bar the doors.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.30
+	desc = {
+		trigger = { has_character_flag = castaway_north }
+		text = EVTDESCcastaway30_north
+		picture = GFX_evt_troll_attack
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_albion }
+		text = EVTDESCcastaway30_albion
+		picture = GFX_evt_fimir_cave
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_south }
+		text = EVTDESCcastaway30_south
+		picture = GFX_evt_cave_lair
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_lustria }
+		text = EVTDESCcastaway30_lustria
+		picture = GFX_evt_lustria_jungle
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_ulthuan }
+		text = EVTDESCcastaway30_ulthuan
+		picture = GFX_evt_cave_lair
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # castaway.20, castaway.21, castaway.23
+
+	immediate = {
+		any_courtier = {
+			limit = { has_character_flag = castaway_companion }
+			save_event_target_as = castaway_companion
+		}
+	}
+
+	option = { # I hold the hall myself
+		name = EVTOPTAcastaway30
+		random_list = {
+			55 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.3 martial = 18 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 trait = strong }
+				prestige = 100
+				castaway_good_move_effect = yes
+			}
+			45 = {
+				modifier = { factor = 1.5 NOT = { martial = 8 } }
+				modifier = { factor = 1.3 trait = craven }
+				prestige = 25
+				add_trait = wounded
+			}
+		}
+		character_event = { id = castaway.31 days = 20 random = 20 }
+	}
+	option = { # Send the companion
+		name = EVTOPTBcastaway30
+		trigger = {
+			event_target:castaway_companion = { is_incapable = no }
+		}
+		event_target:castaway_companion = {
+			random_list = {
+				60 = {
+					prestige = 50
+					opinion = { who = ROOT modifier = opinion_grateful years = 10 }
+				}
+				40 = {
+					add_trait = wounded
+				}
+			}
+		}
+		character_event = { id = castaway.31 days = 20 random = 20 }
+	}
+	option = { # Bar the doors
+		name = EVTOPTCcastaway30
+		prestige = -25
+		castaway_bad_move_effect = yes
+		character_event = { id = castaway.31 days = 20 random = 20 }
+	}
+}
+
+# castaway.31 Down into the mere
+# The thing is dead or driven off, and its mother comes for revenge. The
+# blood trail leads into a black mere. Go down after her yourself (a hard
+# fight: the giant's blade, if no one in the world holds it yet), send the
+# companion in your place, or leave the mere alone.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.31
+	desc = EVTDESCcastaway31
+	picture = GFX_evt_cave_lair
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # castaway.30
+
+	immediate = {
+		any_courtier = {
+			limit = { has_character_flag = castaway_companion }
+			save_event_target_as = castaway_companion
+		}
+	}
+
+	option = { # Into the water
+		name = EVTOPTAcastaway31
+		random_list = {
+			45 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.3 martial = 18 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 trait = strong }
+				modifier = { factor = 1.2 trait = duelist }
+				prestige = 150
+				if = {
+					limit = { NOT = { any_character = { has_artifact = sea_giants_blade } } }
+					add_artifact = sea_giants_blade
+				}
+				castaway_good_move_effect = yes
+				castaway_good_move_effect = yes
+			}
+			35 = {
+				prestige = 50
+				add_trait = wounded
+				castaway_good_move_effect = yes
+			}
+			20 = {
+				modifier = { factor = 1.5 NOT = { martial = 8 } }
+				modifier = { factor = 1.3 trait = craven }
+				add_maimed_trait_effect = yes
+				castaway_bad_move_effect = yes
+			}
+		}
+		character_event = { id = castaway.32 days = 60 random = 30 }
+	}
+	option = { # The companion goes down
+		name = EVTOPTBcastaway31
+		trigger = {
+			event_target:castaway_companion = { is_incapable = no }
+		}
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 event_target:castaway_companion = { martial = 12 } }
+				event_target:castaway_companion = { prestige = 100 }
+				prestige = 50
+				castaway_good_move_effect = yes
+			}
+			50 = {
+				event_target:castaway_companion = {
+					death = { death_reason = death_accident_generic_beast }
+				}
+				castaway_bad_move_effect = yes
+			}
+		}
+		character_event = { id = castaway.32 days = 60 random = 30 }
+	}
+	option = { # Leave the mere alone
+		name = EVTOPTCcastaway31
+		add_character_modifier = { name = castaway_mother_haunts years = 10 }
+		castaway_bad_move_effect = yes
+		character_event = { id = castaway.32 days = 60 random = 30 }
+	}
+}
+
+# castaway.32 The hall rebuilt
+# The hall stands again: the island's folk come back to it, and the
+# survivors of the wreck (and the mutiny's few loyal men) are now the
+# castaway's own guard. A lasting rebuilt hall on the island
+# (castaway_rebuilt_hall) and a small retinue of survivors.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.32
+	desc = EVTDESCcastaway32
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # castaway.31
+
+	option = { # Light the fires in the hall
+		name = EVTOPTAcastaway32
+		random_province = {
+			limit = { has_province_flag = castaway_island }
+			add_province_modifier = { name = castaway_rebuilt_hall duration = -1 }
+			save_event_target_as = castaway_island
+		}
+		if = {
+			limit = { castaway_holds_island_trigger = yes }
+			spawn_unit = {
+				province = event_target:castaway_island
+				home = event_target:castaway_island
+				owner = ROOT
+				troops = {
+					light_infantry = { 150 150 }
+					archers = { 100 100 }
+				}
+				attrition = 1
+				maintenance_multiplier = 0.25
+				disband_on_peace = no
+				cannot_inherit = yes
+				earmark = castaway_survivors
+			}
+		}
+		prestige = 50
+		character_event = { id = castaway.40 days = 365 random = 365 }
+	}
+}
+
+###############################################################################
+# A sail on the horizon
+###############################################################################
+
+# castaway.40 A sail on the horizon
+# Years on, a sail: a ship that will carry the castaway home. Go home and
+# claim the old titles back (castaway.41 to whoever holds the old seat),
+# stay as Lord of the Isle (independent, a unique trait, and the heir's
+# tribute ships), or stay and send for the family.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.40
+	desc = EVTDESCcastaway40
+	picture = GFX_evt_merchant_ship_at_sea_republic
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # castaway.32
+
+	immediate = {
+		castaway_find_home_lord_effect = yes
+	}
+
+	option = { # Home!
+		name = EVTOPTAcastaway40
+		trigger = {
+			event_target:castaway_home_lord = {
+				NOT = { character = ROOT }
+				any_demesne_title = { has_title_flag = castaway_old_title }
+			}
+		}
+		castaway_claim_home_effect = yes
+		event_target:castaway_home_lord = {
+			character_event = { id = castaway.41 days = 30 }
+		}
+		ai_chance = { factor = 50 }
+	}
+	option = { # Lord of the Isle
+		name = EVTOPTBcastaway40
+		trigger = { castaway_holds_island_trigger = yes }
+		set_defacto_liege = THIS
+		add_trait = lord_of_the_isle
+		add_character_modifier = { name = castaway_tribute_ships years = 30 }
+		prestige = 100
+		castaway_end_effect = yes
+		narrative_event = { id = castaway.50 days = 120 random = 120 }
+		ai_chance = { factor = 30 }
+	}
+	option = { # Send for them
+		name = EVTOPTCcastaway40
+		trigger = { castaway_holds_island_trigger = yes }
+		any_spouse = {
+			limit = {
+				is_ruler = no
+				prisoner = no
+			}
+			move_character = ROOT
+		}
+		any_child = {
+			limit = {
+				is_ruler = no
+				prisoner = no
+			}
+			move_character = ROOT
+		}
+		castaway_end_effect = yes
+		narrative_event = { id = castaway.50 days = 120 random = 120 }
+		ai_chance = { factor = 20 }
+	}
+}
+
+# castaway.41 The drowned lord returns
+# The lord who holds the castaway's old seat (the heir, a regent's ward, a
+# usurper) hears that the drowned lord lives and wants it all back. Hand
+# the titles back (castaway_hand_back_effect), or refuse. A loyal grown
+# child of the castaway with a good opinion of them says yes; a child
+# ruler's regent, the greedy, the ambitious and strangers say no.
+# Scope: ROOT is the lord of the old seat. FROM: the castaway.
+character_event = {
+	id = castaway.41
+	desc = EVTDESCcastaway41
+	picture = GFX_evt_merchant_ship_at_sea_republic
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # castaway.40
+
+	option = { # Welcome home
+		name = EVTOPTAcastaway41
+		castaway_hand_back_effect = yes
+		FROM = { character_event = { id = castaway.43 days = 3 } }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 5 opinion = { who = FROM value = 50 } }
+			modifier = { factor = 3 is_child_of = FROM }
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 2 trait = content }
+			modifier = { factor = 0.2 trait = greedy }
+			modifier = { factor = 0.2 trait = ambitious }
+			modifier = { factor = 0.3 NOT = { opinion = { who = FROM value = 0 } } }
+			modifier = { factor = 0 is_adult = no }
+			modifier = { factor = 0 NOT = { dynasty = FROM } }
+		}
+	}
+	option = { # The dead stay dead
+		name = EVTOPTBcastaway41
+		FROM = { character_event = { id = castaway.42 days = 3 } }
+		ai_chance = { factor = 10 }
+	}
+}
+
+# castaway.42 Turned away
+# The lord of the old seat says the drowned lord is an impostor. Raise the
+# island and the survivors for the Return of the Drowned Lord (a war on the
+# claim to the old seat's highest title, with a host of survivors and old
+# retainers that goes home at peace), or leave them the lands and keep the
+# claims.
+# Scope: ROOT is the castaway. FROM: the lord of the old seat.
+character_event = {
+	id = castaway.42
+	desc = EVTDESCcastaway42
+	picture = GFX_evt_pirate_fleet
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # castaway.41
+
+	option = { # The Return of the Drowned Lord!
+		name = EVTOPTAcastaway42
+		capital_scope = { save_event_target_as = castaway_muster }
+		spawn_unit = {
+			province = event_target:castaway_muster
+			home = event_target:castaway_muster
+			owner = ROOT
+			troops = {
+				heavy_infantry = { 400 400 }
+				light_infantry = { 600 600 }
+				archers = { 300 300 }
+			}
+			attrition = 1
+			maintenance_multiplier = 0.5
+			disband_on_peace = yes
+			cannot_inherit = yes
+			earmark = castaway_return
+		}
+		FROM = {
+			random_demesne_title = {
+				limit = {
+					has_title_flag = castaway_old_title
+					higher_tier_than = BARON
+				}
+				preferred_limit = { is_primary_holder_title = yes }
+				holder_scope = {
+					reverse_war = {
+						target = ROOT
+						casus_belli = claim
+						thirdparty_title = PREV
+					}
+				}
+			}
+		}
+		castaway_end_effect = yes
+		narrative_event = { id = castaway.50 days = 365 random = 180 }
+	}
+	option = { # Let them keep it
+		name = EVTOPTBcastaway42
+		prestige = -50
+		piety = 25
+		castaway_end_effect = yes
+		narrative_event = { id = castaway.50 days = 120 random = 120 }
+	}
+}
+
+# castaway.43 Home again
+# The old seat opens its gates. Keep the island, or grant it to the
+# companion who saved the castaway's life. The mutineer, if he is at home,
+# is thrown in the dungeon. Then the spouse (castaway.44).
+# Scope: ROOT is the castaway. FROM: the lord who handed the titles back.
+character_event = {
+	id = castaway.43
+	desc = EVTDESCcastaway43
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # castaway.41
+
+	immediate = {
+		any_courtier = {
+			limit = { has_character_flag = castaway_companion }
+			save_event_target_as = castaway_companion
+		}
+		any_character = {
+			limit = {
+				has_character_flag = castaway_mutineer
+				prisoner = no
+			}
+			imprison = ROOT
+		}
+	}
+
+	option = { # The island stays mine
+		name = EVTOPTAcastaway43
+		prestige = 100
+	}
+	option = { # The island goes to my companion
+		name = EVTOPTBcastaway43
+		trigger = {
+			castaway_holds_island_trigger = yes
+			event_target:castaway_companion = {
+				is_adult = yes
+				is_incapable = no
+			}
+		}
+		random_province = {
+			limit = { has_province_flag = castaway_island }
+			county = { event_target:castaway_companion = { grant_title = PREV } }
+			any_province_holding = {
+				limit = { holder_scope = { character = ROOT } }
+				event_target:castaway_companion = { grant_title = PREV }
+			}
+		}
+		event_target:castaway_companion = {
+			opinion = { who = ROOT modifier = opinion_grateful years = 30 }
+		}
+		prestige = 50
+	}
+	after = {
+		castaway_end_effect = yes
+		character_event = { id = castaway.44 days = 10 }
+		narrative_event = { id = castaway.50 days = 180 random = 180 }
+	}
+}
+
+# castaway.44 The suitor at the table
+# The Odyssey beat: the spouse who mourned the castaway has wed again (or
+# ended the marriage in mourning, castaway.7). String the old bow and win
+# them back, or let them keep their new life. Fires only when the spouse
+# moved on and lives.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.44
+	desc = EVTDESCcastaway44
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # castaway.43
+
+	trigger = {
+		any_character = { has_character_flag = castaway_spouse_moved_on }
+	}
+
+	immediate = {
+		random_character = {
+			limit = { has_character_flag = castaway_spouse_moved_on }
+			save_event_target_as = castaway_old_spouse
+		}
+	}
+
+	option = { # String the old bow
+		name = EVTOPTAcastaway44
+		trigger = {
+			is_married = no
+			event_target:castaway_old_spouse = { prisoner = no }
+		}
+		event_target:castaway_old_spouse = {
+			random_spouse = {
+				opinion = { who = ROOT modifier = opinion_furious years = 20 }
+				save_event_target_as = castaway_suitor
+			}
+			if = {
+				limit = { is_married = yes }
+				remove_spouse = event_target:castaway_suitor
+			}
+			add_spouse = ROOT
+			clr_character_flag = castaway_spouse_moved_on
+			if = {
+				limit = { is_ruler = no }
+				move_character = ROOT
+			}
+		}
+		prestige = 100
+	}
+	option = { # Let them be
+		name = EVTOPTBcastaway44
+		piety = 50
+		event_target:castaway_old_spouse = {
+			clr_character_flag = castaway_spouse_moved_on
+		}
+	}
+}
+
+###############################################################################
+# The last move
+###############################################################################
+
+# castaway.50 The last move
+# The grey stranger comes back for the end of the game, and the chess
+# score decides. Five good moves or more: Death concedes (a long life).
+# Two to four: a draw, Death says "later" (in old age a dragon wakes on
+# the island, castaway.60). Fewer: Death wins, and takes years off the
+# castaway's life. One who refused the game can draw at best.
+# Scope: ROOT is the castaway.
+narrative_event = {
+	id = castaway.50
+	title = EVTNAMEcastaway50
+	desc = {
+		trigger = { has_character_flag = castaway_end_win }
+		text = EVTDESCcastaway50_win
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_end_draw }
+		text = EVTDESCcastaway50_draw
+	}
+	desc = {
+		trigger = { has_character_flag = castaway_end_loss }
+		text = EVTDESCcastaway50_loss
+	}
+	picture = GFX_evt_death
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # castaway.40, castaway.42, castaway.43
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = castaway_refused }
+			if = {
+				limit = { check_variable = { which = castaway_game value = 5 } }
+				set_character_flag = castaway_end_draw
+			}
+			else = {
+				set_character_flag = castaway_end_loss
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = castaway_game value = 5 } }
+			set_character_flag = castaway_end_win
+		}
+		else_if = {
+			limit = { check_variable = { which = castaway_game value = 2 } }
+			set_character_flag = castaway_end_draw
+		}
+		else = {
+			set_character_flag = castaway_end_loss
+		}
+	}
+
+	option = { # Death tips over his king
+		name = EVTOPTAcastaway50
+		trigger = { has_character_flag = castaway_end_win }
+		add_character_modifier = { name = castaway_death_conceded duration = -1 }
+		prestige = 300
+	}
+	option = { # "Later."
+		name = EVTOPTBcastaway50
+		trigger = { has_character_flag = castaway_end_draw }
+		prestige = 100
+		custom_tooltip = { text = castaway_dragon_later_tt }
+		character_event = { id = castaway.60 days = 5475 random = 3650 }
+	}
+	option = { # Checkmate
+		name = EVTOPTCcastaway50
+		trigger = { has_character_flag = castaway_end_loss }
+		add_character_modifier = { name = castaway_deaths_due duration = -1 }
+	}
+}
+
+###############################################################################
+# The dragon of the isle
+###############################################################################
+
+# castaway.60 The dragon of the isle
+# Death's "later" comes due. In the castaway's old age a dragon wakes under
+# the island and burns the hall. Fight it as Beowulf did and die a hero (a
+# ballad and great prestige for the heir, castaway.61), or let it burn the
+# island. Only while the castaway still holds the island.
+# Scope: ROOT is the castaway.
+character_event = {
+	id = castaway.60
+	desc = EVTDESCcastaway60
+	picture = GFX_evt_dragon
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # castaway.50
+
+	trigger = {
+		castaway_holds_island_trigger = yes
+		prisoner = no
+	}
+
+	option = { # One last fight
+		name = EVTOPTAcastaway60
+		current_heir = {
+			character_event = { id = castaway.61 days = 3 }
+		}
+		prestige = 500
+		death = { death_reason = death_battle }
+	}
+	option = { # Let it burn
+		name = EVTOPTBcastaway60
+		prestige = -100
+		random_province = {
+			limit = { has_province_flag = castaway_island }
+			add_province_modifier = { name = castaway_dragon_burned years = 10 }
+		}
+	}
+}
+
+# castaway.61 The ballad of the drowned lord
+# The heir of a castaway who died fighting the island's dragon inherits
+# their song: great prestige and a ballad sung for fifty years.
+# Scope: ROOT is the heir. FROM: the dead castaway.
+character_event = {
+	id = castaway.61
+	desc = EVTDESCcastaway61
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # castaway.60
+
+	option = { # Sing it again
+		name = EVTOPTAcastaway61
+		prestige = 500
+		add_character_modifier = { name = castaway_drowned_ballad years = 50 }
+	}
+}

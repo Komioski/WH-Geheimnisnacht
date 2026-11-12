@@ -1736,3 +1736,345 @@ sea_legend_found_bloodline_effect = {
 		}
 	}
 }
+
+###############################################################################
+# The castaway's saga (phase 9, events/WHG_castaway_events.txt)
+#
+# Flags on the castaway: castaway_saga (the saga runs), castaway_playing or
+# castaway_refused (Death's game), castaway_by_mutiny (how it began), one of
+# castaway_north / _albion / _south / _lustria / _ulthuan (the island's
+# waters). Variable castaway_game: the chess score, one move per act.
+# Province flags: castaway_island, castaway_old_seat. Title flag
+# castaway_old_title on every title the castaway held at home.
+###############################################################################
+
+# A good move on Death's board.
+# Scope: the castaway.
+castaway_good_move_effect = {
+	change_variable = { which = castaway_game value = 1 }
+	custom_tooltip = { text = castaway_good_move_tt }
+}
+
+# A bad move on Death's board.
+# Scope: the castaway.
+castaway_bad_move_effect = {
+	change_variable = { which = castaway_game value = -1 }
+	custom_tooltip = { text = castaway_bad_move_tt }
+}
+
+# Finds a free island (castaway_island_trigger), flags it and notes its
+# waters on ROOT. Callers check any_province first.
+# Scope: ROOT, the castaway.
+castaway_pick_island_effect = {
+	random_province = {
+		limit = { castaway_island_trigger = yes }
+		set_province_flag = castaway_island
+		save_event_target_as = castaway_island
+		if = {
+			limit = { OR = { province_id = 1199 province_id = 1200 } }
+			ROOT = { set_character_flag = castaway_north }
+		}
+		else_if = {
+			limit = { OR = { province_id = 2479 province_id = 2520 } }
+			ROOT = { set_character_flag = castaway_albion }
+		}
+		else_if = {
+			limit = { OR = { province_id = 1781 province_id = 1764 province_id = 1765 } }
+			ROOT = { set_character_flag = castaway_lustria }
+		}
+		else_if = {
+			limit = { province_id = 1536 }
+			ROOT = { set_character_flag = castaway_ulthuan }
+		}
+		else = {
+			ROOT = { set_character_flag = castaway_south }
+		}
+	}
+}
+
+# Washed ashore, presumed drowned: every title at home goes to the heir as
+# on a death (abdicate), and on the same day the castaway takes the island,
+# so a player is never left unlanded. The island's count is the hall
+# monster's first victim: he dies, or flees to his liege's court. The
+# island stays in its liege's realm.
+# Scope: ROOT, the castaway.
+castaway_wash_ashore_effect = {
+	capital_scope = { set_province_flag = castaway_old_seat }
+	any_demesne_title = { set_title_flag = castaway_old_title }
+	any_spouse = { set_character_flag = castaway_spouse }
+	current_heir = {
+		set_character_flag = castaway_heir
+		save_event_target_as = castaway_heir
+	}
+	random_province = {
+		limit = { has_province_flag = castaway_island }
+		save_event_target_as = castaway_island
+		owner = {
+			save_event_target_as = castaway_island_count
+			if = {
+				limit = { independent = no }
+				liege = { save_event_target_as = castaway_island_liege }
+				ROOT = { set_character_flag = castaway_had_liege }
+			}
+		}
+	}
+	abdicate = yes
+	event_target:castaway_island = {
+		county = { ROOT = { grant_title = PREV } }
+		any_province_holding = {
+			limit = { holder_scope = { character = event_target:castaway_island_count } }
+			ROOT = { grant_title = PREV }
+		}
+	}
+	if = {
+		limit = {
+			has_character_flag = castaway_had_liege
+			event_target:castaway_island_liege = { character = ROOT }
+		}
+		# The island was the castaway's own vassal: it now answers to the heir.
+		set_defacto_liege = event_target:castaway_heir
+	}
+	else_if = {
+		limit = { has_character_flag = castaway_had_liege }
+		set_defacto_liege = event_target:castaway_island_liege
+	}
+	else = {
+		set_defacto_liege = THIS
+	}
+	event_target:castaway_island_count = {
+		if = {
+			limit = { is_landed = no }
+			random_list = {
+				50 = {
+					death = { death_reason = death_accident_generic_beast }
+				}
+				50 = {
+					trigger = {
+						ROOT = { has_character_flag = castaway_had_liege }
+						event_target:castaway_island_liege = { NOT = { character = ROOT } }
+					}
+					move_character = event_target:castaway_island_liege
+				}
+			}
+		}
+	}
+	add_character_modifier = { name = castaway_marooned duration = -1 }
+}
+
+# The companion who left the footprints: a native of the island's waters.
+# A Norscan in the north, an islander of Albion, a Southlander, an Amazon
+# of Lustria, an Asur off Ulthuan. Saved as event_target:castaway_companion.
+# Scope: ROOT, the castaway.
+castaway_make_companion_effect = {
+	if = {
+		limit = { has_character_flag = castaway_north }
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			culture = fjarmann
+			religion = norscan_gods
+			female = no
+			age = 24
+			attributes = { martial = 8 }
+		}
+	}
+	else_if = {
+		limit = { has_character_flag = castaway_albion }
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			culture = albion_albany
+			religion = old_faith
+			female = no
+			age = 24
+			attributes = { martial = 7 learning = 6 }
+		}
+	}
+	else_if = {
+		limit = { has_character_flag = castaway_lustria }
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			culture = amazon_main
+			religion = amazon
+			female = yes
+			age = 24
+			attributes = { martial = 9 }
+		}
+	}
+	else_if = {
+		limit = { has_character_flag = castaway_ulthuan }
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			culture = caledori
+			religion = cadai
+			female = no
+			age = 60
+			attributes = { martial = 7 learning = 8 }
+		}
+	}
+	else = {
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			culture = bayaji
+			religion = akghan
+			female = no
+			age = 24
+			attributes = { martial = 7 stewardship = 6 }
+		}
+	}
+	new_character = {
+		character_event = { id = aiclean.31 } # Racial trait
+		set_character_flag = castaway_companion
+		save_event_target_as = castaway_companion
+		add_trait = hunter
+		opinion = { who = ROOT modifier = opinion_grateful years = 20 }
+	}
+}
+
+# The sorcerer of the far shore and his daughter: an exiled magister of
+# the Celestial College, or off Ulthuan an exiled mage of Saphery. Saved as
+# event_target:castaway_magister and event_target:castaway_daughter.
+# Scope: ROOT, the castaway.
+castaway_make_magister_effect = {
+	if = {
+		limit = { has_character_flag = castaway_ulthuan }
+		create_character = {
+			random_traits = no
+			dynasty = random
+			culture = caledori
+			religion = cadai
+			female = no
+			age = 420
+			attributes = { learning = 18 intrigue = 10 }
+			trait = asur_mage
+			trait = lore_high_magic
+			trait = magic_potential_3
+			trait = proud
+			trait = scholar
+		}
+	}
+	else = {
+		create_character = {
+			random_traits = no
+			dynasty = random
+			culture = reiklander
+			religion = sigmarite
+			female = no
+			age = 58
+			attributes = { learning = 18 intrigue = 10 }
+			trait = lore_heavens
+			trait = magic_potential_3
+			trait = proud
+			trait = scholar
+		}
+	}
+	new_character = {
+		character_event = { id = aiclean.31 } # Racial trait
+		set_character_flag = castaway_magister
+		save_event_target_as = castaway_magister
+	}
+	# His daughter, of his house and blood.
+	event_target:castaway_magister = {
+		ROOT = {
+			create_character = {
+				random_traits = yes
+				dynasty = PREV
+				culture = PREV
+				religion = PREV
+				female = yes
+				age = 17
+				attributes = { learning = 10 diplomacy = 8 }
+				trait = fair
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Racial trait
+				set_father = event_target:castaway_magister
+				set_character_flag = castaway_daughter
+				save_event_target_as = castaway_daughter
+			}
+		}
+	}
+}
+
+# The magister teaches the castaway: a gifted pupil who is no mage yet
+# becomes one in his lore; anyone else gains learning.
+# Scope: the castaway. event_target:castaway_magister is the teacher.
+castaway_magister_tutor_effect = {
+	if = {
+		limit = {
+			apprentice_has_gift_trigger = yes
+			is_trained_mage_trigger = no
+		}
+		event_target:castaway_magister = { save_event_target_as = mage_tutor }
+		apprentice_tutor_lore_effect = yes
+		apprentice_new_mage_effect = yes
+	}
+	else = {
+		apprentice_learning_large_effect = yes
+	}
+}
+
+# Going home: pressed claims on every title the castaway held at home, now
+# in the hands of the lord of the old seat.
+# Scope: ROOT, the castaway. event_target:castaway_home_lord is that lord.
+castaway_claim_home_effect = {
+	event_target:castaway_home_lord = {
+		any_demesne_title = {
+			limit = { has_title_flag = castaway_old_title }
+			ROOT = { add_pressed_claim = PREV }
+		}
+	}
+}
+
+# The lord of the old seat (the heir, or whoever holds it now), saved as
+# event_target:castaway_home_lord.
+# Scope: ROOT, the castaway.
+castaway_find_home_lord_effect = {
+	random_province = {
+		limit = { has_province_flag = castaway_old_seat }
+		owner = { save_event_target_as = castaway_home_lord }
+	}
+}
+
+# The castaway's heir hands the old titles back: every flagged title, the
+# vassals under them, and the heir comes to the castaway's court if left
+# landless. The castaway then answers to the heir's old liege (or none).
+# Scope: the lord of the old seat. FROM: the castaway.
+castaway_hand_back_effect = {
+	if = {
+		limit = { independent = no }
+		liege = { save_event_target_as = castaway_home_liege }
+		FROM = { set_character_flag = castaway_home_had_liege }
+	}
+	any_demesne_title = {
+		limit = { has_title_flag = castaway_old_title }
+		FROM = { grant_title = PREV }
+	}
+	any_vassal = {
+		limit = { NOT = { character = FROM } }
+		set_defacto_liege = FROM
+	}
+	FROM = {
+		if = {
+			limit = { has_character_flag = castaway_home_had_liege }
+			set_defacto_liege = event_target:castaway_home_liege
+		}
+		else = {
+			set_defacto_liege = THIS
+		}
+	}
+	if = {
+		limit = { is_landed = no }
+		move_character = FROM
+	}
+}
+
+# The saga is over: the flags that steer it go.
+# Scope: the castaway.
+castaway_end_effect = {
+	clr_character_flag = castaway_saga
+	remove_character_modifier = castaway_marooned
+}

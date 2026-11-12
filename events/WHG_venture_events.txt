@@ -24,13 +24,16 @@
 # Colonies                                  venture.40 - 41
 # The colony's year                         venture.5, venture.50 - 65
 # The Slann's answer                        venture.70 - 76
+# The Great Voyage                          venture.80 - 89
+# Reputations                               venture.90
 #
 # Fired from: venture.1 from the decisions venture_sponsor_expedition and
 # venture_lead_expedition (decisions/WHG_venture_decisions.txt); venture.30
 # from venture_chart_coast; venture.40 from the Colonial Charter war
 # (coastal_colonization, common/cb_types/wh_cb_types.txt); venture.5 from
 # on_startup; venture.50 from on_yearly_pulse; venture.70 from
-# on_five_year_pulse. The game rule
+# on_five_year_pulse; venture.80 from venture_great_voyage and venture.90
+# from venture_choose_reputation. The game rule
 # warhammer_venture_lead decides whether players may lead in person (on
 # by default).
 # Scripted triggers: common/scripted_triggers/WHG_venture_triggers.txt
@@ -39,6 +42,7 @@
 # Modifiers: common/event_modifiers/WHG_venture_modifiers.txt
 # Colony buildings: common/buildings/WHG_venture_colony_buildings.txt
 # Artifacts: common/artifacts/WHG_venture_artifacts.txt
+# Bloodlines: common/bloodlines/WHG_venture_bloodlines.txt
 # Saved: the expedition's flags and the variable venture_odds (see
 #   WHG_venture_effects.txt), cleared by venture_clear_effect; the
 #   variables venture_deeds (for the Great Voyage) and venture_slann_wrath
@@ -2238,6 +2242,583 @@ character_event = {
 				set_character_flag = venture_found_temple_gold
 				add_artifact = temple_city_gold
 			}
+		}
+	}
+}
+
+###############################################################################
+# The Great Voyage
+###############################################################################
+
+# venture.80 Past the edge of every chart
+# A Master Venturer with six deeds plans the Great Voyage: west past
+# Lustria to the edge of the world, east round the Southlands to Ind and
+# Cathay by sea, or north through the ice past Naggaroth. Each route can
+# be sailed once a game.
+# Scope: ROOT is the Venturer (venture_great_voyage).
+narrative_event = {
+	id = venture.80
+	title = EVTNAMEventure80
+	desc = EVTDESCventure80
+	picture = GFX_evt_questing_ocean
+
+	is_triggered_only = yes # venture_great_voyage
+
+	option = { # West
+		name = EVTOPTAventure80
+		trigger = { NOT = { has_global_flag = venture_voyage_west_sailed } }
+		set_global_flag = venture_voyage_west_sailed
+		set_character_flag = venture_gv_west
+		character_event = { id = venture.81 }
+		ai_chance = { factor = 40 }
+	}
+	option = { # East
+		name = EVTOPTBventure80
+		trigger = { NOT = { has_global_flag = venture_voyage_east_sailed } }
+		set_global_flag = venture_voyage_east_sailed
+		set_character_flag = venture_gv_east
+		character_event = { id = venture.81 }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 venture_voice_araby_trigger = yes }
+			modifier = { factor = 3 venture_voice_east_trigger = yes }
+		}
+	}
+	option = { # North
+		name = EVTOPTCventure80
+		trigger = { NOT = { has_global_flag = venture_voyage_north_sailed } }
+		set_global_flag = venture_voyage_north_sailed
+		set_character_flag = venture_gv_north
+		character_event = { id = venture.81 }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 venture_voice_norse_trigger = yes }
+			modifier = { factor = 2 venture_voice_dawi_trigger = yes }
+			modifier = { factor = 2 venture_voice_asur_trigger = yes }
+		}
+	}
+}
+
+# venture.81 Who commands?
+# Lead the Great Voyage in person (players under the game rule
+# warhammer_venture_lead), or send the best captain at court. The legend
+# and the bloodline are the Venturer's either way.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.81
+	desc = EVTDESCventure81
+	picture = GFX_evt_merchant_ship_at_sea_republic
+
+	is_triggered_only = yes # venture.80
+
+	option = { # I will command
+		name = EVTOPTAventure81
+		trigger = {
+			venture_may_lead_trigger = yes
+			is_adult = yes
+			is_ill = no
+		}
+		set_character_flag = venture_leading
+		add_character_modifier = { name = venture_on_great_voyage days = 730 }
+		character_event = { id = venture.82 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 0.3 age = 60 }
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0 trait = craven }
+		}
+	}
+	option = { # Send the best captain
+		name = EVTOPTBventure81
+		venture_pick_captain_effect = yes
+		character_event = { id = venture.82 }
+		ai_chance = { factor = 50 }
+	}
+}
+
+# venture.82 The fleet sails (hidden)
+# Sets the voyage's odds and sends three trials (the edge of the charts,
+# a strange land, the crew at the end of its rope) over some eighteen
+# months, then the reckoning (venture.86) at about two years.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.82
+	hide_window = yes
+
+	is_triggered_only = yes # venture.81
+
+	immediate = {
+		set_character_flag = venture_great_voyage_out
+		set_character_flag = venture_expedition_out
+		add_character_modifier = { name = venture_expedition_cd years = 5 }
+		set_variable = { which = venture_odds value = 0 }
+		if = {
+			limit = { has_artifact = venture_navigators_compass }
+			change_variable = { which = venture_odds value = 1 }
+		}
+		if = {
+			limit = { has_character_modifier = venture_fresh_charts }
+			change_variable = { which = venture_odds value = 1 }
+		}
+		if = {
+			limit = {
+				OR = {
+					AND = {
+						venture_leading_trigger = yes
+						OR = { trait = adventurer martial = 16 }
+					}
+					AND = {
+						venture_leading_trigger = no
+						event_target:venture_captain = { OR = { trait = adventurer martial = 16 } }
+					}
+				}
+			}
+			change_variable = { which = venture_odds value = 1 }
+		}
+		character_event = { id = venture.83 days = 120 random = 60 }
+		character_event = { id = venture.84 days = 300 random = 60 }
+		character_event = { id = venture.85 days = 480 random = 60 }
+		character_event = { id = venture.86 days = 680 random = 40 }
+	}
+}
+
+# venture.83 The edge of the charts
+# West: the windless Sea of Dreams, where ships rot in the weed. East: the
+# storms off the Southlands' last cape. North: the ice that closes behind
+# the fleet. Gamble on pushing through, or pay to do it the slow way.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.83
+	desc = {
+		trigger = { has_character_flag = venture_gv_west }
+		text = EVTDESCventure83_west
+	}
+	desc = {
+		trigger = { has_character_flag = venture_gv_east }
+		text = EVTDESCventure83_east
+	}
+	desc = {
+		trigger = { has_character_flag = venture_gv_north }
+		text = EVTDESCventure83_north
+	}
+	picture = {
+		trigger = { has_character_flag = venture_gv_north }
+		picture = GFX_evt_elf_winter
+	}
+	picture = {
+		trigger = { NOT = { has_character_flag = venture_gv_north } }
+		picture = GFX_evt_ship_storm
+	}
+
+	is_triggered_only = yes # venture.82
+
+	trigger = { has_character_flag = venture_great_voyage_out }
+
+	option = { # Push through
+		name = EVTOPTAventure83
+		random_list = {
+			50 = {
+				custom_tooltip = { text = venture_gamble_won_tt }
+				venture_odds_up_effect = yes
+				venture_odds_up_effect = yes
+			}
+			50 = {
+				custom_tooltip = { text = venture_gamble_lost_tt }
+				venture_odds_down_effect = yes
+				venture_odds_down_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+	option = { # The slow way
+		name = EVTOPTBventure83
+		trigger = { wealth = 150 }
+		wealth = -150
+		venture_odds_up_effect = yes
+		ai_chance = { factor = 60 }
+	}
+}
+
+# venture.84 A strange land
+# West: an island of black pyramids older than the Slann. East: the court
+# of a king of Ind who has never heard of the Old World. North: a hall of
+# the dead Norse, or a drowned Asur colony of Lothlakh, under the ice. Trade
+# and parley, take what is there, or (a learned leader in person) read its
+# secrets.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.84
+	desc = {
+		trigger = { has_character_flag = venture_gv_west }
+		text = EVTDESCventure84_west
+	}
+	desc = {
+		trigger = { has_character_flag = venture_gv_east }
+		text = EVTDESCventure84_east
+	}
+	desc = {
+		trigger = { has_character_flag = venture_gv_north }
+		text = EVTDESCventure84_north
+	}
+	picture = {
+		trigger = { has_character_flag = venture_gv_west }
+		picture = GFX_evt_jungle_ruins3
+	}
+	picture = {
+		trigger = { has_character_flag = venture_gv_east }
+		picture = GFX_evt_feast
+	}
+	picture = {
+		trigger = { has_character_flag = venture_gv_north }
+		picture = GFX_evt_norscan_village
+	}
+
+	is_triggered_only = yes # venture.82
+
+	trigger = { has_character_flag = venture_great_voyage_out }
+
+	option = { # Parley and trade
+		name = EVTOPTAventure84
+		trigger = { wealth = 100 }
+		wealth = -100
+		prestige = 50
+		venture_odds_up_effect = yes
+		ai_chance = { factor = 40 }
+	}
+	option = { # Take what is there
+		name = EVTOPTBventure84
+		wealth = 250
+		venture_odds_down_effect = yes
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+	option = { # Read its secrets
+		name = EVTOPTCventure84
+		trigger = {
+			venture_leading_trigger = yes
+			learning = 14
+		}
+		venture_odds_up_effect = yes
+		venture_odds_up_effect = yes
+		ai_chance = { factor = 80 }
+	}
+}
+
+# venture.85 The end of the rope
+# Two years from home, the crew has had enough. Hold them by force (a hard
+# leader keeps them, a soft one loses half), talk them round (a silver
+# tongue in person), or turn for home now and save what can be saved.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.85
+	desc = {
+		trigger = { venture_leading_trigger = yes }
+		text = EVTDESCventure85_lead
+	}
+	desc = {
+		trigger = { venture_leading_trigger = no }
+		text = EVTDESCventure85_letter
+	}
+	picture = GFX_evt_pirate_crew
+
+	is_triggered_only = yes # venture.82
+
+	trigger = { has_character_flag = venture_great_voyage_out }
+
+	option = { # Hold them by force
+		name = EVTOPTAventure85
+		if = {
+			limit = {
+				OR = {
+					AND = {
+						venture_leading_trigger = yes
+						martial = 14
+					}
+					AND = {
+						venture_leading_trigger = no
+						event_target:venture_captain = { martial = 14 }
+					}
+				}
+			}
+			venture_odds_up_effect = yes
+		}
+		else = {
+			venture_odds_down_effect = yes
+			venture_odds_down_effect = yes
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 martial = 14 }
+		}
+	}
+	option = { # Talk them round
+		name = EVTOPTBventure85
+		trigger = {
+			venture_leading_trigger = yes
+			diplomacy = 14
+		}
+		venture_odds_up_effect = yes
+		ai_chance = { factor = 80 }
+	}
+	option = { # Turn for home
+		name = EVTOPTCventure85
+		set_character_flag = venture_turned_back
+		custom_tooltip = { text = venture_turn_back_tt }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = craven }
+			modifier = { factor = 0 trait = brave }
+		}
+	}
+}
+
+# venture.86 The reckoning of the Great Voyage (hidden)
+# A voyage that turned back comes home broken (venture.89). Otherwise, out
+# of a hundred: 40 come home in glory (venture.87), 35 are lost
+# (venture.88), 25 come home broken; the odds shift every share. A sent
+# captain who died on the way loses the voyage.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.86
+	hide_window = yes
+
+	is_triggered_only = yes # venture.82
+
+	trigger = { has_character_flag = venture_great_voyage_out }
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = venture_turned_back }
+			character_event = { id = venture.89 }
+		}
+		else_if = {
+			limit = {
+				venture_leading_trigger = no
+				event_target:venture_captain = { is_alive = no }
+			}
+			character_event = { id = venture.88 }
+		}
+		else = {
+			random_list = {
+				40 = {
+					modifier = { factor = 1.25 check_variable = { which = venture_odds value = 2 } }
+					modifier = { factor = 1.25 check_variable = { which = venture_odds value = 4 } }
+					modifier = { factor = 1.25 check_variable = { which = venture_odds value = 6 } }
+					modifier = { factor = 0.6 NOT = { check_variable = { which = venture_odds value = 0 } } }
+					character_event = { id = venture.87 }
+				}
+				35 = {
+					modifier = { factor = 0.8 check_variable = { which = venture_odds value = 2 } }
+					modifier = { factor = 0.8 check_variable = { which = venture_odds value = 4 } }
+					modifier = { factor = 0.8 check_variable = { which = venture_odds value = 6 } }
+					modifier = { factor = 1.3 NOT = { check_variable = { which = venture_odds value = 0 } } }
+					character_event = { id = venture.88 }
+				}
+				25 = {
+					character_event = { id = venture.89 }
+				}
+			}
+		}
+	}
+}
+
+# venture.87 The Great Voyage comes home
+# The fleet comes home from past the edge of the world. The Venturer
+# founds the bloodline of the route, takes a fortune and the name of an
+# explorer, and is remembered forever.
+# Scope: ROOT is the Venturer.
+narrative_event = {
+	id = venture.87
+	title = EVTNAMEventure87
+	desc = {
+		trigger = { has_character_flag = venture_gv_west }
+		text = EVTDESCventure87_west
+	}
+	desc = {
+		trigger = { has_character_flag = venture_gv_east }
+		text = EVTDESCventure87_east
+	}
+	desc = {
+		trigger = { has_character_flag = venture_gv_north }
+		text = EVTDESCventure87_north
+	}
+	picture = GFX_evt_adventurers
+
+	is_triggered_only = yes # venture.86
+
+	option = {
+		name = EVTOPTAventure87
+		custom_tooltip = {
+			text = found_bloodline_tt
+			hidden_effect = {
+				if = {
+					limit = { has_character_flag = venture_gv_west }
+					create_bloodline = { type = venture_legend_west }
+				}
+				else_if = {
+					limit = { has_character_flag = venture_gv_east }
+					create_bloodline = { type = venture_legend_east }
+				}
+				else = {
+					create_bloodline = { type = venture_legend_north }
+				}
+			}
+		}
+		wealth = 2000
+		prestige = 1000
+		add_society_currency_massive_effect = yes
+		venture_deed_effect = yes
+		venture_deed_effect = yes
+		venture_deed_effect = yes
+		if = {
+			limit = { NOT = { has_nickname = yes } }
+			give_nickname = nick_the_explorer
+		}
+		add_character_modifier = { name = venture_famed_explorer years = 30 }
+		venture_compass_effect = yes
+		venture_great_voyage_clear_effect = yes
+	}
+}
+
+# venture.88 Lost past the edge of the world
+# The Great Voyage never comes home. A Venturer who led it is gone (the
+# heir inherits the legend, and some prestige); a sponsor loses the
+# captain and the fortune. The route stays open for another to try.
+# Scope: ROOT is the Venturer.
+narrative_event = {
+	id = venture.88
+	title = EVTNAMEventure88
+	desc = {
+		trigger = { venture_leading_trigger = yes }
+		text = EVTDESCventure88_lead
+	}
+	desc = {
+		trigger = { venture_leading_trigger = no }
+		text = EVTDESCventure88_sponsor
+	}
+	picture = GFX_evt_ship_storm
+
+	is_triggered_only = yes # venture.86
+
+	option = {
+		name = EVTOPTAventure88
+		venture_great_voyage_reopen_effect = yes
+		if = {
+			limit = { venture_leading_trigger = yes }
+			if = {
+				limit = { current_heir = { always = yes } }
+				current_heir = { prestige = 250 }
+			}
+			venture_great_voyage_clear_effect = yes
+			death = { death_reason = death_missing }
+		}
+		else = {
+			prestige = -50
+			if = {
+				limit = { event_target:venture_captain = { is_alive = yes } }
+				event_target:venture_captain = { death = { death_reason = death_missing } }
+			}
+			venture_great_voyage_clear_effect = yes
+		}
+	}
+}
+
+# venture.89 Home, broken
+# The Great Voyage comes home with a handful of men, having seen things
+# past the edge of the charts that no one believes. Great prestige and
+# deeds, no bloodline; the route stays open.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.89
+	desc = EVTDESCventure89
+	picture = GFX_evt_pirate_ship
+
+	is_triggered_only = yes # venture.86
+
+	option = {
+		name = EVTOPTAventure89
+		venture_great_voyage_reopen_effect = yes
+		prestige = 300
+		venture_deed_effect = yes
+		venture_deed_effect = yes
+		if = {
+			limit = { venture_leading_trigger = yes }
+			random_list = {
+				50 = { add_trait = wounded }
+				50 = { add_trait = ill }
+			}
+		}
+		venture_great_voyage_clear_effect = yes
+	}
+}
+
+###############################################################################
+# Reputations
+###############################################################################
+
+# venture.90 What the ports say
+# A Master Venturer chooses a reputation (venture_choose_reputation):
+# Conqueror, Merchant Prince, Scholar or Saviour. Ten years between
+# changes.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.90
+	desc = EVTDESCventure90
+	picture = GFX_evt_adventurers
+
+	is_triggered_only = yes # venture_choose_reputation
+
+	immediate = {
+		set_character_flag = venture_reputation_chosen
+	}
+
+	option = { # Conqueror
+		name = EVTOPTAventure90
+		trigger = { NOT = { has_character_modifier = venture_rep_conqueror } }
+		venture_clear_reputation_effect = yes
+		add_character_modifier = { name = venture_rep_conqueror duration = -1 }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 2 martial = 14 }
+			modifier = { factor = 2 trait = wroth }
+		}
+	}
+	option = { # Merchant Prince
+		name = EVTOPTBventure90
+		trigger = { NOT = { has_character_modifier = venture_rep_merchant } }
+		venture_clear_reputation_effect = yes
+		add_character_modifier = { name = venture_rep_merchant duration = -1 }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 2 stewardship = 14 }
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+	option = { # Scholar
+		name = EVTOPTCventure90
+		trigger = { NOT = { has_character_modifier = venture_rep_scholar } }
+		venture_clear_reputation_effect = yes
+		add_character_modifier = { name = venture_rep_scholar duration = -1 }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 2 learning = 14 }
+			modifier = { factor = 2 trait = scholar }
+		}
+	}
+	option = { # Saviour
+		name = EVTOPTDventure90
+		trigger = { NOT = { has_character_modifier = venture_rep_saviour } }
+		venture_clear_reputation_effect = yes
+		add_character_modifier = { name = venture_rep_saviour duration = -1 }
+		ai_chance = {
+			factor = 25
+			modifier = { factor = 2 diplomacy = 14 }
+			modifier = { factor = 2 trait = kind }
 		}
 	}
 }

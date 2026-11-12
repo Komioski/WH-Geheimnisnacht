@@ -19,16 +19,21 @@
 # alive in our 2010 history appear by name (Luthor Harkon, Lokhir
 # Fellheart, Duriath Helbane, the jarl of Skeggi).
 #
-# Setup                                    seas.1
+# Setup: sea lords, the Black Arks sail    seas.1-2
 # Real sailing hook                        seas.5
 # Set Out: heading and quay omens          seas.10-16
 # Encounter roller and homecoming          seas.18-19
 # Encounters at sea                        seas.20-31
 # Digging up buried treasure               seas.34
+# Flagships and raiders                    seas.40-43
+# The Black Arks                           seas.50-65
 #
 # Fired from: seas.1 on_startup (wh_on_actions.txt); seas.5 from naval.1
 # (an army at sea); seas.10 from the sea_set_out decision
-# (decisions/WHG_sea_decisions.txt).
+# (decisions/WHG_sea_decisions.txt); seas.40 - 41 and seas.55 from
+# on_five_year_pulse; seas.42 - 43, 50, 52 from the flagship, raider and ark
+# decisions; seas.59 - 60 from on_war_started; seas.64 from on_yearly_pulse;
+# seas.65 from on_death.
 # Scripted triggers: common/scripted_triggers/WHG_sea_triggers.txt
 # Scripted effects: common/scripted_effects/WHG_sea_effects.txt
 # Voices: localisation/customizable_localisation/WHG_sea_voices.txt
@@ -60,6 +65,28 @@ character_event = {
 	immediate = {
 		set_global_flag = sea_lords_found
 		sea_find_named_lords_effect = yes
+		character_event = { id = seas.2 days = 1 }
+	}
+}
+
+# seas.2 The Black Arks set sail (hidden)
+# Once a game, a day after the start: eleven of the sixteen Black Arks are
+# given captains (sea_ark_startup_effect), five stay in the Witch King's
+# reserve.
+# Scope: ROOT is the player who fired seas.1.
+character_event = {
+	id = seas.2
+	hide_window = yes
+
+	is_triggered_only = yes # seas.1
+
+	trigger = {
+		NOT = { has_global_flag = sea_arks_launched }
+	}
+
+	immediate = {
+		set_global_flag = sea_arks_launched
+		sea_ark_startup_effect = yes
 	}
 }
 
@@ -570,6 +597,22 @@ character_event = {
 						}
 					}
 					character_event = { id = seas.31 }
+				}
+				3 = { # A Black Ark adrift (Druchii without an ark)
+					trigger = {
+						sea_voice_druchii_trigger = yes
+						is_landed = yes
+						sea_has_black_ark_trigger = no
+						sea_ark_in_reserve_trigger = yes
+						OR = {
+							has_character_flag = sea_in_naggaroth
+							has_character_flag = sea_in_chaos
+							has_character_flag = sea_in_western
+							has_character_flag = sea_in_ulthuan
+						}
+					}
+					modifier = { factor = 2 society_rank >= 3 }
+					character_event = { id = seas.51 }
 				}
 			}
 			if = {
@@ -1819,5 +1862,410 @@ character_event = {
 	option = {
 		name = EVTOPTAseas43
 		sea_spawn_raiders_effect = yes
+	}
+}
+
+###############################################################################
+# The Black Arks
+###############################################################################
+
+# seas.50 The Witch King's answer
+# A Corsair has petitioned Naggarond for an ark (sea_attain_black_ark). The
+# Witch King grants one from the reserve, or keeps the gift and says not
+# yet. Fame and rank sway him; there is nothing to grant when the reserve is
+# empty.
+# Scope: ROOT is the petitioner.
+character_event = {
+	id = seas.50
+	desc = {
+		text = EVTDESCseas50_granted
+		trigger = { has_character_flag = sea_ark_petition_granted }
+	}
+	desc = {
+		text = EVTDESCseas50_refused
+		trigger = { NOT = { has_character_flag = sea_ark_petition_granted } }
+	}
+	picture = GFX_evt_dark_elf_black_ark
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # sea_attain_black_ark decision
+
+	immediate = {
+		if = {
+			limit = { sea_ark_in_reserve_trigger = yes }
+			random_list = {
+				60 = {
+					modifier = { factor = 1.5 society_rank >= 4 }
+					modifier = { factor = 1.3 prestige = 1500 }
+					modifier = { factor = 1.3 martial = 15 }
+					modifier = { factor = 0.6 NOT = { prestige = 500 } }
+					set_character_flag = sea_ark_petition_granted
+				}
+				40 = { }
+			}
+		}
+	}
+
+	option = { # The ark is mine
+		name = EVTOPTAseas50
+		trigger = { has_character_flag = sea_ark_petition_granted }
+		sea_grant_reserve_ark_effect = yes
+		prestige = 100
+	}
+	option = { # I will be patient
+		name = EVTOPTBseas50
+		trigger = { NOT = { has_character_flag = sea_ark_petition_granted } }
+		custom_tooltip = { text = sea_ark_petition_refused_tt }
+	}
+
+	after = {
+		clr_character_flag = sea_ark_petition_granted
+	}
+}
+
+# seas.51 A Black Ark adrift
+# On a voyage a Druchii captain without an ark comes upon one from the
+# reserve, drifting with no fleetmaster: dead of plague, of mutiny, or of
+# something worse below decks. Board her and she is yours.
+# Scope: ROOT is the captain (seas.18).
+character_event = {
+	id = seas.51
+	desc = EVTDESCseas51
+	picture = GFX_evt_dark_elf_black_ark
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Board her
+		name = EVTOPTAseas51
+		random_list = {
+			75 = {
+				modifier = { factor = 1.5 martial = 14 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				sea_grant_reserve_ark_effect = yes
+				prestige = 100
+				sea_deed_effect = yes
+			}
+			25 = {
+				modifier = { factor = 1.5 trait = craven }
+				modifier = { factor = 1.5 manann_mood_bad_trigger = yes }
+				custom_tooltip = { text = sea_ark_adrift_lost_tt }
+				random = { chance = 50 add_trait = wounded }
+			}
+		}
+		ai_chance = { factor = 90 }
+	}
+	option = { # Leave the cursed thing to the sea
+		name = EVTOPTBseas51
+		manann_mood_up_effect = yes
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 trait = craven }
+		}
+	}
+}
+
+# seas.52 The challenge for an ark
+# A Corsair Lord has challenged another captain for their ark (sea_seize_
+# black_ark): take her by storm, or buy her crew. The winner keeps the ark.
+# Scope: ROOT is the challenger, FROM the ark's captain.
+character_event = {
+	id = seas.52
+	desc = EVTDESCseas52
+	picture = GFX_evt_dark_elf_corsair
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # sea_seize_black_ark decision
+
+	option = { # Storm the gates
+		name = EVTOPTAseas52
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 martial = 15 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 0.7 FROM = { martial = 15 } }
+				modifier = { factor = 0.8 FROM = { trait = brave } }
+				set_character_flag = sea_ark_challenge_won
+			}
+			50 = {
+				add_trait = wounded
+				prestige = -100
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+	option = { # Buy her crew
+		name = EVTOPTBseas52
+		trigger = { wealth = 150 }
+		wealth = -150
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 intrigue = 15 }
+				modifier = { factor = 1.3 trait = deceitful }
+				modifier = { factor = 0.7 FROM = { intrigue = 15 } }
+				modifier = { factor = 0.8 FROM = { trait = paranoid } }
+				set_character_flag = sea_ark_challenge_won
+			}
+			50 = {
+				prestige = -50
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = deceitful }
+		}
+	}
+
+	after = {
+		if = {
+			limit = { has_character_flag = sea_ark_challenge_won }
+			FROM = {
+				random_artifact = {
+					limit = { has_artifact_flag = black_ark }
+					transfer_artifact = { from = FROM to = ROOT }
+				}
+				if = {
+					limit = { sea_has_black_ark_trigger = no }
+					clr_character_flag = ark_captain
+				}
+				opinion = { modifier = opinion_sea_took_my_ark who = ROOT years = 50 }
+			}
+			set_character_flag = ark_captain
+			prestige = 150
+			sea_deed_effect = yes
+		}
+		else = {
+			FROM = { prestige = 50 }
+		}
+		FROM = { character_event = { id = seas.53 } }
+		clr_character_flag = sea_ark_challenge_won
+	}
+}
+
+# seas.53 The challenge is over
+# The captain hears how the challenge for their ark ended.
+# Scope: ROOT is the ark's captain (or former captain), FROM the
+# challenger.
+character_event = {
+	id = seas.53
+	desc = {
+		text = EVTDESCseas53_lost
+		trigger = { FROM = { has_character_flag = sea_ark_challenge_won } }
+	}
+	desc = {
+		text = EVTDESCseas53_kept
+		trigger = { FROM = { NOT = { has_character_flag = sea_ark_challenge_won } } }
+	}
+	picture = GFX_evt_dark_elf_corsair
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.52
+
+	option = {
+		name = EVTOPTAseas53
+	}
+}
+
+# seas.55 The Witch King remembers
+# Now and then Naggarond hands an ark from the reserve to a deserving
+# Corsair (rank 3 or more, Druchii, on the coast, without one). This keeps
+# the arks moving among the AI too.
+# Scope: ROOT is the Corsair.
+character_event = {
+	id = seas.55
+	desc = EVTDESCseas55
+	picture = GFX_evt_dark_elf_black_ark
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_five_year_pulse, list sea_black_arks
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		society_member_of = adventurers_druchii_corsairs
+		society_rank >= 3
+		sea_ark_worthy_trigger = yes
+		sea_ark_in_reserve_trigger = yes
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 society_rank >= 4 }
+		modifier = { factor = 1.5 prestige = 1500 }
+	}
+
+	option = { # Kneel and accept
+		name = EVTOPTAseas55
+		sea_grant_reserve_ark_effect = yes
+		prestige = 50
+	}
+}
+
+# seas.59 The ark sails for the defender (hidden)
+# A war has begun against a captain of the Black Arks: the ark sails
+# against the attacker.
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = seas.59
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_started
+
+	has_character_flag = ark_captain
+
+	trigger = {
+		sea_ark_can_sail_trigger = yes
+		FROM = { is_landed = yes }
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = ark_enemy }
+		sea_ark_sail_effect = yes
+	}
+}
+
+# seas.60 The ark sails for the attacker (hidden)
+# A captain of the Black Arks has started a war: the ark sails against the
+# defender. Once per war, so the ark is the opening blow.
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = seas.60
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_started
+
+	trigger = {
+		is_landed = yes
+		FROM = { sea_ark_can_sail_trigger = yes }
+	}
+
+	immediate = {
+		save_event_target_as = ark_enemy
+		FROM = { sea_ark_sail_effect = yes }
+	}
+}
+
+# seas.61 The ark awaits your command
+# A player captain is asked whether to send the ark against the enemy.
+# Scope: ROOT is the captain; event_target:ark_enemy the enemy.
+letter_event = {
+	id = seas.61
+	title = EVTTITLEseas61
+	desc = EVTDESCseas61
+	picture = GFX_evt_dark_elf_black_ark
+	is_triggered_only = yes # sea_ark_sail_effect
+
+	option = { # Send the ark
+		name = EVTOPTAseas61
+		set_character_flag = ark_at_sea
+		custom_tooltip = { text = sea_ark_sails_tt }
+		character_event = { id = seas.62 days = 30 random = 30 }
+	}
+	option = { # The ark stays at anchor
+		name = EVTOPTBseas61
+	}
+}
+
+# seas.62 The ark comes ashore (hidden)
+# If the war still runs, the ark's host lands at the enemy port nearest
+# their capital (sea_ark_land_host_effect), and the enemy is told.
+# Scope: ROOT is the captain; event_target:ark_enemy the enemy.
+character_event = {
+	id = seas.62
+	hide_window = yes
+	is_triggered_only = yes # seas.61, sea_ark_sail_effect
+
+	immediate = {
+		clr_character_flag = ark_at_sea
+		if = {
+			limit = {
+				is_alive = yes
+				sea_has_black_ark_trigger = yes
+				event_target:ark_enemy = {
+					is_alive = yes
+					is_landed = yes
+					war_with = ROOT
+				}
+			}
+			sea_ark_land_host_effect = yes
+			event_target:ark_enemy = { character_event = { id = seas.63 } }
+		}
+	}
+}
+
+# seas.63 A Black Ark off the coast
+# The enemy (a player) learns that an ark's host has come ashore.
+# Scope: ROOT is the enemy, FROM the captain.
+character_event = {
+	id = seas.63
+	desc = EVTDESCseas63
+	picture = GFX_evt_dark_elf_black_ark
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.62
+
+	trigger = { ai = no }
+
+	option = {
+		name = EVTOPTAseas63
+	}
+}
+
+# seas.64 The pens fill (hidden)
+# In a year of war a captain's ark comes home with captives
+# (slave_gain_lot_effect; two lots for a great ark).
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.64
+	hide_window = yes
+
+	is_triggered_only = yes # on_yearly_pulse
+
+	has_character_flag = ark_captain
+
+	trigger = {
+		war = yes
+		is_landed = yes
+		slave_keeper_trigger = yes
+		sea_has_black_ark_trigger = yes
+	}
+
+	immediate = {
+		slave_gain_lot_effect = yes
+		if = {
+			limit = { any_artifact = { has_artifact_flag = ark_great } }
+			slave_gain_lot_effect = yes
+		}
+	}
+}
+
+# seas.65 The fleetmaster is dead (hidden)
+# A captain of the Black Arks dies. A Corsair heir inherits the ark; any
+# other heir loses it to Naggarond, and it goes back to the reserve for the
+# Witch King to hand on.
+# Scope: ROOT is the dead captain.
+character_event = {
+	id = seas.65
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+
+	has_character_flag = ark_captain
+
+	immediate = {
+		if = {
+			limit = {
+				current_heir = { society_member_of = adventurers_druchii_corsairs }
+			}
+			current_heir = { set_character_flag = ark_captain }
+		}
+		else = {
+			sea_return_arks_effect = yes
+		}
 	}
 }

@@ -23,12 +23,14 @@
 # Charting a coast                          venture.30 - 32
 # Colonies                                  venture.40 - 41
 # The colony's year                         venture.5, venture.50 - 65
+# The Slann's answer                        venture.70 - 76
 #
 # Fired from: venture.1 from the decisions venture_sponsor_expedition and
 # venture_lead_expedition (decisions/WHG_venture_decisions.txt); venture.30
 # from venture_chart_coast; venture.40 from the Colonial Charter war
 # (coastal_colonization, common/cb_types/wh_cb_types.txt); venture.5 from
-# on_startup; venture.50 from on_yearly_pulse. The game rule
+# on_startup; venture.50 from on_yearly_pulse; venture.70 from
+# on_five_year_pulse. The game rule
 # warhammer_venture_lead decides whether players may lead in person (on
 # by default).
 # Scripted triggers: common/scripted_triggers/WHG_venture_triggers.txt
@@ -1244,6 +1246,10 @@ character_event = {
 			county = { save_event_target_as = venture_colony_title }
 		}
 		venture_pick_governor_effect = yes
+		if = { # The Old Ones' land: the Slann take note (venture.70)
+			limit = { event_target:venture_colony_site = { region = world_new_world_lustria } }
+			change_variable = { which = venture_slann_wrath value = 1 }
+		}
 	}
 
 	option = { # Hold it myself
@@ -1898,5 +1904,340 @@ character_event = {
 			add_province_modifier = { name = venture_colony_bountiful years = 5 }
 		}
 		piety = 25
+	}
+}
+
+###############################################################################
+# The Slann's answer
+###############################################################################
+
+# venture.70 The Slann remember (hidden)
+# Every five years, a Venturer who has robbed the Old Ones (plundered a
+# temple-city or a shrine, burned a village for a defaced Monument, or
+# chartered a colony in Lustria; the variable venture_slann_wrath) may
+# hear from the Slann: first an omen (venture.71), then, if the warning
+# went unheeded and the wrath stands, the answer itself: a temple host
+# against a Lustrian colony (venture.72), or skinks in the dark for a
+# Venturer with no colony there (venture.74). The more wrath, the likelier;
+# a treaty with a temple-city halves it.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.70
+	hide_window = yes
+
+	is_triggered_only = yes # on_five_year_pulse
+
+	only_playable = yes
+
+	trigger = {
+		check_variable = { which = venture_slann_wrath value = 1 }
+		NOT = { has_character_flag = venture_slann_answering }
+	}
+
+	immediate = {
+		random_list = {
+			80 = { # The Slann sleep on
+				modifier = { factor = 0.75 check_variable = { which = venture_slann_wrath value = 2 } }
+				modifier = { factor = 0.6 check_variable = { which = venture_slann_wrath value = 3 } }
+				modifier = { factor = 0.5 check_variable = { which = venture_slann_wrath value = 5 } }
+				modifier = { factor = 2 has_character_modifier = venture_slann_treaty }
+			}
+			20 = {
+				trigger = { NOT = { has_character_flag = venture_slann_warned } }
+				character_event = { id = venture.71 }
+			}
+			20 = {
+				trigger = {
+					has_character_flag = venture_slann_warned
+					any_realm_province = {
+						has_province_flag = venture_colony
+						region = world_new_world_lustria
+					}
+				}
+				set_character_flag = venture_slann_answering
+				character_event = { id = venture.72 }
+			}
+			20 = {
+				trigger = {
+					has_character_flag = venture_slann_warned
+					NOT = {
+						any_realm_province = {
+							has_province_flag = venture_colony
+							region = world_new_world_lustria
+						}
+					}
+				}
+				set_character_flag = venture_slann_answering
+				character_event = { id = venture.74 }
+			}
+		}
+	}
+}
+
+# venture.71 The omens
+# A comet, dreams of a vast, still presence behind the eyes, and a small
+# jade tablet left on the pillow. Atone with gold, give back the stolen
+# treasure, or defy the Old Ones (and be warned).
+# Scope: ROOT is the Venturer.
+narrative_event = {
+	id = venture.71
+	title = EVTNAMEventure71
+	desc = EVTDESCventure71
+	picture = GFX_evt_lustria_slann
+
+	is_triggered_only = yes # venture.70
+
+	option = { # Atone with gold
+		name = EVTOPTAventure71
+		trigger = { wealth = 150 }
+		wealth = -150
+		set_variable = { which = venture_slann_wrath value = 0 }
+		custom_tooltip = { text = venture_wrath_gone_tt }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = paranoid }
+			modifier = { factor = 0.3 trait = greedy }
+		}
+	}
+	option = { # Give back the treasure
+		name = EVTOPTBventure71
+		trigger = {
+			OR = {
+				has_artifact = venture_jungle_idol
+				has_artifact = temple_city_gold
+				has_artifact = slann_gold
+			}
+		}
+		if = {
+			limit = { has_artifact = slann_gold }
+			destroy_artifact = slann_gold
+			clr_global_flag = venture_slann_gold_taken
+		}
+		else_if = {
+			limit = { has_artifact = temple_city_gold }
+			destroy_artifact = temple_city_gold
+		}
+		else = {
+			destroy_artifact = venture_jungle_idol
+		}
+		set_variable = { which = venture_slann_wrath value = 0 }
+		custom_tooltip = { text = venture_wrath_gone_tt }
+		ai_chance = { factor = 40 }
+	}
+	option = { # Defy them
+		name = EVTOPTCventure71
+		set_character_flag = venture_slann_warned
+		prestige = 25
+		custom_tooltip = { text = venture_slann_defied_tt }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.3 trait = craven }
+		}
+	}
+}
+
+# venture.72 The temple host
+# The Slann send a host of Saurus out of the jungle against a Lustrian
+# colony of the Venturer's realm, led by an Oldblood, with the dinosaur
+# rampage war (lustrian_rampage) on the province's top liege. Eight months
+# on, venture.73 sees whether the colony stood.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.72
+	desc = EVTDESCventure72
+	picture = GFX_evt_lizardmen_saurus
+
+	is_triggered_only = yes # venture.70
+
+	immediate = {
+		random_realm_province = {
+			limit = {
+				has_province_flag = venture_colony
+				region = world_new_world_lustria
+			}
+			preferred_limit = { venture_colony_has_capitol_trigger = yes }
+			preferred_limit = { venture_colony_has_port_trigger = yes }
+			save_event_target_as = venture_colony_site
+		}
+		create_character = {
+			random_traits = yes
+			dynasty = none
+			religion = old_ones
+			culture = lizardman
+			female = yes # Lizardmen culture: a Saurus (aiclean.31)
+			age = 120
+			attributes = { martial = 14 }
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			set_character_flag = rampage_revolter
+			set_government_type = lizardmen_government
+			save_event_target_as = venture_temple_host
+			create_title = {
+				tier = DUKE
+				landless = yes
+				temporary = yes
+				rebel = yes
+				culture = THIS
+				name = "VENTURE_TEMPLE_HOST"
+				holder = THIS
+			}
+			spawn_unit = {
+				province = event_target:venture_colony_site
+				home = event_target:venture_colony_site
+				owner = THIS
+				leader = THIS
+				scaled_by_biggest_garrison = 1.2
+				troops = {
+					heavy_infantry = { 8 8 }
+					war_elephants = { 2 2 }
+					light_infantry = { 6 6 }
+				}
+				attrition = 0.5
+				disband_on_peace = yes
+			}
+			spawn_unit = {
+				province = event_target:venture_colony_site
+				home = event_target:venture_colony_site
+				owner = THIS
+				scaled_by_biggest_garrison = 0.8
+				troops = {
+					light_infantry = { 6 6 }
+					archers = { 6 6 }
+				}
+				attrition = 0.5
+				disband_on_peace = yes
+			}
+		}
+		event_target:venture_colony_site = {
+			owner = {
+				top_liege = {
+					reverse_war = {
+						target = event_target:venture_temple_host
+						casus_belli = lustrian_rampage
+						thirdparty_title = event_target:venture_colony_site
+					}
+				}
+			}
+		}
+		character_event = { id = venture.73 days = 240 }
+	}
+
+	option = {
+		name = EVTOPTAventure72
+	}
+}
+
+# venture.73 Did the colony stand? (hidden)
+# If the temple host holds the colony, it is razed (venture.75); if not,
+# the host broke on its walls (venture.76).
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.73
+	hide_window = yes
+
+	is_triggered_only = yes # venture.72
+
+	immediate = {
+		clr_character_flag = venture_slann_answering
+		clr_character_flag = venture_slann_warned
+		set_variable = { which = venture_slann_wrath value = 0 }
+		if = {
+			limit = {
+				event_target:venture_colony_site = {
+					OR = {
+						is_occupied = yes
+						NOT = { owner = { same_realm = ROOT } }
+					}
+				}
+			}
+			character_event = { id = venture.75 }
+		}
+		else = {
+			character_event = { id = venture.76 }
+		}
+	}
+}
+
+# venture.74 Skinks in the dark
+# With no colony to burn, the Slann send their answer for the Venturer
+# alone: skink assassins with poisoned darts. Double the guard and hope,
+# or trust to luck. Survive, and the Old Ones let the matter rest.
+# Scope: ROOT is the Venturer.
+character_event = {
+	id = venture.74
+	desc = EVTDESCventure74
+	picture = GFX_evt_lizardman_skink_green
+
+	is_triggered_only = yes # venture.70
+
+	option = { # Double the guard
+		name = EVTOPTAventure74
+		trigger = { wealth = 100 }
+		wealth = -100
+		venture_skink_strike_effect = yes
+		ai_chance = { factor = 70 }
+	}
+	option = { # Trust to luck
+		name = EVTOPTBventure74
+		set_character_flag = venture_unguarded
+		venture_skink_strike_effect = yes
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+}
+
+# venture.75 Ruination
+# The temple host took the colony and razed it: every colony building is
+# gone, and the colony must start again from the ashes.
+# Scope: ROOT is the Venturer. event_target:venture_colony_site.
+character_event = {
+	id = venture.75
+	desc = EVTDESCventure75
+	picture = GFX_evt_lizardmen_temple_fire
+
+	is_triggered_only = yes # venture.73
+
+	option = {
+		name = EVTOPTAventure75
+		event_target:venture_colony_site = {
+			venture_colony_raze_effect = yes
+		}
+		prestige = -100
+	}
+}
+
+# venture.76 The host broke on the walls
+# The colony stood. The Saurus host broke on its walls, and every port on
+# the coast is singing about it: great prestige, a reputation among the
+# Venturers, a chance of temple gold from the field, and the Old Ones let
+# the matter rest.
+# Scope: ROOT is the Venturer. event_target:venture_colony_site.
+character_event = {
+	id = venture.76
+	desc = EVTDESCventure76
+	picture = GFX_evt_lizardmen_dying
+
+	is_triggered_only = yes # venture.73
+
+	option = {
+		name = EVTOPTAventure76
+		prestige = 250
+		add_society_currency_major_effect = yes
+		venture_deed_effect = yes
+		add_character_modifier = { name = venture_slann_defied years = 20 }
+		if = {
+			limit = { NOT = { has_character_flag = venture_found_temple_gold } }
+			random = {
+				chance = 30
+				set_character_flag = venture_found_temple_gold
+				add_artifact = temple_city_gold
+			}
+		}
 	}
 }

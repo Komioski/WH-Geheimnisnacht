@@ -28,6 +28,7 @@
 # Flagships and raiders                    seas.40-43
 # The Black Arks                           seas.50-65
 # Reputations                              seas.70-73
+# The legend of the seas                   seas.100-116
 #
 # Fired from: seas.1 on_startup (wh_on_actions.txt); seas.5 from naval.1
 # (an army at sea); seas.10 from the sea_set_out decision
@@ -35,7 +36,10 @@
 # on_five_year_pulse; seas.42 - 43, 50, 52 from the flagship, raider and ark
 # decisions; seas.59 - 60 from on_war_started; seas.64 from on_yearly_pulse;
 # seas.65 from on_death; seas.70 from the reputation decision, seas.71
-# from on_war_started, seas.72 from on_battle_won_owner.
+# from on_war_started, seas.72 from on_battle_won_owner; seas.100 from
+# on_society_progress_full, seas.110 from on_unit_entering_province (a
+# player's legendary voyage, game rule warhammer_sea_legend), seas.116 from
+# on_death.
 # Scripted triggers: common/scripted_triggers/WHG_sea_triggers.txt
 # Scripted effects: common/scripted_effects/WHG_sea_effects.txt
 # Voices: localisation/customizable_localisation/WHG_sea_voices.txt
@@ -2466,5 +2470,520 @@ character_event = {
 
 	option = {
 		name = EVTOPTAseas73
+	}
+}
+
+###############################################################################
+# The legend of the seas
+# When a sea society's legend is full, a captain of the top rank sails a
+# legendary voyage: three famous raids on the ports of their people's route,
+# then a fight with the sea's best. The survivor founds a sea bloodline. The
+# AI's voyage is rolled; a player sails it in person, port by port, unless
+# the warhammer_sea_legend game rule says otherwise.
+###############################################################################
+
+# seas.100 The legend is full (hidden)
+# The legend of the Corsairs, the Wolves of the Sea or the Freigattur is
+# full: progress halts and a rank 4 captain is called (a player if
+# possible), with a fellow captain to sail beside them. Without one, the
+# legend starts again.
+# Scope: ROOT is the grandmaster; FROM the society.
+character_event = {
+	id = seas.100
+	hide_window = yes
+	is_triggered_only = yes # on_society_progress_full
+
+	trigger = {
+		FROM = { sea_legend_society_trigger = yes }
+	}
+
+	immediate = {
+		FROM = {
+			set_flag = block_society_progress
+			save_event_target_as = sea_legend_society
+		}
+		if = {
+			limit = {
+				FROM = {
+					any_society_member = {
+						society_rank == 4
+						is_adult = yes
+						is_inaccessible_trigger = no
+						prisoner = no
+					}
+				}
+			}
+			FROM = {
+				random_society_member = {
+					limit = {
+						society_rank == 4
+						is_adult = yes
+						is_inaccessible_trigger = no
+						prisoner = no
+					}
+					preferred_limit = { ai = no }
+					save_event_target_as = sea_legend_captain
+				}
+				random_society_member = {
+					limit = {
+						society_rank >= 3
+						NOT = { character = event_target:sea_legend_captain }
+						is_adult = yes
+						prisoner = no
+					}
+					save_event_target_as = sea_legend_mate
+				}
+			}
+			event_target:sea_legend_captain = { character_event = { id = seas.101 } }
+		}
+		else = {
+			FROM = {
+				clr_flag = block_society_progress
+				set_society_progress = 0
+			}
+		}
+	}
+}
+
+# seas.101 The legend calls
+# The captain is called to the legendary voyage of their people
+# (GetSeaLegendRoute). A player who sails in person must take the fleet to
+# each port in turn (seas.110), within five years (seas.115); otherwise the
+# voyage is rolled (seas.102). A player may refuse, and the legend passes.
+# Scope: ROOT is the captain; event_target:sea_legend_society the society,
+# event_target:sea_legend_mate a fellow captain (may be unset).
+character_event = {
+	id = seas.101
+	desc = {
+		text = EVTDESCseas101_druchii
+		trigger = { sea_voice_druchii_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas101_vampire
+		trigger = { sea_voice_vampire_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas101_orc
+		trigger = { sea_voice_orc_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas101_norse
+		trigger = { sea_voice_norse_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas101_araby
+		trigger = { sea_voice_araby_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas101_sartosan
+		trigger = { sea_voice_sartosan_trigger = yes }
+	}
+	picture = GFX_evt_pirate_fleet
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.100
+
+	option = { # We sail!
+		name = EVTOPTAseas101
+		set_character_flag = sea_legend_sailing
+		set_character_flag = sea_legend_stop_1
+		prestige = 50
+		if = {
+			limit = { sea_legend_physical_trigger = yes }
+			custom_tooltip = { text = sea_legend_physical_tt }
+			sea_legend_set_heading_effect = yes
+			character_event = { id = seas.115 days = 1825 }
+		}
+		else = {
+			custom_tooltip = { text = sea_legend_rolled_tt }
+			character_event = { id = seas.102 days = 30 random = 30 }
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { # Let another chase the legend
+		name = EVTOPTBseas101
+		trigger = { ai = no }
+		prestige = -100
+		sea_legend_end_effect = yes
+		ai_chance = { factor = 0 }
+	}
+}
+
+# seas.102 A legendary raid
+# The voyage reaches one of the route's three ports. Storm it for a great
+# prize and the legend, or take a ransom and sail on. A port held by the
+# captain's own realm is passed in peace. After the third port comes the
+# sea's best (seas.105).
+# Scope: ROOT is the captain; event_target:sea_legend_port is set here.
+character_event = {
+	id = seas.102
+	desc = {
+		text = EVTDESCseas102_friendly
+		trigger = { event_target:sea_legend_port = { owner = { same_realm = ROOT } } }
+	}
+	desc = {
+		text = EVTDESCseas102
+		trigger = { event_target:sea_legend_port = { NOT = { owner = { same_realm = ROOT } } } }
+	}
+	picture = GFX_evt_pirate_port
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.101, seas.102, seas.110
+
+	trigger = { has_character_flag = sea_legend_sailing }
+
+	immediate = {
+		if = {
+			limit = { is_in_society = yes }
+			society = { save_event_target_as = sea_legend_society }
+		}
+		sea_legend_save_port_effect = yes
+		sea_legend_clear_heading_effect = yes
+	}
+
+	option = { # Storm the harbour!
+		name = EVTOPTAseas102
+		trigger = { event_target:sea_legend_port = { NOT = { owner = { same_realm = ROOT } } } }
+		random_list = {
+			70 = {
+				modifier = { factor = 1.5 martial = 15 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				modifier = { factor = 1.3 event_target:sea_legend_mate = { is_alive = yes } }
+				sea_take_prize_large_effect = yes
+				sea_dread_bonus_effect = yes
+				prestige = 100
+			}
+			30 = {
+				modifier = { factor = 1.5 trait = craven }
+				modifier = { factor = 1.3 manann_mood_bad_trigger = yes }
+				sea_take_prize_small_effect = yes
+				add_trait = wounded
+			}
+		}
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+	option = { # Take the ransom and sail on
+		name = EVTOPTBseas102
+		trigger = { event_target:sea_legend_port = { NOT = { owner = { same_realm = ROOT } } } }
+		sea_take_prize_effect = yes
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 2 trait = craven }
+		}
+	}
+	option = { # A friendly harbour: take on water and sail on
+		name = EVTOPTCseas102
+		trigger = { event_target:sea_legend_port = { owner = { same_realm = ROOT } } }
+		manann_mood_up_effect = yes
+	}
+
+	after = {
+		if = {
+			limit = { has_character_flag = sea_legend_stop_3 }
+			clr_character_flag = sea_legend_stop_3
+			character_event = { id = seas.105 days = 20 random = 20 }
+		}
+		else_if = {
+			limit = { has_character_flag = sea_legend_stop_2 }
+			clr_character_flag = sea_legend_stop_2
+			set_character_flag = sea_legend_stop_3
+			if = {
+				limit = { sea_legend_physical_trigger = yes }
+				sea_legend_set_heading_effect = yes
+			}
+			else = {
+				character_event = { id = seas.102 days = 40 random = 40 }
+			}
+		}
+		else = {
+			clr_character_flag = sea_legend_stop_1
+			set_character_flag = sea_legend_stop_2
+			if = {
+				limit = { sea_legend_physical_trigger = yes }
+				sea_legend_set_heading_effect = yes
+			}
+			else = {
+				character_event = { id = seas.102 days = 40 random = 40 }
+			}
+		}
+	}
+}
+
+# seas.105 The sea's best
+# At the end of the route the sea sends its champion: an Imperial admiral, a
+# Sea Lord of Ulthuan, a sea dragon or a kraken (never the captain's own
+# people). Win, and the legend is made; lose, and the sea may keep the
+# captain.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.105
+	desc = {
+		text = EVTDESCseas105_admiral
+		trigger = { has_character_flag = sea_legend_foe_admiral }
+	}
+	desc = {
+		text = EVTDESCseas105_sealord
+		trigger = { has_character_flag = sea_legend_foe_sealord }
+	}
+	desc = {
+		text = EVTDESCseas105_dragon
+		trigger = { has_character_flag = sea_legend_foe_dragon }
+	}
+	desc = {
+		text = EVTDESCseas105_kraken
+		trigger = { has_character_flag = sea_legend_foe_kraken }
+	}
+	picture = GFX_evt_naval_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.102
+
+	immediate = {
+		random_list = {
+			30 = {
+				trigger = { sea_can_meet_imperial_trigger = yes }
+				modifier = { factor = 2 sea_voice_norse_trigger = yes }
+				modifier = { factor = 2 sea_voice_orc_trigger = yes }
+				set_character_flag = sea_legend_foe_admiral
+			}
+			30 = {
+				trigger = { sea_can_meet_asur_trigger = yes }
+				modifier = { factor = 3 sea_voice_druchii_trigger = yes }
+				set_character_flag = sea_legend_foe_sealord
+			}
+			20 = {
+				modifier = { factor = 2 sea_voice_norse_trigger = yes }
+				set_character_flag = sea_legend_foe_dragon
+			}
+			20 = {
+				modifier = { factor = 2 sea_voice_vampire_trigger = yes }
+				modifier = { factor = 2 sea_voice_araby_trigger = yes }
+				set_character_flag = sea_legend_foe_kraken
+			}
+		}
+	}
+
+	option = { # Meet them!
+		name = EVTOPTAseas105
+		random_list = {
+			55 = { # Victory
+				modifier = { factor = 1.5 martial = 15 }
+				modifier = { factor = 1.3 martial = 20 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				modifier = { factor = 1.3 event_target:sea_legend_mate = { is_alive = yes } }
+				modifier = { factor = 1.3 sea_has_flagship_trigger = yes }
+				modifier = { factor = 1.5 sea_has_black_ark_trigger = yes }
+				set_character_flag = sea_legend_done
+				prestige = 300
+				sea_deed_effect = yes
+				character_event = { id = seas.106 }
+			}
+			15 = { # Victory, but the captain falls
+				modifier = { factor = 0.5 trait = brave }
+				custom_tooltip = { text = sea_legend_fall_tt }
+				hidden_effect = {
+					if = {
+						limit = { current_heir = { always = yes } }
+						current_heir = {
+							save_event_target_as = sea_legend_heir
+						}
+					}
+					character_event = { id = seas.107 }
+				}
+			}
+			30 = { # Defeat
+				modifier = { factor = 1.5 trait = craven }
+				modifier = { factor = 1.3 manann_mood_bad_trigger = yes }
+				prestige = -100
+				random_list = {
+					60 = { add_maimed_trait_effect = yes }
+					40 = { add_trait = wounded }
+				}
+				custom_tooltip = { text = sea_legend_lost_tt }
+				sea_legend_end_effect = yes
+			}
+		}
+	}
+
+	after = {
+		clr_character_flag = sea_legend_foe_admiral
+		clr_character_flag = sea_legend_foe_sealord
+		clr_character_flag = sea_legend_foe_dragon
+		clr_character_flag = sea_legend_foe_kraken
+	}
+}
+
+# seas.106 The blood of a legend
+# The voyage is done and the captain founds the sea bloodline of their
+# people (sea_legend_found_bloodline_effect). The society's legend starts
+# again, and its other players hear of it (seas.108).
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.106
+	desc = {
+		text = EVTDESCseas106_druchii
+		trigger = { sea_voice_druchii_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas106_vampire
+		trigger = { sea_voice_vampire_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas106_orc
+		trigger = { sea_voice_orc_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas106_norse
+		trigger = { sea_voice_norse_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas106_araby
+		trigger = { sea_voice_araby_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas106_sartosan
+		trigger = { sea_voice_sartosan_trigger = yes }
+	}
+	picture = GFX_evt_pirate_captain
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.105
+
+	option = {
+		name = EVTOPTAseas106
+		sea_legend_found_bloodline_effect = yes
+		hidden_effect = {
+			event_target:sea_legend_society = {
+				any_society_member = {
+					limit = {
+						ai = no
+						NOT = { character = ROOT }
+					}
+					character_event = { id = seas.108 }
+				}
+			}
+		}
+		sea_legend_end_effect = yes
+	}
+}
+
+# seas.107 Victory, and the sea takes its price
+# The captain wins and dies in the winning. Their heir founds the bloodline
+# in their name.
+# Scope: ROOT is the captain; event_target:sea_legend_heir the heir.
+character_event = {
+	id = seas.107
+	desc = EVTDESCseas107
+	picture = GFX_evt_naval_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.105
+
+	option = {
+		name = EVTOPTAseas107
+		sea_legend_end_effect = yes
+		if = {
+			limit = { event_target:sea_legend_heir = { is_alive = yes } }
+			event_target:sea_legend_heir = {
+				sea_legend_found_bloodline_effect = yes
+				prestige = 200
+			}
+		}
+		death = { death_reason = death_battle }
+	}
+}
+
+# seas.108 News of a sea legend
+# A player of the same society hears that a captain has made the legend.
+# Scope: ROOT is the player; FROM the captain.
+character_event = {
+	id = seas.108
+	desc = EVTDESCseas108
+	picture = GFX_evt_pirate_ship
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.106
+
+	option = {
+		name = EVTOPTAseas108
+	}
+}
+
+# seas.110 The fleet reaches a port of the legend (hidden)
+# A player sailing the legend in person enters the next port of the route.
+# Scope: ROOT is a commander entering a province.
+character_event = {
+	id = seas.110
+	hide_window = yes
+	is_triggered_only = yes # on_unit_entering_province
+
+	has_character_flag = sea_legend_sailing
+
+	trigger = {
+		sea_legend_physical_trigger = yes
+		sea_legend_at_next_port_trigger = yes
+	}
+
+	immediate = {
+		character_event = { id = seas.102 }
+	}
+}
+
+# seas.115 The legend fades
+# Five years have passed and a player's voyage is still not done: the legend
+# fades, and the society must begin again.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.115
+	desc = EVTDESCseas115
+	picture = GFX_evt_ship_storm
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.101
+
+	trigger = {
+		has_character_flag = sea_legend_sailing
+		NOT = { has_character_flag = sea_legend_done }
+	}
+
+	immediate = {
+		if = {
+			limit = { is_in_society = yes }
+			society = { save_event_target_as = sea_legend_society }
+		}
+	}
+
+	option = {
+		name = EVTOPTAseas115
+		prestige = -100
+		sea_legend_end_effect = yes
+	}
+}
+
+# seas.116 Lost on the voyage (hidden)
+# A captain dies while sailing the legend: the society's legend is freed to
+# begin again.
+# Scope: ROOT is the dead captain.
+character_event = {
+	id = seas.116
+	hide_window = yes
+	is_triggered_only = yes # on_death
+
+	has_character_flag = sea_legend_sailing
+
+	immediate = {
+		if = {
+			limit = { is_in_society = yes }
+			society = {
+				clr_flag = block_society_progress
+				set_society_progress = 0
+			}
+		}
 	}
 }

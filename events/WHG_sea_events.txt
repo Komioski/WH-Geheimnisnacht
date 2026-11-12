@@ -27,13 +27,15 @@
 # Digging up buried treasure               seas.34
 # Flagships and raiders                    seas.40-43
 # The Black Arks                           seas.50-65
+# Reputations                              seas.70-73
 #
 # Fired from: seas.1 on_startup (wh_on_actions.txt); seas.5 from naval.1
 # (an army at sea); seas.10 from the sea_set_out decision
 # (decisions/WHG_sea_decisions.txt); seas.40 - 41 and seas.55 from
 # on_five_year_pulse; seas.42 - 43, 50, 52 from the flagship, raider and ark
 # decisions; seas.59 - 60 from on_war_started; seas.64 from on_yearly_pulse;
-# seas.65 from on_death.
+# seas.65 from on_death; seas.70 from the reputation decision, seas.71
+# from on_war_started, seas.72 from on_battle_won_owner.
 # Scripted triggers: common/scripted_triggers/WHG_sea_triggers.txt
 # Scripted effects: common/scripted_effects/WHG_sea_effects.txt
 # Voices: localisation/customizable_localisation/WHG_sea_voices.txt
@@ -731,6 +733,7 @@ character_event = {
 			}
 		}
 		slave_gain_lot_effect = yes
+		sea_dread_bonus_effect = yes
 		sea_take_prize_small_effect = yes
 		ai_chance = { factor = 40 }
 	}
@@ -1968,7 +1971,8 @@ character_event = {
 
 # seas.52 The challenge for an ark
 # A Corsair Lord has challenged another captain for their ark (sea_seize_
-# black_ark): take her by storm, or buy her crew. The winner keeps the ark.
+# black_ark): take her by storm, or buy her crew. The winner keeps the ark,
+# and Naggarond frowns on a captain who takes an ark without leave.
 # Scope: ROOT is the challenger, FROM the ark's captain.
 character_event = {
 	id = seas.52
@@ -2037,6 +2041,14 @@ character_event = {
 			set_character_flag = ark_captain
 			prestige = 150
 			sea_deed_effect = yes
+			c_naggarond = {
+				holder_scope = {
+					if = {
+						limit = { NOT = { character = ROOT } }
+						opinion = { modifier = opinion_sea_ark_without_leave who = ROOT years = 10 }
+					}
+				}
+			}
 		}
 		else = {
 			FROM = { prestige = 50 }
@@ -2237,6 +2249,7 @@ character_event = {
 
 	immediate = {
 		slave_gain_lot_effect = yes
+		sea_dread_bonus_effect = yes
 		if = {
 			limit = { any_artifact = { has_artifact_flag = ark_great } }
 			slave_gain_lot_effect = yes
@@ -2267,5 +2280,191 @@ character_event = {
 		else = {
 			sea_return_arks_effect = yes
 		}
+	}
+}
+
+###############################################################################
+# Reputations
+###############################################################################
+
+# seas.70 What the seas whisper
+# A rank 4 captain chooses their reputation (sea_choose_reputation): Dread
+# Captain (more captives, feared), Sea Wolf (raids and battles), Merchant
+# of Plunder (more gold from every prize), The Damned (the Vampire Coast:
+# the drowned rise after victories, seas.72) or the Sworn Admiral of their
+# liege (voiced per people: GetSeaAdmiral). Ten years between changes.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.70
+	desc = EVTDESCseas70
+	picture = GFX_evt_pirate_captain
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # sea_choose_reputation decision
+
+	immediate = {
+		clr_character_flag = sea_reputation_chosen
+		set_character_flag = sea_reputation_chosen
+	}
+
+	option = { # Dread Captain
+		name = EVTOPTAseas70
+		trigger = { NOT = { has_character_modifier = sea_rep_dread } }
+		sea_clear_reputation_effect = yes
+		add_character_modifier = { name = sea_rep_dread duration = -1 }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 3 trait = impaler }
+			modifier = { factor = 2 sea_voice_druchii_trigger = yes }
+		}
+	}
+	option = { # Sea Wolf
+		name = EVTOPTBseas70
+		trigger = { NOT = { has_character_modifier = sea_rep_wolf } }
+		sea_clear_reputation_effect = yes
+		add_character_modifier = { name = sea_rep_wolf duration = -1 }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = brave }
+			modifier = { factor = 2 trait = wroth }
+			modifier = { factor = 2 sea_voice_orc_trigger = yes }
+		}
+	}
+	option = { # Merchant of Plunder
+		name = EVTOPTCseas70
+		trigger = { NOT = { has_character_modifier = sea_rep_merchant } }
+		sea_clear_reputation_effect = yes
+		add_character_modifier = { name = sea_rep_merchant duration = -1 }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = greedy }
+			modifier = { factor = 2 stewardship = 12 }
+			modifier = { factor = 2 sea_voice_araby_trigger = yes }
+		}
+	}
+	option = { # The Damned
+		name = EVTOPTDseas70
+		trigger = {
+			sea_voice_vampire_trigger = yes
+			NOT = { has_character_modifier = sea_rep_damned }
+		}
+		sea_clear_reputation_effect = yes
+		add_character_modifier = { name = sea_rep_damned duration = -1 }
+		ai_chance = { factor = 60 }
+	}
+	option = { # Sworn Admiral
+		name = EVTOPTEseas70
+		trigger = {
+			independent = no
+			NOT = { has_character_modifier = sea_rep_admiral }
+		}
+		sea_clear_reputation_effect = yes
+		add_character_modifier = { name = sea_rep_admiral duration = -1 }
+		set_character_flag = sea_sworn_admiral
+		liege = {
+			opinion = { modifier = opinion_sea_sworn_admiral who = ROOT years = 10 }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = honest }
+			modifier = { factor = 2 opinion = { who = liege value = 50 } }
+			modifier = { factor = 0.2 trait = ambitious }
+		}
+	}
+}
+
+# seas.71 The admiral is called (hidden)
+# A Sworn Admiral's liege goes to war: the admiral's fleet sails with them,
+# which brings prestige and the liege's favour.
+# Scope: ROOT is the defender, FROM the attacker (the liege).
+character_event = {
+	id = seas.71
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_started
+
+	trigger = {
+		FROM = {
+			any_vassal = { has_character_flag = sea_sworn_admiral }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			any_vassal = {
+				limit = {
+					has_character_flag = sea_sworn_admiral
+					is_landed = yes
+					prisoner = no
+				}
+				prestige = 50
+				reverse_opinion = { modifier = opinion_sea_admiral_answered who = FROM years = 5 }
+				character_event = { id = seas.73 }
+			}
+		}
+	}
+}
+
+# seas.72 The drowned rise
+# The Damned win a battle, and the dead of both sides get up again and walk
+# into the sea to join the captain's crew. Once a year at most.
+# Scope: ROOT is the winning commander's owner.
+character_event = {
+	id = seas.72
+	desc = EVTDESCseas72
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_battle_won_owner
+
+	has_character_flag = sea_reputation_chosen
+
+	trigger = {
+		has_character_modifier = sea_rep_damned
+		NOT = { has_character_modifier = sea_damned_risen_cd }
+		is_landed = yes
+	}
+
+	immediate = {
+		add_character_modifier = { name = sea_damned_risen_cd years = 1 hidden = yes }
+	}
+
+	option = {
+		name = EVTOPTAseas72
+		capital_scope = { save_event_target_as = sea_damned_home }
+		spawn_unit = {
+			province = event_target:sea_damned_home
+			home = event_target:sea_damned_home
+			owner = ROOT
+			troops = {
+				light_infantry = { 400 400 }
+				heavy_infantry = { 100 100 }
+			}
+			attrition = 1
+			maintenance_multiplier = 0
+			disband_on_peace = yes
+			cannot_inherit = yes
+			earmark = sea_damned_risen
+		}
+	}
+}
+
+# seas.73 Your liege calls the fleet
+# A Sworn Admiral learns that their liege has gone to war, and the fleet
+# sails with them.
+# Scope: ROOT is the admiral, FROM the defender of seas.71.
+character_event = {
+	id = seas.73
+	desc = EVTDESCseas73
+	picture = GFX_evt_pirate_fleet
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.71
+
+	trigger = { ai = no }
+
+	option = {
+		name = EVTOPTAseas73
 	}
 }

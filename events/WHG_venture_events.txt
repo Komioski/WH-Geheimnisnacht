@@ -18,7 +18,7 @@
 #
 # The expedition is planned                 venture.1 - 3
 # The reckoning (hidden)                    venture.4
-# On the way: what the jungle sends         venture.10 - 18
+# On the way: what the jungle sends         venture.10 - 19
 # Outcomes                                  venture.20 - 25
 # Charting a coast                          venture.30 - 32
 # Colonies                                  venture.40 - 41
@@ -27,6 +27,7 @@
 # The Great Voyage                          venture.80 - 89
 # Reputations                               venture.90
 # Venturer missions                         venture.100 - 106
+# Tales: Swamp Town, the society's tales    venture.120 - 125
 #
 # Fired from: venture.1 from the decisions venture_sponsor_expedition and
 # venture_lead_expedition (decisions/WHG_venture_decisions.txt); venture.30
@@ -35,7 +36,8 @@
 # on_startup; venture.50 from on_yearly_pulse; venture.70 from
 # on_five_year_pulse; venture.80 from venture_great_voyage and venture.90
 # from venture_choose_reputation; venture.100 from seaquest.2
-# (events/WHG_sea_society_events.txt). The game rule
+# (events/WHG_sea_society_events.txt); venture.120 from on_five_year_pulse,
+# venture.125 from on_character_society_rank_up. The game rule
 # warhammer_venture_lead decides whether players may lead in person (on
 # by default).
 # Scripted triggers: common/scripted_triggers/WHG_venture_triggers.txt
@@ -313,7 +315,8 @@ character_event = {
 # venture.10 What the jungle sends (hidden)
 # Picks one trial that fits the destination and has not come yet on this
 # venture: fever, a Stegadon stampede, mutiny, a shrine, new friends,
-# Druchii riders, ice, a madman's map.
+# Druchii riders, ice, a madman's map, or a captain of the Wolves of the
+# Sea (venture.19).
 # Scope: ROOT is the Venturer.
 character_event = {
 	id = venture.10
@@ -387,6 +390,23 @@ character_event = {
 				trigger = { NOT = { has_character_flag = venture_hz_map } }
 				set_character_flag = venture_hz_map
 				character_event = { id = venture.18 }
+			}
+			10 = {
+				trigger = {
+					NOT = { has_character_flag = venture_hz_pirates }
+					adventurers_pirates = {
+						any_society_member = { venture_pirate_foe_trigger = yes }
+					}
+				}
+				set_character_flag = venture_hz_pirates
+				adventurers_pirates = {
+					random_society_member = {
+						limit = { venture_pirate_foe_trigger = yes }
+						preferred_limit = { society_rank >= 3 }
+						save_event_target_as = venture_pirate
+					}
+				}
+				character_event = { id = venture.19 }
 			}
 		}
 	}
@@ -3070,5 +3090,269 @@ character_event = {
 		clr_quest = quest_venture_charter
 		clr_quest = quest_venture_works
 		prestige = -50
+	}
+}
+
+###############################################################################
+# Tales of the Venturers
+###############################################################################
+
+# venture.120 Swamp Town (hidden)
+# Once a game, from 2064 IC: a band of gamblers and charlatans run out of
+# Port Reaver (in our lore, the Ranaldan Moritz Eulenspiegel and his
+# friends) flee south past the ruins of Cadavo and found Swamp Town on a
+# Lustrian harbour: the vilest and the safest place in Lustria to trade.
+# The founder is a generated character; the county goes to them as a free
+# colony, and the Venturers hear of it (venture.121).
+# Scope: ROOT is any playable character (on_five_year_pulse).
+character_event = {
+	id = venture.120
+	hide_window = yes
+
+	is_triggered_only = yes # on_five_year_pulse
+
+	only_playable = yes
+
+	trigger = {
+		NOT = { has_global_flag = venture_swamp_town }
+		year = 2064
+		any_province = { venture_swamp_town_site_trigger = yes }
+	}
+
+	immediate = {
+		set_global_flag = venture_swamp_town
+		random_province = {
+			limit = { venture_swamp_town_site_trigger = yes }
+			preferred_limit = {
+				any_neighbor_province = {
+					owner = {
+						OR = {
+							has_landed_title = d_port_reaver
+							has_landed_title = d_cadavo
+							any_liege = {
+								OR = {
+									has_landed_title = d_port_reaver
+									has_landed_title = d_cadavo
+								}
+							}
+						}
+					}
+				}
+			}
+			save_event_target_as = venture_colony_site
+			county = { save_event_target_as = venture_colony_title }
+		}
+		random_list = {
+			50 = {
+				create_character = {
+					random_traits = yes
+					dynasty = random
+					religion = sigmarite
+					culture = neueslander
+					female = no
+					age = 38
+					attributes = { intrigue = 12 diplomacy = 10 }
+					trait = deceitful
+					trait = gamer
+				}
+			}
+			30 = {
+				create_character = {
+					random_traits = yes
+					dynasty = random
+					religion = myrmidian
+					culture = oltremari
+					female = no
+					age = 38
+					attributes = { intrigue = 12 diplomacy = 10 }
+					trait = deceitful
+					trait = gamer
+				}
+			}
+			20 = {
+				create_character = {
+					random_traits = yes
+					dynasty = random
+					religion = myrmidian
+					culture = oltremari
+					female = yes
+					age = 38
+					attributes = { intrigue = 12 diplomacy = 10 }
+					trait = deceitful
+					trait = gamer
+				}
+			}
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # Racial trait
+			save_event_target_as = venture_swamp_founder
+			wealth = 300
+		}
+		event_target:venture_colony_title = {
+			usurp_title_plus_barony_if_unlanded = { target = event_target:venture_swamp_founder type = invasion }
+		}
+		event_target:venture_swamp_founder = { set_defacto_liege = THIS }
+		event_target:venture_colony_site = {
+			culture = event_target:venture_swamp_founder
+			set_province_flag = venture_colony
+			set_province_flag = venture_swamp_town
+			add_province_modifier = { name = venture_swamp_town duration = -1 }
+			add_province_modifier = { name = venture_new_colony years = 10 }
+		}
+		any_player = {
+			limit = {
+				OR = {
+					venture_member_trigger = yes
+					any_realm_province = { region = world_new_world_lustria }
+				}
+			}
+			character_event = { id = venture.121 days = 7 }
+		}
+	}
+}
+
+# venture.121 News of Swamp Town
+# Word reaches the Venturers and the lords of Lustria that a new colony
+# has been founded on the coast: Swamp Town.
+# Scope: ROOT is a player. event_target:venture_swamp_founder.
+character_event = {
+	id = venture.121
+	desc = EVTDESCventure121
+	picture = GFX_evt_lustria_jungle
+
+	is_triggered_only = yes # venture.120
+
+	option = {
+		name = EVTOPTAventure121
+	}
+}
+
+# venture.125 A tale of the Venturers
+# A Venturer who rises in rank hears one of the society's old tales and
+# takes its lesson to heart: Marco Colombo's treaty at Tlax (rank 2), El
+# Cadavo's three colonies (rank 3), Losteriksson's landing and Erik the
+# Lost (rank 4).
+# Scope: ROOT is the member; FROM the society.
+character_event = {
+	id = venture.125
+	desc = {
+		trigger = { society_rank == 2 }
+		text = EVTDESCventure125_colombo
+	}
+	desc = {
+		trigger = { society_rank == 3 }
+		text = EVTDESCventure125_cadavo
+	}
+	desc = {
+		trigger = { society_rank == 4 }
+		text = EVTDESCventure125_losteriksson
+	}
+	picture = GFX_evt_adventurers
+
+	is_triggered_only = yes # on_character_society_rank_up
+
+	ai = no
+
+	trigger = {
+		society_member_of = adventurers_the_league
+		society_rank >= 2
+	}
+
+	option = { # Parley first
+		name = {
+			trigger = { society_rank == 2 }
+			text = EVTOPTAventure125_colombo
+		}
+		name = {
+			trigger = { society_rank == 3 }
+			text = EVTOPTAventure125_cadavo
+		}
+		name = {
+			trigger = { society_rank == 4 }
+			text = EVTOPTAventure125_losteriksson
+		}
+		prestige = 25
+	}
+}
+
+# venture.19 Sails on the horizon
+# A pirate captain of the Wolves of the Sea finds the venture at sea. Pay
+# them off (the gold goes to the captain), fight (a hard commander wins,
+# and the pirate pays in prestige), or hire them as an escort. Never a
+# pirate of the Venturer's own dynasty.
+# Scope: ROOT is the Venturer. event_target:venture_pirate.
+character_event = {
+	id = venture.19
+	desc = {
+		trigger = { venture_leading_trigger = yes }
+		text = EVTDESCventure19_lead
+	}
+	desc = {
+		trigger = { venture_leading_trigger = no }
+		text = EVTDESCventure19_letter
+	}
+	picture = GFX_evt_pirate_fleet
+
+	is_triggered_only = yes # venture.10
+
+	option = { # Pay them off
+		name = EVTOPTAventure19
+		trigger = { wealth = 75 }
+		wealth = -75
+		event_target:venture_pirate = {
+			show_scope_change = no
+			wealth = 75
+		}
+		ai_chance = { factor = 40 }
+	}
+	option = { # Fight
+		name = EVTOPTBventure19
+		if = {
+			limit = {
+				OR = {
+					AND = {
+						venture_leading_trigger = yes
+						martial = 12
+					}
+					AND = {
+						venture_leading_trigger = no
+						event_target:venture_captain = { martial = 12 }
+					}
+				}
+			}
+			custom_tooltip = { text = venture_pirates_beaten_tt }
+			venture_odds_up_effect = yes
+			prestige = 30
+			event_target:venture_pirate = {
+				show_scope_change = no
+				prestige = -30
+			}
+		}
+		else = {
+			custom_tooltip = { text = venture_pirates_won_tt }
+			venture_odds_down_effect = yes
+			venture_odds_down_effect = yes
+			event_target:venture_pirate = {
+				show_scope_change = no
+				wealth = 50
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 martial = 12 }
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+	option = { # Hire them as an escort
+		name = EVTOPTCventure19
+		trigger = { wealth = 150 }
+		wealth = -150
+		venture_odds_up_effect = yes
+		event_target:venture_pirate = {
+			show_scope_change = no
+			wealth = 150
+			opinion = { modifier = opinion_grateful who = ROOT years = 10 }
+		}
+		ai_chance = { factor = 20 }
 	}
 }

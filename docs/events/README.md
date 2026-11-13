@@ -12,7 +12,7 @@ python3 tools/events/check_events.py events/X.txt      # every finding for one f
 python3 tools/events/pdxfmt.py events/X.txt            # reformat a file in the house style
 ```
 
-Run both before committing an event change, and commit the regenerated CSV with it.
+Run both before committing an event change, and commit the regenerated CSV with it. After a change to `common/on_actions`, also run `python3 tools/common/check_on_actions.py` (see `docs/common/README.md`).
 
 `pdxfmt.py` only changes layout: tabs, `key = value` spacing, one statement per line with short blocks kept on one line, comments kept where they were. It refuses to write a file if the code or comments would change.
 

@@ -3,7 +3,7 @@
 # Namespace: wonder (was LT in the vanilla wonder files)
 # Faction: Generic
 #
-# Part 1: names and descriptions      wonder.1 - wonder.4
+# Part 1: names and descriptions      wonder.1 - wonder.5
 #   (was LT.10000 - 10003 in LT_wonder_maintenance_events.txt)
 # Part 2: life around the wonders     wonder.50 - wonder.64
 #   (was LT.60001 - 60701 in LT_wonder_flavor_event_2.txt)
@@ -19,7 +19,7 @@
 # Part 12: the sack                   wonder.210
 #   (parts 3 - 12 were LT.20001 - 21000 in LT_wonder_flavor_events.txt)
 #
-# Fired from 00_on_actions.txt: on_wonder_stage_finish (1),
+# Fired from 00_on_actions.txt: on_startup (5), on_wonder_stage_finish (1),
 #   on_wonder_upgrade_finish (2, 4, 50, 190), on_wonder_stage_loot_finish
 #   (3, 205), on_wonder_owner_change (58), on_wonder_construction_start
 #   (120), on_wonder_loot_start (200, 201, 204), on_wonder_restore_finish
@@ -83,7 +83,11 @@ character_event = {
 		}
 		wonder_stage_completion_sound_effect = yes
 		event_target:target_wonder = {
-			if = {
+			if = { # A hold or city with a lore name keeps it
+				limit = { has_wonder_flag = wonder_lore_named }
+				event_target:target_province = { wonder_naming_and_describing_effect = yes }
+			}
+			else_if = {
 				limit = {
 					NOR = {
 						has_wonder_flag = wonder_desc_1
@@ -98,9 +102,16 @@ character_event = {
 				}
 				set_wonder_flag = wonder_desc_1
 			}
-			set_description = wonder_desc_text_update
 			if = {
-				limit = { has_custom_name = no NOT = { has_wonder_flag = is_historical } }
+				limit = { NOT = { has_wonder_flag = wonder_lore_named } }
+				set_description = wonder_desc_text_update
+			}
+			if = {
+				limit = {
+					has_custom_name = no
+					NOT = { has_wonder_flag = is_historical }
+					NOT = { has_wonder_flag = wonder_lore_named }
+				}
 				wonder_rename_effect = yes
 			}
 		}
@@ -140,6 +151,7 @@ character_event = {
 				limit = {
 					has_custom_name = no
 					NOT = { has_wonder_flag = is_historical }
+					NOT = { has_wonder_flag = wonder_lore_named }
 					OR = {
 						had_flag = { flag = wonder_name_1 years = 55 }
 						had_flag = { flag = wonder_name_2 years = 65 }
@@ -153,6 +165,7 @@ character_event = {
 			}
 			if = {
 				limit = {
+					NOT = { has_wonder_flag = wonder_lore_named }
 					OR = {
 						had_flag = { flag = wonder_desc_1 years = 15 }
 						had_flag = { flag = wonder_desc_2 years = 35 }
@@ -163,6 +176,10 @@ character_event = {
 					}
 				}
 				wonder_redescribe_effect = yes
+			}
+			if = { # A hold or city with a lore name keeps it
+				limit = { has_wonder_flag = wonder_lore_named }
+				event_target:target_province = { wonder_naming_and_describing_effect = yes }
 			}
 		}
 	}
@@ -225,6 +242,32 @@ character_event = {
 				limit = { has_wonder_upgrade = upgrade_statue_god }
 				set_description = upgrade_statue_god_desc
 			}
+		}
+	}
+}
+
+# wonder.5 Lore names at game start
+# Hidden. Once per game, every wonder in a province with a hand-written
+# entry takes its lore name and description: this is how the one Great
+# Dwarf hold wonder (wonder_dawi_hold) becomes Everpeak, Zhufbar, Barak
+# Varr and the rest, and how Altdorf, Nuln and Talabheim get their names.
+# Scope: a player.
+character_event = {
+	id = wonder.5
+	hide_window = yes
+
+	is_triggered_only = yes # on_startup
+
+	trigger = {
+		ai = no
+		NOT = { has_global_flag = wonder_lore_names_set }
+	}
+
+	immediate = {
+		set_global_flag = wonder_lore_names_set
+		any_province = {
+			limit = { has_wonder = yes }
+			wonder_naming_and_describing_effect = yes
 		}
 	}
 }
@@ -320,13 +363,16 @@ character_event = {
 
 # wonder.54 The fountain of youth
 # A ruler drinks from the fountain of the Magnificent Garden (decision,
-# once in ten years) and grows two years younger. A lunatic leaps in and
-# swallows the water the wrong way, and is two years older for it.
+# once in ten years, shared with the free drink at Ganaina, amazon.206) and
+# grows two years younger, three for one who found the Pools of Lustria
+# (lustria.93) and knows how to drink. A lunatic leaps in and swallows the
+# water the wrong way, and is two years older for it.
 # Scope: ROOT is the ruler.
 character_event = {
 	id = wonder.54
 	title = EVTNAMEwonder54
-	desc = { trigger = { is_lunatic_trigger = no } text = EVTDESCwonder54 }
+	desc = { trigger = { is_lunatic_trigger = no NOT = { has_character_flag = found_the_pools } } text = EVTDESCwonder54 }
+	desc = { trigger = { is_lunatic_trigger = no has_character_flag = found_the_pools } text = EVTDESCwonder54c }
 	desc = { trigger = { is_lunatic_trigger = yes } text = EVTDESCwonder54b }
 	picture = GFX_evt_garden
 	border = GFX_event_normal_frame_religion
@@ -343,7 +389,11 @@ character_event = {
 	option = { # Drink
 		name = EVTOPTAwonder54
 		trigger = { is_lunatic_trigger = no }
-		add_age = -2
+		if = {
+			limit = { has_character_flag = found_the_pools }
+			add_age = -3
+		}
+		else = { add_age = -2 }
 	}
 	option = { # Leap in
 		name = EVTOPTBwonder54
@@ -3123,7 +3173,8 @@ character_event = {
 }
 
 # wonder.203 A wonder is restored
-# Hidden. A restored wonder can be looted for treasure again.
+# Hidden. A restored wonder can be looted for treasure again, and a hold or
+# city with a lore name takes it back (it was "Ruins of ..." since wonder.3).
 # Scope: ROOT is the owner, FROM the wonder.
 character_event = {
 	id = wonder.203
@@ -3132,7 +3183,14 @@ character_event = {
 	is_triggered_only = yes # on_wonder_restore_finish
 
 	immediate = {
-		FROM = { clr_wonder_flag = artifact_was_looted }
+		FROM = {
+			clr_wonder_flag = artifact_was_looted
+			if = {
+				limit = { has_wonder_flag = wonder_lore_named }
+				clr_wonder_flag = was_renamed
+				location = { wonder_naming_and_describing_effect = yes }
+			}
+		}
 	}
 }
 

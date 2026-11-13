@@ -1,0 +1,4511 @@
+###############################################################################
+# WHG_magic_effects.txt: scripted effects
+# Subject: magic: the Winds, the lores, wizards, stars and seers
+#
+# A scripted effect is a named list of commands, used anywhere an effect can go
+# as "name = yes". It runs in the scope it is called from. Names are global
+# across the folder and must be unique; the load order of files does not
+# matter.
+#
+# Each entry lists the files that use it ("Used by"). Sections:
+#   Shared: used by three or more files (11)
+#   Used by magic_laws (4)
+#   Used by WHG_empire_effects (4)
+#   Used by WHG_health_events (6)
+#   Building blocks of other entries in this file (18)
+#   Used by WHG_magic_events (17)
+#   Other helpers used by one or two files (10)
+#   Not used by any live script yet: kept for content to come (4)
+###############################################################################
+
+###############################################################################
+# Shared: used by three or more files
+###############################################################################
+
+# Moves the lunacy trait to the stage the lunatic_counter variable has
+# reached: twitchy from 5, maniac from 10, raving from 20. Fires the matching
+# notice (mutate.6-8) when the stage changes. Sets the lunacy_counter_active
+# flag, the pre-trigger of the five-yearly drift (mutate.9).
+# Scope: a character.
+# Used by: WHG_health_events, WHG_character_events, WHG_praag_events +3 more
+lunacy_counter_check_effect = {
+	set_character_flag = lunacy_counter_active # lets mutate.9 find this character
+	if = {
+		limit = { check_variable = { which = "lunatic_counter" value = 20 } }
+		if = {
+			limit = { NOT = { trait = lunatic_3 } }
+			remove_trait = lunatic_1
+			remove_trait = lunatic_2
+			add_trait = lunatic_3
+			character_event = { id = mutate.6 days = 50 random = 150 } # Raving lunatic
+		}
+	}
+	else_if = {
+		limit = { check_variable = { which = "lunatic_counter" value = 10 } }
+		if = {
+			limit = { NOT = { trait = lunatic_2 } }
+			remove_trait = lunatic_1
+			remove_trait = lunatic_3
+			add_trait = lunatic_2
+			character_event = { id = mutate.7 days = 50 random = 150 } # Maniac
+		}
+	}
+	else_if = {
+		limit = { check_variable = { which = "lunatic_counter" value = 5 } }
+		if = {
+			limit = { NOT = { trait = lunatic_1 } }
+			remove_trait = lunatic_2
+			remove_trait = lunatic_3
+			add_trait = lunatic_1
+			character_event = { id = mutate.8 days = 50 random = 150 } # Twitchy
+		}
+	}
+}
+
+# Magic Pool represents how long a mage can continue casting in battle before
+# exhausting themselves
+# Used by: WHG_race_effects, WHG_magic_events, 61000_astur +10 more
+calc_magic_pool_effect = {
+	# Mostly based on magic potential, but higher magic power can stretch their power further.
+	set_variable = { which = MagicPool value = 1 }
+	if = {
+		limit = {
+			trait = magic_potential_1
+		}
+		change_variable = { which = MagicPool value = 1 }
+	}
+	else_if = {
+		limit = {
+			trait = magic_potential_2
+		}
+		change_variable = { which = MagicPool value = 3 }
+	}
+	else_if = {
+		limit = {
+			trait = magic_potential_3
+		}
+		change_variable = { which = MagicPool value = 6 }
+	}
+	else_if = {
+		limit = {
+			trait = magic_potential_4
+		}
+		change_variable = { which = MagicPool value = 10 }
+	}
+
+	if = {
+		limit = {
+			has_character_modifier = magic_power_1
+		}
+	}
+	else_if = {
+		limit = {
+			has_character_modifier = magic_power_2
+		}
+		change_variable = { which = MagicPool value = 1 }
+	}
+	else_if = {
+		limit = {
+			has_character_modifier = magic_power_3
+		}
+		change_variable = { which = MagicPool value = 2 }
+	}
+	else_if = {
+		limit = {
+			has_character_modifier = magic_power_4
+		}
+		change_variable = { which = MagicPool value = 3 }
+	}
+
+	#liche priests and tomb kings who know necromancy don't have magic potential, and a lot of them, tomb kings are already OP so will give them a tiny boost
+	if = {
+		limit = {
+			trait = khemri_liche_priest
+		}
+		change_variable = { which = MagicPool value = 1 }
+	}
+	else_if = {
+		limit = {
+			trait = khemri_tomb_king
+		}
+		change_variable = { which = MagicPool value = 2 }
+	}
+	if = {
+		limit = {
+			trait = lore_hag
+		}
+		if = {
+			limit = {
+				location = { is_winter = yes }
+
+			}
+			change_variable = { which = MagicPool value = 1 }
+		}
+	}
+
+	#Ice magic is more effective depending on climate
+	if = {
+		limit = {
+			trait = lore_ice
+		}
+		if = {
+			limit = {
+				location = { is_winter = yes }
+
+			}
+			change_variable = { which = MagicPool value = 1 }
+		}
+		if = {
+			limit = {
+				location = { climate = severe_winter }
+
+			}
+			change_variable = { which = MagicPool value = 1 }
+		}
+		else_if	= {
+			limit = {
+				location = { climate = mild_winter }
+			}
+			change_variable = { which = MagicPool value = -1 }
+		}
+		else_if	= {
+			limit = {
+				location = {
+					NOR = {
+						climate = severe_winter
+						climate = normal_winter
+						climate = mild_winter
+					}
+				}
+			}
+			change_variable = { which = MagicPool value = -2 }
+		}
+	}
+
+	#Chaos gets demons as well so they have a lower pool
+	if = {
+		limit = {
+			summons_daemons_in_battle_trigger = yes
+			check_variable = { which = MagicPool value = 2 }
+		}
+		change_variable = { which = MagicPool value = -1 }
+	}
+	if = {
+		limit = {
+			summons_undead_in_battle_trigger = yes
+			check_variable = { which = MagicPool value = 2 }
+		}
+		change_variable = { which = MagicPool value = -1 }
+	}
+
+	#Artifacts
+	if = {
+		limit = {
+			any_artifact = {
+				has_artifact_flag = armor
+				NOT = { has_artifact_flag = armoured_caster }
+				is_artifact_active = yes
+			}
+			#All armour is special mage armour for these cultures
+			NOR = {
+				culture = caledori
+				culture = sapherian
+				is_strong_trigger = yes
+				is_vampire_trigger = yes
+				trait = chaos_dwarf_sorcerer
+				trait = chaos_dwarf_daemonsmith
+			}
+		}
+		if = {
+			limit = {
+				any_artifact = {
+					has_artifact_flag = armor
+					NOT = { has_artifact_flag = armoured_caster }
+					is_artifact_active = yes
+					quality < 5
+				}
+			}
+			change_variable = { which = MagicPool value = -2 }
+		}
+		else_if = {
+			limit = {
+				any_artifact = {
+					has_artifact_flag = armor
+					NOT = { has_artifact_flag = armoured_caster }
+					is_artifact_active = yes
+					quality >= 5
+				}
+			}
+			change_variable = { which = MagicPool value = -1 }
+		}
+	}
+	if = {
+		limit = {
+			any_artifact = {
+				has_artifact_flag = power_stone
+				is_artifact_active = yes
+			}
+		}
+		change_variable = { which = MagicPool value = 2 }
+	}
+	if = {
+		limit = {
+			any_artifact = {
+				has_artifact_flag = staff_battle_magic_pool_1
+				is_artifact_active = yes
+			}
+		}
+		change_variable = { which = MagicPool value = 1 }
+	}
+	if = {
+		limit = {
+			any_artifact = {
+				has_artifact_flag = staff_battle_magic_pool_2
+				is_artifact_active = yes
+			}
+		}
+		change_variable = { which = MagicPool value = 2 }
+	}
+	if = {
+		limit = {
+			any_artifact = {
+				has_artifact_flag = staff_battle_magic_pool_3
+				is_artifact_active = yes
+			}
+		}
+		change_variable = { which = MagicPool value = 3 }
+	}
+
+	#Non Magic traits, skilled mages can will apply their powers at the right times and avoid wasting power
+	if = {
+		limit = {
+			martial < 6
+			check_variable = { which = MagicPool value = 2 }
+		}
+		change_variable = { which = MagicPool value = -1 }
+	}
+	else_if = {
+		limit = {
+			martial >= 15
+			martial <= 21
+		}
+		change_variable = { which = MagicPool value = 1 }
+	}
+	else_if = {
+		limit = {
+			martial >= 22
+			martial <= 30
+		}
+		change_variable = { which = MagicPool value = 2 }
+	}
+	else_if = {
+		limit = {
+			martial > 30
+		}
+		change_variable = { which = MagicPool value = 3 }
+	}
+	#For simplicity certain Blood dragon Vampires summoners use the same pool variable with a static number per trait they have.
+	if = {
+		limit = {
+			trait = special_char_red_duke
+		}
+		set_variable = { which = MagicPool value = 4 }
+	}
+	#For simplicity Divine magic users have fixed pools as per their rank.
+	if = {
+		limit = {
+			OR = {
+				trait = lore_ursun
+				trait = lore_ulric
+				trait = lore_taalite
+				trait = lore_sigmar
+				trait = lore_myrmidia
+				trait = lore_morr
+				trait = lore_manann
+				trait = lore_shallya
+				trait = lore_verena
+			}
+		}
+		set_variable = { which = MagicPool value = 1 }
+		trigger_switch = {
+			on_trigger = tier
+			baron = { set_variable = { which = MagicPool value = 2 } }
+			count = { set_variable = { which = MagicPool value = 3 } }
+			duke = { set_variable = { which = MagicPool value = 4 } }
+			king = { set_variable = { which = MagicPool value = 5 } }
+			emperor = { set_variable = { which = MagicPool value = 6 } }
+		}
+		if = {
+			limit = {
+				is_theocracy=no
+				is_landed=yes
+			}
+			change_variable = { which = MagicPool value = -1 }
+		}
+	}
+	#For simplicity Khorne Daemon summoners use the same pool variable with a static number per trait they have.
+	#No else_if as can have more than one trait
+	if = {
+		limit = {
+			trait = khorne_berserker
+		}
+		set_variable = { which = MagicPool value = 1 }
+	}
+	if = {
+		limit = {
+			trait = champion_khorne
+		}
+		set_variable = { which = MagicPool value = 2 }
+	}
+	if = {
+		limit = {
+			trait = chosen_khorne
+		}
+		set_variable = { which = MagicPool value = 3 }
+	}
+	if = {
+		limit = {
+			trait = prince_khorne
+		}
+		set_variable = { which = MagicPool value = 4 }
+	}
+
+	#easier than coding all the else_ifs
+	negative_magic_pool_effect = yes
+	set_variable = { which = MagicPoolMax which = MagicPool }
+
+	#Reductions
+	if = {
+		limit = {
+			has_character_modifier = magic_siege_pool_reduction_timer
+		}
+		change_variable = { which = MagicPool value = -1 }
+	}
+}
+
+# Activate magic system and assign random lore for mage
+# Used by: WHG_chaos_effects, WHG_magic_effects, WHG_childhood_events +7 more
+random_lore_mage_effect = {
+	add_magic_potential_effect = yes
+	magic_power_random_effect = yes
+	enable_magic_xp_effect = yes
+	random_lore_effect = yes
+	set_character_flag = special_marshal
+}
+
+# Used by: WHG_maintenance_events, WHG_battle_events, WHG_magic_effects
+random_lore_effect = {
+	if = {
+		limit = {
+			is_human = yes
+			NOT = { religion_group = chaos_gods_group }
+		}
+		if = {
+			limit = {
+				OR = {
+					religion = ormazd
+					religion = kitabid
+				}
+				NOR = {
+					trait = peasant_leader
+					trait = heresiarch
+				}
+			}
+			add_trait = arabyan_scholar
+		}
+		if = {
+			limit = {
+				OR = {
+					trait = peasant_leader
+					trait = heresiarch
+					top_liege = { has_character_modifier = expelled_k_witch_hunters_order }
+					top_liege = { trait = peasant_leader }
+				}
+				gender_is_allowed_magic_trigger = no
+			}
+			if = {
+				limit = {
+					is_female = no
+				}
+				add_trait = hedge_wizard
+			}
+			else = {
+				add_trait = witch
+			}
+		}
+		random_list = {
+			5 = {
+				add_trait = lore_ice
+				if = {
+					limit = {
+						is_female = yes
+						religion = kislev_gods
+					}
+					add_trait = ice_witch
+				}
+				modifier = {
+					factor = 10
+					OR = {
+						religion = kislev_gods
+						religion = northern_gods
+						religion = northern_gods_reformed
+						culture_group = kislevite_group
+					}
+				}
+				modifier = {
+					factor = 0
+					NOR = {
+						religion = kislev_gods
+						religion = northern_gods
+						religion = northern_gods_reformed
+						culture_group = kislevite_group
+					}
+				}
+			}
+			5 = {
+				if = {
+					limit = {
+						OR = {
+							religion = northern_gods
+							religion = northern_gods_reformed
+						}
+					}
+					add_trait = hag_witch
+					add_trait = lore_hag
+				}
+				modifier = {
+					factor = 10
+					OR = {
+						religion = northern_gods
+						religion = northern_gods_reformed
+					}
+				}
+				modifier = {
+					factor = 0
+					NOR = {
+						is_female = yes
+						religion = kislev_gods
+						religion = northern_gods
+						religion = northern_gods_reformed
+						culture_group = kislevite_group
+					}
+				}
+			}
+			5 = {
+				add_trait = lore_fire
+				#Flashy
+				modifier = {
+					factor = 5
+					culture_group = norscan_group
+				}
+				modifier = {
+					factor = 10
+					religion = stromfels
+				}
+			}
+			5 = {
+				add_trait = lore_beasts
+				modifier = {
+					factor = 5
+					OR = {
+						religion = old_faith
+						religion = old_faith_reformed
+					}
+				}
+				modifier = {
+					factor = 5
+					culture_group = norscan_group
+				}
+			}
+			5 = {
+				add_trait = lore_metal
+			}
+			5 = {
+				add_trait = lore_light
+				modifier = {
+					factor = 3
+					is_benevolent_trigger = yes
+				}
+			}
+			5 = {
+				add_trait = lore_life
+				modifier = {
+					factor = 3
+					is_benevolent_trigger = yes
+				}
+				modifier = {
+					factor = 5
+					OR = {
+						religion = old_faith
+						religion = old_faith_reformed
+					}
+				}
+				modifier = {
+					factor = 10
+					religion = shallyan
+				}
+			}
+			5 = {
+				add_trait = lore_heavens
+				if = {
+					limit = {
+						OR = {
+							religion = draconite
+							culture_group = oriental_group
+						}
+					}
+					add_trait = astromancer
+				}
+				modifier = {
+					factor = 10
+					OR = {
+						religion = draconite
+						culture_group = oriental_group
+					}
+				}
+			}
+			5 = {
+				add_trait = lore_death
+			}
+			5 = {
+				add_trait = lore_shadows
+			}
+			5 = {
+				add_trait = lore_necromancy
+				modifier = {
+					factor = 10
+					religion_group = necromantic_group
+				}
+				modifier = {
+					factor = 0
+					NOT = { religion_group = necromantic_group }
+				}
+			}
+		}
+	}
+	else_if = {
+		limit = {
+			AND = {
+				is_elf = yes
+				OR = {
+					AND = {
+						is_female = no
+						NOT = {
+							top_liege = {
+								trait = malekith
+							}
+						}
+					}
+					is_female = yes
+				}
+			}
+		}
+		if = {
+			limit = {
+				culture_group = asur_group
+			}
+			random_list = {
+				50 = {
+					add_trait = lore_high_magic
+				}
+				50 = {
+					add_trait = lore_light
+				}
+			}
+			add_trait = asur_mage
+		}
+		else_if = {
+			limit = {
+				culture_group = druchii_group
+			}
+			random_list = {
+				50 = {
+					add_trait = lore_dark_magic
+				}
+				50 = {
+					add_trait = lore_shadows
+				}
+			}
+			if = {
+				limit = {
+					is_female = yes
+				}
+				add_trait = druchii_sorceress
+			}
+			else = {
+				add_trait = druchii_mage
+			}
+		}
+		else_if = {
+			limit = {
+				culture_group = asrai_group
+			}
+			add_trait = asrai_spellsinger
+			random_list = {
+				25 = {
+					add_trait = lore_high_magic
+				}
+				25 = {
+					add_trait = lore_dark_magic
+				}
+				25 = {
+					add_trait = lore_shadows
+				}
+				25 = {
+					add_trait = lore_light
+				}
+			}
+		}
+	}
+	else_if = {
+		limit = {
+			culture_group = dwarf_chaos_group
+		}
+		random_list = {
+			75 = {
+				add_trait = chaos_dwarf_daemonsmith
+			}
+			25 = {
+				add_trait = chaos_dwarf_sorcerer
+			}
+		}
+	}
+	else_if = {
+		limit = {
+			culture_group = skaven_group
+		}
+		if = {
+			limit = {
+				culture = skryre
+			}
+			add_trait = warlock_engineer
+		}
+		else = {
+			add_trait = lore_vermin
+		}
+	}
+	else_if = {
+		limit = {
+			trait = creature_amazon
+		}
+		add_trait = lore_beasts
+	}
+	else_if = {
+		limit = {
+			OR = {
+				trait = creature_goblin
+				trait = creature_hobgoblin
+				trait = creature_orc
+			}
+		}
+		add_trait = lore_waaagh
+		add_trait = greenskin_shaman
+	}
+	else_if = {
+		limit = {
+			trait = creature_skink
+		}
+		add_trait = skink_priest
+		random_list = {
+			65 = { add_trait = lore_heavens }
+			35 = { add_trait = lore_beasts }
+		}
+	}
+	else_if = {
+		limit = {
+			religion_group = chaos_gods_group
+		}
+		if = {
+			limit = {
+				trait = creature_beastman
+			}
+			add_trait = bray_shaman
+		}
+		if = {
+			limit = {
+				open_follower_of_undivided = yes
+			}
+			add_trait = lore_chaos
+		}
+		else_if = {
+			limit = {
+				open_follower_of_nurgle = yes
+			}
+			add_trait = lore_nurgle
+		}
+		else_if = {
+			limit = {
+				open_follower_of_slaanesh = yes
+			}
+			add_trait = lore_slaanesh
+		}
+		else_if = {
+			limit = {
+				open_follower_of_tzeentch = yes
+			}
+			add_trait = lore_tzeentch
+		}
+	}
+	calc_magic_pool_effect = yes
+}
+
+# Raises a mage one power level (none -> 1 -> 2 -> 3 -> 4). Lifts the
+# character's magic XP to the next level's threshold, then lets
+# level_up_magic_power_effect set the level from the XP, as the XP system does.
+# Used by: WHG_chaos_dwarf_events, WHG_asrai_events, WHG_asur_events +5 more
+magic_lvl_increase_effect = {
+	if = {
+		limit = {
+			NOR = {
+				has_character_modifier = magic_power_1
+				has_character_modifier = magic_power_2
+				has_character_modifier = magic_power_3
+				has_character_modifier = magic_power_4
+			}
+		}
+		set_variable = { which = "cl" value = 1 }
+		add_character_modifier = { name = magic_power_1 duration = -1 }
+		magic_power_1_xp_effect = yes
+	}
+	else_if = {
+		limit = { has_character_modifier = magic_power_1 }
+		magic_power_2_xp_effect = yes
+		level_up_magic_power_effect = yes
+	}
+	else_if = {
+		limit = { has_character_modifier = magic_power_2 }
+		magic_power_3_xp_effect = yes
+		level_up_magic_power_effect = yes
+	}
+	else_if = {
+		limit = { has_character_modifier = magic_power_3 }
+		magic_power_4_xp_effect = yes
+		level_up_magic_power_effect = yes
+	}
+}
+
+# Add magic potential to character
+# Used by: WHG_battle_events, WHG_lizardmen_events, WHG_magic_effects
+add_magic_potential_effect = {
+	if = {
+		limit = {
+			NOT = { magic_potential_trigger = yes }
+		}
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = magic_potential_flag_1
+					has_character_flag = magic_potential_flag_2
+					has_character_flag = magic_potential_flag_3
+					has_character_flag = magic_potential_flag_4
+				}
+			}
+			if = {
+				limit = {
+					has_character_flag = magic_potential_flag_1
+				}
+				add_trait = magic_potential_1
+				clr_character_flag = magic_potential_flag_1
+			}
+			else_if = {
+				limit = {
+					has_character_flag = magic_potential_flag_2
+				}
+				add_trait = magic_potential_2
+				clr_character_flag = magic_potential_flag_2
+			}
+			else_if = {
+				limit = {
+					has_character_flag = magic_potential_flag_3
+				}
+				add_trait = magic_potential_3
+				clr_character_flag = magic_potential_flag_3
+			}
+			else_if = {
+				limit = {
+					has_character_flag = magic_potential_flag_4
+				}
+				add_trait = magic_potential_4
+				clr_character_flag = magic_potential_flag_4
+			}
+		}
+		else_if = {
+			limit = {
+				has_magic_power_trigger = yes
+			}
+			if = {
+				limit = {
+					has_character_modifier = magic_power_1
+				}
+				add_trait = magic_potential_1
+			}
+			else_if = {
+				limit = {
+					has_character_modifier = magic_power_2
+				}
+				add_trait = magic_potential_2
+			}
+			else_if = {
+				limit = {
+					OR = {
+						has_character_modifier = magic_power_3
+						has_character_modifier = magic_power_4
+					}
+				}
+				random_list = {
+					9 = {
+						add_trait = magic_potential_3
+					}
+					1 = {
+						add_trait = magic_potential_4
+					}
+				}
+			}
+		}
+		else = {
+			random_list = {
+				40 = {
+					add_trait = magic_potential_1
+				}
+				30 = {
+					add_trait = magic_potential_2
+				}
+				7 = {
+					add_trait = magic_potential_3
+				}
+				3 = {
+					add_trait = magic_potential_4
+				}
+			}
+		}
+		clr_character_flag = recessive_mage
+	}
+}
+
+# Removes current magic power and adds random magic power
+# Used by: WHG_disease_events, WHG_skaven_events +16 more
+magic_power_random_effect = {
+	magic_power_removal_effect = yes
+	# A new mage is marked for battle casting at once (the yearly refresh,
+	# battlemagic.7, only looks at marked characters)
+	if = {
+		limit = { battle_magic_system_trigger = yes }
+		set_character_flag = battle_magic_system_flag
+	}
+	random_list = {
+		60 = {
+			add_character_modifier = { name = magic_power_1 duration = -1 }
+			set_variable = { which = "cl" value = 1}
+			magic_power_1_xp_effect = yes
+			change_learning = 1
+		}
+		35 = {
+			add_character_modifier = { name = magic_power_2 duration = -1 }
+			set_variable = { which = "cl" value = 2}
+			magic_power_2_xp_effect = yes
+			change_learning = 2
+		}
+		4 = {
+			add_character_modifier = { name = magic_power_3 duration = -1 }
+			set_variable = { which = "cl" value = 3}
+			magic_power_3_xp_effect = yes
+			change_learning = 5
+		}
+		1 = {
+			add_character_modifier = { name = magic_power_4 duration = -1 }
+			set_variable = { which = "cl" value = 4}
+			magic_power_4_xp_effect = yes
+			change_learning = 8
+		}
+	}
+}
+
+# Removes current magic power and adds random magic power and learning based on
+# current learning value
+# Used by: WHG_magic_events, WHG_bretonnia_effects, WHG_kislev_events +1 more
+magic_power_teach_effect = {
+	magic_power_removal_effect = yes
+	random_list = {
+		60 = {
+			modifier={
+				factor = 0.2
+				learning = 20
+			}
+			modifier={
+				factor = 0.4
+				learning = 16
+			}
+			add_character_modifier = { name = magic_power_1 duration = -1 }
+			set_variable = { which = "cl" value = 1}
+			magic_power_1_xp_effect = yes
+			change_learning = 1
+		}
+		35 = {
+			modifier={
+				factor=0.5
+				learning=20
+			}
+			modifier={
+				factor=0.8
+				learning=16
+			}
+			add_character_modifier = { name = magic_power_2 duration = -1 }
+			set_variable = { which = "cl" value = 2}
+			magic_power_2_xp_effect = yes
+		}
+		10 = {
+			modifier={
+				factor=2
+				learning=20
+			}
+			modifier={
+				factor=1.2
+				learning=12
+			}
+			modifier={
+				factor=1.6
+				learning=16
+			}
+			add_character_modifier = { name = magic_power_3 duration = -1 }
+			set_variable = { which = "cl" value = 3}
+			magic_power_3_xp_effect = yes
+			change_learning = 1
+		}
+		5 = {
+			modifier={
+				factor=2
+				learning=20
+			}
+			modifier={
+				factor=1.2
+				learning=12
+			}
+			modifier={
+				factor=1.6
+				learning=16
+			}
+			add_character_modifier = { name = magic_power_4 duration = -1 }
+			set_variable = { which = "cl" value = 4}
+			magic_power_4_xp_effect = yes
+			change_learning = 2
+		}
+	}
+}
+
+# Turns on the XP system for Mages
+# Used by: WHG_daemon_events, WHG_maintenance_events +19 more
+enable_magic_xp_effect = {
+	set_character_flag = special_marshal
+	if = {
+		limit = {
+			has_magic_power_trigger = yes
+			is_trained_mage_trigger = yes
+			NOT = { check_variable = { which = "magicxp" value = 1 } }
+		}
+		if = {
+			limit = { has_character_modifier = magic_power_1 }
+			set_variable = { which = "cl" value = 1 }
+			magic_power_1_xp_effect = yes
+		}
+		else_if = {
+			limit = { has_character_modifier = magic_power_2 }
+			set_variable = { which = "cl" value = 2 }
+			magic_power_2_xp_effect = yes
+		}
+		else_if = {
+			limit = { has_character_modifier = magic_power_3 }
+			set_variable = { which = "cl" value = 3 }
+			magic_power_3_xp_effect = yes
+		}
+		else_if = {
+			limit = { has_character_modifier = magic_power_4 }
+			set_variable = { which = "cl" value = 4 }
+			magic_power_4_xp_effect = yes
+		}
+	}
+	else_if = {
+		limit = {
+			NOT = { has_magic_power_trigger = yes }
+			is_trained_mage_trigger = yes
+		}
+		level_up_magic_power_effect = yes
+	}
+}
+
+# Reveals hidden magic based on character flags
+# Used by: WHG_magic_events, WHG_college_of_magic_events +2 more
+reveal_hidden_magic_effect = {
+	if = {
+		limit = { has_character_flag = magic_potential_flag_4 }
+		add_trait = magic_potential_4
+		clr_character_flag = magic_potential_flag_4
+	}
+	if = {
+		limit = { has_character_flag = magic_potential_flag_3 }
+		add_trait = magic_potential_3
+		clr_character_flag = magic_potential_flag_3
+	}
+	if = {
+		limit = { has_character_flag = magic_potential_flag_2 }
+		add_trait = magic_potential_2
+		clr_character_flag = magic_potential_flag_2
+	}
+	if = {
+		limit = { has_character_flag = magic_potential_flag_1 }
+		add_trait = magic_potential_1
+		clr_character_flag = magic_potential_flag_1
+	}
+}
+
+# Clear learning Lore character flags
+# Used by: WHG_magic_events, WHG_college_of_magic_events, WHG_empire_effects
+clr_learning_flags_effect = {
+	clr_character_flag = learning_lore_metal
+	clr_character_flag = learning_lore_fire
+	clr_character_flag = learning_lore_death
+	clr_character_flag = learning_lore_shadows
+	clr_character_flag = learning_lore_beasts
+	clr_character_flag = learning_lore_heavens
+	clr_character_flag = learning_lore_light
+	clr_character_flag = learning_lore_life
+}
+
+###############################################################################
+# Used by magic_laws
+###############################################################################
+
+# Effect of passing the law, only used when law is passed by voting
+# Used by: magic_laws
+magic_law_pass_effect = {
+	set_character_flag = trigger_magic_law_cost
+	if = {
+		limit = {
+			NOT = { has_character_flag = magic_laws_forced }
+		}
+		clr_magic_rights_effect = yes
+		last_magic_law_effect = yes
+		character_event = { id = magiclaw.1 days = 1 } # tells the realm, sets up the great revolt
+	}
+}
+
+# Effect of passing the law
+# Used by: magic_laws
+magic_law_effect = {
+	if = {
+		limit = {
+			NOT = { has_character_flag = magic_laws_forced }
+			has_character_flag = trigger_magic_law_cost
+			has_game_started = yes
+		}
+		clr_character_flag = trigger_magic_law_cost
+	}
+}
+
+# Cost of changing magic law
+# Used by: magic_laws
+magic_law_cost_effect = {
+	if = {
+		limit = {
+			real_tier = DUKE
+			has_magic_law_any_trigger = yes
+		}
+		prestige = -2250
+		piety = -1750
+	}
+	else_if = {
+		limit = {
+			real_tier = KING
+			has_magic_law_any_trigger = yes
+			any_liege = {
+				OR = {
+					has_magic_law_1_trigger = yes
+					has_magic_law_2_trigger = yes
+					has_magic_law_3_trigger = yes
+				}
+			}
+		}
+		prestige = -1750
+		piety = -1250
+	}
+	else_if = {
+		limit = {
+			real_tier = KING
+			has_magic_law_any_trigger = yes
+		}
+		prestige = -2000
+		piety = -1500
+	}
+	else_if = {
+		limit = {
+			real_tier = EMPEROR
+			has_magic_law_any_trigger = yes
+		}
+		prestige = -1500
+		piety = -1000
+	}
+}
+
+# Refund for changing magic law
+# Used by: magic_laws
+magic_law_refund_effect = {
+	if = {
+		limit = {
+			real_tier = DUKE
+			has_magic_law_any_trigger = yes
+		}
+		prestige = 2250
+		piety = 1750
+	}
+	else_if = {
+		limit = {
+			real_tier = KING
+			has_magic_law_any_trigger = yes
+			liege = {
+				OR = {
+					has_magic_law_1_trigger = yes
+					has_magic_law_2_trigger = yes
+					has_magic_law_3_trigger = yes
+				}
+			}
+		}
+		prestige = 1750
+		piety = 1250
+	}
+	else_if = {
+		limit = {
+			real_tier = KING
+			has_magic_law_any_trigger = yes
+		}
+		prestige = 2000
+		piety = 1500
+	}
+	else_if = {
+		limit = {
+			real_tier = EMPEROR
+			has_magic_law_any_trigger = yes
+		}
+		prestige = 1500
+		piety = 1000
+	}
+}
+
+###############################################################################
+# Used by WHG_empire_effects
+###############################################################################
+
+# Done training, If no patricach for the order you get to be the new one
+# Used by: WHG_empire_effects
+college_finished_effect = {
+	if = {
+		limit = { has_character_flag = college_member_learning_on_own }
+		add_society_currency_major_effect = yes
+	}
+	#If no patricach for the order you get to be the new one
+	if = {
+		limit = {
+			society = {
+				NOT = {
+					any_society_member = {
+						check_has_same_lore_as_root = yes
+						society_rank == 5
+					}
+				}
+			}
+		}
+		society_rank_up = 4
+	}
+}
+
+# Initial Magister setup so Colleges arent empty
+# Used by: WHG_empire_effects
+create_inital_magister_effect = {
+	create_new_magister_effect = yes
+	new_character = {
+		# Set Racial Trait
+		character_event = {
+			id = aiclean.31
+		}
+		random_lore_mage_effect = yes
+		remove_lore_effect = yes
+		add_trait = lore_beasts
+		add_trait = hedge_wizard
+		join_society = event_target:magic_society_to_join
+		society_rank_up = {
+			society = event_target:magic_society_to_join
+			rank = 4
+		}
+	}
+	create_new_magister_effect = yes
+	new_character = {
+		# Set Racial Trait
+		character_event = {
+			id = aiclean.31
+		}
+		random_lore_mage_effect = yes
+		remove_lore_effect = yes
+		add_trait = lore_heavens
+		add_trait = hedge_wizard
+		join_society = event_target:magic_society_to_join
+		society_rank_up = {
+			society = event_target:magic_society_to_join
+			rank = 4
+		}
+	}
+	create_new_magister_effect = yes
+	new_character = {
+		# Set Racial Trait
+		character_event = {
+			id = aiclean.31
+		}
+		random_lore_mage_effect = yes
+		remove_lore_effect = yes
+		add_trait = lore_fire
+		add_trait = hedge_wizard
+		join_society = event_target:magic_society_to_join
+		society_rank_up = {
+			society = event_target:magic_society_to_join
+			rank = 4
+		}
+	}
+	create_new_magister_effect = yes
+	new_character = {
+		# Set Racial Trait
+		character_event = {
+			id = aiclean.31
+		}
+		random_lore_mage_effect = yes
+		remove_lore_effect = yes
+		add_trait = lore_metal
+		add_trait = hedge_wizard
+		join_society = event_target:magic_society_to_join
+		society_rank_up = {
+			society = event_target:magic_society_to_join
+			rank = 4
+		}
+	}
+	create_new_magister_effect = yes
+	new_character = {
+		# Set Racial Trait
+		character_event = {
+			id = aiclean.31
+		}
+		random_lore_mage_effect = yes
+		remove_lore_effect = yes
+		add_trait = lore_light
+		add_trait = hedge_wizard
+		join_society = event_target:magic_society_to_join
+		society_rank_up = {
+			society = event_target:magic_society_to_join
+			rank = 4
+		}
+	}
+	create_new_magister_effect = yes
+	new_character = {
+		# Set Racial Trait
+		character_event = {
+			id = aiclean.31
+		}
+		random_lore_mage_effect = yes
+		remove_lore_effect = yes
+		add_trait = lore_shadows
+		add_trait = hedge_wizard
+		join_society = event_target:magic_society_to_join
+		society_rank_up = {
+			society = event_target:magic_society_to_join
+			rank = 4
+		}
+	}
+	create_new_magister_effect = yes
+	new_character = {
+		# Set Racial Trait
+		character_event = {
+			id = aiclean.31
+		}
+		random_lore_mage_effect = yes
+		remove_lore_effect = yes
+		add_trait = lore_life
+		add_trait = hedge_wizard
+		join_society = event_target:magic_society_to_join
+		society_rank_up = {
+			society = event_target:magic_society_to_join
+			rank = 4
+		}
+	}
+	create_new_magister_effect = yes
+	new_character = {
+		# Set Racial Trait
+		character_event = {
+			id = aiclean.31
+		}
+		random_lore_mage_effect = yes
+		remove_lore_effect = yes
+		add_trait = lore_death
+		add_trait = hedge_wizard
+		join_society = event_target:magic_society_to_join
+		society_rank_up = {
+			society = event_target:magic_society_to_join
+			rank = 4
+		}
+	}
+	#Create some lower ranks
+	set_variable = {
+		which = college_mages_to_create
+		value = 10
+	}
+	while = {
+		limit = {
+			check_variable = { which = college_mages_to_create value > 0 }
+		}
+		change_variable = {
+			which = college_mages_to_create
+			value = -1
+		}
+		create_new_magister_effect = yes
+		new_character = {
+			# Set Racial Trait
+			character_event = {
+				id = aiclean.31
+			}
+			random_lore_mage_effect = yes
+			add_trait = hedge_wizard
+			join_society = event_target:magic_society_to_join
+			random_list = {
+				50 = {
+					society_rank_up = {
+						society = event_target:magic_society_to_join
+						rank = 1
+					}
+				}
+				50 = {
+					society_rank_up = {
+						society = event_target:magic_society_to_join
+						rank = 2
+					}
+				}
+				50 = {
+					society_rank_up = {
+						society = event_target:magic_society_to_join
+						rank = 3
+					}
+				}
+			}
+		}
+	}
+}
+
+# Assign Semi random name to new college with similar names blocked off to
+# prevent repetitions
+# Used by: WHG_empire_effects
+random_college_name_effect = {
+	hidden_tooltip = {
+		random_list = {
+			100 = {
+				modifier = {
+					factor = 0
+					ROOT = {
+						NOR = {
+							culture = albion_main
+							religion = old_faith
+							religion = old_faith_reformed
+						}
+					}
+				}
+				set_name = "Circle of Truthsayers"
+			}
+			100 = {
+				modifier = {
+					factor = 0
+					ROOT = {
+						NOR = {
+							culture = albion_main
+							religion = old_faith
+							religion = old_faith_reformed
+						}
+					}
+				}
+				set_name = "Circle of Soothsayers"
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_1_used } }
+				modifier = {
+					factor = 0.2
+					ROOT = { NOT = { religion = myrmidian } }
+				}
+				set_name = "[Root.Culture.GetName] College of War Wizards"
+				set_global_flag = college_name_1_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_1_used } }
+				modifier = {
+					factor = 0.2
+					ROOT = { NOT = { religion = myrmidian } }
+				}
+				set_name = "[Root.Culture.GetName] Academy of War Wizards"
+				set_global_flag = college_name_1_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_1_used } }
+				modifier = {
+					factor = 0.2
+					ROOT = { NOT = { religion = myrmidian } }
+				}
+				set_name = "[Root.PrimaryTitle.GetName] College of War Wizards"
+				set_global_flag = college_name_1_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_1_used } }
+				modifier = {
+					factor = 0.2
+					ROOT = { NOT = { religion = myrmidian } }
+				}
+				set_name = "[Root.PrimaryTitle.GetName] Academy of War Wizards"
+				set_global_flag = college_name_1_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_1_used } }
+				modifier = {
+					factor = 0.2
+					ROOT = { NOT = { religion = myrmidian } }
+				}
+				modifier = {
+					factor = 0.1
+					ROOT = { NOT = { trait = proud } }
+				}
+				set_name = "[Root.GetOnlyDynastyName] Academy of War Wizards"
+				set_global_flag = college_name_1_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_2_used } }
+				set_name = "[Root.Culture.GetName] College of Magic"
+				set_global_flag = college_name_2_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_2_used } }
+				set_name = "[Root.PrimaryTitle.GetName] College of Magic"
+				set_global_flag = college_name_2_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_2_used } }
+				set_name = "[Prev.GetName] College of Magic"
+				set_global_flag = college_name_2_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_2_used } }
+				modifier = {
+					factor = 0.1
+					ROOT = { NOT = { trait = proud } }
+				}
+				set_name = "[Root.GetOnlyDynastyName] College of Magic"
+				set_global_flag = college_name_2_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_3_used } }
+				set_name = "[Root.Culture.GetName] College of the Arcane"
+				set_global_flag = college_name_3_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_3_used } }
+				set_name = "[Root.PrimaryTitle.GetName] College of the Arcane"
+				set_global_flag = college_name_3_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_3_used } }
+				set_name = "[Prev.GetName] College of the Arcane"
+				set_global_flag = college_name_3_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_3_used } }
+				modifier = {
+					factor = 0.1
+					ROOT = { NOT = { trait = proud } }
+				}
+				set_name = "[Root.GetOnlyDynastyName] College of the Arcane"
+				set_global_flag = college_name_3_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_4_used } }
+				set_name = "[Root.Culture.GetName] Academy of Magic"
+				set_global_flag = college_name_4_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_4_used } }
+				set_name = "[Root.PrimaryTitle.GetName] Academy of Magic"
+				set_global_flag = college_name_4_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_4_used } }
+				set_name = "[Prev.GetName] Academy of Magic"
+				set_global_flag = college_name_4_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_4_used } }
+				modifier = {
+					factor = 0.1
+					ROOT = { NOT = { trait = proud } }
+				}
+				set_name = "[Root.GetOnlyDynastyName] Academy of Magic"
+				set_global_flag = college_name_4_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_5_used } }
+				set_name = "[Root.Culture.GetName] Academy of the Arcane"
+				set_global_flag = college_name_5_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_5_used } }
+				set_name = "[Root.PrimaryTitle.GetName] Academy of the Arcane"
+				set_global_flag = college_name_5_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_5_used } }
+				set_name = "[Prev.GetName] Academy of the Arcane"
+				set_global_flag = college_name_5_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_5_used } }
+				modifier = {
+					factor = 0.1
+					ROOT = { NOT = { trait = proud } }
+				}
+				set_name = "[Root.GetOnlyDynastyName] Academy of the Arcane"
+				set_global_flag = college_name_5_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_6_used } }
+				set_name = "[Root.Culture.GetName] Towers of Wizardry"
+				set_global_flag = college_name_6_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_6_used } }
+				set_name = "[Root.PrimaryTitle.GetName] Towers of Wizardry"
+				set_global_flag = college_name_6_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_6_used } }
+				set_name = "[Prev.GetName] Towers of Wizardry"
+				set_global_flag = college_name_6_used
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = college_name_6_used } }
+				modifier = {
+					factor = 0.1
+					ROOT = { NOT = { trait = proud } }
+				}
+				set_name = "[Root.GetOnlyDynastyName] Towers of Wizardry"
+				set_global_flag = college_name_6_used
+			}
+		}
+	}
+}
+
+# Add special building to capital holding
+# Used by: WHG_empire_effects
+college_building_effect = {
+	custom_tooltip = {
+		text = EVTTOOLTIPecollege_active
+		capital_holding = {
+			if = {
+				limit = {
+					holding_type = castle
+				}
+				add_building = ca_college_of_magic
+			}
+			else_if = {
+				limit = {
+					holding_type = city
+				}
+				add_building = ct_college_of_magic
+			}
+		}
+	}
+}
+
+###############################################################################
+# Used by WHG_health_events
+###############################################################################
+
+# The court learns that its ruler has gone mad. Vassals and unlanded courtiers
+# of a faith that frowns on madness (lunacy_sane_faith_trigger) think less of
+# ROOT for ten years.
+# Scope: the lunatic (ROOT).
+# Used by: WHG_health_events
+lunacy_court_shocked_effect = {
+	hidden_tooltip = {
+		any_vassal = {
+			limit = { lunacy_sane_faith_trigger = yes }
+			opinion = { modifier = opinion_lunatic_w who = ROOT years = 10 }
+		}
+		any_courtier = {
+			limit = {
+				is_landed = no
+				lunacy_sane_faith_trigger = yes
+			}
+			opinion = { modifier = opinion_lunatic_w who = ROOT years = 10 }
+		}
+	}
+}
+
+# Moves the lunacy trait to the stage the lunatic_counter variable has reached,
+# up or down. Climbing a stage goes through lunacy_counter_check_effect and
+# shows its notice; falling back is silent, and a twitchy or cured character
+# loses any madness (lunacy_strip_madness_effect). Below 5 every lunacy trait
+# goes.
+# Scope: a character.
+# Used by: WHG_health_events, WHG_mutation_events
+lunacy_counter_settle_effect = {
+	if = {
+		limit = {
+			trait = lunatic_3
+			NOT = { check_variable = { which = "lunatic_counter" value = 20 } }
+		}
+		remove_trait = lunatic_3
+		if = {
+			limit = { check_variable = { which = "lunatic_counter" value = 10 } }
+			add_trait = lunatic_2
+		}
+		else_if = {
+			limit = { check_variable = { which = "lunatic_counter" value = 5 } }
+			add_trait = lunatic_1
+		}
+		lunacy_strip_madness_effect = yes
+	}
+	else_if = {
+		limit = {
+			trait = lunatic_2
+			NOT = { check_variable = { which = "lunatic_counter" value = 10 } }
+		}
+		remove_trait = lunatic_2
+		if = {
+			limit = { check_variable = { which = "lunatic_counter" value = 5 } }
+			add_trait = lunatic_1
+		}
+		lunacy_strip_madness_effect = yes
+	}
+	else_if = {
+		limit = {
+			trait = lunatic_1
+			NOT = { check_variable = { which = "lunatic_counter" value = 5 } }
+		}
+		remove_trait = lunatic_1
+		lunacy_strip_madness_effect = yes
+	}
+	else = {
+		lunacy_counter_check_effect = yes
+	}
+}
+
+# Gorging on blood or flesh: a temperate character may lose the trait, others
+# may turn gluttonous, and a glutton may grow fat.
+# Scope: a character.
+# Used by: WHG_health_events
+lunacy_gluttony_effect = {
+	if = {
+		limit = { trait = temperate }
+		random = { chance = 40 remove_trait = temperate }
+	}
+	else_if = {
+		limit = { trait = gluttonous }
+		if = {
+			limit = { NOT = { trait = is_fat } }
+			random = { chance = 25 add_trait = is_fat }
+		}
+	}
+	else = {
+		random = { chance = 30 add_trait = gluttonous }
+	}
+}
+
+# A night of excess: a chaste or celibate character may lose the trait, others
+# may turn lustful.
+# Scope: a character.
+# Used by: WHG_health_events
+lunacy_lust_effect = {
+	if = {
+		limit = {
+			OR = {
+				trait = chaste
+				trait = celibate
+			}
+		}
+		random = {
+			chance = 50
+			remove_trait = chaste
+			remove_trait = celibate
+		}
+	}
+	else_if = {
+		limit = { NOT = { trait = lustful } }
+		random = { chance = 50 add_trait = lustful }
+	}
+}
+
+# Dies by accident, unless the character cannot die (antideath_effect).
+# Scope: a character.
+# Used by: WHG_health_events
+lunacy_accident_death_effect = {
+	if = {
+		limit = { is_invincible_trigger = yes }
+		antideath_effect = yes
+	}
+	else = {
+		death = { death_reason = death_accident }
+	}
+}
+
+# An everchild turns their mortal mother into a vampire of their own bloodline.
+# Scope: ROOT is the vampire everchild, FROM the mother.
+# Used by: WHG_health_events
+lunacy_turn_mother_effect = {
+	FROM = {
+		clear_favour_effect = yes
+		clr_character_flag = hidden_cultist_tzeentch
+		clr_character_flag = hidden_cultist_nurgle
+		clr_character_flag = hidden_cultist_slaanesh
+		clr_character_flag = hidden_cultist_khorne
+		clr_character_flag = hidden_cultist_undivided
+		clear_secret_religion = yes
+	}
+	if = {
+		limit = {
+			OR = {
+				trait = vampire_lahmian_visible
+				trait = vampire_lahmian_hidden
+			}
+		}
+		FROM = {
+			add_trait = vampire_lahmian_visible
+			set_graphical_culture = lahmian_vampire
+		}
+	}
+	else_if = {
+		limit = {
+			OR = {
+				trait = vampire_strigoi_visible
+				trait = vampire_strigoi_hidden
+			}
+		}
+		FROM = {
+			add_trait = vampire_strigoi_visible
+			set_graphical_culture = strigoi_vampire
+		}
+	}
+	else_if = {
+		limit = {
+			OR = {
+				trait = vampire_blood_visible
+				trait = vampire_blood_hidden
+			}
+		}
+		FROM = {
+			add_trait = vampire_blood_visible
+			culture = blooddragons_culture
+			set_graphical_culture = generic_vampire
+		}
+	}
+	else_if = {
+		limit = {
+			OR = {
+				trait = vampire_necrarch_visible
+				trait = vampire_necrarch_hidden
+			}
+		}
+		FROM = {
+			add_trait = vampire_necrarch_visible
+			set_graphical_culture = generic_vampire
+		}
+	}
+	else_if = {
+		limit = {
+			OR = {
+				trait = vampire_jade_visible
+				trait = vampire_jade_hidden
+			}
+		}
+		FROM = {
+			add_trait = vampire_jade_visible
+			set_graphical_culture = generic_vampire
+		}
+	}
+	else_if = {
+		limit = {
+			OR = {
+				trait = vampire_mahtmasi_visible
+				trait = vampire_mahtmasi_hidden
+			}
+		}
+		FROM = {
+			add_trait = vampire_mahtmasi_visible
+			set_graphical_culture = generic_vampire
+		}
+	}
+	else = {
+		FROM = {
+			add_trait = vampire_carstein_visible
+			set_graphical_culture = generic_vampire
+		}
+	}
+	FROM = {
+		religion = vampiric
+		recalc_succession = yes
+	}
+}
+
+###############################################################################
+# Building blocks of other entries in this file
+###############################################################################
+
+# Removes the six mortal madnesses once nothing can sustain them: the
+# character is no longer a maniac or raving lunatic and wears no madness
+# artifact (the onset events need one of those).
+# Scope: a character.
+# Used by: WHG_magic_effects
+lunacy_strip_madness_effect = {
+	if = {
+		limit = {
+			lunacy_maniac_trigger = no
+			lunacy_raving_trigger = no
+		}
+		remove_character_modifier = blind_virtue
+		remove_character_modifier = despairing_laughter
+		remove_character_modifier = unfeeling
+		remove_character_modifier = fake_mage
+		remove_character_modifier = bloodthirsty
+		remove_character_modifier = god_delusion
+	}
+}
+
+# Scope: the buyer.
+# Used by: WHG_magic_effects, WHG_magic_events
+commission_clear_effect = {
+	clr_character_flag = commission_waiting
+	clr_character_flag = commission_sword_1
+	clr_character_flag = commission_sword_2
+	clr_character_flag = commission_sword_3
+	clr_character_flag = commission_sword_4
+	clr_character_flag = commission_sword_5
+	clr_character_flag = commission_amulet_1
+	clr_character_flag = commission_amulet_3
+	clr_character_flag = commission_amulet_5
+	clr_character_flag = commission_potion_healing
+	clr_character_flag = commission_potion_beauty
+	clr_character_flag = commission_potion_youth
+	clr_character_flag = commission_ring_persuasion
+	clr_character_flag = commission_ring_invisibility
+	clr_character_flag = commission_ring_speed
+	clr_character_flag = commission_ring_command
+	clr_character_flag = commission_elixir_martial
+	clr_character_flag = commission_elixir_stewardship
+	clr_character_flag = commission_elixir_diplomacy
+	clr_character_flag = commission_elixir_intrigue
+}
+
+# Prevents Magic Pool from becoming a negative number
+# Used by: WHG_magic_effects
+negative_magic_pool_effect = {
+	if = {
+		limit = {
+			NOT = { check_variable = { which = MagicPool value = 1 } }
+		}
+		set_variable = { which = MagicPool value = 1 }
+	}
+}
+
+# Calculate the number of magic units to spawn
+# Used by: WHG_magic_effects
+calc_magic_units_effect = {
+	set_variable = { which = SpellUnitsToSpawn value = 1 }
+	if = {
+		limit = {
+			has_character_modifier = magic_power_1
+		}
+		change_variable = { which = SpellUnitsToSpawn value = 2 }
+	}
+	else_if = {
+		limit = {
+			has_character_modifier = magic_power_2
+		}
+		change_variable = { which = SpellUnitsToSpawn value = 4 }
+	}
+	else_if = {
+		limit = {
+			has_character_modifier = magic_power_3
+		}
+		change_variable = { which = SpellUnitsToSpawn value = 6 }
+	}
+	else_if = {
+		limit = {
+			has_character_modifier = magic_power_4
+		}
+		change_variable = { which = SpellUnitsToSpawn value = 9 }
+	}
+
+	#More advanced magic gets more
+	if = {
+		limit = {
+			trait = lore_dark_magic
+		}
+		change_variable = { which = SpellUnitsToSpawn value = 4 }
+	}
+	else_if = {
+		limit = {
+			trait = lore_high_magic
+		}
+		change_variable = { which = SpellUnitsToSpawn value = 4 }
+	}
+}
+
+# Used by: WHG_magic_effects
+spawn_magic_units_effect = {
+	while = {
+		limit = {
+			check_variable = {
+				which = SpellUnitsToSpawn
+				value > 0
+			}
+		}
+		if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 16 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 16
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 16 16 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 15 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 15
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 15 15 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 14 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 14
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 14 14 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 13 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 13
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 13 13 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 12 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 12
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 12 12 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 11 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 11
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 11 11 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 10 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 10
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 10 10 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 9 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 9
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 9 9 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 8 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 8
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 8 8 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 7 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 7
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 7 7 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 6 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 6
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 6 6 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 5 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 5
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 5 5 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 4 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 4
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 4 4 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 3 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 3
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 3 3 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 2 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 2
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 2 2 }
+				}
+				earmark = magical_spells
+			}
+		}
+		else_if = {
+			limit = { check_variable = { which = SpellUnitsToSpawn value == 1 } }
+			subtract_variable = {
+				which = SpellUnitsToSpawn
+				value = 1
+			}
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					magical_spells = { 1 1 }
+				}
+				earmark = magical_spells
+			}
+		}
+	}
+}
+
+# Was summoning these demons intentional or not? Who knows! Chaos is funky
+# Used by: WHG_magic_effects
+magic_spawn_undead_effect = {
+	random_list = {
+		25 = {
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					undead_horde = { 5 5 }
+				}
+				earmark = magical_spells
+			}
+		}
+		25 = {
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					undead_horde = { 10 10 }
+				}
+				earmark = magical_spells
+			}
+		}
+		25 = {
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					undead_horde = { 15 15 }
+				}
+				earmark = magical_spells
+			}
+			modifier = {
+				factor = 2
+				trait = special_char_red_duke
+			}
+			modifier = {
+				factor = 2
+				trait = cruel
+			}
+			modifier = {
+				factor = 2
+				trait = impaler
+			}
+		}
+		25 = {
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					undead_horde = { 20 20 }
+				}
+				earmark = magical_spells
+			}
+			modifier = {
+				factor = 2
+				trait = special_char_red_duke
+			}
+			modifier = {
+				factor = 2
+				trait = cruel
+			}
+			modifier = {
+				factor = 2
+				trait = impaler
+			}
+		}
+	}
+}
+
+# Was summoning these demons intentional or not? Who knows! Chaos is funky
+# Used by: WHG_magic_effects
+magic_spawn_demons_effect = {
+	random_list = {
+		25 = {
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					daemonic_host = { 5 5 }
+				}
+				earmark = magical_spells
+			}
+			modifier = {
+				factor = 2
+				is_doom_very_low_trigger = yes
+			}
+			modifier = {
+				factor = 1.5
+				is_doom_low_trigger = yes
+			}
+			modifier = {
+				factor = 0.5
+				is_doom_high_trigger = yes
+			}
+			modifier = {
+				factor = 0
+				is_doom_very_high_trigger = yes
+			}
+		}
+		25 = {
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					daemonic_host = { 10 10 }
+				}
+				earmark = magical_spells
+			}
+		}
+		25 = {
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					daemonic_host = { 15 15 }
+				}
+				earmark = magical_spells
+			}
+			modifier = {
+				factor = 0.5
+				is_doom_low_trigger = yes
+			}
+			modifier = {
+				factor = 2
+				is_doom_high_trigger = yes
+			}
+			modifier = {
+				factor = 2
+				is_doom_very_high_trigger = yes
+			}
+			modifier = {
+				factor = 1.5
+				khorne_summoner_trigger = yes
+			}
+		}
+		25 = {
+			spawn_unit = {
+				province = PREV
+				owner = THIS
+				troops = {
+					daemonic_host = { 20 20 }
+				}
+				earmark = magical_spells
+			}
+			modifier = {
+				factor = 0.5
+				is_doom_low_trigger = yes
+			}
+			modifier = {
+				factor = 2
+				is_doom_high_trigger = yes
+			}
+			modifier = {
+				factor = 4
+				is_doom_very_high_trigger = yes
+			}
+			modifier = {
+				factor = 3
+				khorne_summoner_trigger = yes
+			}
+		}
+	}
+}
+
+# Used by: WHG_magic_effects
+remove_lore_effect = {
+	remove_trait = chaos_dwarf_sorcerer
+	remove_trait = khemri_liche_priest
+	remove_trait = warlock_engineer
+	remove_trait = lore_vermin
+	remove_trait = lore_dark_magic
+	remove_trait = lore_necromancy
+	remove_trait = lore_beasts
+	remove_trait = lore_heavens
+	remove_trait = lore_fire
+	remove_trait = lore_metal
+	remove_trait = lore_light
+	remove_trait = lore_shadows
+	remove_trait = lore_life
+	remove_trait = lore_death
+	remove_trait = lore_high_magic
+	remove_trait = lore_slaanesh
+	remove_trait = lore_nurgle
+	remove_trait = lore_tzeentch
+	remove_trait = lore_chaos
+	remove_trait = lore_ice
+	remove_trait = lore_hag
+	remove_trait = ice_witch
+	remove_trait = hag_witch
+	remove_trait = lore_waaagh
+}
+
+# Used by: WHG_magic_effects
+magic_power_removal_effect = {
+	remove_character_modifier = magic_power_1
+	remove_character_modifier = magic_power_2
+	remove_character_modifier = magic_power_3
+	remove_character_modifier = magic_power_4
+}
+
+# Setup historical spellcasters by event instead of through each history file
+# Used by: WHG_magic_effects
+historical_spellcaster_effect = {
+	if = {
+		#If we rebalance xp don't want to have to go through all the history files
+		limit = {
+			historical = yes
+			NOT = { khorne_summoner_trigger = yes }
+		}
+		enable_magic_xp_effect = yes
+		if = {
+			limit = {
+				NOR = {
+					khorne_summoner_trigger = yes
+					magic_potential_trigger = yes
+				}
+			}
+			add_magic_potential_effect = yes
+		}
+	}
+}
+
+# Set starting XP based on magic power level
+# Used by: WHG_magic_effects, WHG_maintenance_events
+magic_power_1_xp_effect = {
+	set_variable = { which = "magicxp" value = 0 }
+}
+
+# Set starting XP based on magic power level
+# Used by: WHG_magic_effects, WHG_maintenance_events
+magic_power_2_xp_effect = {
+	set_variable = { which = "magicxp" value = 150 }
+}
+
+# Set starting XP based on magic power level
+# Used by: WHG_magic_effects, WHG_maintenance_events
+magic_power_3_xp_effect = {
+	set_variable = { which = "magicxp" value = 500 }
+}
+
+# Set starting XP based on magic power level
+# Used by: WHG_magic_effects, WHG_maintenance_events
+magic_power_4_xp_effect = {
+	set_variable = { which = "magicxp" value = 1000 }
+}
+
+# Used by: WHG_magic_effects, WHG_magic_events
+level_up_magic_power_effect = {
+	magic_power_removal_effect = yes
+	if = {
+		limit = { magic_power_1_threshold_trigger = yes }
+		set_variable = { which = "cl" value = 1 }
+		add_character_modifier = { name = magic_power_1 duration = -1 }
+	}
+	else_if = {
+		limit = { magic_power_2_threshold_trigger = yes }
+		set_variable = { which = "cl" value = 2 }
+		add_character_modifier = { name = magic_power_2 duration = -1 }
+	}
+	else_if = {
+		limit = { magic_power_3_threshold_trigger = yes }
+		set_variable = { which = "cl" value = 3 }
+		add_character_modifier = { name = magic_power_3 duration = -1 }
+	}
+	else_if = {
+		limit = { magic_power_4_threshold_trigger = yes }
+		set_variable = { which = "cl" value = 4 }
+		add_character_modifier = { name = magic_power_4 duration = -1 }
+	}
+}
+
+# Set last active magic law
+# Used by: WHG_magic_effects
+last_magic_law_effect = {
+	if = {
+		limit = {
+			has_magic_law_0_trigger = yes
+		}
+		set_character_flag = HadMagicLaw0
+	}
+	else_if = {
+		limit = {
+			has_magic_law_1_trigger = yes
+		}
+		set_character_flag = HadMagicLaw1
+	}
+	else_if = {
+		limit = {
+			has_magic_law_2_trigger = yes
+		}
+		set_character_flag = HadMagicLaw2
+	}
+	else = {
+		set_character_flag = HadMagicLawError
+	}
+}
+
+# Clear flags related to magic laws and rights
+# Used by: WHG_magic_effects, WHG_magic_events
+clr_magic_rights_effect = {
+	clr_character_flag = HadMagicLaw0
+	clr_character_flag = HadMagicLaw1
+	clr_character_flag = HadMagicLaw2
+	clr_character_flag = GivingMoreMagicRights
+	clr_character_flag = TakingAwayMagicRights
+}
+
+# Effect to create a new Magister
+# Used by: WHG_magic_effects
+create_new_magister_effect = {
+	random_list = {
+		10 = {
+			create_random_priest = {
+				random_traits = yes
+				dynasty = actually_culture
+				female = 50
+				attributes = {
+					diplomacy = 4
+					learning = 12
+					stewardship = 4
+					intrigue = 4
+					martial = 4
+				}
+			}
+		}
+		10 = {
+			create_random_intriguer = {
+				random_traits = yes
+				dynasty = actually_culture
+				female = 50
+				attributes = {
+					diplomacy = 4
+					learning = 4
+					stewardship = 4
+					intrigue = 12
+					martial = 4
+				}
+			}
+		}
+		10 = {
+			create_random_diplomat = {
+				random_traits = yes
+				dynasty = actually_culture
+				female = 50
+				attributes = {
+					diplomacy = 12
+					learning = 4
+					stewardship = 4
+					intrigue = 4
+					martial = 4
+				}
+			}
+		}
+		10 = {
+			create_random_soldier = {
+				random_traits = yes
+				dynasty = actually_culture
+				female = 50
+				attributes = {
+					diplomacy = 4
+					learning = 4
+					stewardship = 4
+					intrigue = 4
+					martial = 12
+				}
+			}
+		}
+		10 = {
+			create_random_steward = {
+				random_traits = yes
+				dynasty = actually_culture
+				female = 50
+				attributes = {
+					diplomacy = 4
+					learning = 4
+					stewardship = 12
+					intrigue = 4
+					martial = 4
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# Used by WHG_magic_events
+###############################################################################
+
+# Scope: the mage. event_target:buyer is the buyer.
+# Used by: WHG_magic_events
+commission_take_effect = {
+	add_trait = crafting_magic_item
+	event_target:buyer = { set_character_flag = commission_waiting }
+	if = {
+		limit = { event_target:buyer = { has_character_flag = commission_sword_1 } }
+		wealth = 80
+		change_variable = { which = magicxp value = 20 }
+		event_target:buyer = {
+			scaled_wealth = { value = -0.6 min = -120 max = -200 }
+			character_event = { id = commission.30 days = 365 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_sword_2 } }
+		wealth = 120
+		change_variable = { which = magicxp value = 20 }
+		event_target:buyer = {
+			scaled_wealth = { value = -0.9 min = -200 max = -400 }
+			character_event = { id = commission.30 days = 730 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_sword_3 } }
+		wealth = 200
+		change_variable = { which = magicxp value = 30 }
+		event_target:buyer = {
+			scaled_wealth = { value = -1.3 min = -400 max = -800 }
+			character_event = { id = commission.30 days = 1095 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_sword_4 } }
+		wealth = 250
+		change_variable = { which = magicxp value = 40 }
+		event_target:buyer = {
+			scaled_wealth = { value = -1.8 min = -500 max = -1000 }
+			character_event = { id = commission.30 days = 1460 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_sword_5 } }
+		wealth = 350
+		change_variable = { which = magicxp value = 50 }
+		event_target:buyer = {
+			scaled_wealth = { value = -2.8 min = -600 max = -1200 }
+			character_event = { id = commission.30 days = 1825 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_amulet_1 } }
+		wealth = 60
+		change_variable = { which = magicxp value = 20 }
+		event_target:buyer = {
+			scaled_wealth = { value = -0.5 min = -80 max = -200 }
+			character_event = { id = commission.30 days = 365 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_amulet_3 } }
+		wealth = 120
+		change_variable = { which = magicxp value = 50 }
+		event_target:buyer = {
+			scaled_wealth = { value = -0.8 min = -180 max = -360 }
+			character_event = { id = commission.30 days = 1095 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_amulet_5 } }
+		wealth = 325
+		change_variable = { which = magicxp value = 50 }
+		event_target:buyer = {
+			scaled_wealth = { value = -2.8 min = -500 max = -1000 }
+			character_event = { id = commission.30 days = 1825 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_potion_healing } }
+		wealth = 60
+		change_variable = { which = magicxp value = 20 }
+		event_target:buyer = {
+			scaled_wealth = { value = -0.5 min = -80 max = -200 }
+			character_event = { id = commission.30 days = 365 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_potion_beauty } }
+		wealth = 120
+		change_variable = { which = magicxp value = 50 }
+		event_target:buyer = {
+			scaled_wealth = { value = -0.8 min = -200 max = -800 }
+			character_event = { id = commission.30 days = 365 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_potion_youth } }
+		wealth = 750
+		change_variable = { which = magicxp value = 100 }
+		event_target:buyer = {
+			scaled_wealth = { value = -3.5 min = -1000 max = -3000 }
+			character_event = { id = commission.30 days = 3650 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_ring_persuasion } }
+		wealth = 70
+		change_variable = { which = magicxp value = 20 }
+		event_target:buyer = {
+			scaled_wealth = { value = -0.8 min = -120 max = -240 }
+			character_event = { id = commission.30 days = 365 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_ring_invisibility } }
+		wealth = 70
+		change_variable = { which = magicxp value = 20 }
+		event_target:buyer = {
+			scaled_wealth = { value = -0.8 min = -120 max = -240 }
+			character_event = { id = commission.30 days = 365 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_ring_speed } }
+		wealth = 70
+		change_variable = { which = magicxp value = 30 }
+		event_target:buyer = {
+			scaled_wealth = { value = -0.8 min = -120 max = -240 }
+			character_event = { id = commission.30 days = 365 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_ring_command } }
+		wealth = 70
+		change_variable = { which = magicxp value = 30 }
+		event_target:buyer = {
+			scaled_wealth = { value = -0.8 min = -120 max = -240 }
+			character_event = { id = commission.30 days = 365 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_elixir_martial } }
+		wealth = 125
+		change_variable = { which = magicxp value = 20 }
+		event_target:buyer = {
+			wealth = -375
+			character_event = { id = commission.30 days = 730 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_elixir_stewardship } }
+		wealth = 125
+		change_variable = { which = magicxp value = 20 }
+		event_target:buyer = {
+			wealth = -375
+			character_event = { id = commission.30 days = 730 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_elixir_diplomacy } }
+		wealth = 125
+		change_variable = { which = magicxp value = 20 }
+		event_target:buyer = {
+			wealth = -375
+			character_event = { id = commission.30 days = 730 }
+		}
+	}
+	else_if = {
+		limit = { event_target:buyer = { has_character_flag = commission_elixir_intrigue } }
+		wealth = 125
+		change_variable = { which = magicxp value = 20 }
+		event_target:buyer = {
+			wealth = -375
+			character_event = { id = commission.30 days = 730 }
+		}
+	}
+}
+
+# Scope: the buyer. FROM is the mage.
+# Used by: WHG_magic_events
+commission_deliver_effect = {
+	if = { limit = { has_character_flag = commission_sword_1 } add_artifact = sword_1 }
+	else_if = { limit = { has_character_flag = commission_sword_2 } add_artifact = sword_2 }
+	else_if = { limit = { has_character_flag = commission_sword_3 } add_artifact = sword_3 }
+	else_if = { limit = { has_character_flag = commission_sword_4 } add_artifact = sword_4 }
+	else_if = { limit = { has_character_flag = commission_sword_5 } add_artifact = sword_5 }
+	else_if = { limit = { has_character_flag = commission_amulet_1 } add_artifact = amulet_of_protection_1 }
+	else_if = { limit = { has_character_flag = commission_amulet_3 } add_artifact = amulet_of_protection_3 }
+	else_if = { limit = { has_character_flag = commission_amulet_5 } add_artifact = amulet_of_protection_5 }
+	else_if = { limit = { has_character_flag = commission_potion_healing } add_artifact = potion_of_healing }
+	else_if = { limit = { has_character_flag = commission_potion_beauty } add_artifact = potion_of_beauty }
+	else_if = { limit = { has_character_flag = commission_potion_youth } add_artifact = elixir_of_eternal_youth }
+	else_if = { limit = { has_character_flag = commission_ring_persuasion } add_artifact = ring_of_persuasion }
+	else_if = { limit = { has_character_flag = commission_ring_invisibility } add_artifact = ring_of_invisibility }
+	else_if = { limit = { has_character_flag = commission_ring_speed } add_artifact = ring_of_speed }
+	else_if = { limit = { has_character_flag = commission_ring_command } add_artifact = ring_of_command }
+	else_if = { limit = { has_character_flag = commission_elixir_martial } add_artifact = elixir_of_the_marshall }
+	else_if = { limit = { has_character_flag = commission_elixir_stewardship } add_artifact = elixir_of_the_steward }
+	else_if = { limit = { has_character_flag = commission_elixir_diplomacy } add_artifact = elixir_of_the_diplomat }
+	else_if = { limit = { has_character_flag = commission_elixir_intrigue } add_artifact = elixir_of_the_spy }
+	FROM = { remove_trait = crafting_magic_item }
+	commission_clear_effect = yes
+}
+
+# Used by: WHG_magic_events
+gift_hunt_success_effect = {
+	if = {
+		limit = { society_member_of = ice_witch_sisterhood }
+		character_event = { id = kislev.8 }
+	}
+	else = { character_event = { id = bretonmagic.5 } }
+}
+
+# Used by: WHG_magic_events
+gift_hunt_failed_effect = {
+	if = {
+		limit = { society_member_of = ice_witch_sisterhood }
+		character_event = { id = kislev.9 }
+	}
+	else = { character_event = { id = bretonmagic.6 } }
+}
+
+# Hollowed: no gift, no power, no lore, no apprenticeship. A landed victim
+# gives up his lands.
+# Used by: WHG_magic_events, WHG_druchii_events
+gift_sever_effect = {
+	magic_power_removal_effect = yes
+	remove_magic_effect = yes
+	remove_trait = mage_apprentice
+	clr_character_flag = magic_potential_flag_1
+	clr_character_flag = magic_potential_flag_2
+	clr_character_flag = magic_potential_flag_3
+	clr_character_flag = magic_potential_flag_4
+	set_character_flag = failed_mage
+	add_trait = hollowed
+	if = { limit = { is_landed = yes } abdicate = yes }
+}
+
+# Used by: WHG_magic_events
+battle_magic_casting_effect = {
+	if = {
+		limit = {
+			check_variable = {
+				which = MagicPool
+				value > 0
+			}
+		}
+		calc_magic_units_effect = yes
+		subtract_variable = {
+			which = MagicPool
+			value = 1
+		}
+		magic_xp_effect = yes
+		if = {
+			limit = {
+				NOT = { khorne_summoner_trigger = yes }
+			}
+			location = {
+				ROOT = {
+					if = {
+						limit = { is_ruler = yes }
+						spawn_magic_units_effect = yes
+					}
+					else = {
+						liege = {
+							# The count was worked out on the caster
+							set_variable = { which = SpellUnitsToSpawn which = PREV }
+							spawn_magic_units_effect = yes
+						}
+					}
+				}
+			}
+		}
+		if = {
+			limit = {
+				summons_daemons_in_battle_trigger = yes
+			}
+			location = {
+				ROOT = {
+					if = {
+						limit = { is_ruler = yes }
+						magic_spawn_demons_effect = yes
+					}
+					else = {
+						liege = {
+							magic_spawn_demons_effect = yes
+						}
+					}
+				}
+			}
+		}
+		if = {
+			limit = {
+				summons_undead_in_battle_trigger = yes
+			}
+			location = {
+				ROOT = {
+					if = {
+						limit = { is_ruler = yes }
+						magic_spawn_undead_effect = yes
+					}
+					else = {
+						liege = {
+							magic_spawn_undead_effect = yes
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# Chance to become a Battle Mage
+# Used by: WHG_magic_events
+chance_of_battle_mage_effect = {
+	if = {
+		limit = {
+			#Only for randomly generated characters
+			is_adult = yes
+			NOT = { has_character_flag = rolled_chance_to_be_battle_mage }
+		}
+		set_character_flag = rolled_chance_to_be_battle_mage
+		if = {
+			limit = {
+				NOT = { is_trained_mage_trigger = yes }
+			}
+			#add trait then remove so we don't have to dupe the burning trigger
+			add_trait = magic_potential_1
+			if = {
+				limit = {
+					OR = {
+						is_elf = yes
+						AND = {
+							trait = creature_skaven
+							is_female = no
+						}
+						culture_group = dwarf_chaos_group
+						trait = creature_amazon
+						trait = creature_skink
+						trait = creature_beastman
+						trait = fimir_maergh
+						trait = fimir_dirach
+						AND = {
+							is_human = yes
+							OR = {
+								NOT = { check_if_mage_should_be_burned_trigger = yes }
+								trait = peasant_leader
+								trait = heresiarch
+							}
+						}
+						trait = creature_orc
+						trait = creature_goblin
+						trait = creature_hobgoblin
+					}
+				}
+				random_list = { #magic
+					990 = {
+						remove_trait = magic_potential_1
+						#nothing
+					}
+					10 = {
+						remove_trait = magic_potential_1
+						remove_trait = magic_potential_2
+						remove_trait = magic_potential_3
+						remove_trait = magic_potential_4
+						clr_character_flag = magic_potential_flag_1
+						clr_character_flag = magic_potential_flag_2
+						clr_character_flag = magic_potential_flag_3
+						clr_character_flag = magic_potential_flag_4
+						random_lore_mage_effect = yes
+						modifier = {
+							factor = 20
+							culture_group = amazon_group
+							is_theocracy = yes
+						}
+						modifier = {
+							factor = 0
+							follower_of_khorne = yes
+						}
+						modifier = {
+							factor = 20
+							is_female = yes
+							OR = {
+								religion = kislev_gods
+								religion = northern_gods
+								religion = northern_gods_reformed
+							}
+							NOT = { year = 2015 }
+							#Get some more witchs in the world
+						}
+						modifier = {
+							factor = 0
+							is_witch_hunter_trigger = yes
+						}
+						modifier = {
+							factor = 0.5
+							is_doom_very_low_trigger = yes
+						}
+						modifier = {
+							factor = 1.5
+							is_doom_medium_trigger = yes
+						}
+						modifier = {
+							factor = 2
+							is_doom_high_trigger = yes
+						}
+						modifier = {
+							factor = 4
+							is_doom_very_high_trigger = yes
+						}
+						modifier = {
+							factor = 1.5
+							is_doom_high_trigger = yes
+							open_follower_of_any_chaos_gods = yes
+						}
+						modifier = {
+							factor = 3
+							is_doom_very_high_trigger = yes
+							open_follower_of_any_chaos_gods = yes
+						}
+						modifier = {
+							factor = 3
+							is_smart_trigger = yes
+						}
+						modifier = {
+							factor = 6
+							#Like a beacon
+							top_liege = { has_character_modifier = expelled_k_witch_hunters_order }
+							top_liege = { trait = peasant_leader }
+							NOT = {
+								has_global_flag = magic_legal_old_world
+							}
+						}
+						modifier = {
+							factor = 0.1
+							is_dumb_trigger = yes
+						}
+						modifier = {
+							factor = 3
+							is_learned_trigger = yes
+						}
+						modifier = {
+							factor = 0.3
+							has_education_learning_trigger = no
+						}
+						modifier = {
+							factor = 0.1
+							NOT = { learning = 7 }
+						}
+						modifier = {
+							factor = 1.5
+							OR = {
+								#Lets make the mages interesting people
+								is_attractive_trigger = yes
+								is_unattractive_trigger = yes
+							}
+						}
+						modifier = {
+							factor = 0.01
+							#Stop swarms of mayor and priest mages
+							is_ruler = yes
+						}
+						modifier = {
+							factor = 2
+							#These guys actually have formal eduction in magic
+							is_elf = yes
+						}
+						modifier = {
+							factor = 3
+							#Amazons have the rite of passage that can give magic
+							trait = creature_amazon
+						}
+						modifier = {
+							factor = 5
+							#Shamans
+							OR = {
+								trait = creature_goblin
+								trait = creature_hobgoblin
+								trait = creature_orc
+							}
+							is_theocracy = yes
+						}
+						modifier = {
+							factor = 1000
+							#1 in 100 birth and almost always spellcasters
+							trait = fimir_maergh
+						}
+						modifier = {
+							factor = 100
+							#Dev Privilege
+							has_character_flag = easter_egg
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# Gain a normal amount of magic experience
+# Used by: WHG_magic_events, WHG_magic_effects
+magic_xp_effect = {
+	historical_spellcaster_effect = yes
+	if = {
+		limit = { gain_magic_xp_trigger = yes}
+		if = {
+			limit = { trait = magic_potential_1 }
+			custom_tooltip = {
+				text = gain_magic_xp_tt
+				change_variable = { which = "magicxp" value = 10 }
+			}
+		}
+		else_if = {
+			limit = { trait = magic_potential_2 }
+			custom_tooltip = {
+				text = gain_magic_xp_tt
+				change_variable = { which = "magicxp" value = 20 }
+			}
+		}
+		else_if = {
+			limit = { trait = magic_potential_3 }
+			custom_tooltip = {
+				text = gain_magic_xp_tt
+				change_variable = { which = "magicxp" value = 30 }
+			}
+		}
+		else_if = {
+			limit = { trait = magic_potential_4 }
+			custom_tooltip = {
+				text = gain_magic_xp_tt
+				change_variable = { which = "magicxp" value = 50 }
+			}
+		}
+		else = {
+			#Fallback
+			custom_tooltip = {
+				text = gain_magic_xp_tt
+				change_variable = { which = "magicxp" value = 10 }
+			}
+		}
+		if = {
+			limit = {
+				trait = creature_slann
+			}
+			hidden_tooltip = {
+				change_variable = { which = "magicxp" value = 30 }
+			}
+		}
+		if = {
+			limit = {
+				is_college_of_magic_member = yes
+			}
+			hidden_tooltip = {
+				change_variable = { which = "magicxp" value = 20 }
+			}
+		}
+		#Check for levelup
+		character_event = { id = spell.1 }
+	}
+}
+
+# Adjust magic law up or down a level
+# Used by: WHG_magic_events
+magic_law_up_or_down_effect = {
+	if = {
+		limit = {
+			OR = {
+				AND = {
+					has_character_flag = HadMagicLaw0
+					has_magic_law_1_trigger = yes
+				}
+				AND = {
+					has_character_flag = HadMagicLaw1
+					has_magic_law_2_trigger = yes
+				}
+			}
+		}
+		set_character_flag = GivingMoreMagicRights
+	}
+	else = {
+		set_character_flag = TakingAwayMagicRights
+	}
+}
+
+# Create bloodline for legalizing magic
+# Used by: WHG_magic_events, WHG_college_of_magic_events
+magic_legal_bloodline_effect = {
+	if = {
+		limit = {
+			NOT = { has_global_flag = magic_legal_old_world_first_time }
+		}
+		set_global_flag = magic_legal_old_world
+		set_global_flag = magic_legal_old_world_first_time
+	}
+	if = {
+		limit = {
+			has_magic_law_2_trigger = yes
+			NOT = {
+				any_owned_bloodline = {
+					has_bloodline_flag = magic_legacy
+					bloodline_is_active_for = PREV
+				}
+			}
+			NOT = { magic_legal_50_years_trigger = yes }
+			OR = {
+				#Stop loads of random dukes easily passing it and getting loads of credit.
+				ai = no
+				higher_real_tier_than = KING
+				realm_size = 60
+				NOT = { has_global_flag = magic_legal_old_world_first_time }
+				has_character_flag = mage_peasent_leader
+			}
+		}
+		create_bloodline = { type = magic_legal_bloodline }
+	}
+}
+
+# THIS (a necromancer) gains one level of necromantic power, up to 5.
+# Used by: WHG_magic_events
+spell_necro_power_up_effect = {
+	if = {
+		limit = { has_character_modifier = necromantic_power_4 }
+		remove_character_modifier = necromantic_power_4
+		add_character_modifier = { name = necromantic_power_5 duration = -1 }
+	}
+	else_if = {
+		limit = { has_character_modifier = necromantic_power_3 }
+		remove_character_modifier = necromantic_power_3
+		add_character_modifier = { name = necromantic_power_4 duration = -1 }
+	}
+	else_if = {
+		limit = { has_character_modifier = necromantic_power_2 }
+		remove_character_modifier = necromantic_power_2
+		add_character_modifier = { name = necromantic_power_3 duration = -1 }
+	}
+	else_if = {
+		limit = { has_character_modifier = necromantic_power_1 }
+		remove_character_modifier = necromantic_power_1
+		add_character_modifier = { name = necromantic_power_2 duration = -1 }
+	}
+	else_if = {
+		limit = { NOT = { has_character_modifier = necromantic_power_5 } }
+		add_character_modifier = { name = necromantic_power_1 duration = -1 }
+	}
+}
+
+# THIS (a necromancer) spends one level of necromantic power.
+# Used by: WHG_magic_events
+spell_necro_power_down_effect = {
+	if = {
+		limit = { has_character_modifier = necromantic_power_5 }
+		remove_character_modifier = necromantic_power_5
+		add_character_modifier = { name = necromantic_power_4 duration = -1 }
+	}
+	else_if = {
+		limit = { has_character_modifier = necromantic_power_4 }
+		remove_character_modifier = necromantic_power_4
+		add_character_modifier = { name = necromantic_power_3 duration = -1 }
+	}
+	else_if = {
+		limit = { has_character_modifier = necromantic_power_3 }
+		remove_character_modifier = necromantic_power_3
+		add_character_modifier = { name = necromantic_power_2 duration = -1 }
+	}
+	else_if = {
+		limit = { has_character_modifier = necromantic_power_2 }
+		remove_character_modifier = necromantic_power_2
+		add_character_modifier = { name = necromantic_power_1 duration = -1 }
+	}
+	else = { remove_character_modifier = necromantic_power_1 }
+}
+
+# THIS (a necromancer) rolls whether the dead answer in greater numbers than
+# he called for: about even odds, better for vampires, Nagash's faithful,
+# Tomb Kings and stronger casters, worse for hedge wizards.
+# Used by: WHG_magic_events
+spell_horde_size_roll_effect = {
+	clr_character_flag = spell_horde_big
+	random_list = {
+		50 = { }
+		50 = {
+			modifier = { factor = 1.75 religion = nagashi }
+			modifier = { factor = 0.85 trait = hedge_wizard }
+			modifier = { factor = 1.85 trait = creature_nehekharan }
+			modifier = { factor = 1.75 is_vampire_trigger = yes }
+			modifier = { factor = 1.65 has_character_modifier = magic_power_2 }
+			modifier = { factor = 1.75 has_character_modifier = magic_power_3 }
+			modifier = { factor = 1.85 has_character_modifier = magic_power_4 }
+			set_character_flag = spell_horde_big
+		}
+	}
+}
+
+# THIS (a necromancer) raises a horde at his location. Its size comes from
+# the flags spell_horde_1 - 5 (and spell_horde_big), set by spell.10. Each
+# size has its own earmark (summoned_zombiehorde_1 - 10) and taints the land.
+# The horde falls apart after 15 months or more (spell.12).
+# Used by: WHG_magic_events
+spell_raise_dead_effect = {
+	if = {
+		limit = { has_character_flag = spell_horde_1 }
+		location = { add_province_modifier = { name = province_tainted_1 duration = 650 } }
+		character_event = { id = spell.12 days = 450 random = 490 }
+		if = {
+			limit = { has_character_flag = spell_horde_big }
+			location = {
+				PREV = {
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_2
+						troops = { undead_horde = { 1750 1750 } }
+						cannot_inherit = yes
+						attrition = 0
+					}
+				}
+			}
+		}
+		else = {
+			location = {
+				PREV = {
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_1
+						troops = { undead_horde = { 1500 1500 } }
+						cannot_inherit = yes
+						attrition = 0
+					}
+				}
+			}
+		}
+	}
+	else_if = {
+		limit = { has_character_flag = spell_horde_2 }
+		location = { add_province_modifier = { name = province_tainted_2 duration = 850 } }
+		character_event = { id = spell.12 days = 450 random = 590 }
+		if = {
+			limit = { has_character_flag = spell_horde_big }
+			location = {
+				PREV = {
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_4
+						troops = { undead_horde = { 2000 2000 } }
+						cannot_inherit = yes
+						reinforces = yes
+						attrition = 0
+					}
+					while = {
+						count = 2
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							earmark = summoned_zombiehorde_4
+							troops = { undead_horde = { 1000 1000 } }
+							cannot_inherit = yes
+							attrition = 0
+						}
+					}
+				}
+			}
+		}
+		else = {
+			location = {
+				PREV = {
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_3
+						troops = { undead_horde = { 2000 2000 } }
+						cannot_inherit = yes
+						attrition = 0
+					}
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_3
+						troops = { undead_horde = { 1000 1000 } }
+						cannot_inherit = yes
+						attrition = 0
+					}
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_3
+						troops = { undead_horde = { 500 500 } }
+						cannot_inherit = yes
+						attrition = 0
+					}
+				}
+			}
+		}
+	}
+	else_if = {
+		limit = { has_character_flag = spell_horde_3 }
+		location = { add_province_modifier = { name = province_tainted_3 duration = 1000 } }
+		character_event = { id = spell.12 days = 450 random = 690 }
+		if = {
+			limit = { has_character_flag = spell_horde_big }
+			location = {
+				PREV = {
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_6
+						troops = { undead_horde = { 2000 2000 } }
+						cannot_inherit = yes
+						reinforces = yes
+						attrition = 0
+					}
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_6
+						troops = { undead_horde = { 2000 2000 } }
+						cannot_inherit = yes
+						attrition = 0
+					}
+					while = {
+						count = 4
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							earmark = summoned_zombiehorde_6
+							troops = { undead_horde = { 1000 1000 } }
+							cannot_inherit = yes
+							attrition = 0
+						}
+					}
+				}
+			}
+		}
+		else = {
+			location = {
+				PREV = {
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_5
+						troops = { undead_horde = { 2000 2000 } }
+						cannot_inherit = yes
+						reinforces = yes
+						attrition = 0
+					}
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_5
+						troops = { undead_horde = { 2000 2000 } }
+						cannot_inherit = yes
+						attrition = 0
+					}
+					while = {
+						count = 2
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							earmark = summoned_zombiehorde_5
+							troops = { undead_horde = { 1000 1000 } }
+							cannot_inherit = yes
+							attrition = 0
+						}
+					}
+				}
+			}
+		}
+	}
+	else_if = {
+		limit = { has_character_flag = spell_horde_4 }
+		location = { add_province_modifier = { name = province_tainted_4 duration = 1500 } }
+		character_event = { id = spell.12 days = 450 random = 790 }
+		if = {
+			limit = { has_character_flag = spell_horde_big }
+			location = {
+				PREV = {
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_8
+						troops = { undead_horde = { 2500 2500 } }
+						cannot_inherit = yes
+						reinforces = yes
+						attrition = 0
+					}
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_8
+						troops = { undead_horde = { 2500 2500 } }
+						cannot_inherit = yes
+						attrition = 0
+					}
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_8
+						troops = { undead_horde = { 2000 2000 } }
+						cannot_inherit = yes
+						attrition = 0
+					}
+					while = {
+						count = 6
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							earmark = summoned_zombiehorde_8
+							troops = { undead_horde = { 1000 1000 } }
+							cannot_inherit = yes
+							attrition = 0
+						}
+					}
+				}
+			}
+		}
+		else = {
+			location = {
+				PREV = {
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_zombiehorde_7
+						troops = { undead_horde = { 2000 2000 } }
+						cannot_inherit = yes
+						reinforces = yes
+						attrition = 0
+					}
+					while = {
+						count = 2
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							earmark = summoned_zombiehorde_7
+							troops = { undead_horde = { 2000 2000 } }
+							cannot_inherit = yes
+							attrition = 0
+						}
+					}
+					while = {
+						count = 4
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							earmark = summoned_zombiehorde_7
+							troops = { undead_horde = { 1000 1000 } }
+							cannot_inherit = yes
+							attrition = 0
+						}
+					}
+				}
+			}
+		}
+	}
+	else_if = {
+		limit = { has_character_flag = spell_horde_5 }
+		location = { add_province_modifier = { name = province_tainted_5 duration = 2000 } }
+		character_event = { id = spell.12 days = 450 random = 890 }
+		if = {
+			limit = { has_character_flag = spell_horde_big }
+			location = {
+				PREV = {
+					while = {
+						count = 3
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							earmark = summoned_zombiehorde_10
+							troops = { undead_horde = { 2500 2500 } }
+							cannot_inherit = yes
+							reinforces = yes
+							attrition = 0
+						}
+					}
+					while = {
+						count = 2
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							earmark = summoned_zombiehorde_10
+							troops = { undead_horde = { 2500 2500 } }
+							cannot_inherit = yes
+							attrition = 0
+						}
+					}
+					while = {
+						count = 4
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							earmark = summoned_zombiehorde_10
+							troops = { undead_horde = { 1500 1500 } }
+							cannot_inherit = yes
+							attrition = 0
+						}
+					}
+					while = {
+						count = 2
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							earmark = summoned_zombiehorde_10
+							troops = { undead_horde = { 1000 1000 } }
+							cannot_inherit = yes
+							attrition = 0
+						}
+					}
+				}
+			}
+		}
+		else = {
+			location = {
+				PREV = {
+					while = {
+						count = 3
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							earmark = summoned_zombiehorde_9
+							troops = { undead_horde = { 2500 2500 } }
+							cannot_inherit = yes
+							reinforces = yes
+							attrition = 0
+						}
+					}
+					while = {
+						count = 4
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							earmark = summoned_zombiehorde_9
+							troops = { undead_horde = { 1500 1500 } }
+							cannot_inherit = yes
+							attrition = 0
+						}
+					}
+					while = {
+						count = 2
+						spawn_unit = {
+							province = PREV
+							owner = THIS
+							earmark = summoned_zombiehorde_9
+							troops = { undead_horde = { 1000 1000 } }
+							cannot_inherit = yes
+							attrition = 0
+						}
+					}
+				}
+			}
+		}
+	}
+	set_character_flag = spell_dead_walk
+}
+
+# THIS (a mage of Life) wakes the forest at his location. Weaker casters
+# wake a small or average wood, stronger ones an average or great one.
+# The trees go back to sleep after 15 months or more (spell.72).
+# Used by: WHG_magic_events
+spell_awaken_wood_effect = {
+	if = {
+		limit = {
+			OR = { has_character_modifier = magic_power_3 has_character_modifier = magic_power_4 }
+		}
+		random_list = {
+			50 = { set_character_flag = spell_wood_2 }
+			50 = { set_character_flag = spell_wood_3 }
+		}
+	}
+	else = {
+		random_list = {
+			50 = { set_character_flag = spell_wood_1 }
+			50 = { set_character_flag = spell_wood_2 }
+		}
+	}
+	if = {
+		limit = { has_character_flag = spell_wood_3 }
+		character_event = { id = spell.72 days = 450 random = 690 }
+		location = {
+			PREV = {
+				spawn_unit = {
+					province = PREV
+					owner = THIS
+					earmark = summoned_treekin_3
+					troops = { summoned_treekin = { 1000 1000 } }
+					cannot_inherit = yes
+					reinforces = yes
+					attrition = 0
+				}
+				while = {
+					count = 2
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_treekin_3
+						troops = { summoned_treekin = { 1000 1000 } }
+						cannot_inherit = yes
+						attrition = 0
+					}
+				}
+			}
+		}
+	}
+	else_if = {
+		limit = { has_character_flag = spell_wood_2 }
+		character_event = { id = spell.72 days = 450 random = 590 }
+		location = {
+			PREV = {
+				spawn_unit = {
+					province = PREV
+					owner = THIS
+					earmark = summoned_treekin_2
+					troops = { summoned_treekin = { 750 750 } }
+					cannot_inherit = yes
+					reinforces = yes
+					attrition = 0
+				}
+				while = {
+					count = 2
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_treekin_2
+						troops = { summoned_treekin = { 750 750 } }
+						cannot_inherit = yes
+						attrition = 0
+					}
+				}
+			}
+		}
+	}
+	else = {
+		character_event = { id = spell.72 days = 450 random = 590 }
+		location = {
+			PREV = {
+				while = {
+					count = 3
+					spawn_unit = {
+						province = PREV
+						owner = THIS
+						earmark = summoned_treekin_1
+						troops = { summoned_treekin = { 500 500 } }
+						cannot_inherit = yes
+						attrition = 0
+					}
+				}
+			}
+		}
+	}
+	set_character_flag = spell_wood_awake
+}
+
+# THIS (a mage) is turned into a beast: his race is stripped and the given
+# creature trait is added by the caller. A transformed ruler loses his
+# claim on the throne.
+# Used by: WHG_magic_events
+spell_polymorph_effect = {
+	remove_race_trait_effect = yes
+	add_trait = disinherited
+	opinion = { modifier = opinion_polymorphed_me who = FROM }
+}
+
+# THIS (a ruler who has just shown his magic on a prisoner) frightens his
+# court: the vassals and courtiers who are not brave or clever fear him.
+# Used by: WHG_magic_events
+spell_cowed_court_effect = {
+	any_vassal = {
+		limit = { NOR = { trait = brave trait = quick trait = brilliant trait = genius } }
+		opinion = { modifier = opinion_scared_into_submission who = ROOT }
+	}
+	any_courtier = {
+		limit = { NOR = { trait = brave trait = quick trait = brilliant trait = genius } }
+		opinion = { modifier = opinion_scared_into_submission who = ROOT }
+	}
+}
+
+###############################################################################
+# Other helpers used by one or two files
+###############################################################################
+
+# Gain a major amount of magic experience
+# Used by: WHG_black_crusade_events
+magic_xp_major_effect = {
+	historical_spellcaster_effect = yes
+	if = {
+		limit = { gain_magic_xp_trigger = yes}
+		if = {
+			limit = { trait = magic_potential_1 }
+			custom_tooltip = {
+				text = gain_magic_xp_major_tt
+				change_variable = { which = "magicxp" value = 30 }
+			}
+		}
+		else_if = {
+			limit = { trait = magic_potential_2 }
+			custom_tooltip = {
+				text = gain_magic_xp_major_tt
+				change_variable = { which = "magicxp" value = 60 }
+			}
+		}
+		else_if = {
+			limit = { trait = magic_potential_3 }
+			custom_tooltip = {
+				text = gain_magic_xp_major_tt
+				change_variable = { which = "magicxp" value = 90 }
+			}
+		}
+		else_if = {
+			limit = { trait = magic_potential_4 }
+			custom_tooltip = {
+				text = gain_magic_xp_major_tt
+				change_variable = { which = "magicxp" value = 120 }
+			}
+		}
+		else = {
+			#Fallback
+			custom_tooltip = {
+				text = gain_magic_xp_major_tt
+				change_variable = { which = "magicxp" value = 30 }
+			}
+		}
+		if = {
+			limit = {
+				trait = creature_slann
+			}
+			hidden_tooltip = {
+				change_variable = { which = "magicxp" value = 120 }
+			}
+		}
+		if = {
+			limit = {
+				is_college_of_magic_member = yes
+			}
+			hidden_tooltip = {
+				change_variable = { which = "magicxp" value = 60 }
+			}
+		}
+		#Check for levelup
+		character_event = { id = spell.1 }
+	}
+}
+
+# Gain a massive amount of magic experience
+# Used by: WHG_black_crusade_events
+magic_xp_massive_effect = {
+	historical_spellcaster_effect = yes
+	if = {
+		limit = { gain_magic_xp_trigger = yes}
+		if = {
+			limit = { trait = magic_potential_1 }
+			custom_tooltip = {
+				text = gain_magic_xp_massive_tt
+				change_variable = { which = "magicxp" value = 90 }
+			}
+		}
+		else_if = {
+			limit = { trait = magic_potential_2 }
+			custom_tooltip = {
+				text = gain_magic_xp_massive_tt
+				change_variable = { which = "magicxp" value = 120 }
+			}
+		}
+		else_if = {
+			limit = { trait = magic_potential_3 }
+			custom_tooltip = {
+				text = gain_magic_xp_massive_tt
+				change_variable = { which = "magicxp" value = 160 }
+			}
+		}
+		else_if = {
+			limit = { trait = magic_potential_4 }
+			custom_tooltip = {
+				text = gain_magic_xp_massive_tt
+				change_variable = { which = "magicxp" value = 200 }
+			}
+		}
+		else = {
+			#Fallback
+			custom_tooltip = {
+				text = gain_magic_xp_massive_tt
+				change_variable = { which = "magicxp" value = 90 }
+			}
+		}
+		if = {
+			limit = {
+				trait = creature_slann
+			}
+			hidden_tooltip = {
+				change_variable = { which = "magicxp" value = 200 }
+			}
+		}
+		if = {
+			limit = {
+				is_college_of_magic_member = yes
+			}
+			hidden_tooltip = {
+				change_variable = { which = "magicxp" value = 160 }
+			}
+		}
+		#Check for levelup
+		character_event = { id = spell.1 }
+	}
+}
+
+# Used by: WHG_chaos_effects, WHG_magic_effects
+remove_magic_effect = {
+	remove_trait = magic_potential_1
+	remove_trait = magic_potential_2
+	remove_trait = magic_potential_3
+	remove_trait = magic_potential_4
+	remove_trait = witch
+	remove_trait = warlock
+	remove_trait = hag_witch
+	remove_trait = hedge_wizard
+	remove_trait = ice_witch
+	remove_trait = asrai_spellsinger
+	remove_trait = asur_mage
+	remove_trait = chaos_dwarf_sorcerer
+	remove_trait = greenskin_shaman
+	remove_trait = druchii_mage
+	remove_trait = druchii_sorceress
+	remove_trait = skink_priest
+	remove_trait = bray_shaman
+	remove_trait = lore_ice
+	remove_trait = lore_hag
+	remove_trait = lore_fire
+	remove_trait = lore_beasts
+	remove_trait = lore_metal
+	remove_trait = lore_light
+	remove_trait = lore_life
+	remove_trait = lore_heavens
+	remove_trait = lore_death
+	remove_trait = lore_shadows
+	remove_trait = lore_high_magic
+	remove_trait = lore_dark_magic
+	remove_trait = lore_chaos
+	remove_trait = lore_nurgle
+	remove_trait = lore_slaanesh
+	remove_trait = lore_tzeentch
+	remove_trait = lore_necromancy
+	remove_trait = lore_waaagh
+	remove_trait = lore_vermin
+	remove_trait = beast_transformation
+}
+
+# Used by: WHG_college_of_magic_events
+join_magic_society_effect = {
+	if = {
+		limit = { PREV = { society_member_of = college_of_magic_imperial } }
+		join_society = college_of_magic_imperial
+	}
+	else_if = {
+		limit = { PREV = { society_member_of = college_of_magic_dynamic_1 } }
+		join_society = college_of_magic_dynamic_1
+	}
+	else_if = {
+		limit = { PREV = { society_member_of = college_of_magic_dynamic_2 } }
+		join_society = college_of_magic_dynamic_2
+	}
+	else_if = {
+		limit = { PREV = { society_member_of = college_of_magic_dynamic_3 } }
+		join_society = college_of_magic_dynamic_3
+	}
+	else_if = {
+		limit = { PREV = { society_member_of = college_of_magic_dynamic_4 } }
+		join_society = college_of_magic_dynamic_4
+	}
+	else_if = {
+		limit = { PREV = { society_member_of = college_of_magic_dynamic_5 } }
+		join_society = college_of_magic_dynamic_5
+	}
+	#Start training if needed
+	character_event = { id = college.20 days = 10 }
+}
+
+# Learn a random magic Lore
+# Used by: WHG_college_of_magic_events
+learn_random_lore_effect = {
+	random_list = {
+		10 = {
+			set_character_flag = learning_lore_metal
+		}
+		10 = {
+			set_character_flag = learning_lore_fire
+		}
+		10 = {
+			set_character_flag = learning_lore_death
+		}
+		10 = {
+			set_character_flag = learning_lore_shadows
+		}
+		10 = {
+			set_character_flag = learning_lore_beasts
+		}
+		10 = {
+			set_character_flag = learning_lore_heavens
+		}
+		10 = {
+			set_character_flag = learning_lore_light
+		}
+		10 = {
+			set_character_flag = learning_lore_life
+		}
+	}
+}
+
+# Hides magic potential based on character flags
+# Used by: WHG_druchii_events
+hide_magic_effect = {
+	trigger_switch = {
+		on_trigger = trait
+		### magic_potential ###
+		magic_potential_4 = {
+			remove_trait = magic_potential_4
+			set_character_flag = magic_potential_flag_4
+		}
+		magic_potential_3 = {
+			remove_trait = magic_potential_3
+			set_character_flag = magic_potential_flag_3
+		}
+		magic_potential_2 = {
+			remove_trait = magic_potential_2
+			set_character_flag = magic_potential_flag_2
+		}
+		magic_potential_1 = {
+			remove_trait = magic_potential_1
+			set_character_flag = magic_potential_flag_1
+		}
+	}
+}
+
+# Brings the lunatic_counter variable in line with the lunacy trait when the
+# trait was added or cured by an event that does not track the counter (vanilla
+# treatments, adolescence, religious events). Never moves a trait.
+# Scope: a character. Used by mutate.9 before the drift roll.
+# Used by: WHG_praag_events, WHG_mutation_events
+lunacy_counter_sync_effect = {
+	set_character_flag = lunacy_counter_active
+	if = {
+		limit = {
+			trait = lunatic_3
+			NOT = { check_variable = { which = "lunatic_counter" value = 20 } }
+		}
+		set_variable = { which = "lunatic_counter" value = 20 }
+	}
+	else_if = {
+		limit = {
+			trait = lunatic_2
+			NOT = { check_variable = { which = "lunatic_counter" value = 10 } }
+		}
+		set_variable = { which = "lunatic_counter" value = 10 }
+	}
+	else_if = {
+		limit = {
+			trait = lunatic_1
+			NOT = { check_variable = { which = "lunatic_counter" value = 5 } }
+		}
+		set_variable = { which = "lunatic_counter" value = 5 }
+	}
+	else_if = {
+		limit = {
+			is_lunatic_trigger = no
+			check_variable = { which = "lunatic_counter" value = 5 }
+		}
+		set_variable = { which = "lunatic_counter" value = 4 }
+	}
+	# The counter never drops below zero, so recovery cannot bank sanity.
+	if = {
+		limit = { NOT = { check_variable = { which = "lunatic_counter" value = 0 } } }
+		set_variable = { which = "lunatic_counter" value = 0 }
+	}
+}
+
+# Speaks a character's doom. A child with an encouraged horoscope gets a
+# doom from its destined path and a little more of the foretold gift, and
+# the parent who cast the horoscope hears of it (stars.22).
+# Scope: the character.
+# Used by: WHG_star_events
+star_doom_effect = {
+	if = {
+		limit = { star_doom_foretold_trigger = yes }
+		trigger_switch = {
+			on_trigger = has_character_flag
+			destined_steward = {
+				hidden_effect = {
+					random_list = {
+						10 = { add_character_modifier = { name = dooming_1 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_5 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_8 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_29 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_33 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_34 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_47 duration = -1 } }
+					}
+				}
+				add_character_modifier = { name = star_doom_steward duration = -1 }
+			}
+			destined_fighter = {
+				hidden_effect = {
+					random_list = {
+						10 = { add_character_modifier = { name = dooming_2 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_4 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_11 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_23 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_31 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_32 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_36 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_49 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_50 duration = -1 } }
+					}
+				}
+				add_character_modifier = { name = star_doom_fighter duration = -1 }
+			}
+			destined_diplomat = {
+				hidden_effect = {
+					random_list = {
+						10 = { add_character_modifier = { name = dooming_3 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_7 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_16 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_21 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_40 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_48 duration = -1 } }
+					}
+				}
+				add_character_modifier = { name = star_doom_diplomat duration = -1 }
+			}
+			destined_schemer = {
+				hidden_effect = {
+					random_list = {
+						10 = { add_character_modifier = { name = dooming_6 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_12 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_20 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_22 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_26 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_28 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_42 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_43 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_44 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_45 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_46 duration = -1 } }
+					}
+				}
+				add_character_modifier = { name = star_doom_schemer duration = -1 }
+			}
+			destined_scholar = {
+				hidden_effect = {
+					random_list = {
+						10 = { add_character_modifier = { name = dooming_17 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_24 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_27 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_30 duration = -1 } }
+						10 = { add_character_modifier = { name = dooming_39 duration = -1 } }
+					}
+				}
+				add_character_modifier = { name = star_doom_scholar duration = -1 }
+			}
+		}
+		hidden_effect = {
+			if = {
+				limit = {
+					has_character_flag = horoscope_maker_is_mother
+					mother = { is_alive = yes ai = no }
+				}
+				mother = { character_event = { id = stars.22 days = 3 } }
+			}
+			if = {
+				limit = {
+					has_character_flag = horoscope_maker_is_father
+					father = { is_alive = yes ai = no }
+				}
+				father = { character_event = { id = stars.22 days = 3 } }
+			}
+		}
+	}
+	else = {
+		set_dooming_effect = yes
+	}
+}
+
+# Used by: WHG_verena_events
+clean_up_horoscope_effect = {
+	clr_character_flag = avoided_destiny
+	clr_character_flag = horoscope_maker_died
+	clr_character_flag = destined_artist
+	clr_character_flag = destined_fighter
+	clr_character_flag = destined_diplomat
+	clr_character_flag = destined_schemer
+	clr_character_flag = destined_scholar
+	clr_character_flag = encouraged_horoscope_pattern
+	clr_character_flag = discouraged_horoscope_pattern
+	clr_character_flag = horoscope_child_evaluate
+	clr_character_flag = horoscope_path_1
+	clr_character_flag = horoscope_maker_is_mother
+	clr_character_flag = horoscope_maker_is_father
+	remove_character_modifier = horoscope_cooldown
+}
+
+# Used by: WHG_verena_events
+set_horoscope_modifier_effect = { # Modifiers received by target during the Hermetics Horoscope Power
+	if = {
+		limit = {
+			has_childhood_horoscope_modifier_trigger = yes
+			NOT = { has_character_flag = avoided_destiny }
+		}
+		trigger_switch = {
+			on_trigger = has_character_modifier
+			guided_by_horoscope_diplomacy = {
+				remove_character_modifier = guided_by_horoscope_diplomacy
+				add_character_modifier = {
+		    		name = guided_by_horoscope_diplomacy_adult
+		    		duration = 2555
+		    	}
+			}
+			guided_by_horoscope_martial = {
+				remove_character_modifier = guided_by_horoscope_martial
+				add_character_modifier = {
+		    		name = guided_by_horoscope_martial_adult
+		    		duration = 2555
+		    	}
+			}
+			guided_by_horoscope_stewardship = {
+				remove_character_modifier = guided_by_horoscope_stewardship
+				add_character_modifier = {
+		    		name = guided_by_horoscope_stewardship_adult
+		    		duration = 2555
+		    	}
+			}
+			guided_by_horoscope_intrigue = {
+				remove_character_modifier = guided_by_horoscope_intrigue
+				add_character_modifier = {
+		    		name = guided_by_horoscope_intrigue_adult
+		    		duration = 2555
+		    	}
+			}
+			guided_by_horoscope_learning = {
+				remove_character_modifier = guided_by_horoscope_learning
+				add_character_modifier = {
+		    		name = guided_by_horoscope_learning_adult
+		    		duration = 2555
+		    	}
+			}
+		}
+		break = yes
+	}
+
+	if = {
+		limit = {
+			has_childhood_horoscope_modifier_trigger = no
+			is_adult = no
+			NOT = { has_character_flag = avoided_destiny }
+		}
+		trigger_switch = {
+			on_trigger = has_character_flag
+			destined_steward = {
+				add_character_modifier = {
+    				name = guided_by_horoscope_stewardship
+    				duration =-1
+    			}
+			}
+			destined_fighter = {
+				add_character_modifier = {
+    				name = guided_by_horoscope_martial
+    				duration =-1
+    			}
+			}
+			destined_diplomat = {
+				add_character_modifier = {
+    				name = guided_by_horoscope_diplomacy
+    				duration =-1
+    			}
+			}
+			destined_schemer = {
+				add_character_modifier = {
+    				name = guided_by_horoscope_intrigue
+    				duration =-1
+    			}
+			}
+			destined_scholar = {
+				add_character_modifier = {
+    				name = guided_by_horoscope_learning
+    				duration =-1
+    			}
+			}
+		}
+		break = yes
+	}
+
+	if = {
+		limit = {
+			has_childhood_horoscope_modifier_trigger = no
+			has_character_flag = avoided_destiny
+		}
+		trigger_switch = {
+			on_trigger = has_character_flag
+			destined_steward = {
+				add_character_modifier = {
+    				name = horoscope_outcome_jittery
+    				years = 15
+    			}
+			}
+			destined_fighter = {
+				add_character_modifier = {
+    				name = horoscope_outcome_brute
+					years = 15
+    			}
+			}
+			destined_diplomat = {
+				add_character_modifier = {
+    				name = horoscope_outcome_artist
+    				years = 15
+    			}
+			}
+			destined_schemer = {
+				add_character_modifier = {
+    				name = horoscope_outcome_arrogant
+    				years = 15
+    			}
+			}
+			destined_scholar = {
+				add_character_modifier = {
+    				name = horoscope_outcome_scatterbrain
+    				years = 15
+    			}
+			}
+		}
+		break = yes
+	}
+
+	if = {
+		limit = {
+			has_childhood_horoscope_modifier_trigger = yes
+			has_character_flag = avoided_destiny
+		}
+		trigger_switch = {
+			on_trigger = has_character_flag
+			destined_steward = {
+				if = { limit = { has_character_modifier = guided_by_horoscope_stewardship }
+					remove_character_modifier = guided_by_horoscope_stewardship
+				}
+				add_character_modifier = {
+    				name = horoscope_outcome_jittery
+    				years = 15
+    			}
+			}
+			destined_fighter = {
+				if = { limit = { has_character_modifier = guided_by_horoscope_martial }
+					remove_character_modifier = guided_by_horoscope_martial
+				}
+				add_character_modifier = {
+    				name = horoscope_outcome_brute
+					years = 15
+    			}
+			}
+			destined_diplomat = {
+				if = { limit = { has_character_modifier = guided_by_horoscope_diplomacy }
+					remove_character_modifier = guided_by_horoscope_diplomacy
+				}
+				add_character_modifier = {
+    				name = horoscope_outcome_artist
+    				years = 15
+    			}
+			}
+			destined_schemer = {
+				if = { limit = { has_character_modifier = guided_by_horoscope_intrigue }
+					remove_character_modifier = guided_by_horoscope_intrigue
+				}
+				add_character_modifier = {
+    				name = horoscope_outcome_arrogant
+    				years = 15
+    			}
+			}
+			destined_scholar = {
+				if = { limit = { has_character_modifier = guided_by_horoscope_learning }
+					remove_character_modifier = guided_by_horoscope_learning
+				}
+				add_character_modifier = {
+    				name = horoscope_outcome_scatterbrain
+    				years = 15
+    			}
+			}
+		}
+		break = yes
+	}
+}
+
+###############################################################################
+# Not used by any live script yet: kept for content to come
+###############################################################################
+
+# Lowers a mage one power level (4 -> 3 -> 2 -> 1 -> none), the same way
+magic_lvl_decrease_effect = {
+	if = {
+		limit = { has_character_modifier = magic_power_1 }
+		set_variable = { which = "cl" value = 0 }
+		remove_character_modifier = magic_power_1
+	}
+	else_if = {
+		limit = { has_character_modifier = magic_power_2 }
+		magic_power_1_xp_effect = yes
+		level_up_magic_power_effect = yes
+	}
+	else_if = {
+		limit = { has_character_modifier = magic_power_3 }
+		magic_power_2_xp_effect = yes
+		level_up_magic_power_effect = yes
+	}
+	else_if = {
+		limit = { has_character_modifier = magic_power_4 }
+		magic_power_3_xp_effect = yes
+		level_up_magic_power_effect = yes
+	}
+}
+
+# Gain magic experience based on teacher magic power
+magic_xp_teacher_effect = {
+	if = {
+		limit = { FROM = { has_character_modifier = magic_power_1 } }
+		change_variable = { which = magicxp value = 1 }
+	}
+	else_if = {
+		limit = { FROM = { has_character_modifier = magic_power_2 } }
+		change_variable = { which = magicxp value = 2 }
+	}
+	else_if = {
+		limit = { FROM = { has_character_modifier = magic_power_3 } }
+		change_variable = { which = magicxp value = 3 }
+	}
+	else_if = {
+		limit = { FROM = { has_character_modifier = magic_power_4 } }
+		change_variable = { which = magicxp value = 4 }
+	}
+}
+
+# Cleanup to clear magic legality flag
+revert_magic_legal_effect = {
+	if = {
+		limit = {
+			NOT = {
+				any_independent_ruler = {
+					has_law = magic_law_2
+				}
+			}
+			NOT = {
+				had_global_flag = {
+					flag = magic_legal_old_world
+					years >= 50
+				}
+			}
+		}
+		clr_global_flag = magic_legal_old_world
+	}
+}
+
+join_magic_society_tutor_effect = {
+	random_list = {
+		20 = {
+			limit = {
+				college_of_magic_imperial = { society_is_active = yes }
+				can_join_society = college_of_magic_imperial
+			}
+			join_society = college_of_magic_imperial
+			#Start training if needed
+			character_event = { id = college.20 days = 10 }
+		}
+		20 = {
+			limit = {
+				college_of_magic_dynamic_1 = { society_is_active = yes }
+				can_join_society = college_of_magic_dynamic_1
+			}
+			join_society = college_of_magic_dynamic_1
+			#Start training if needed
+			character_event = { id = college.20 days = 10 }
+		}
+		20 = {
+			limit = {
+				college_of_magic_dynamic_2 = { society_is_active = yes }
+				can_join_society = college_of_magic_dynamic_2
+			}
+			join_society = college_of_magic_dynamic_2
+			#Start training if needed
+			character_event = { id = college.20 days = 10 }
+		}
+		20 = {
+			limit = {
+				college_of_magic_dynamic_3 = { society_is_active = yes }
+				can_join_society = college_of_magic_dynamic_3
+			}
+			join_society = college_of_magic_dynamic_3
+			#Start training if needed
+			character_event = { id = college.20 days = 10 }
+		}
+		15 = {
+			limit = {
+				college_of_magic_dynamic_4 = { society_is_active = yes }
+				can_join_society = college_of_magic_dynamic_4
+			}
+			join_society = college_of_magic_dynamic_4
+			#Start training if needed
+			character_event = { id = college.20 days = 10 }
+		}
+		15 = {
+			limit = {
+			college_of_magic_dynamic_5 = { society_is_active = yes }
+			can_join_society = college_of_magic_dynamic_5
+			}
+			join_society = college_of_magic_dynamic_5
+			#Start training if needed
+			character_event = { id = college.20 days = 10 }
+		}
+		1 = {
+			set_character_flag = mcollbarr_entry
+		}
+	}
+}

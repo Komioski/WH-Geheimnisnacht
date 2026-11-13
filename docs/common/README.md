@@ -38,6 +38,7 @@ fail silently on a mistake there.
 | Folder | Status | Files |
 |---|---|---|
 | on_actions | done | 15 files merged into 9 `WHG_*_on_actions.txt` by subject; `00_on_actions.txt` and `00_zeus_education.txt` are vanilla-name overrides with the index |
+| modifiers | done | event_modifiers (57 files to 21), opinion_modifiers (22 to 21), triggered_modifiers (1 to 3), modifier_definitions (2 to 3), all `WHG_<subject>_<folder>.txt`; the vanilla names are overrides with the index |
 
 ## on_actions
 
@@ -55,3 +56,30 @@ fail silently on a mistake there.
   missing events, an on_action written twice, duplicate entries, pulse
   sub-lists without a `0` entry and commented-out entries. Run it with
   `tools/events/check_events.py` before committing.
+
+## Modifiers (event, opinion, triggered, definitions)
+
+- One file per subject in each folder, with the same subjects everywhere
+  (character, court, realm, war, faith, society, magic, chaos, undead,
+  greenskin, dwarf, elves, empire, bretonnia, kislev, south, east, sea,
+  legend): `WHG_kislev_event_modifiers.txt`,
+  `WHG_kislev_opinion_modifiers.txt`. A modifier goes in the subject of the
+  scripts that use it most.
+- `WHG_engine_*` holds what the game applies itself (prison, truce breaking,
+  bankruptcy, and vanilla's "hard" opinion modifiers): never rename those.
+  `WHG_vanilla_*` holds vanilla modifiers that nothing in the mod uses, kept
+  for salvage; move one to its subject file when you bring it back.
+- Each entry starts with a comment: its name in game and the files that use
+  it. Modifiers nothing uses yet go at the end of their file under "Not used
+  by any script yet".
+- Every modifier a player can see needs a name and a `_desc` in
+  localisation (`localisation/00_WHG_modifiers.csv` for ones without a home
+  file). Opinion modifiers at 0 need none (they do not show).
+- Triggered modifiers are checked for every character all the time: put
+  cheap, rare checks (a title, a trait, a flag) in `potential` and the rest
+  in `trigger`, which need not repeat `potential`.
+- `python3 tools/common/check_modifiers.py` reports modifiers defined twice,
+  modifiers used but not defined (adding one does nothing, checking one is
+  always false), bad icons, triggered modifiers missing a block, UTF-8 files
+  and commented-out code. With `--vanilla-loc <CK2>/localisation` it also
+  reports visible modifiers with no name.

@@ -1,0 +1,1871 @@
+###############################################################################
+# The game-book stories: grief in a time of plague, and courtly love
+# Namespaces: grief, courtly (were GBC.1 - GBC.13 and GBC.199 - GBC.143 in
+#   gbc_events.txt)
+# Faction: Generic
+# Serves: every lord and lady, above all the players
+#
+# Two short stories from the old game book. In the first a lord loses a
+# friend or kinsman to one of the great plagues, and a kinsman with the dead
+# one's owl helps them through their grief, until the plague comes for the
+# kinsman too. In the second a newlywed lord falls for the husband or wife
+# of another lord at the wedding feast, and courts them with poems, gifts and
+# a hunt, until the jealous spouse must be dealt with.
+# (Both stories were dead before the 2026 events refactor: the first waited
+# for a Black Death flag the mod never sets, the second's wedding hook was
+# commented out.)
+#
+# Grief brings the family together  grief.1 - grief.20
+# Courtly love                      courtly.1 - courtly.44
+#
+# Callers: grief.1 from the on_yearly_pulse list (00_on_actions.txt);
+#   courtly.1 from on_marriage (00_on_actions.txt).
+# Saved: grief: character flags grief_mourning (once per lifetime),
+#   grief_new_friend, grief_took_owl, grief_knows_friend_ill; event targets
+#   grief_dead_one, grief_friend, grief_councillor.
+#   courtly: character flags courtly_love (once per lifetime), courtly_lover
+#   and the choice flags courtly_*; event targets courtly_lover,
+#   courtly_rival.
+# Scripted triggers: common/scripted_triggers/WHG_gamebook_triggers.txt
+# Scripted effects: common/scripted_effects/WHG_gamebook_effects.txt
+# Localisation: localisation/00_WHG_gamebook_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = grief
+
+###############################################################################
+# Grief brings the family together
+###############################################################################
+
+# grief.1 The plague takes a friend
+# on_yearly_pulse: one of the great plagues takes a friend or kinsman.
+# Scope: ROOT is the mourner.
+character_event = {
+	id = grief.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_yearly_pulse
+
+	min_age = 16
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		NOT = { has_character_flag = grief_mourning }
+		OR = {
+			any_friend = { grief_dying_one_trigger = yes }
+			any_dynasty_member = { grief_dying_one_trigger = yes }
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { any_friend = { grief_dying_one_trigger = yes } }
+			random_friend = {
+				limit = { grief_dying_one_trigger = yes }
+				save_event_target_as = grief_dead_one
+			}
+		}
+		else = {
+			random_dynasty_member = {
+				limit = { grief_dying_one_trigger = yes }
+				save_event_target_as = grief_dead_one
+			}
+		}
+		set_character_flag = grief_mourning
+		event_target:grief_dead_one = { death = { death_reason = death_trait } }
+		narrative_event = { id = grief.2 days = 10 }
+	}
+}
+
+# grief.2 Gazing at the stars
+# Scope: ROOT is the mourner.
+narrative_event = {
+	id = grief.2
+	title = EVTNAMEgrief2
+	desc = EVTDESCgrief2
+	picture = GFX_evt_comet
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # grief.1
+
+	option = {
+		name = EVTOPTAgrief2
+		hidden_tooltip = { character_event = { id = grief.3 days = 10 } }
+	}
+}
+
+# grief.3 Alone with the grief
+# Scope: ROOT is the mourner.
+character_event = {
+	id = grief.3
+	desc = { trigger = { job_spiritual = { always = yes } } text = EVTDESCgrief3_priest }
+	desc = { trigger = { NOT = { job_spiritual = { always = yes } } } text = EVTDESCgrief3 }
+	picture = GFX_evt_pale_rider
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # grief.2
+
+	option = { # I should talk to someone
+		name = EVTOPTAgrief3
+		if = {
+			limit = { NOT = { trait = stressed } }
+			random = {
+				chance = 50
+				add_trait = stressed
+				hidden_tooltip = { character_event = { id = traitnote.282 } } # Notify stressed
+			}
+		}
+		hidden_tooltip = { character_event = { id = grief.4 days = 5 } }
+	}
+	option = { # I wish they were here
+		name = EVTOPTBgrief3
+		if = {
+			limit = { NOT = { trait = depressed } }
+			random = {
+				chance = 10
+				add_trait = depressed
+				hidden_tooltip = { character_event = { id = traitnote.288 } } # Notify depressed
+			}
+		}
+		hidden_tooltip = { character_event = { id = grief.4 days = 8 } }
+	}
+}
+
+# grief.4 A kinsman steps forward
+# Picks a kinsman (or a well-meaning courtier) who took in the dead one's owl.
+# Scope: ROOT is the mourner.
+character_event = {
+	id = grief.4
+	hide_window = yes
+
+	is_triggered_only = yes # grief.3
+
+	trigger = {
+		OR = {
+			any_dynasty_member = { grief_new_friend_trigger = yes }
+			any_courtier = { grief_new_friend_trigger = yes opinion = { who = ROOT value = 10 } }
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { any_dynasty_member = { grief_new_friend_trigger = yes } }
+			any_dynasty_member = {
+				limit = { grief_new_friend_trigger = yes }
+				score_value = { value = 10 interesting_courtier_selection_score = yes }
+				save_event_target_as = grief_friend
+			}
+		}
+		else = {
+			any_courtier = {
+				limit = { grief_new_friend_trigger = yes opinion = { who = ROOT value = 10 } }
+				score_value = { value = 10 interesting_courtier_selection_score = yes }
+				save_event_target_as = grief_friend
+			}
+		}
+		event_target:grief_friend = {
+			set_character_flag = grief_new_friend
+			character_event = { id = grief.5 }
+		}
+	}
+}
+
+# grief.5 Relay: the kinsman comes to the mourner
+# Scope: ROOT is the kinsman.
+character_event = {
+	id = grief.5
+	hide_window = yes
+
+	is_triggered_only = yes # grief.4
+
+	immediate = {
+		FROM = { character_event = { id = grief.6 } }
+	}
+}
+
+# grief.6 A kinsman reaches out
+# Scope: ROOT is the mourner, FROM the kinsman.
+character_event = {
+	id = grief.6
+	desc = EVTDESCgrief6
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # grief.5
+
+	option = { # I am more than they think
+		name = EVTOPTAgrief6
+		if = {
+			limit = { NOR = { trait = honest trait = deceitful } }
+			add_trait = honest
+			hidden_tooltip = { character_event = { id = traitnote.262 } } # Notify honest
+		}
+		if = { limit = { trait = shy } remove_trait = shy }
+		hidden_tooltip = { character_event = { id = grief.7 days = 10 } }
+	}
+	option = { # I am FINE
+		name = EVTOPTBgrief6
+		if = { limit = { trait = honest } remove_trait = honest }
+		if = { limit = { NOT = { trait = stubborn } } add_trait = stubborn }
+		hidden_tooltip = { character_event = { id = grief.7 days = 10 } }
+	}
+}
+
+# grief.7 The owl
+# The kinsman offers the dead one's owl.
+# Scope: ROOT is the mourner.
+character_event = {
+	id = grief.7
+	desc = EVTDESCgrief7
+	picture = GFX_evt_falconing
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # grief.6
+
+	trigger = {
+		event_target:grief_friend = { is_alive = yes }
+	}
+
+	option = { # the owl is adorable
+		name = EVTOPTAgrief7
+		event_target:grief_friend = {
+			opinion = { who = ROOT modifier = opinion_budding_friendship }
+		}
+		add_character_modifier = { name = pet_owl duration = -1 }
+		set_character_flag = grief_took_owl
+		if = { limit = { trait = depressed } remove_trait = depressed }
+		if = { limit = { trait = stressed } remove_trait = stressed }
+		hidden_tooltip = {
+			character_event = { id = pet.1 days = 3500 random = 2000 } # The owl dies
+			character_event = { id = grief.8 days = 25 }
+		}
+	}
+	option = { # I can barely care for myself
+		name = EVTOPTBgrief7
+		hidden_tooltip = { character_event = { id = grief.8 days = 25 } }
+	}
+}
+
+# grief.8 A councillor who noticed
+# Picks a councillor (or another courtier) who saw the two together. The
+# kinsman starts to feel unwell.
+# Scope: ROOT is the mourner.
+character_event = {
+	id = grief.8
+	hide_window = yes
+
+	is_triggered_only = yes # grief.7
+
+	immediate = {
+		if = {
+			limit = {
+				any_courtier = {
+					is_councillor = yes
+					NOT = { character = event_target:grief_friend }
+					opinion = { who = ROOT value = 25 }
+				}
+			}
+			any_courtier = {
+				limit = {
+					is_councillor = yes
+					NOT = { character = event_target:grief_friend }
+					opinion = { who = ROOT value = 25 }
+				}
+				score_value = { value = 10 interesting_courtier_selection_score = yes }
+				save_event_target_as = grief_councillor
+			}
+		}
+		else = {
+			any_courtier = {
+				limit = { is_adult = yes NOT = { character = event_target:grief_friend } }
+				score_value = { value = 10 interesting_courtier_selection_score = yes }
+				save_event_target_as = grief_councillor
+			}
+		}
+		event_target:grief_friend = {
+			if = {
+				limit = { is_disease_immune_race = no }
+				if = {
+					limit = { has_dlc = "Reapers" }
+					add_trait = fever
+					set_character_flag = developing_illness
+				}
+				else = { add_trait = ill }
+			}
+		}
+		if = {
+			limit = { event_target:grief_councillor = { always = yes } }
+			event_target:grief_councillor = { character_event = { id = grief.9 } }
+		}
+		else = { event_target:grief_friend = { character_event = { id = grief.11 days = 30 } } }
+	}
+}
+
+# grief.9 Relay: the councillor comes to the mourner
+# Scope: ROOT is the councillor.
+character_event = {
+	id = grief.9
+	hide_window = yes
+
+	is_triggered_only = yes # grief.8
+
+	immediate = {
+		FROM = { character_event = { id = grief.10 } }
+	}
+}
+
+# grief.10 The councillor asks about the kinsman
+# Scope: ROOT is the mourner, FROM the councillor.
+character_event = {
+	id = grief.10
+	desc = EVTDESCgrief10
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # grief.9
+
+	option = { # our grief has brought us together
+		name = EVTOPTAgrief10
+		if = {
+			limit = { NOT = { is_friend = event_target:grief_friend } }
+			add_friend = event_target:grief_friend
+		}
+		hidden_tooltip = {
+			event_target:grief_friend = { character_event = { id = grief.11 days = 30 } }
+		}
+	}
+	option = { # I don't know what you mean
+		name = EVTOPTBgrief10
+		if = { limit = { NOR = { trait = cynical trait = zealous } } add_trait = cynical }
+		hidden_tooltip = {
+			event_target:grief_friend = { character_event = { id = grief.11 days = 30 } }
+		}
+	}
+}
+
+# grief.11 Relay: the kinsman comes back
+# Scope: ROOT is the kinsman.
+character_event = {
+	id = grief.11
+	hide_window = yes
+
+	is_triggered_only = yes # grief.8, grief.10
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		FROM = { character_event = { id = grief.12 } }
+	}
+}
+
+# grief.12 The kinsman is not well
+# Scope: ROOT is the mourner, FROM the kinsman.
+character_event = {
+	id = grief.12
+	desc = { trigger = { has_character_flag = grief_took_owl } text = EVTDESCgrief12_owl }
+	desc = { trigger = { NOT = { has_character_flag = grief_took_owl } } text = EVTDESCgrief12 }
+	picture = GFX_evt_quarrel
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # grief.11
+
+	option = { # what's wrong?
+		name = EVTOPTAgrief12
+		if = { limit = { trait = wroth } remove_trait = wroth }
+		else_if = {
+			limit = { NOT = { trait = patient } }
+			add_trait = patient
+			hidden_tooltip = { character_event = { id = traitnote.264 } } # Notify patient
+		}
+		hidden_tooltip = { character_event = { id = grief.13 } }
+	}
+	option = { # leave me be!
+		name = EVTOPTBgrief12
+		if = { limit = { trait = patient } remove_trait = patient }
+		else_if = {
+			limit = { NOT = { trait = wroth } }
+			add_trait = wroth
+			hidden_tooltip = { character_event = { id = traitnote.254 } } # Notify wroth
+		}
+		hidden_tooltip = { character_event = { id = grief.14 } }
+	}
+	option = { # it does not concern me
+		name = EVTOPTCgrief12
+		if = {
+			limit = { NOR = { trait = arbitrary trait = just } }
+			add_trait = arbitrary
+			hidden_tooltip = { character_event = { id = traitnote.266 } } # Notify arbitrary
+		}
+		hidden_tooltip = { character_event = { id = grief.15 } }
+	}
+}
+
+# grief.13 The kinsman fears the plague
+# Scope: ROOT is the mourner.
+character_event = {
+	id = grief.13
+	desc = EVTDESCgrief13
+	picture = GFX_evt_shadowy_cabal
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # grief.12
+
+	immediate = {
+		set_character_flag = grief_knows_friend_ill
+	}
+
+	option = {
+		name = EVTOPTAgrief13
+		hidden_tooltip = {
+			event_target:grief_friend = { character_event = { id = grief.16 days = 15 } }
+		}
+	}
+}
+
+# grief.14 The kinsman weeps
+# Scope: ROOT is the mourner.
+character_event = {
+	id = grief.14
+	desc = EVTDESCgrief14
+	picture = GFX_evt_shadowy_cabal
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # grief.12
+
+	option = {
+		name = EVTOPTAgrief14
+		hidden_tooltip = {
+			event_target:grief_friend = { character_event = { id = grief.16 days = 15 } }
+		}
+	}
+}
+
+# grief.15 The kinsman curses the mourner
+# Scope: ROOT is the mourner.
+character_event = {
+	id = grief.15
+	desc = EVTDESCgrief15
+	picture = GFX_evt_shadowy_cabal
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # grief.12
+
+	option = {
+		name = EVTOPTAgrief15
+		custom_tooltip = { text = EVTOPTAgrief15_TT }
+		event_target:grief_friend = {
+			opinion = { who = ROOT modifier = opinion_disgusted months = 60 }
+		}
+		hidden_tooltip = { character_event = { id = grief.18 days = 20 } }
+	}
+}
+
+# grief.16 Relay: the kinsman asks for company
+# Scope: ROOT is the kinsman.
+character_event = {
+	id = grief.16
+	hide_window = yes
+
+	is_triggered_only = yes # grief.13, grief.14
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		FROM = { character_event = { id = grief.17 } }
+	}
+}
+
+# grief.17 Time together
+# Scope: ROOT is the mourner, FROM the kinsman.
+character_event = {
+	id = grief.17
+	desc = { trigger = { has_character_flag = grief_knows_friend_ill } text = EVTDESCgrief17_ill }
+	desc = {
+		trigger = { NOT = { has_character_flag = grief_knows_friend_ill } }
+		text = EVTDESCgrief17
+	}
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # grief.16
+
+	option = { # sit by their side
+		name = EVTOPTAgrief17
+		trigger = { has_character_flag = grief_knows_friend_ill }
+		custom_tooltip = { text = EVTOPTAgrief17_TT }
+		hidden_tooltip = { character_event = { id = grief.18 days = 30 random = 10 } }
+	}
+	option = { # ride out together
+		name = EVTOPTBgrief17
+		trigger = { NOT = { has_character_flag = grief_knows_friend_ill } }
+		custom_tooltip = { text = EVTOPTBgrief17_TT }
+		hidden_tooltip = { character_event = { id = grief.18 days = 40 random = 10 } }
+	}
+}
+
+# grief.18 Does the kinsman live?
+# About two in three live. The plague cannot take the undying or those it
+# cannot touch.
+# Scope: ROOT is the mourner.
+character_event = {
+	id = grief.18
+	hide_window = yes
+
+	is_triggered_only = yes # grief.15, grief.17
+
+	trigger = {
+		event_target:grief_friend = { is_alive = yes }
+	}
+
+	immediate = {
+		random_list = {
+			65 = { narrative_event = { id = grief.19 } }
+			35 = {
+				modifier = {
+					factor = 0
+					event_target:grief_friend = { is_invincible_trigger = yes }
+				}
+				modifier = {
+					factor = 0
+					event_target:grief_friend = { is_disease_immune_race = yes }
+				}
+				narrative_event = { id = grief.20 days = 5 random = 5 }
+			}
+		}
+	}
+}
+
+# grief.19 The kinsman lives
+# Scope: ROOT is the mourner.
+narrative_event = {
+	id = grief.19
+	title = EVTNAMEgrief19
+	desc = { trigger = { has_character_flag = grief_knows_friend_ill } text = EVTDESCgrief19_ill }
+	desc = {
+		trigger = { NOT = { has_character_flag = grief_knows_friend_ill } }
+		text = EVTDESCgrief19
+	}
+	picture = GFX_evt_garden
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # grief.18
+
+	option = {
+		name = { trigger = { has_character_flag = grief_knows_friend_ill } text = EVTOPTAgrief19 }
+		name = {
+			trigger = { NOT = { has_character_flag = grief_knows_friend_ill } }
+			text = EVTOPTBgrief19
+		}
+		custom_tooltip = { text = EVTOPTAgrief19_TT }
+		grief_end_effect = yes
+		event_target:grief_friend = {
+			remove_trait = fever
+			remove_trait = ill
+			clr_character_flag = developing_illness
+		}
+	}
+}
+
+# grief.20 The kinsman dies
+# Scope: ROOT is the mourner.
+narrative_event = {
+	id = grief.20
+	title = EVTNAMEgrief20
+	desc = { trigger = { has_character_flag = grief_knows_friend_ill } text = EVTDESCgrief20_ill }
+	desc = {
+		trigger = { NOT = { has_character_flag = grief_knows_friend_ill } }
+		text = EVTDESCgrief20
+	}
+	picture = GFX_evt_death
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # grief.18
+
+	trigger = {
+		event_target:grief_friend = { is_alive = yes }
+	}
+
+	immediate = {
+		event_target:grief_friend = {
+			if = { limit = { has_dlc = "Reapers" } add_trait = malaise }
+			death = { death_reason = death_trait }
+		}
+	}
+
+	option = {
+		name = EVTOPTAgrief20
+		custom_tooltip = { text = EVTOPTAgrief20_TT }
+		grief_end_effect = yes
+	}
+}
+
+###############################################################################
+# Courtly love
+# A newlywed lord falls for the husband or wife of another lord at the
+# wedding feast: the spouse of their liege, of a fellow vassal or of one of
+# their own vassals.
+###############################################################################
+
+namespace = courtly
+
+# courtly.1 A glance at the wedding feast
+# on_marriage: a newlywed player may fall for someone else at their own
+# wedding feast (3%).
+# Scope: ROOT is the employer, FROM the newlywed.
+character_event = {
+	id = courtly.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_marriage
+
+	trigger = {
+		FROM = {
+			ai = no
+			is_landed = yes
+			is_adult = yes
+			is_no_females_race = no
+			block_general_event_trigger = no
+			NOR = {
+				any_lover = { always = yes }
+				trait = celibate
+				has_character_flag = courtly_love
+			}
+		}
+	}
+
+	immediate = {
+		random = { chance = 3 FROM = { character_event = { id = courtly.2 days = 3 } } }
+	}
+}
+
+# courtly.2 Who caught the eye?
+# Picks the married one: the liege's spouse first, then the spouse of a
+# fellow vassal, then of one of the newlywed's own vassals.
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.2
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.1
+
+	immediate = {
+		if = {
+			limit = {
+				liege = {
+					NOT = { character = ROOT }
+					any_spouse = { courtly_love_target_trigger = yes }
+				}
+			}
+			liege = {
+				any_spouse = {
+					limit = { courtly_love_target_trigger = yes }
+					score_value = { value = 10 interesting_courtier_selection_score = yes }
+					save_event_target_as = courtly_lover
+				}
+			}
+		}
+		else_if = {
+			limit = {
+				liege = {
+					any_vassal = {
+						NOT = { character = ROOT }
+						any_spouse = { courtly_love_target_trigger = yes }
+					}
+				}
+			}
+			liege = {
+				random_vassal = {
+					limit = {
+						NOT = { character = ROOT }
+						any_spouse = { courtly_love_target_trigger = yes }
+					}
+					any_spouse = {
+						limit = { courtly_love_target_trigger = yes }
+						score_value = { value = 10 interesting_courtier_selection_score = yes }
+						save_event_target_as = courtly_lover
+					}
+				}
+			}
+		}
+		else_if = {
+			limit = { any_vassal = { any_spouse = { courtly_love_target_trigger = yes } } }
+			random_vassal = {
+				limit = { any_spouse = { courtly_love_target_trigger = yes } }
+				any_spouse = {
+					limit = { courtly_love_target_trigger = yes }
+					score_value = { value = 10 interesting_courtier_selection_score = yes }
+					save_event_target_as = courtly_lover
+				}
+			}
+		}
+		if = {
+			limit = { event_target:courtly_lover = { always = yes } }
+			set_character_flag = courtly_love
+			event_target:courtly_lover = {
+				spouse = { save_event_target_as = courtly_rival }
+				character_event = { id = courtly.3 }
+			}
+		}
+	}
+}
+
+# courtly.3 Relay: the married one
+# Scope: ROOT is the married one, FROM the newlywed.
+character_event = {
+	id = courtly.3
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.2
+
+	immediate = {
+		FROM = { narrative_event = { id = courtly.4 } }
+	}
+}
+
+# courtly.4 Across the hall
+# Scope: ROOT is the newlywed, FROM the married one.
+narrative_event = {
+	id = courtly.4
+	title = EVTNAMEcourtly4
+	desc = EVTDESCcourtly4
+	picture = GFX_evt_marriage
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes # courtly.3
+	hide_new = yes
+
+	option = {
+		name = EVTOPTAcourtly4
+		hidden_tooltip = {
+			event_target:courtly_lover = { character_event = { id = courtly.5 days = 3 } }
+		}
+	}
+}
+
+# courtly.5 Relay: the married one at the feast
+# Scope: ROOT is the married one.
+character_event = {
+	id = courtly.5
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.4
+
+	trigger = {
+		block_general_event_trigger = no
+	}
+
+	immediate = {
+		FROM = { character_event = { id = courtly.6 } }
+	}
+}
+
+# courtly.6 The dance
+# Scope: ROOT is the newlywed, FROM the married one.
+character_event = {
+	id = courtly.6
+	desc = {
+		trigger = { has_dlc = "Way of Life" }
+		picture = GFX_evt_dancing
+		text = EVTDESCcourtly6
+	}
+	desc = {
+		trigger = { NOT = { has_dlc = "Way of Life" } }
+		picture = GFX_evt_feast
+		text = EVTDESCcourtly6
+	}
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # courtly.5
+
+	option = { # pay attention to them
+		name = EVTOPTAcourtly6
+		opinion = { who = FROM modifier = opinion_charmed }
+		spouse = { opinion = { who = ROOT modifier = opinion_inattentive } }
+		hidden_tooltip = {
+			event_target:courtly_lover = { character_event = { id = courtly.7 days = 15 } }
+		}
+	}
+	option = { # my place is with my new spouse
+		name = EVTOPTBcourtly6
+		trigger = { NOT = { trait = lustful } }
+		clr_character_flag = courtly_love
+	}
+}
+
+# courtly.7 Relay: the married one in a dream
+# Scope: ROOT is the married one.
+character_event = {
+	id = courtly.7
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.6
+
+	trigger = {
+		block_general_event_trigger = no
+	}
+
+	immediate = {
+		FROM = { character_event = { id = courtly.8 } }
+	}
+}
+
+# courtly.8 The dream
+# Scope: ROOT is the newlywed, FROM the married one.
+character_event = {
+	id = courtly.8
+	desc = EVTDESCcourtly8
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # courtly.7
+
+	option = { # find them before they leave
+		name = EVTOPTAcourtly8
+		trigger = { NOT = { trait = craven } }
+		if = {
+			limit = { NOT = { trait = brave } }
+			random = {
+				chance = 20
+				add_trait = brave
+				hidden_tooltip = { character_event = { id = traitnote.270 } } # Notify brave
+			}
+		}
+		hidden_tooltip = {
+			event_target:courtly_lover = { character_event = { id = courtly.9 days = 3 } }
+		}
+	}
+	option = { # this is wrong
+		name = EVTOPTBcourtly8
+		add_trait = stressed
+		if = {
+			limit = { NOR = { trait = chaste trait = lustful } }
+			random = {
+				chance = 50
+				add_trait = chaste
+				hidden_tooltip = { character_event = { id = traitnote.274 } } # Notify chaste
+			}
+		}
+	}
+}
+
+# courtly.9 Relay: the married one in the garden
+# Scope: ROOT is the married one.
+character_event = {
+	id = courtly.9
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.8
+
+	trigger = {
+		block_general_event_trigger = no
+	}
+
+	immediate = {
+		FROM = { character_event = { id = courtly.10 } }
+	}
+}
+
+# courtly.10 In the garden
+# The married one turns the newlywed away, kindly.
+# Scope: ROOT is the newlywed, FROM the married one.
+character_event = {
+	id = courtly.10
+	desc = {
+		trigger = { has_dlc = "Way of Life" }
+		picture = GFX_evt_castle_garden
+		text = EVTDESCcourtly10
+	}
+	desc = {
+		trigger = { NOT = { has_dlc = "Way of Life" } }
+		picture = GFX_evt_garden
+		text = EVTDESCcourtly10
+	}
+	picture = GFX_evt_garden
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # courtly.9
+
+	option = {
+		name = EVTOPTAcourtly10
+		hidden_tooltip = { character_event = { id = courtly.11 days = 150 } }
+	}
+}
+
+# courtly.11 A poem or a gift?
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.11
+	desc = EVTDESCcourtly11
+	picture = GFX_evt_recieve_letter
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # courtly.10
+
+	trigger = {
+		event_target:courtly_lover = { is_alive = yes }
+	}
+
+	option = { # write a poem
+		name = EVTOPTAcourtly11
+		trigger = { NOT = { trait = poet } }
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 diplomacy = 12 }
+				modifier = { factor = 1.5 diplomacy = 18 }
+				modifier = { factor = 1.5 diplomacy = 24 }
+				custom_tooltip = { text = EVTOPTAcourtly11_TT_good }
+				hidden_tooltip = { character_event = { id = courtly.12 days = 3 } }
+			}
+			50 = {
+				custom_tooltip = { text = EVTOPTAcourtly11_TT_bad }
+				hidden_tooltip = { character_event = { id = courtly.13 days = 3 } }
+			}
+		}
+	}
+	option = { # a masterful poem
+		name = EVTOPTBcourtly11
+		trigger = { trait = poet }
+		hidden_tooltip = { character_event = { id = courtly.12 days = 3 } }
+	}
+	option = { # send a gift
+		name = EVTOPTCcourtly11
+		scaled_wealth = { value = -0.5 min = -25 }
+		set_character_flag = courtly_gift
+		hidden_tooltip = {
+			event_target:courtly_lover = {
+				character_event = { id = courtly.14 days = 40 random = 20 }
+			}
+		}
+	}
+	option = { # send nothing
+		name = EVTOPTDcourtly11
+		event_target:courtly_lover = { opinion = { who = ROOT modifier = opinion_broken_promises } }
+		hidden_tooltip = { narrative_event = { id = courtly.44 days = 30 } }
+	}
+}
+
+# courtly.12 The poem is good
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.12
+	desc = EVTDESCcourtly12
+	picture = GFX_evt_monk
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # courtly.11
+
+	option = {
+		name = EVTOPTAcourtly12
+		if = { limit = { NOT = { trait = poet } } add_trait = poet }
+		set_character_flag = courtly_poem_good
+		hidden_tooltip = {
+			event_target:courtly_lover = {
+				character_event = { id = courtly.14 days = 40 random = 20 }
+			}
+		}
+	}
+}
+
+# courtly.13 The poem is bad
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.13
+	desc = EVTDESCcourtly13
+	picture = GFX_evt_monk
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # courtly.11
+
+	option = { # send it anyway
+		name = EVTOPTAcourtly13
+		add_trait = stressed
+		set_character_flag = courtly_poem_bad
+		hidden_tooltip = {
+			event_target:courtly_lover = {
+				character_event = { id = courtly.14 days = 40 random = 20 }
+			}
+		}
+	}
+	option = { # burn it and send a gift
+		name = EVTOPTBcourtly13
+		add_trait = stressed
+		scaled_wealth = { value = -0.5 min = -25 }
+		set_character_flag = courtly_gift
+		hidden_tooltip = {
+			event_target:courtly_lover = {
+				character_event = { id = courtly.14 days = 40 random = 20 }
+			}
+		}
+	}
+}
+
+# courtly.14 Relay: the married one writes back
+# Scope: ROOT is the married one.
+character_event = {
+	id = courtly.14
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.11 - 13
+
+	trigger = {
+		block_general_event_trigger = no
+	}
+
+	immediate = {
+		FROM = { letter_event = { id = courtly.15 } }
+	}
+}
+
+# courtly.15 The reply
+# Scope: ROOT is the newlywed, FROM the married one.
+letter_event = {
+	id = courtly.15
+	desc = { trigger = { has_character_flag = courtly_poem_good } text = EVTDESCcourtly15_good }
+	desc = { trigger = { has_character_flag = courtly_poem_bad } text = EVTDESCcourtly15_bad }
+	desc = { trigger = { has_character_flag = courtly_gift } text = EVTDESCcourtly15_gift }
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes # courtly.14
+
+	option = { # they loved the poem
+		name = EVTOPTAcourtly15
+		trigger = { has_character_flag = courtly_poem_good }
+		reverse_opinion = { who = FROM modifier = opinion_romantic_poem }
+		clr_character_flag = courtly_poem_good
+		hidden_tooltip = { character_event = { id = courtly.16 days = 150 random = 15 } }
+	}
+	option = { # they hated the poem
+		name = EVTOPTBcourtly15
+		trigger = { has_character_flag = courtly_poem_bad }
+		reverse_opinion = { who = FROM modifier = opinion_terrible_poem }
+		clr_character_flag = courtly_poem_bad
+		hidden_tooltip = { narrative_event = { id = courtly.44 days = 30 } }
+	}
+	option = { # they loved the gift
+		name = EVTOPTCcourtly15
+		trigger = { has_character_flag = courtly_gift }
+		reverse_opinion = { who = FROM modifier = opinion_romantic_gift }
+		clr_character_flag = courtly_gift
+		hidden_tooltip = { character_event = { id = courtly.16 days = 150 random = 15 } }
+	}
+}
+
+# courtly.16 An invitation to the hunt
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.16
+	desc = {
+		trigger = { has_dlc = "Way of Life" }
+		picture = GFX_evt_hunting_scene
+		text = EVTDESCcourtly16
+	}
+	desc = {
+		trigger = { NOT = { has_dlc = "Way of Life" } }
+		picture = GFX_evt_recieve_letter
+		text = EVTDESCcourtly16
+	}
+	picture = GFX_evt_recieve_letter
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # courtly.15
+
+	trigger = {
+		event_target:courtly_lover = { is_alive = yes }
+		event_target:courtly_rival = { is_alive = yes }
+	}
+
+	option = { # go
+		name = EVTOPTAcourtly16
+		hidden_tooltip = {
+			event_target:courtly_lover = {
+				character_event = { id = courtly.17 days = 50 random = 10 }
+			}
+		}
+	}
+	option = { # stay home
+		name = EVTOPTBcourtly16
+		hidden_tooltip = { narrative_event = { id = courtly.44 days = 30 } }
+	}
+}
+
+# courtly.17 Relay: the married one at dinner
+# Scope: ROOT is the married one.
+character_event = {
+	id = courtly.17
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.16
+
+	trigger = {
+		block_general_event_trigger = no
+	}
+
+	immediate = {
+		FROM = { character_event = { id = courtly.18 } }
+	}
+}
+
+# courtly.18 Dinner at the hunting lodge
+# Scope: ROOT is the newlywed, FROM the married one.
+character_event = {
+	id = courtly.18
+	desc = EVTDESCcourtly18
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # courtly.17
+
+	option = { # try to speak with them
+		name = EVTOPTAcourtly18
+		hidden_tooltip = {
+			event_target:courtly_rival = { character_event = { id = courtly.19 days = 3 } }
+		}
+	}
+	option = { # watch from afar
+		name = EVTOPTBcourtly18
+		hidden_tooltip = { character_event = { id = courtly.21 days = 20 } }
+	}
+}
+
+# courtly.19 Relay: the spouse watches
+# Scope: ROOT is the jealous spouse.
+character_event = {
+	id = courtly.19
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.18
+
+	trigger = {
+		block_general_event_trigger = no
+	}
+
+	immediate = {
+		FROM = { character_event = { id = courtly.20 } }
+	}
+}
+
+# courtly.20 The spouse notices
+# Scope: ROOT is the newlywed, FROM the jealous spouse.
+character_event = {
+	id = courtly.20
+	desc = EVTDESCcourtly20
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # courtly.19
+
+	option = {
+		name = EVTOPTAcourtly20
+		event_target:courtly_rival = {
+			opinion = { who = ROOT modifier = opinion_acting_suspicious }
+		}
+		hidden_tooltip = { character_event = { id = courtly.21 days = 17 } }
+	}
+}
+
+# courtly.21 A scream in the woods
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.21
+	desc = EVTDESCcourtly21
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # courtly.18, courtly.20
+
+	trigger = {
+		event_target:courtly_lover = { is_alive = yes }
+	}
+
+	option = { # run towards it
+		name = EVTOPTAcourtly21
+		hidden_tooltip = {
+			event_target:courtly_lover = { character_event = { id = courtly.22 days = 1 } }
+		}
+	}
+	option = { # it is none of my business
+		name = EVTOPTBcourtly21
+		hidden_tooltip = { character_event = { id = courtly.24 days = 7 } }
+	}
+}
+
+# courtly.22 Relay: the married one in danger
+# Scope: ROOT is the married one.
+character_event = {
+	id = courtly.22
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.21
+
+	trigger = {
+		block_general_event_trigger = no
+	}
+
+	immediate = {
+		FROM = { character_event = { id = courtly.23 } }
+	}
+}
+
+# courtly.23 The boar
+# A great boar has the married one at bay.
+# Scope: ROOT is the newlywed, FROM the married one.
+character_event = {
+	id = courtly.23
+	desc = EVTDESCcourtly23
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # courtly.22
+
+	option = { # shoot
+		name = EVTOPTAcourtly23
+		random_list = {
+			40 = {
+				modifier = { factor = 1.2 combat_rating = 10 }
+				modifier = { factor = 1.2 combat_rating = 20 }
+				modifier = { factor = 1.2 combat_rating = 30 }
+				modifier = { factor = 1.2 combat_rating = 40 }
+				modifier = { factor = 1.2 combat_rating = 50 }
+				modifier = { factor = 1.5 trait = hunter }
+				custom_tooltip = { text = EVTOPTAcourtly23_TT }
+				set_character_flag = courtly_shot_hit
+			}
+			60 = {
+				modifier = { factor = 1.2 NOT = { combat_rating = 0 } }
+				modifier = { factor = 1.2 NOT = { combat_rating = -10 } }
+				modifier = { factor = 1.2 NOT = { combat_rating = -20 } }
+				tooltip = { FROM = { add_maimed_trait_effect = yes } }
+				set_character_flag = courtly_shot_missed
+			}
+		}
+		hidden_tooltip = {
+			event_target:courtly_lover = { character_event = { id = courtly.25 days = 1 } }
+		}
+	}
+	option = { # charge the beast
+		name = EVTOPTBcourtly23
+		trigger = { NOT = { trait = craven } }
+		random_list = {
+			70 = {
+				custom_tooltip = { text = EVTOPTBcourtly23_TT }
+				set_character_flag = courtly_charge_won
+			}
+			30 = {
+				custom_tooltip = { text = maimed_effect_tooltip }
+				set_character_flag = courtly_charge_hurt
+			}
+		}
+		hidden_tooltip = {
+			event_target:courtly_lover = { character_event = { id = courtly.25 days = 1 } }
+		}
+	}
+	option = { # freeze
+		name = EVTOPTCcourtly23
+		random_list = {
+			80 = {
+				tooltip = { FROM = { add_maimed_trait_effect = yes } }
+				set_character_flag = courtly_froze_maimed
+			}
+			20 = {
+				modifier = { factor = 0 FROM = { is_invincible_trigger = yes } }
+				custom_tooltip = { text = EVTOPTCcourtly23_TT }
+				set_character_flag = courtly_froze_death
+			}
+		}
+		hidden_tooltip = {
+			event_target:courtly_lover = { character_event = { id = courtly.25 days = 1 } }
+		}
+	}
+}
+
+# courtly.24 The married one is dead
+# The newlywed did not come, and the boar killed the married one.
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.24
+	desc = EVTDESCcourtly24
+	picture = GFX_evt_death
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # courtly.21
+
+	option = {
+		name = EVTOPTAcourtly24
+		event_target:courtly_lover = { courtly_boar_death_effect = yes }
+		if = {
+			limit = { NOT = { trait = depressed } }
+			add_trait = depressed
+			hidden_tooltip = { character_event = { id = traitnote.288 } } # Notify depressed
+		}
+		hidden_tooltip = { narrative_event = { id = courtly.44 days = 30 } }
+	}
+}
+
+# courtly.25 Relay: after the boar
+# Scope: ROOT is the married one.
+character_event = {
+	id = courtly.25
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.23
+
+	trigger = {
+		block_general_event_trigger = no
+	}
+
+	immediate = {
+		FROM = { character_event = { id = courtly.26 } }
+	}
+}
+
+# courtly.26 After the boar
+# Scope: ROOT is the newlywed, FROM the married one.
+character_event = {
+	id = courtly.26
+	desc = { trigger = { has_character_flag = courtly_shot_hit } text = EVTDESCcourtly26_hit }
+	desc = { trigger = { has_character_flag = courtly_shot_missed } text = EVTDESCcourtly26_missed }
+	desc = { trigger = { has_character_flag = courtly_charge_won } text = EVTDESCcourtly26_won }
+	desc = { trigger = { has_character_flag = courtly_charge_hurt } text = EVTDESCcourtly26_hurt }
+	desc = {
+		trigger = {
+			OR = {
+				has_character_flag = courtly_froze_maimed
+				has_character_flag = courtly_froze_death
+			}
+		}
+		text = EVTDESCcourtly26_froze
+	}
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # courtly.25
+
+	option = { # they are saved: become lovers
+		name = EVTOPTAcourtly26
+		trigger = { courtly_saved_trigger = yes }
+		if = {
+			limit = { is_no_females_race = no FROM = { is_no_females_race = no } }
+			add_lover = FROM
+		}
+		set_character_flag = courtly_lover
+		if = { limit = { has_character_flag = courtly_charge_hurt } add_maimed_trait_effect = yes }
+		courtly_clear_hunt_effect = yes
+		hidden_tooltip = {
+			character_event = { id = courtly.27 days = 20 }
+			character_event = { id = courtly.28 days = 30 }
+		}
+	}
+	option = { # they are saved: deny the love
+		name = EVTOPTBcourtly26
+		trigger = { courtly_saved_trigger = yes }
+		reverse_opinion = { who = FROM modifier = opinion_advance_rejected }
+		if = { limit = { has_character_flag = courtly_charge_hurt } add_maimed_trait_effect = yes }
+		courtly_clear_hunt_effect = yes
+		hidden_tooltip = {
+			character_event = { id = courtly.28 days = 30 }
+			narrative_event = { id = courtly.44 days = 30 }
+		}
+	}
+	option = { # they are maimed
+		name = EVTOPTCcourtly26
+		trigger = {
+			OR = {
+				has_character_flag = courtly_shot_missed
+				has_character_flag = courtly_froze_maimed
+			}
+		}
+		FROM = { add_maimed_trait_effect = yes }
+		courtly_clear_hunt_effect = yes
+		hidden_tooltip = { narrative_event = { id = courtly.44 days = 30 } }
+	}
+	option = { # they are dead
+		name = EVTOPTDcourtly26
+		trigger = { has_character_flag = courtly_froze_death }
+		FROM = { courtly_boar_death_effect = yes }
+		courtly_clear_hunt_effect = yes
+		hidden_tooltip = { narrative_event = { id = courtly.44 days = 30 } }
+	}
+}
+
+# courtly.27 Stolen days
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.27
+	desc = EVTDESCcourtly27
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # courtly.26
+
+	trigger = {
+		event_target:courtly_lover = { is_alive = yes is_lover = ROOT }
+		event_target:courtly_rival = { is_alive = yes }
+	}
+
+	option = { # meet in secret
+		name = EVTOPTAcourtly27
+		hidden_tooltip = {
+			event_target:courtly_rival = { character_event = { id = courtly.29 days = 3 } }
+		}
+	}
+	option = { # wait for the next hunt
+		name = EVTOPTBcourtly27
+		hidden_tooltip = {
+			event_target:courtly_lover = { character_event = { id = courtly.31 days = 90 } }
+		}
+	}
+}
+
+# courtly.28 The hunt is over
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.28
+	desc = {
+		trigger = { has_dlc = "Way of Life" }
+		picture = GFX_evt_hunting_scene
+		text = EVTDESCcourtly28
+	}
+	desc = {
+		trigger = { NOT = { has_dlc = "Way of Life" } }
+		picture = GFX_evt_hunt
+		text = EVTDESCcourtly28
+	}
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # courtly.26
+
+	option = {
+		name = EVTOPTAcourtly28
+	}
+}
+
+# courtly.29 Relay: the spouse finds out
+# Scope: ROOT is the jealous spouse.
+character_event = {
+	id = courtly.29
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.27
+
+	trigger = {
+		block_general_event_trigger = no
+	}
+
+	immediate = {
+		FROM = { character_event = { id = courtly.30 } }
+	}
+}
+
+# courtly.30 Caught
+# Scope: ROOT is the newlywed, FROM the jealous spouse.
+character_event = {
+	id = courtly.30
+	desc = EVTDESCcourtly30
+	picture = GFX_evt_quarrel
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # courtly.29
+
+	option = {
+		name = EVTOPTAcourtly30
+		if = { limit = { NOT = { is_rival = FROM } } add_rival = FROM }
+		courtly_adulterer_effect = yes
+		event_target:courtly_lover = { courtly_adulterer_effect = yes }
+		hidden_tooltip = { character_event = { id = courtly.33 days = 90 random = 15 } }
+	}
+}
+
+# courtly.31 Relay: the lover writes
+# Scope: ROOT is the lover.
+character_event = {
+	id = courtly.31
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.27
+
+	trigger = {
+		block_general_event_trigger = no
+		is_lover = FROM
+	}
+
+	immediate = {
+		FROM = { letter_event = { id = courtly.32 } }
+	}
+}
+
+# courtly.32 The lover's plea
+# The lover asks the newlywed to deal with the spouse.
+# Scope: ROOT is the newlywed, FROM the lover.
+letter_event = {
+	id = courtly.32
+	desc = EVTDESCcourtly32
+	border = GFX_event_letter_frame_intrigue
+
+	is_triggered_only = yes # courtly.31
+
+	option = { # I will
+		name = EVTOPTAcourtly32
+		hidden_tooltip = { character_event = { id = courtly.33 days = 60 random = 15 } }
+	}
+	option = { # I cannot
+		name = EVTOPTBcourtly32
+		clr_character_flag = courtly_lover
+		remove_lover = FROM
+		FROM = { if = { limit = { NOT = { trait = depressed } } add_trait = depressed } }
+		hidden_tooltip = { narrative_event = { id = courtly.44 days = 20 } }
+	}
+}
+
+# courtly.33 What of the spouse?
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.33
+	desc = EVTDESCcourtly33
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # courtly.30, courtly.32
+
+	trigger = {
+		event_target:courtly_lover = { is_alive = yes }
+		event_target:courtly_rival = { is_alive = yes }
+	}
+
+	option = { # a duel to the death
+		name = EVTOPTAcourtly33
+		set_character_flag = courtly_duel
+		tooltip_info = martial
+		hidden_tooltip = { event_target:courtly_rival = { character_event = { id = courtly.34 } } }
+	}
+	option = { # talk sense into them
+		name = EVTOPTBcourtly33
+		set_character_flag = courtly_talk
+		tooltip_info = diplomacy
+		hidden_tooltip = { event_target:courtly_rival = { character_event = { id = courtly.34 } } }
+	}
+	option = { # a knife in the dark
+		name = EVTOPTCcourtly33
+		set_character_flag = courtly_murder
+		tooltip_info = intrigue
+		hidden_tooltip = { event_target:courtly_rival = { character_event = { id = courtly.34 } } }
+	}
+}
+
+# courtly.34 The spouse is dealt with
+# Rolls the newlywed's choice against the spouse.
+# Scope: ROOT is the jealous spouse, FROM the newlywed.
+character_event = {
+	id = courtly.34
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.33
+
+	trigger = {
+		block_general_event_trigger = no
+	}
+
+	immediate = {
+		FROM = {
+			if = {
+				limit = { has_character_flag = courtly_duel }
+				clr_character_flag = courtly_duel
+				letter_event = { id = courtly.35 }
+				random_list = {
+					60 = {
+						modifier = { factor = 1.2 combat_rating = 10 }
+						modifier = { factor = 1.2 combat_rating = 20 }
+						modifier = { factor = 1.2 combat_rating = 30 }
+						modifier = { factor = 1.2 combat_rating = 40 }
+						modifier = { factor = 1.2 combat_rating = 50 }
+						modifier = { factor = 1.2 trait = duelist }
+						modifier = { factor = 1.2 ROOT = { NOT = { combat_rating = 0 } } }
+						modifier = { factor = 1.2 ROOT = { NOT = { combat_rating = -10 } } }
+						modifier = { factor = 0 ROOT = { is_invincible_trigger = yes } }
+						character_event = { id = courtly.36 days = 30 }
+					}
+					40 = {
+						modifier = { factor = 1.2 NOT = { combat_rating = 0 } }
+						modifier = { factor = 1.2 NOT = { combat_rating = -10 } }
+						modifier = { factor = 1.2 ROOT = { combat_rating = 10 } }
+						modifier = { factor = 1.2 ROOT = { combat_rating = 20 } }
+						modifier = { factor = 1.2 ROOT = { combat_rating = 30 } }
+						modifier = { factor = 1.2 ROOT = { combat_rating = 40 } }
+						character_event = { id = courtly.37 days = 30 }
+					}
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = courtly_talk }
+				clr_character_flag = courtly_talk
+				random_list = {
+					60 = {
+						modifier = { factor = 1.2 diplomacy = 10 }
+						modifier = { factor = 1.2 diplomacy = 13 }
+						modifier = { factor = 1.2 diplomacy = 16 }
+						modifier = { factor = 1.2 diplomacy = 19 }
+						modifier = { factor = 1.2 diplomacy = 22 }
+						modifier = { factor = 1.5 trait = socializer }
+						character_event = { id = courtly.38 days = 60 }
+					}
+					40 = {
+						modifier = { factor = 1.5 ROOT = { trait = wroth } }
+						modifier = { factor = 1.5 ROOT = { trait = proud } }
+						modifier = { factor = 1.5 ROOT = { trait = stubborn } }
+						character_event = { id = courtly.39 days = 60 }
+					}
+				}
+			}
+			else = {
+				clr_character_flag = courtly_murder
+				random_list = {
+					60 = {
+						modifier = { factor = 1.2 intrigue = 10 }
+						modifier = { factor = 1.2 intrigue = 13 }
+						modifier = { factor = 1.2 intrigue = 16 }
+						modifier = { factor = 1.2 intrigue = 19 }
+						modifier = { factor = 1.2 intrigue = 22 }
+						modifier = { factor = 1.5 trait = schemer }
+						modifier = { factor = 0 ROOT = { is_invincible_trigger = yes } }
+						character_event = { id = courtly.40 days = 90 }
+					}
+					40 = {
+						modifier = { factor = 1.2 ROOT = { intrigue = 10 } }
+						modifier = { factor = 1.2 ROOT = { intrigue = 13 } }
+						modifier = { factor = 1.2 ROOT = { intrigue = 16 } }
+						modifier = { factor = 1.2 ROOT = { intrigue = 19 } }
+						modifier = { factor = 1.2 ROOT = { intrigue = 22 } }
+						modifier = { factor = 1.5 ROOT = { trait = schemer } }
+						character_event = { id = courtly.41 days = 90 }
+					}
+				}
+			}
+		}
+	}
+}
+
+# courtly.35 The challenge
+# Scope: ROOT is the newlywed, FROM the jealous spouse.
+letter_event = {
+	id = courtly.35
+	desc = EVTDESCcourtly35
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes # courtly.34
+
+	option = {
+		name = EVTOPTAcourtly35
+		if = { limit = { NOT = { is_rival = FROM } } add_rival = FROM }
+	}
+}
+
+# courtly.36 The duel is won
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.36
+	desc = EVTDESCcourtly36
+	picture = GFX_evt_melee
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # courtly.34
+
+	option = {
+		name = EVTOPTAcourtly36
+		event_target:courtly_rival = { death = { death_reason = death_duel killer = ROOT } }
+		hidden_tooltip = {
+			event_target:courtly_lover = { character_event = { id = courtly.42 days = 50 } }
+		}
+	}
+}
+
+# courtly.37 The duel is lost
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.37
+	desc = EVTDESCcourtly37
+	picture = GFX_evt_melee
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # courtly.34
+
+	option = {
+		name = EVTOPTAcourtly37
+		remove_lover = event_target:courtly_lover
+		clr_character_flag = courtly_lover
+		random_list = {
+			50 = {
+				modifier = { factor = 0 is_invincible_trigger = yes }
+				custom_tooltip = { text = EVTOPTAcourtly37_TT }
+				death = { death_reason = death_duel killer = event_target:courtly_rival }
+			}
+			50 = {
+				add_maimed_trait_effect = yes
+				hidden_tooltip = { narrative_event = { id = courtly.44 days = 30 } }
+			}
+		}
+	}
+}
+
+# courtly.38 The spouse lets them go
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.38
+	desc = EVTDESCcourtly38
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # courtly.34
+
+	option = {
+		name = EVTOPTAcourtly38
+		event_target:courtly_rival = { remove_spouse = event_target:courtly_lover }
+		hidden_tooltip = {
+			event_target:courtly_lover = { character_event = { id = courtly.42 days = 50 } }
+		}
+	}
+}
+
+# courtly.39 The spouse will not hear of it
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.39
+	desc = EVTDESCcourtly39
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # courtly.34
+
+	option = {
+		name = EVTOPTAcourtly39
+		remove_lover = event_target:courtly_lover
+		clr_character_flag = courtly_lover
+		if = {
+			limit = { NOT = { is_rival = event_target:courtly_rival } }
+			add_rival = event_target:courtly_rival
+		}
+		event_target:courtly_rival = { opinion = { who = ROOT modifier = opinion_rival } }
+		hidden_tooltip = { narrative_event = { id = courtly.44 days = 30 } }
+	}
+}
+
+# courtly.40 The knife finds its mark
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.40
+	desc = EVTDESCcourtly40
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # courtly.34
+
+	option = {
+		name = EVTOPTAcourtly40
+		event_target:courtly_rival = {
+			death = { death_reason = death_murder_unknown_arrow killer = ROOT }
+		}
+		hidden_tooltip = {
+			event_target:courtly_lover = { character_event = { id = courtly.42 days = 50 } }
+		}
+	}
+}
+
+# courtly.41 The plot is found out
+# Scope: ROOT is the newlywed.
+character_event = {
+	id = courtly.41
+	desc = EVTDESCcourtly41
+	picture = GFX_evt_hunt
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # courtly.34
+
+	option = {
+		name = EVTOPTAcourtly41
+		remove_lover = event_target:courtly_lover
+		clr_character_flag = courtly_lover
+		if = {
+			limit = { NOT = { has_character_modifier = known_murderer } }
+			add_character_modifier = { name = known_murderer years = 50 }
+		}
+		if = {
+			limit = { NOT = { is_rival = event_target:courtly_rival } }
+			add_rival = event_target:courtly_rival
+		}
+		hidden_tooltip = { narrative_event = { id = courtly.44 days = 30 } }
+	}
+}
+
+# courtly.42 Relay: the lover is free
+# Scope: ROOT is the lover.
+character_event = {
+	id = courtly.42
+	hide_window = yes
+
+	is_triggered_only = yes # courtly.36, courtly.38, courtly.40
+
+	trigger = {
+		block_general_event_trigger = no
+		is_lover = FROM
+	}
+
+	immediate = {
+		FROM = { narrative_event = { id = courtly.43 } }
+	}
+}
+
+# courtly.43 Together at last
+# The lover leaves for the newlywed's court (unless they hold land).
+# Scope: ROOT is the newlywed, FROM the lover.
+narrative_event = {
+	id = courtly.43
+	title = EVTNAMEcourtly43
+	desc = EVTDESCcourtly43
+	picture = GFX_evt_lovers
+	border = GFX_event_narrative_frame_diplomacy
+
+	is_triggered_only = yes # courtly.42
+
+	option = {
+		name = EVTOPTAcourtly43
+		clr_character_flag = courtly_lover
+		FROM = { if = { limit = { is_landed = no } move_character = ROOT } }
+	}
+}
+
+# courtly.44 What might have been
+# Scope: ROOT is the newlywed.
+narrative_event = {
+	id = courtly.44
+	title = EVTNAMEcourtly44
+	desc = {
+		trigger = { has_dlc = "Way of Life" }
+		picture = GFX_evt_castle_garden
+		text = EVTDESCcourtly44
+	}
+	desc = {
+		trigger = { NOT = { has_dlc = "Way of Life" } }
+		picture = GFX_evt_garden
+		text = EVTDESCcourtly44
+	}
+	picture = GFX_evt_garden
+	border = GFX_event_narrative_frame_religion
+
+	is_triggered_only = yes # courtly.11 - courtly.41
+
+	option = {
+		name = EVTOPTAcourtly44
+		clr_character_flag = courtly_lover
+		if = {
+			limit = { NOT = { trait = depressed } }
+			add_trait = depressed
+			hidden_tooltip = { character_event = { id = traitnote.288 } } # Notify depressed
+		}
+	}
+}

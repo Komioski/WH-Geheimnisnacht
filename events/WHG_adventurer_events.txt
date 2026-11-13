@@ -11,7 +11,7 @@
 # A landless son of a noble house with nothing to inherit gathers a host and
 # goes raiding abroad. Every year he weighs his loot: rich enough, he seeks
 # land from a realm he has plundered, by bargain with a great lord (the
-# negotiation in adventurers_negotiation.txt) or by war on a small one, and
+# negotiation, Part 2 of this file) or by war on a small one, and
 # a lord who refused him a title may go home at war. A horde clan driven from
 # its pastures takes to raiding in the same way. Defeat, capture or a raid
 # called off ends it.
@@ -44,10 +44,14 @@
 #   Cathay invasion in jd_chinese_invasion_events.txt (adventurer.12, .13,
 #   .49). The claimant_adventures list on on_five_year_pulse in
 #   wh_on_actions.txt (adventurer.50, .53); the Nehekharan claimants
-#   (S_nehekharans_events.txt) and the Asur explorers (WHG_asur_events.txt)
+#   (WHG_nehekhara_events.txt) and the Asur explorers (WHG_asur_events.txt)
 #   fire adventurer.51, .52, .54, .55 and .59. on_five_year_pulse in
 #   00_on_actions.txt (adventurer.60). Shared triggers and effects
 #   are in WHG_horse_lords_triggers.txt and WHG_horse_lords_effects.txt.
+#
+# Also in this file (each part keeps its own header and namespace):
+#   Part 2: Bargaining with a raider (namespace advneg, was ADV in
+#   adventurers_negotiation.txt)
 ###############################################################################
 
 namespace = adventurer
@@ -270,7 +274,7 @@ character_event = {
 
 # adventurer.11 Land, by bargain or by war
 # Hidden. Picks a looted realm: a great lord with land to spare is offered
-# a bargain (ADV.1, with a check in 65 days whether the raid goes on,
+# a bargain (advneg.1 in Part 2, with a check in 65 days whether the raid goes on,
 # adventurer.44); a small one is attacked for a duchy. If neither works the
 # adventure ends (adventurer.49).
 # Scope: the raider.
@@ -285,7 +289,7 @@ character_event = {
 			if = {
 				limit = { adventurer_negotiation_partner_trigger = yes }
 				set_character_flag = negotiating_with_adventurer
-				character_event = { id = ADV.1 }
+				character_event = { id = advneg.1 }
 				ROOT = {
 					set_character_flag = adventurer_next_step
 					character_event = { id = adventurer.44 days = 65 }
@@ -365,7 +369,7 @@ character_event = {
 			if = {
 				limit = { adventurer_negotiation_partner_trigger = yes }
 				set_character_flag = negotiating_with_adventurer
-				character_event = { id = ADV.1 }
+				character_event = { id = advneg.1 }
 				ROOT = { set_character_flag = adventurer_next_step }
 			}
 			else_if = {
@@ -664,7 +668,7 @@ character_event = {
 # exile if the target is the claimant's own lord.
 # Scope: the claimant. From the claimant_adventures list on
 #   on_five_year_pulse in wh_on_actions.txt (was an MTTH of 50 years on every
-#   landless adult), and the Nehekharan claimants in S_nehekharans_events.txt
+#   landless adult), and the Nehekharan claimants in WHG_nehekhara_events.txt
 #   (which fire adventurer.51, .52 and .59 directly).
 character_event = {
 	id = adventurer.50
@@ -2025,5 +2029,1105 @@ character_event = {
 		spawn_good_commander_effect = yes
 		spawn_good_commander_effect = yes
 		spawn_good_commander_effect = yes
+	}
+}
+
+
+###############################################################################
+# Part 2: Bargaining with a raider (namespace advneg)
+# Faction: Generic
+# Serves: the great lords a raiding adventurer has plundered, and the raider
+# (was ADV.1 - ADV.21 in the vanilla adventurers_negotiation.txt)
+#
+# A raider rich with loot offers to buy a county or marry into the house of
+# a great lord. The lord sells, marries off a child, or refuses and faces
+# war; the raider pays, haggles, or takes the county for nothing. A settled
+# raider becomes the lord's vassal and may take the lord's faith.
+#
+# The offer                      advneg.1 - advneg.3
+# The price                      advneg.4 - advneg.10
+# The settled raider             advneg.20 - advneg.21
+#
+# Callers: adventurer.11 and adventurer.19 (Part 1), the Cathay invasion
+#   (WHG_cathay_invasion_events.txt) and the negotiate-with-raider decision
+#   in jd_decisions.txt (advneg.1).
+# Saved: variables price, haggle_price (province), adventurer_treasury,
+#   province_offer, transfer_money; character flags haggle_price,
+#   no_haggling, peaceful_negotiation, negotiating_with_adventurer; event
+#   targets raiding_adventurer, adventurer_target, selling_province,
+#   marriage_child. Province modifier settled_adventurer.
+# The notification advneg.21 had been switched off; it is back for players.
+###############################################################################
+
+namespace = advneg
+
+# advneg.1 The adventurer sends terms
+# Hidden. A raider who has plundered a great lord prices one of the lord's
+# lesser counties (or a vassal's, four times in five) by its holdings, and
+# picks an unwed grown child to ask for. With a county or a child to offer,
+# the negotiation starts (advneg.2, advneg.3); otherwise the raider declares
+# war. The decision path (peaceful_negotiation) never ends in war.
+# Scope: ROOT is the lord; FROM the raider (overridable through
+#   event_target:adventurer_decision_target_override and
+#   adventurer_decision_taker_override).
+character_event = {
+	id = advneg.1
+
+	is_triggered_only = yes
+	hide_window = yes
+
+	immediate = {
+		FROM = { save_event_target_as = raiding_adventurer }
+		if = {
+			limit = {
+				event_target:adventurer_decision_target_override = {
+					is_alive = yes
+				}
+			}
+			event_target:adventurer_decision_target_override = {
+				save_event_target_as = raiding_adventurer
+			}
+		}
+		save_event_target_as = adventurer_target
+		if = {
+			limit = {
+				event_target:adventurer_decision_taker_override = {
+					is_alive = yes
+				}
+			}
+			event_target:adventurer_decision_taker_override = {
+				save_event_target_as = adventurer_target
+			}
+		}
+		#Stores how much money adventurer has
+		event_target:raiding_adventurer = { export_to_variable = { which = adventurer_treasury value = treasury } }
+		#Picks out a province to sell
+		random_demesne_province = {
+			limit = {
+				is_capital = no
+				num_of_settlements = 1
+				NOT = {
+					has_province_modifier = nomad_agitation
+				}
+			}
+			preferred_limit = {
+				event_target:raiding_adventurer = {
+					OR = {
+						religion = norscan_gods
+						has_religion_feature = religion_seafaring
+						is_seafarer = yes
+					}
+				}
+				port = yes
+			}
+
+			set_variable = { which = price value = 100 }
+
+			trigger_switch = {
+				on_trigger = num_of_settlements
+				7 = { change_variable = { which = price value = 700 } }
+				6 = { change_variable = { which = price value = 600 } }
+				5 = { change_variable = { which = price value = 500 } }
+				4 = { change_variable = { which = price value = 400 } }
+				3 = { change_variable = { which = price value = 300 } }
+				2 = { change_variable = { which = price value = 200 } }
+				1 = { change_variable = { which = price value = 100 } }
+			}
+
+			trigger_switch = {
+				on_trigger = num_of_empty_holdings
+				6 = { change_variable = { which = price value = 150 } }
+				5 = { change_variable = { which = price value = 125 } }
+				4 = { change_variable = { which = price value = 100 } }
+				3 = { change_variable = { which = price value = 75 } }
+				2 = { change_variable = { which = price value = 50 } }
+				1 = { change_variable = { which = price value = 25 } }
+			}
+
+			set_variable = { which = haggle_price which = price }
+			multiply_variable = { which = haggle_price value = 0.7 }
+
+
+			#Checks that the adventurer has enough money to haggle
+			if = {
+				limit = {
+					OR = {
+						event_target:adventurer_target = {
+							has_character_flag = peaceful_negotiation
+						}
+						event_target:raiding_adventurer = { check_variable = { which = adventurer_treasury which = haggle_price which = PREV } }
+					}
+				}
+				save_event_target_as = selling_province
+			}
+		}
+		#If they can't afford your province, pick a vassal province (also a big chance to happen even if they can afford it)
+		random_list = {
+			80 = {
+				random_vassal = {
+					limit = {
+						any_demesne_province = {
+							is_capital = no
+							num_of_settlements = 1
+							NOT = {
+								has_province_modifier = nomad_agitation
+							}
+						}
+					}
+					preferred_limit = {
+						event_target:raiding_adventurer = {
+							OR = {
+								religion = norscan_gods
+								has_religion_feature = religion_seafaring
+								is_seafarer = yes
+							}
+						}
+						any_demesne_province = {
+							is_capital = no
+							num_of_settlements = 1
+							NOT = {
+								has_province_modifier = nomad_agitation
+							}
+							port = yes
+						}
+					}
+					random_demesne_province = {
+						limit = {
+							is_capital = no
+							num_of_settlements = 1
+							NOT = {
+								has_province_modifier = nomad_agitation
+							}
+						}
+						preferred_limit = {
+							event_target:raiding_adventurer = {
+								OR = {
+									religion = norscan_gods
+									has_religion_feature = religion_seafaring
+									is_seafarer = yes
+								}
+							}
+							is_capital = no
+							num_of_settlements = 1
+							NOT = {
+								has_province_modifier = nomad_agitation
+							}
+							port = yes
+						}
+
+						set_variable = { which = price value = 100 }
+
+						trigger_switch = {
+							on_trigger = num_of_settlements
+							7 = { change_variable = { which = price value = 400 } }
+							6 = { change_variable = { which = price value = 350 } }
+							5 = { change_variable = { which = price value = 300 } }
+							4 = { change_variable = { which = price value = 250 } }
+							3 = { change_variable = { which = price value = 200 } }
+							2 = { change_variable = { which = price value = 150 } }
+							1 = { change_variable = { which = price value = 100 } }
+						}
+
+						trigger_switch = {
+							on_trigger = num_of_empty_holdings
+							6 = { change_variable = { which = price value = 60 } }
+							5 = { change_variable = { which = price value = 50 } }
+							4 = { change_variable = { which = price value = 40 } }
+							3 = { change_variable = { which = price value = 30 } }
+							2 = { change_variable = { which = price value = 20 } }
+							1 = { change_variable = { which = price value = 10 } }
+						}
+
+						set_variable = { which = haggle_price which = price }
+						multiply_variable = { which = haggle_price value = 0.7 }
+
+						save_event_target_as = selling_province
+					}
+				}
+			}
+			20 = {
+				trigger = {
+					event_target:selling_province = { always = yes }
+				}
+				#Empty, your demesne province is kept as selling_province
+			}
+		}
+		if = {
+			limit = { event_target:raiding_adventurer = { is_married = no } }
+			random_child = {
+				limit = {
+					OR = {
+						AND = {
+							event_target:raiding_adventurer = { is_woman_trigger = yes }
+							is_female = no
+						}
+						AND = {
+							event_target:raiding_adventurer = { is_female = no }
+							is_woman_trigger = yes
+						}
+					}
+					is_adult = yes
+					is_alive = yes
+					is_married = no
+					can_marry = yes
+					NOT = { is_primary_heir = ROOT }
+					is_ruler = no
+					character_disease_trigger = no
+					has_disability_trigger = no
+					OR = {
+						stewardship = 5
+						martial = 5
+						diplomacy = 5
+						intrigue = 5
+						learning = 5
+					}
+				}
+				preferred_limit = {
+					NOR = {
+						is_dumb_trigger = yes
+						has_mental_disorder_trigger = yes
+						trait = homosexual
+						trait = celibate
+						has_ugly_trait_trigger = yes
+					}
+					OR = {
+						is_smart_trigger = yes
+						has_attractive_trait_trigger = yes
+						has_pleasant_personality_trigger = yes
+						stewardship = 13
+						martial = 13
+						diplomacy = 13
+						intrigue = 13
+						learning = 15
+					}
+				}
+				preferred_limit = {
+					NOR = {
+						is_dumb_trigger = yes
+						has_mental_disorder_trigger = yes
+						trait = homosexual
+						trait = celibate
+						has_ugly_trait_trigger = yes
+					}
+				}
+				preferred_limit = {
+					NOR = {
+						is_dumb_trigger = yes
+						has_mental_disorder_trigger = yes
+						has_ugly_trait_trigger = yes
+					}
+				}
+				preferred_limit = {
+					NOT = {
+						has_ugly_trait_trigger = yes
+					}
+				}
+				save_event_target_as = marriage_child
+			}
+		}
+		#If a suitable deal can be made, fire the negotiation
+		if = {
+			limit = {
+				OR = {
+					event_target:selling_province = { always = yes }
+					event_target:marriage_child = { always = yes }
+				}
+			}
+			event_target:raiding_adventurer = { character_event = { id = advneg.2 } }
+		}
+		else = {
+			#Adventurer declares war
+			raiding_adventurer_war_declaration_effect = yes
+			#Logging for displaced prince...
+			if = {
+				limit = { event_target:raiding_adventurer = { has_character_flag = is_displaced_prince } }
+				log = "Displaced royal: [raiding_adventurer.GetBestName] declared war over the province [selling_province.GetName], currently held by [Root.GetBestName]."
+			}
+		}
+	}
+}
+
+# advneg.2 Ping
+# Hidden. Turns the raider's offer into the letter to the lord.
+# Scope: ROOT is the raider, FROM the lord.
+character_event = {
+	id = advneg.2
+	hide_window = yes
+	is_triggered_only = yes
+	immediate = {
+		FROM = { letter_event = { id = advneg.3 } }
+	}
+}
+
+# advneg.3 The raider's letter
+# Sell the county (your own or a vassal's, which angers the vassals), give
+# the child in marriage, or refuse and face war (or, from the decision, just
+# send the raider away).
+# Scope: ROOT is the lord, FROM the raider.
+letter_event = {
+	id = advneg.3
+	border = GFX_event_letter_frame_war
+
+	desc = {
+		trigger = {
+			event_target:selling_province = { always = yes }
+			event_target:marriage_child = { always = yes }
+		}
+		text = EVTDESCadvneg3_a
+	}
+	desc = {
+		trigger = {
+			event_target:selling_province = { always = yes }
+			NOT = { event_target:marriage_child = { always = yes } }
+		}
+		text = EVTDESCadvneg3_b
+	}
+	desc = {
+		trigger = {
+			NOT = { event_target:selling_province = { always = yes } }
+			event_target:marriage_child = { always = yes }
+		}
+		text = EVTDESCadvneg3_c
+	}
+
+	is_triggered_only = yes
+
+
+	#Sell your province
+	option = {
+		trigger = {
+			event_target:selling_province = {
+				always = yes
+				owner = { character = ROOT }
+			}
+		}
+		name = EVTOPTAadvneg3
+		custom_tooltip = { text = EVTOPTAadvneg3_tt }
+
+		hidden_effect = {
+			event_target:raiding_adventurer = { character_event = { id = advneg.10 days = 5 } }
+		}
+
+		ai_chance = {
+			factor = 20
+			modifier = { trait = craven factor = 2 }
+			modifier = { trait = greedy factor = 1.3 }
+			modifier = { event_target:raiding_adventurer = { realm_levy_diff = { who = ROOT value = 1500 } } factor = 1.3 }
+			modifier = { event_target:raiding_adventurer = { realm_levy_diff = { who = ROOT value = 3000 } } factor = 1.5 }
+			modifier = { event_target:raiding_adventurer = { realm_levy_diff = { who = ROOT value = 5000 } } factor = 1.5 }
+		}
+	}
+
+	#Sell vassal province
+	option = {
+		trigger = {
+			event_target:selling_province = {
+				always = yes
+				NOT = { owner = { character = ROOT } }
+			}
+		}
+		name = EVTOPTAadvneg3
+		custom_tooltip = { text = EVTOPTBadvneg3_tt }
+
+		tooltip = {
+			prestige = -50
+			event_target:selling_province = {
+				owner = {
+					opinion = {
+						who = ROOT
+						modifier = sold_my_province
+						years = 100
+					}
+				}
+			}
+			if = {
+				limit = { any_vassal = { NOT = { any_demesne_province = { province = event_target:selling_province } } } }
+				custom_tooltip = { text = EVTOPTAadvneg5_tooltip }
+			}
+			hidden_effect = {
+				any_vassal = {
+					limit = { NOT = { any_demesne_province = { province = event_target:selling_province } } }
+					opinion = {
+						who = ROOT
+						modifier = sold_vassal_province
+						years = 5
+					}
+				}
+			}
+		}
+
+		hidden_effect = {
+			event_target:raiding_adventurer = { character_event = { id = advneg.10 days = 5 } }
+		}
+
+		ai_chance = {
+			factor = 30
+			modifier = { trait = craven factor = 2 }
+			modifier = { trait = greedy factor = 2 }
+			modifier = { event_target:raiding_adventurer = { realm_levy_diff = { who = ROOT value = 1500 } } factor = 1.3 }
+			modifier = { event_target:raiding_adventurer = { realm_levy_diff = { who = ROOT value = 3000 } } factor = 1.5 }
+			modifier = { event_target:raiding_adventurer = { realm_levy_diff = { who = ROOT value = 5000 } } factor = 1.5 }
+		}
+	}
+
+	#Agree to marriage
+	option = {
+		trigger = { event_target:marriage_child = { always = yes } }
+		name = EVTOPTCadvneg3
+		custom_tooltip = { text = EVTOPTCadvneg3_tt }
+
+		event_target:marriage_child = {
+			if = {
+				limit = { is_female = no }
+				add_spouse_matrilineal = event_target:raiding_adventurer
+			}
+			if = {
+				limit = { is_woman_trigger = yes }
+				add_spouse = event_target:raiding_adventurer
+			}
+		}
+
+		hidden_effect = {
+			clr_character_flag = adventurer_unsafe_duchy_war
+			clr_character_flag = adventurer_safe_duchy_war
+			clr_character_flag = negotiating_with_adventurer
+			set_looter_hostility_days = {
+				who = event_target:raiding_adventurer
+				days = 0
+			}
+			event_target:raiding_adventurer = {
+				set_looter_hostility_days = {
+					who = ROOT
+					days = 0
+				}
+			}
+		}
+
+		log = "Raiding adventurer [raiding_adventurer.GetBestName]([raiding_adventurer.GetID]) got married to [marriage_child.GetBestName]([marriage_child.GetID]) after negotiations"
+
+		#Logging for displaced prince...
+		if = {
+			limit = { event_target:raiding_adventurer = { has_character_flag = is_displaced_prince } }
+			log = "Displaced royal: [raiding_adventurer.GetBestName] ([raiding_adventurer.GetID]) got married to [marriage_child.GetBestName]([marriage_child.GetID]) after negotiations"
+		}
+
+
+		ai_chance = {
+			factor = 100
+			modifier = { trait = craven factor = 2 }
+			modifier = { is_rival = event_target:marriage_child factor = 2 }
+			modifier = { is_friend = event_target:marriage_child factor = 0.5 }
+			modifier = { num_of_children = 5 factor = 1.3 }
+			modifier = { event_target:raiding_adventurer = { realm_levy_diff = { who = ROOT value = 1500 } } factor = 1.3 }
+			modifier = { event_target:raiding_adventurer = { realm_levy_diff = { who = ROOT value = 3000 } } factor = 1.5 }
+			modifier = { event_target:raiding_adventurer = { realm_levy_diff = { who = ROOT value = 5000 } } factor = 1.5 }
+		}
+	}
+
+	#No deal
+	option = {
+		name = EVTOPTDadvneg3
+		custom_tooltip = { text = EVTOPTDadvneg3_tt }
+
+		trigger = {
+			event_target:adventurer_target = {
+				NOT = {
+					has_character_flag = peaceful_negotiation
+				}
+			}
+		}
+
+		#Adventurer declares war
+		raiding_adventurer_war_declaration_effect = yes
+
+		#Logging for displaced prince...
+		if = {
+			limit = { event_target:raiding_adventurer = { has_character_flag = is_displaced_prince } }
+			log = "Displaced royal: [raiding_adventurer.GetBestName] had their negotiation turned down, and instead declared war over the province [selling_province.GetName], currently held by [Root.GetBestName]."
+		}
+
+		ai_chance = {
+			factor = 20
+			modifier = { realm_levy_diff = { who = event_target:raiding_adventurer value = 1000 } factor = 1.3 }
+			modifier = { realm_levy_diff = { who = event_target:raiding_adventurer value = 2500 } factor = 1.3 }
+			modifier = { trait = brave factor = 2 }
+			modifier = { trait = wroth factor = 1.5 }
+			modifier = { trait = ambitious factor = 1.5 }
+		}
+	}
+
+	#No deal - peaceful
+	option = {
+		name = EVTOPTEadvneg3
+		custom_tooltip = { text = EVTOPTEadvneg3_tt }
+
+		trigger = {
+			event_target:adventurer_target = {
+				has_character_flag = peaceful_negotiation
+			}
+		}
+
+		clr_character_flag = peaceful_negotiation
+
+		#Logging for displaced prince...
+		if = {
+			limit = { event_target:raiding_adventurer = { has_character_flag = is_displaced_prince } }
+			log = "Displaced royal: [raiding_adventurer.GetBestName] had their negotiation turned down, no war was declared as the event was fired via a player-only decision"
+		}
+
+		ai_chance = {
+			factor = 20
+			modifier = { realm_levy_diff = { who = event_target:raiding_adventurer value = 1000 } factor = 1.3 }
+			modifier = { realm_levy_diff = { who = event_target:raiding_adventurer value = 2500 } factor = 1.3 }
+			modifier = { trait = brave factor = 2 }
+			modifier = { trait = wroth factor = 1.5 }
+			modifier = { trait = ambitious factor = 1.5 }
+		}
+	}
+}
+
+
+# advneg.10 The raider weighs the price
+# Hidden. A raider who can pay may accept (advneg.4); a greedy, ambitious or
+# clever one haggles, offering what they can (advneg.5).
+# Scope: ROOT is the raider.
+character_event = {
+	id = advneg.10
+	hide_window = yes
+	is_triggered_only = yes
+	immediate = {
+		#If they can afford the price, see if they haggle or not
+		export_to_variable = { which = adventurer_treasury value = treasury }
+		subtract_variable = { which = adventurer_treasury which = price which = event_target:selling_province }
+		if = {
+			limit = {
+				NOT = { check_variable = { which = adventurer_treasury value = 0 } }
+			}
+			log = "Adventurer [This.GetBestName]([This.GetID]) is forced to haggle since [This.GetSheHe] can't afford the province."
+		}
+		random_list = {
+			50 = {
+				#Deal
+				trigger = { check_variable = { which = adventurer_treasury value = 0 } }
+				modifier = { NOT = { stewardship = 8 } factor = 2 }
+				modifier = { age = 50 factor = 2 }
+				modifier = { trait = craven factor = 2 }
+				modifier = { trait = content factor = 2 }
+				modifier = { trait = charitable factor = 2 }
+				modifier = { trait = just factor = 2 }
+				event_target:adventurer_target = { letter_event = { id = advneg.4 } }
+				ROOT = { set_character_flag = nobreak_advneg_10 }
+			}
+			50 = { #Haggle
+				modifier = { stewardship = 14 factor = 2 }
+				modifier = { trait = greedy factor = 2 }
+				modifier = { trait = ambitious factor = 2 }
+				modifier = { trait = arbitrary factor = 2 }
+
+				export_to_variable = { which = adventurer_treasury value = treasury }
+				subtract_variable = { which = adventurer_treasury which = haggle_price which = event_target:selling_province }
+
+				if = {
+					limit = { check_variable = { which = adventurer_treasury value = 0 } }
+					set_variable = { which = province_offer value = 0 }
+					change_variable = { which = province_offer which = haggle_price which = event_target:selling_province }
+					set_character_flag = haggle_price
+				}
+
+				if = {
+					limit = {
+						NOT = { check_variable = { which = adventurer_treasury value = 0 } }
+						NOT = {
+							wealth = 100
+						}
+					}
+					set_character_flag = no_haggling
+					log = "[This.GetBestName]([This.GetID]) can't even afford the reduced haggle price."
+				}
+
+				if = {
+					limit = {
+						NOT = { check_variable = { which = adventurer_treasury value = 0 } }
+						wealth = 100
+					}
+					set_variable = { which = province_offer value = 0 }
+					export_to_variable = { which = province_offer value = treasury }
+					set_character_flag = haggle_price
+					log = "[This.GetBestName]([This.GetID]) can't even afford the reduced haggle price - they are offering what they have instead."
+				}
+
+				event_target:adventurer_target = { letter_event = { id = advneg.5 } }
+			}
+		}
+		ROOT = { clr_character_flag = nobreak_advneg_10 }
+	}
+}
+
+# advneg.4 The raider accepts
+# The price is paid, the raider takes the county as the lord's vassal, may
+# take the lord's faith (advneg.20), and the lord's lands are safe from
+# raiders for ten years.
+# Scope: ROOT is the lord, FROM the raider.
+letter_event = {
+	id = advneg.4
+	desc = EVTDESCadvneg4
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_effect = {
+			set_variable = { which = transfer_money value = 0 }
+			change_variable = { which = transfer_money which = price which = event_target:selling_province }
+
+			event_target:raiding_adventurer = {
+				set_variable = { which = transfer_money value = 0 }
+				change_variable = { which = transfer_money which = price which = event_target:selling_province }
+				multiply_variable = { which = transfer_money value = -1 }
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAadvneg4
+
+		#Transfers the price of the selling province
+		wealth = transfer_money
+
+		hidden_effect = {
+			event_target:raiding_adventurer = {
+				wealth = transfer_money
+				clr_character_flag = raiding_adventurer # flag set in WHG_adventurer_events.txt
+			}
+
+			#Non-Aggression Pact
+			opinion = {
+				modifier = in_non_aggression_pact
+				years = 3
+				who = FROM
+				origin_description = EVTTITLEadvneg4
+			}
+			FROM = {
+				opinion = {
+					modifier = in_non_aggression_pact
+					years = 3
+					who = ROOT
+					origin_description = EVTTITLEadvneg4
+				}
+			}
+		}
+
+		#Changes opinions/prestige if not your province
+		if = {
+			limit = { NOT = { event_target:selling_province = { owner = { character = ROOT } } } }
+
+			prestige = -50
+
+			event_target:selling_province = {
+				owner = {
+					opinion = {
+						who = ROOT
+						modifier = sold_my_province
+						years = 100
+					}
+				}
+			}
+			if = {
+				limit = { any_vassal = { NOT = { any_demesne_province = { province = event_target:selling_province } } } }
+				custom_tooltip = { text = EVTOPTAadvneg5_tooltip }
+			}
+			hidden_effect = {
+				any_vassal = {
+					limit = { NOT = { any_demesne_province = { province = event_target:selling_province } } }
+					opinion = {
+						who = ROOT
+						modifier = sold_vassal_province
+						years = 5
+					}
+				}
+			}
+		}
+
+		#Government switch
+		if = {
+			limit = {
+				event_target:raiding_adventurer = { is_nomadic = yes }
+				is_nomadic = no
+			}
+			event_target:raiding_adventurer = {
+				if = {
+					limit = {
+						religion_group = ormazd_gods_group
+					}
+					set_government_type = muslim_government
+				}
+				else = {
+					set_government_type = feudal_government
+				}
+			}
+		}
+
+		#Grants province and sets liege
+		event_target:selling_province = {
+			county = { grant_title = event_target:raiding_adventurer }
+		}
+		event_target:raiding_adventurer = { set_defacto_liege = ROOT }
+
+		#Logging for displaced prince...
+		if = {
+			limit = { event_target:raiding_adventurer = { has_character_flag = is_displaced_prince } }
+			log = "Displaced royal: [raiding_adventurer.GetBestName] settled after buying the province [selling_province.GetName] to the price of [transfer_money.GetValue] ducats, from [Root.GetBestName]."
+		}
+		else = {
+			log = "Adventurer [raiding_adventurer.GetBestName] settled after buying the province [selling_province.GetName] to the price of [transfer_money.GetValue] ducats."
+		}
+
+		# Chance to convert to your faith (not a displaced prince of Cathay)
+		hidden_effect = {
+			if = {
+				limit = {
+					event_target:raiding_adventurer = {
+						NOR = {
+							has_character_flag = is_displaced_prince
+							religion = ROOT
+						}
+					}
+				}
+				event_target:raiding_adventurer = { character_event = { id = advneg.20 } }
+			}
+		}
+
+		#Make country safe
+		hidden_effect = {
+			any_realm_province = {
+				add_province_modifier = {
+					name = settled_adventurer
+					years = 10
+				}
+			}
+			event_target:raiding_adventurer = {
+				any_unit = {
+					set_can_toggle_looting = yes
+					set_looting = no
+				}
+				set_looter_hostility_days = {
+					who = ROOT
+					days = 0
+				}
+			}
+			set_looter_hostility_days = {
+				who = event_target:raiding_adventurer
+				days = 0
+			}
+		}
+	}
+
+	after = {
+		clr_character_flag = adventurer_unsafe_duchy_war
+		clr_character_flag = adventurer_safe_duchy_war
+		clr_character_flag = negotiating_with_adventurer
+	}
+}
+
+# advneg.5 A counter-offer
+# The raider offers less, or nothing at all. Accept as in advneg.4, or
+# refuse and face war.
+# Scope: ROOT is the lord, FROM the raider.
+letter_event = {
+	id = advneg.5
+	desc = {
+		trigger = { FROM = { has_character_flag = haggle_price } } #They have enough money and offer to haggle
+		text = EVTDESCadvneg5
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = no_haggling } } #They do not have enough money to haggle and demand it for free
+		text = EVTDESCadvneg5_b
+	}
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes
+
+	immediate = {
+		#Calculates your gain before option so tooltips are correct
+		hidden_effect = {
+			set_variable = { which = transfer_money value = 0 }
+			change_variable = { which = transfer_money which = province_offer which = event_target:raiding_adventurer }
+		}
+	}
+
+
+	#Accept
+	option = {
+		name = EVTOPTAadvneg5
+
+		#Transfers the province offer made by the adventurer.
+		if = {
+			limit = { FROM = { has_character_flag = haggle_price } }
+			wealth = transfer_money
+		}
+
+		hidden_effect = {
+			if = {
+				limit = { FROM = { has_character_flag = haggle_price } }
+				event_target:raiding_adventurer = {
+					multiply_variable = { which = province_offer value = -1 }
+					wealth = province_offer
+					clr_character_flag = raiding_adventurer # flag set in WHG_adventurer_events.txt
+				}
+			}
+
+			#Non-Aggression Pact
+			opinion = {
+				modifier = in_non_aggression_pact
+				years = 3
+				who = FROM
+				origin_description = EVTTITLEadvneg4
+			}
+			FROM = {
+				opinion = {
+					modifier = in_non_aggression_pact
+					years = 3
+					who = ROOT
+					origin_description = EVTTITLEadvneg4
+				}
+			}
+		}
+
+		#Changes opinions/prestige if not your province
+		if = {
+			limit = { NOT = { event_target:selling_province = { owner = { character = ROOT } } } }
+
+			prestige = -50
+
+			event_target:selling_province = {
+				owner = {
+					opinion = {
+						who = ROOT
+						modifier = sold_my_province
+						years = 100
+					}
+				}
+			}
+			if = {
+				limit = { any_vassal = { NOT = { any_demesne_province = { province = event_target:selling_province } } } }
+				custom_tooltip = { text = EVTOPTAadvneg5_tooltip }
+			}
+			hidden_effect = {
+				any_vassal = {
+					limit = { NOT = { any_demesne_province = { province = event_target:selling_province } } }
+					opinion = {
+						who = ROOT
+						modifier = sold_vassal_province
+						years = 5
+					}
+				}
+			}
+		}
+
+		#Government switch
+		if = {
+			limit = {
+				event_target:raiding_adventurer = { is_nomadic = yes }
+				is_nomadic = no
+			}
+			event_target:raiding_adventurer = {
+				if = {
+					limit = {
+						religion_group = ormazd_gods_group
+					}
+					set_government_type = muslim_government
+				}
+				else = {
+					set_government_type = feudal_government
+				}
+			}
+		}
+
+		#Gives province and sets liege
+		event_target:selling_province = {
+			county = { grant_title = event_target:raiding_adventurer }
+		}
+		event_target:raiding_adventurer = { set_defacto_liege = ROOT }
+
+		#Logging for displaced prince...
+		if = {
+			limit = { event_target:raiding_adventurer = { has_character_flag = is_displaced_prince } }
+			log = "Displaced royal: [raiding_adventurer.GetBestName] settled after buying the province [selling_province.GetName] to the price of [transfer_money.GetValue] ducats, from [Root.GetBestName]."
+		}
+		if = {
+			limit = {
+				NOT = { FROM = { has_character_flag = no_haggling } }
+			}
+			log = "Adventurer [raiding_adventurer.GetBestName]([raiding_adventurer.GetID]) settled after buying the province [selling_province.GetName] to the haggle price of [transfer_money.GetValue] ducats."
+		}
+		if = {
+			limit = {
+				FROM = { has_character_flag = no_haggling }
+			}
+			log = "Adventurer [raiding_adventurer.GetBestName]([raiding_adventurer.GetID]) was given the province of [selling_province.GetName] after [raiding_adventurer.GetSheHe] couldn't afford to buy it."
+		}
+
+		# Chance to convert to your faith (not a displaced prince of Cathay)
+		hidden_effect = {
+			if = {
+				limit = {
+					event_target:raiding_adventurer = {
+						NOR = {
+							has_character_flag = is_displaced_prince
+							religion = ROOT
+						}
+					}
+				}
+				event_target:raiding_adventurer = { character_event = { id = advneg.20 } }
+			}
+		}
+
+		#Make country safe
+		hidden_effect = {
+			any_realm_province = {
+				add_province_modifier = {
+					name = settled_adventurer
+					years = 10
+				}
+			}
+			event_target:raiding_adventurer = {
+				any_unit = {
+					set_can_toggle_looting = yes
+					set_looting = no
+				}
+				set_looter_hostility_days = {
+					who = ROOT
+					days = 0
+				}
+			}
+			set_looter_hostility_days = {
+				who = event_target:raiding_adventurer
+				days = 0
+			}
+		}
+
+		ai_chance = {
+			factor = 50
+			modifier = { trait = craven factor = 2 }
+			modifier = { trait = greedy factor = 1.3 }
+			modifier = { event_target:raiding_adventurer = { realm_levy_diff = { who = ROOT value = 1500 } } factor = 1.3 }
+			modifier = { event_target:raiding_adventurer = { realm_levy_diff = { who = ROOT value = 3000 } } factor = 1.5 }
+			modifier = { event_target:raiding_adventurer = { realm_levy_diff = { who = ROOT value = 5000 } } factor = 1.5 }
+		}
+	}
+
+	#Decline
+	option = {
+		name = EVTOPTDadvneg5
+		custom_tooltip = { text = EVTOPTDadvneg3_tt }
+
+		trigger = {
+			event_target:adventurer_target = {
+				NOT = {
+					has_character_flag = peaceful_negotiation
+				}
+			}
+		}
+
+		#Adventurer declares war
+		raiding_adventurer_war_declaration_effect = yes
+
+		ai_chance = {
+			factor = 50
+			modifier = { realm_levy_diff = { who = event_target:raiding_adventurer value = 1000 } factor = 1.3 }
+			modifier = { realm_levy_diff = { who = event_target:raiding_adventurer value = 2500 } factor = 1.3 }
+			modifier = { trait = brave factor = 2 }
+			modifier = { trait = wroth factor = 1.5 }
+			modifier = { trait = ambitious factor = 1.5 }
+			modifier = { event_target:raiding_adventurer = { NOT = { has_character_flag = haggle_price } } factor = 5 }
+			modifier = { event_target:selling_province = { holder_scope = { character = ROOT } } factor = 1.5 }
+		}
+	}
+
+	#Decline - peaceful
+	option = {
+		name = EVTOPTEadvneg5
+		custom_tooltip = { text = EVTOPTEadvneg3_tt }
+
+		trigger = {
+			event_target:adventurer_target = {
+				has_character_flag = peaceful_negotiation
+			}
+		}
+
+		clr_character_flag = peaceful_negotiation
+
+		ai_chance = {
+			factor = 50
+			modifier = { realm_levy_diff = { who = event_target:raiding_adventurer value = 1000 } factor = 1.3 }
+			modifier = { realm_levy_diff = { who = event_target:raiding_adventurer value = 2500 } factor = 1.3 }
+			modifier = { trait = brave factor = 2 }
+			modifier = { trait = wroth factor = 1.5 }
+			modifier = { trait = ambitious factor = 1.5 }
+			modifier = { event_target:raiding_adventurer = { NOT = { has_character_flag = haggle_price } } factor = 5 }
+			modifier = { event_target:selling_province = { holder_scope = { character = ROOT } } factor = 1.5 }
+		}
+	}
+
+	after = {
+		hidden_effect = {
+			clr_character_flag = adventurer_unsafe_duchy_war
+			clr_character_flag = adventurer_safe_duchy_war
+			clr_character_flag = negotiating_with_adventurer
+			event_target:raiding_adventurer = { clr_character_flag = haggle_price }
+		}
+	}
+}
+
+# advneg.20 The settled raider's faith
+# Hidden. Four times in five (more if cynical, content or craven) the new
+# vassal and their landless courtiers take the liege's faith, if it fits
+# their race; a player liege hears of it (advneg.21).
+# Scope: ROOT is the settled raider.
+character_event = {
+	id = advneg.20
+	hide_window = yes
+	is_triggered_only = yes
+	trigger = {
+		NOT = { liege = { religion = ROOT } }
+	}
+
+	immediate = {
+		random_list = {
+			80 = {
+				modifier = { trait = cynical factor = 5 }
+				modifier = { trait = content factor = 5 }
+				modifier = { trait = craven factor = 5 }
+				modifier = { factor = 0 liege = { NOT = { faith_fits_race_of_prev_trigger = yes } } }
+				liege = {
+					ROOT = { religion = PREV }
+					if = { limit = { ai = no } letter_event = { id = advneg.21 days = 7 } }
+				}
+				any_courtier = {
+					limit = {
+						is_landed = no
+						ROOT = { faith_fits_race_of_prev_trigger = yes }
+					}
+					religion = ROOT
+				}
+			}
+			20 = {
+				modifier = { trait = zealous factor = 5 }
+				# Does not convert
+			}
+		}
+	}
+}
+
+# advneg.21 The new vassal converts
+# Scope: ROOT is the liege, FROM the settled raider.
+letter_event = {
+	id = advneg.21
+	desc = EVTDESCadvneg21
+
+	is_triggered_only = yes
+
+	option = {
+		name = EXCELLENT
 	}
 }

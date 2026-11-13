@@ -1,0 +1,4712 @@
+###############################################################################
+# The seas of the world: voyages of the pirate and raider societies
+# Namespace: seas
+# Faction: Generic
+#
+# The sea half of the naval game (the other half is colonies and
+# exploration). Three societies sail under it: the Black Ark Corsairs
+# (adventurers_druchii_corsairs), the Wolves of the Sea (adventurers_pirates:
+# Sartosa, Araby, the Vampire Coast and the Orc freebootaz) and the coastal
+# Norscans of the Freigattur (norscan_society). Every event reads the
+# captain's voice and the sea they sail, so each of the eleven theatres
+# (the Sea of Claws, the Great Western Ocean, the Tilean Sea, the waters of
+# Araby, the Southern Sea, the Lustrian seas, the seas of Naggaroth,
+# Ulthuan's Inner Sea, the Far East, the Sea of Chaos and the Skaven Inner
+# Ocean) has its own cast, hazards and prizes.
+#
+# Rules kept everywhere: a faction never meets itself (the Vampire Coast's
+# captains never meet the Vampire Coast's drowned fleet), and only sea lords
+# alive in our 2010 history appear by name (Luthor Harkon, Lokhir
+# Fellheart, Duriath Helbane, the jarl of Skeggi).
+#
+# Setup: sea lords, the Black Arks sail    seas.1-2
+# Real sailing hook                        seas.5
+# Raid or trade (Bjornlings)               seas.9
+# Set Out: heading and quay omens          seas.10-16
+# Encounter roller and homecoming          seas.18-19
+# Encounters at sea                        seas.20-31
+# Digging up buried treasure               seas.34
+# Flagships and raiders                    seas.40-43
+# The Black Arks                           seas.50-65
+# Reputations                              seas.70-73
+# The legend of the seas                   seas.100-116
+# The Norscan raiders                      seas.121-160
+# Tales of the sea and sagas of the north   seas.198-215
+#
+# Fired from: seas.1 on_startup (wh_on_actions.txt); seas.5 from naval.1
+# (an army at sea); seas.10 from the sea_set_out decision
+# (decisions/WHG_sea_decisions.txt); seas.40 - 41 and seas.55 from
+# on_five_year_pulse; seas.42 - 43, 50, 52 from the flagship, raider and ark
+# decisions; seas.59 - 60 from on_war_started; seas.64 from on_yearly_pulse;
+# seas.65 from on_death; seas.70 from the reputation decision, seas.71
+# from on_war_started, seas.72 from on_battle_won_owner; seas.100 from
+# on_society_progress_full, seas.110 from on_unit_entering_province (a
+# player's legendary voyage, game rule warhammer_sea_legend), seas.116 from
+# on_death; seas.9 and seas.10 from sea_go_a_viking; seas.130 from
+# norse_demand_tribute; seas.140 from norse_champions_fleet; seas.155 from
+# on_five_year_pulse; seas.160 from on_character_society_rank_up; seas.198
+# from on_five_year_pulse (list sea_norse_sagas).
+# Scripted triggers: common/scripted_triggers/WHG_sea_triggers.txt
+# Scripted effects: common/scripted_effects/WHG_sea_effects.txt
+# Voices: localisation/customizable_localisation/WHG_sea_voices.txt
+# Loc: localisation/00_WHG_sea_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = seas
+
+###############################################################################
+# Setup
+###############################################################################
+
+# seas.1 The sea lords of 2010 (hidden)
+# Once a game: finds the sea lords our history has alive at the start
+# (sea_find_named_lords_effect), so encounters can name them while they
+# live.
+# Scope: ROOT is a player at game start or load.
+character_event = {
+	id = seas.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_startup
+
+	trigger = {
+		NOT = { has_global_flag = sea_lords_found }
+	}
+
+	immediate = {
+		set_global_flag = sea_lords_found
+		sea_find_named_lords_effect = yes
+		character_event = { id = seas.2 days = 1 }
+	}
+}
+
+# seas.2 The Black Arks set sail (hidden)
+# Once a game, a day after the start: eleven of the sixteen Black Arks are
+# given captains (sea_ark_startup_effect), five stay in the Witch King's
+# reserve.
+# Scope: ROOT is the player who fired seas.1.
+character_event = {
+	id = seas.2
+	hide_window = yes
+
+	is_triggered_only = yes # seas.1
+
+	trigger = {
+		NOT = { has_global_flag = sea_arks_launched }
+	}
+
+	immediate = {
+		set_global_flag = sea_arks_launched
+		sea_ark_startup_effect = yes
+	}
+}
+
+###############################################################################
+# Set Out: the voyage (rank 2 power sea_set_out)
+###############################################################################
+
+# seas.5 A sail on the horizon (hidden)
+# A captain of the sea societies who really sails, in command of a fleet,
+# may meet what the sea there sends, once a year at most: the same
+# encounters as a Set Out voyage, drawn for the sea they are in.
+# Scope: ROOT is a commander at sea (naval.1).
+character_event = {
+	id = seas.5
+	hide_window = yes
+
+	is_triggered_only = yes # naval.1
+	only_capable = yes
+
+	trigger = {
+		sea_captain_trigger = yes
+		NOT = { has_character_flag = sea_on_voyage }
+		NOT = { has_character_modifier = sea_encounter_cd }
+	}
+
+	immediate = {
+		sea_set_theatre_from_location_effect = yes
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = sea_in_claws
+					has_character_flag = sea_in_western
+					has_character_flag = sea_in_tilean
+					has_character_flag = sea_in_araby
+					has_character_flag = sea_in_southern
+					has_character_flag = sea_in_lustria
+					has_character_flag = sea_in_naggaroth
+					has_character_flag = sea_in_ulthuan
+					has_character_flag = sea_in_east
+					has_character_flag = sea_in_chaos
+					has_character_flag = sea_in_skaven
+				}
+			}
+			add_character_modifier = { name = sea_encounter_cd years = 1 hidden = yes }
+			character_event = { id = seas.18 }
+		}
+	}
+}
+
+# seas.9 Raid or trade?
+# A Bjornling going a-Viking may sail to trade instead: meet the Old World
+# merchants halfway on the Sea of Claws, or hire the ship out as an escort
+# (seas.121 - 122). Then the heading (seas.10).
+# Scope: ROOT is the captain (sea_go_a_viking decision).
+character_event = {
+	id = seas.9
+	desc = EVTDESCseas9
+	picture = GFX_evt_longships_at_sea_oldgods
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # sea_go_a_viking
+
+	option = { # A-viking!
+		name = EVTOPTAseas9
+		character_event = { id = seas.10 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = wroth }
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+	option = { # A-trading
+		name = EVTOPTBseas9
+		set_character_flag = sea_voyage_trade
+		character_event = { id = seas.10 }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 2 stewardship = 12 }
+		}
+	}
+}
+
+# seas.10 Where away?
+# The captain picks a heading: home waters or a neighbouring sea. Each sea
+# has its own prizes, monsters, navies and wonders.
+# Scope: ROOT is the captain (sea_set_out decision).
+character_event = {
+	id = seas.10
+	desc = EVTDESCseas10
+	picture = {
+		trigger = { sea_voice_druchii_trigger = yes }
+		picture = GFX_evt_dark_elf_ship
+	}
+	picture = {
+		trigger = { sea_voice_norse_trigger = yes }
+		picture = GFX_evt_longships_at_sea_oldgods
+	}
+	picture = {
+		trigger = { sea_voice_orc_trigger = yes }
+		picture = GFX_evt_orcs_freeboota
+	}
+	picture = {
+		trigger = {
+			NOR = {
+				sea_voice_druchii_trigger = yes
+				sea_voice_norse_trigger = yes
+				sea_voice_orc_trigger = yes
+			}
+		}
+		picture = GFX_evt_pirate_fleet
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # sea_set_out, sea_go_a_viking, seas.9
+
+	immediate = {
+		sea_set_home_theatre_effect = yes
+		sea_clear_theatre_effect = yes
+	}
+
+	option = { # The Sea of Claws
+		name = EVTOPTseas10_claws
+		trigger = { sea_reach_claws_trigger = yes }
+		set_character_flag = sea_in_claws
+		character_event = { id = seas.11 days = 3 }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 has_character_flag = sea_home_claws }
+		}
+	}
+	option = { # The Great Western Ocean
+		name = EVTOPTseas10_western
+		trigger = { sea_reach_western_trigger = yes }
+		set_character_flag = sea_in_western
+		character_event = { id = seas.11 days = 3 }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 has_character_flag = sea_home_western }
+		}
+	}
+	option = { # The Tilean Sea
+		name = EVTOPTseas10_tilean
+		trigger = { sea_reach_tilean_trigger = yes }
+		set_character_flag = sea_in_tilean
+		character_event = { id = seas.11 days = 3 }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 has_character_flag = sea_home_tilean }
+		}
+	}
+	option = { # The waters of Araby
+		name = EVTOPTseas10_araby
+		trigger = { sea_reach_araby_trigger = yes }
+		set_character_flag = sea_in_araby
+		character_event = { id = seas.11 days = 3 }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 has_character_flag = sea_home_araby }
+		}
+	}
+	option = { # The Southern Sea
+		name = EVTOPTseas10_southern
+		trigger = { sea_reach_southern_trigger = yes }
+		set_character_flag = sea_in_southern
+		character_event = { id = seas.11 days = 3 }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 has_character_flag = sea_home_southern }
+		}
+	}
+	option = { # The Lustrian seas
+		name = EVTOPTseas10_lustria
+		trigger = { sea_reach_lustria_trigger = yes }
+		set_character_flag = sea_in_lustria
+		character_event = { id = seas.11 days = 3 }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 has_character_flag = sea_home_lustria }
+		}
+	}
+	option = { # The seas of Naggaroth
+		name = EVTOPTseas10_naggaroth
+		trigger = { sea_reach_naggaroth_trigger = yes }
+		set_character_flag = sea_in_naggaroth
+		character_event = { id = seas.11 days = 3 }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 has_character_flag = sea_home_naggaroth }
+		}
+	}
+	option = { # Ulthuan and the Inner Sea
+		name = EVTOPTseas10_ulthuan
+		trigger = { sea_reach_ulthuan_trigger = yes }
+		set_character_flag = sea_in_ulthuan
+		character_event = { id = seas.11 days = 3 }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 has_character_flag = sea_home_ulthuan }
+			modifier = { factor = 2 sea_voice_druchii_trigger = yes }
+		}
+	}
+	option = { # The Far Eastern seas
+		name = EVTOPTseas10_east
+		trigger = { sea_reach_east_trigger = yes }
+		set_character_flag = sea_in_east
+		character_event = { id = seas.11 days = 3 }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 has_character_flag = sea_home_east }
+		}
+	}
+	option = { # The Sea of Chaos
+		name = EVTOPTseas10_chaos
+		trigger = { sea_reach_chaos_trigger = yes }
+		set_character_flag = sea_in_chaos
+		character_event = { id = seas.11 days = 3 }
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 3 has_character_flag = sea_home_chaos }
+		}
+	}
+	option = { # The Skaven Inner Ocean
+		name = EVTOPTseas10_skaven
+		trigger = { sea_reach_skaven_trigger = yes }
+		set_character_flag = sea_in_skaven
+		character_event = { id = seas.11 days = 3 }
+		ai_chance = { factor = 10 }
+	}
+}
+
+# seas.11 Casting off (hidden)
+# The voyage begins: three to six months at sea, two or three encounters,
+# and an omen on the quay that sets the sea's mood (seas.12 - 16).
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.11
+	hide_window = yes
+
+	is_triggered_only = yes # seas.10
+
+	immediate = {
+		set_character_flag = sea_on_voyage
+		add_character_modifier = { name = sea_at_sea days = 150 }
+		random_list = {
+			50 = { set_variable = { which = sea_encounters_left value = 2 } }
+			50 = { set_variable = { which = sea_encounters_left value = 3 } }
+		}
+		random_list = {
+			20 = { character_event = { id = seas.12 } }
+			20 = { character_event = { id = seas.13 } }
+			20 = { character_event = { id = seas.14 } }
+			15 = { character_event = { id = seas.15 } }
+			25 = { character_event = { id = seas.16 } }
+		}
+		character_event = { id = seas.18 days = 20 random = 20 }
+	}
+}
+
+# seas.12 The ship's cat
+# A ship's cat has come aboard. Sailors swear a well-fed cat keeps the sea
+# in good temper; some captains would rather see it over the side.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.12
+	desc = EVTDESCseas12
+	picture = GFX_evt_pirate_crew
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.11
+
+	option = { # Feed it
+		name = EVTOPTAseas12
+		manann_mood_up_effect = yes
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 0.5 trait = cruel }
+		}
+	}
+	option = { # Over the side
+		name = EVTOPTBseas12
+		manann_mood_curse_effect = yes
+		prestige = 10
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 2 sea_voice_orc_trigger = yes }
+		}
+	}
+}
+
+# seas.13 The albatross
+# A great white bird follows the ship for days. The crew wants it left
+# alone; the marksmen want a shot at it.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.13
+	desc = EVTDESCseas13
+	picture = GFX_evt_pirate_ship
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.11
+
+	option = { # Let it fly
+		name = EVTOPTAseas13
+		manann_mood_up_effect = yes
+		ai_chance = { factor = 70 }
+	}
+	option = { # Shoot it
+		name = EVTOPTBseas13
+		manann_mood_curse_effect = yes
+		prestige = 15
+		ai_chance = {
+			factor = 15
+			modifier = { factor = 3 trait = proud }
+			modifier = { factor = 3 trait = cruel }
+		}
+	}
+}
+
+# seas.14 A passenger of the cloth
+# A holy one of the captain's own people asks passage: a priest of Manann
+# or Stromfels, a Druchii sorceress, an Orc shaman, a Norse seer, a drowned
+# priest of the Vampire Coast. Bad luck to refuse.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.14
+	desc = EVTDESCseas14
+	picture = GFX_evt_priest_blessing
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.11
+
+	option = { # Welcome aboard
+		name = EVTOPTAseas14
+		manann_mood_up_effect = yes
+		piety = 10
+		ai_chance = { factor = 70 }
+	}
+	option = { # No room
+		name = EVTOPTBseas14
+		manann_mood_down_effect = yes
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = cynical }
+		}
+	}
+}
+
+# seas.15 A new name
+# The crew wants the ship renamed after the captain's last great deed. Every
+# old salt knows a renamed ship is an unlucky ship.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.15
+	desc = EVTDESCseas15
+	picture = GFX_evt_pirate_crew
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.11
+
+	option = { # Paint it on
+		name = EVTOPTAseas15
+		prestige = 25
+		manann_mood_down_effect = yes
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 trait = proud }
+		}
+	}
+	option = { # She keeps her name
+		name = EVTOPTBseas15
+		ai_chance = { factor = 60 }
+	}
+}
+
+# seas.16 Something for the sea
+# Before the tide turns, the crew wants an offering thrown to the sea: gold,
+# or a prisoner if there is one to spare.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.16
+	desc = EVTDESCseas16
+	picture = GFX_evt_pirate_ship
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.11
+
+	option = { # Throw in gold
+		name = EVTOPTAseas16
+		trigger = { wealth = 25 }
+		wealth = -25
+		manann_mood_up_effect = yes
+		ai_chance = { factor = 40 }
+	}
+	option = { # Throw in a prisoner
+		name = EVTOPTBseas16
+		trigger = {
+			any_prisoner = {
+				NOT = { is_close_relative = ROOT }
+				is_ruler = no
+			}
+		}
+		random_prisoner = {
+			limit = {
+				NOT = { is_close_relative = ROOT }
+				is_ruler = no
+			}
+			death = { death_reason = death_sacrificed killer = ROOT }
+		}
+		manann_mood_up_effect = yes
+		manann_mood_up_effect = yes
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 0 trait = kind }
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 3 sea_voice_druchii_trigger = yes }
+		}
+	}
+	option = { # The sea gets nothing
+		name = EVTOPTCseas16
+		manann_mood_down_effect = yes
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = greedy }
+		}
+	}
+}
+
+# seas.18 What the sea sends (hidden)
+# Draws the next encounter for the sea the captain sails, weighted by the
+# sea and the sea's mood, then schedules the next one or the way home
+# (seas.19). A captain taken or lost comes home early. On a real voyage
+# (seas.5) only one encounter is drawn.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.18
+	hide_window = yes
+
+	is_triggered_only = yes # seas.5, seas.11, seas.18
+
+	immediate = {
+		if = {
+			limit = {
+				has_character_flag = sea_on_voyage
+				OR = {
+					prisoner = yes
+					is_inaccessible_trigger = yes
+					trait = incapable
+					NOT = { check_variable = { which = sea_encounters_left value = 1 } }
+				}
+			}
+			character_event = { id = seas.19 }
+		}
+		else = {
+			random_list = {
+				20 = { # A merchantman
+					modifier = {
+						factor = 1.5
+						OR = {
+							has_character_flag = sea_in_tilean
+							has_character_flag = sea_in_araby
+							has_character_flag = sea_in_claws
+							has_character_flag = sea_in_western
+						}
+					}
+					modifier = { factor = 0.3 has_character_flag = sea_in_skaven }
+					modifier = { factor = 0 has_character_flag = sea_voyage_trade }
+					character_event = { id = seas.20 }
+				}
+				10 = { # A storm
+					modifier = { factor = 2 manann_mood_bad_trigger = yes }
+					modifier = { factor = 0.5 manann_mood_good_trigger = yes }
+					modifier = {
+						factor = 1.5
+						OR = {
+							has_character_flag = sea_in_claws
+							has_character_flag = sea_in_western
+							has_character_flag = sea_in_southern
+							has_character_flag = sea_in_chaos
+						}
+					}
+					character_event = { id = seas.21 }
+				}
+				8 = { # A sea monster
+					modifier = { factor = 1.5 manann_mood_bad_trigger = yes }
+					modifier = {
+						factor = 2
+						OR = {
+							has_character_flag = sea_in_claws
+							has_character_flag = sea_in_lustria
+							has_character_flag = sea_in_naggaroth
+							has_character_flag = sea_in_east
+						}
+					}
+					character_event = { id = seas.22 }
+				}
+				6 = { # Mutiny (the dead do not mutiny)
+					trigger = { NOT = { sea_voice_vampire_trigger = yes } }
+					modifier = { factor = 2 manann_mood_bad_trigger = yes }
+					modifier = { factor = 0.5 trait = cruel }
+					character_event = { id = seas.23 }
+				}
+				8 = { # A rival captain
+					character_event = { id = seas.24 }
+				}
+				6 = { # A derelict
+					character_event = { id = seas.25 }
+				}
+				6 = { # An uncharted island
+					trigger = { NOT = { has_character_flag = sea_in_skaven } }
+					modifier = {
+						factor = 2
+						OR = {
+							has_character_flag = sea_in_lustria
+							has_character_flag = sea_in_southern
+							has_character_flag = sea_in_east
+							has_character_flag = sea_in_western
+						}
+					}
+					character_event = { id = seas.26 }
+				}
+				10 = { # A navy
+					character_event = { id = seas.27 }
+				}
+				10 = { # A port of call
+					character_event = { id = seas.28 }
+				}
+				5 = { # The sea power speaks
+					modifier = { factor = 2 manann_mood_good_trigger = yes }
+					modifier = { factor = 3 manann_mood_dire_trigger = yes }
+					character_event = { id = seas.29 }
+				}
+				8 = { # A wonder of this sea
+					character_event = { id = seas.30 }
+				}
+				6 = { # A sleeping coast (slavers)
+					trigger = {
+						slave_keeper_trigger = yes
+						NOT = { has_character_flag = sea_voyage_trade }
+						OR = {
+							sea_voice_druchii_trigger = yes
+							sea_voice_araby_trigger = yes
+							sea_voice_norse_trigger = yes
+						}
+					}
+					character_event = { id = seas.31 }
+				}
+				3 = { # A Black Ark adrift (Druchii without an ark)
+					trigger = {
+						sea_voice_druchii_trigger = yes
+						is_landed = yes
+						sea_has_black_ark_trigger = no
+						sea_ark_in_reserve_trigger = yes
+						OR = {
+							has_character_flag = sea_in_naggaroth
+							has_character_flag = sea_in_chaos
+							has_character_flag = sea_in_western
+							has_character_flag = sea_in_ulthuan
+						}
+					}
+					modifier = { factor = 2 society_rank >= 3 }
+					character_event = { id = seas.51 }
+				}
+				25 = { # Bjornling traders: meet the Old World merchants halfway
+					trigger = { has_character_flag = sea_voyage_trade }
+					character_event = { id = seas.121 }
+				}
+				20 = { # Bjornling traders: hire out as an escort
+					trigger = { has_character_flag = sea_voyage_trade }
+					character_event = { id = seas.122 }
+				}
+				8 = { # Norse: the whale road
+					trigger = {
+						sea_voice_norse_trigger = yes
+						OR = {
+							has_character_flag = sea_in_claws
+							has_character_flag = sea_in_chaos
+							has_character_flag = sea_in_western
+						}
+					}
+					character_event = { id = seas.150 }
+				}
+				6 = { # Norse: the seal skerries
+					trigger = {
+						sea_voice_norse_trigger = yes
+						OR = {
+							has_character_flag = sea_in_claws
+							has_character_flag = sea_in_chaos
+						}
+					}
+					character_event = { id = seas.151 }
+				}
+				6 = { # Norse: the nemesis
+					trigger = {
+						sea_voice_norse_trigger = yes
+						NOT = { has_character_flag = sea_voyage_trade }
+					}
+					modifier = { factor = 3 any_rival = { has_character_flag = sea_nemesis } }
+					character_event = { id = seas.152 }
+				}
+				4 = { # Norse: the dwarf sea-king
+					trigger = {
+						sea_voice_norse_trigger = yes
+						has_character_flag = sea_in_claws
+					}
+					character_event = { id = seas.153 }
+				}
+				3 = { # A tale of the sea (players, once per game each)
+					trigger = { ai = no }
+					character_event = { id = seas.199 }
+				}
+				5 = { # Norse: Skeggi and the saga of Losteriksson
+					trigger = {
+						sea_voice_norse_trigger = yes
+						OR = {
+							has_character_flag = sea_in_lustria
+							has_character_flag = sea_in_western
+						}
+					}
+					character_event = { id = seas.154 }
+				}
+			}
+			if = {
+				limit = { has_character_flag = sea_on_voyage }
+				change_variable = { which = sea_encounters_left value = -1 }
+				if = {
+					limit = { check_variable = { which = sea_encounters_left value = 1 } }
+					character_event = { id = seas.18 days = 35 random = 30 }
+				}
+				else = {
+					character_event = { id = seas.19 days = 25 random = 20 }
+				}
+			}
+		}
+	}
+}
+
+# seas.19 Home from the sea
+# The captain is back with gold, tales and Infamy; the society's legend
+# grows a little. Five years before the next voyage.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.19
+	desc = EVTDESCseas19
+	picture = GFX_evt_pirate_port
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	trigger = { has_character_flag = sea_on_voyage }
+
+	option = { # Ashore at last
+		name = EVTOPTAseas19
+		if = {
+			limit = {
+				prisoner = no
+				is_inaccessible_trigger = no
+			}
+			add_society_currency_minor_effect = yes
+			prestige = 25
+			sea_deed_effect = yes
+		}
+	}
+
+	after = {
+		if = {
+			limit = { seaquest_sea_voyage_done_trigger = yes }
+			character_event = { id = seaquest.65 }
+		}
+		if = {
+			limit = { has_quest = quest_norscan_viking }
+			character_event = { id = freigattur.30 }
+		}
+		sea_end_voyage_effect = yes
+	}
+}
+
+###############################################################################
+# The encounters (seas.18 draws them)
+###############################################################################
+
+# seas.20 A fat merchantman
+# A prize of the sea the captain sails (GetSeaPrize). Board her, frighten her
+# into striking, take her crew for the pens, or take the toll and let her go.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.20
+	desc = EVTDESCseas20
+	picture = GFX_evt_merchant_ship_at_sea_republic
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Board her!
+		name = EVTOPTAseas20
+		random_list = {
+			65 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.3 martial = 18 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				sea_take_prize_effect = yes
+				sea_deed_effect = yes
+			}
+			35 = {
+				modifier = { factor = 1.5 NOT = { martial = 8 } }
+				modifier = { factor = 1.3 trait = craven }
+				modifier = { factor = 1.3 manann_mood_bad_trigger = yes }
+				sea_take_prize_small_effect = yes
+				random = { chance = 40 add_trait = wounded }
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.3 trait = craven }
+		}
+	}
+	option = { # Strike your colours!
+		name = EVTOPTBseas20
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 intrigue = 12 }
+				modifier = { factor = 1.5 trait = cruel }
+				modifier = { factor = 1.5 trait = impaler }
+				sea_take_prize_small_effect = yes
+			}
+			50 = {
+				custom_tooltip = { text = sea_prize_escapes_tt }
+			}
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = craven }
+		}
+	}
+	option = { # Into the pens with them
+		name = EVTOPTCseas20
+		trigger = {
+			slave_keeper_trigger = yes
+			OR = {
+				sea_voice_druchii_trigger = yes
+				sea_voice_araby_trigger = yes
+			}
+		}
+		slave_gain_lot_effect = yes
+		sea_dread_bonus_effect = yes
+		sea_take_prize_small_effect = yes
+		ai_chance = { factor = 40 }
+	}
+	option = { # The Code says take the toll
+		name = EVTOPTDseas20
+		sea_take_prize_small_effect = yes
+		manann_mood_up_effect = yes
+		ai_chance = {
+			factor = 15
+			modifier = { factor = 3 trait = honest }
+			modifier = { factor = 3 trait = kind }
+		}
+	}
+}
+
+# seas.21 A storm
+# A storm falls on the ship, worse when the sea is angry. Ride it out, pray
+# to the sea power, or run for shore and end the voyage.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.21
+	desc = {
+		trigger = { manann_mood_bad_trigger = yes }
+		text = EVTDESCseas21b
+	}
+	desc = {
+		trigger = { NOT = { manann_mood_bad_trigger = yes } }
+		text = EVTDESCseas21
+	}
+	picture = GFX_evt_ship_storm
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Ride it out
+		name = EVTOPTAseas21
+		random_list = {
+			55 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.3 martial = 18 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				prestige = 25
+			}
+			30 = {
+				modifier = { factor = 1.5 manann_mood_bad_trigger = yes }
+				scaled_wealth = { value = -0.1 min = -10 max = -75 }
+			}
+			15 = {
+				modifier = { factor = 2 manann_mood_bad_trigger = yes }
+				add_trait = wounded
+				# Wrecked: the castaway's saga (WHG_castaway_events.txt)
+				if = {
+					limit = { castaway_candidate_trigger = yes }
+					random = {
+						chance = 15
+						character_event = { id = castaway.1 }
+					}
+				}
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+	option = { # Pray to the sea power
+		name = EVTOPTBseas21
+		random_list = {
+			50 = {
+				modifier = { factor = 2 manann_mood_good_trigger = yes }
+				modifier = { factor = 0.3 manann_mood_bad_trigger = yes }
+				piety = 10
+				manann_mood_up_effect = yes
+			}
+			50 = {
+				modifier = { factor = 0.5 manann_mood_good_trigger = yes }
+				manann_mood_down_effect = yes
+				random = { chance = 40 add_trait = wounded }
+			}
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = zealous }
+		}
+	}
+	option = { # Run for shore
+		name = EVTOPTCseas21
+		trigger = { has_character_flag = sea_on_voyage }
+		custom_tooltip = { text = sea_voyage_cut_short_tt }
+		set_variable = { which = sea_encounters_left value = 0 }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = craven }
+		}
+	}
+}
+
+# seas.22 A sea monster
+# A monster of this sea (GetSeaMonster) rises against the ship. Fight it for
+# glory and a rare trophy, flee and lose crew, or feed it a prisoner.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.22
+	desc = EVTDESCseas22
+	picture = GFX_evt_kraken
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Fight it
+		name = EVTOPTAseas22
+		random_list = {
+			45 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.3 martial = 18 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				prestige = 100
+				sea_deed_effect = yes
+				sea_monster_trophy_effect = yes
+			}
+			35 = {
+				prestige = 25
+				random = { chance = 50 add_trait = wounded }
+			}
+			20 = {
+				modifier = { factor = 1.5 NOT = { martial = 8 } }
+				modifier = { factor = 1.3 trait = craven }
+				modifier = { factor = 1.3 manann_mood_bad_trigger = yes }
+				detract_society_currency_minor_effect = yes
+				add_trait = wounded
+				random = { chance = 20 add_maimed_trait_effect = yes }
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.2 trait = craven }
+		}
+	}
+	option = { # Run
+		name = EVTOPTBseas22
+		detract_society_currency_trivial_effect = yes
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 3 trait = craven }
+		}
+	}
+	option = { # Feed it a prisoner
+		name = EVTOPTCseas22
+		trigger = {
+			any_prisoner = {
+				NOT = { is_close_relative = ROOT }
+				is_ruler = no
+			}
+		}
+		random_prisoner = {
+			limit = {
+				NOT = { is_close_relative = ROOT }
+				is_ruler = no
+			}
+			death = { death_reason = death_accident_generic_beast killer = ROOT }
+		}
+		prestige = 10
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 0 trait = kind }
+			modifier = { factor = 3 trait = cruel }
+		}
+	}
+}
+
+# seas.23 Mutiny!
+# The crew grumbles: too long at sea, too little gold. Hang the ringleaders,
+# share out more of the loot, or fight the first mate for the ship.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.23
+	desc = EVTDESCseas23
+	picture = GFX_evt_pirate_crew
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Hang them from the yardarm
+		name = EVTOPTAseas23
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 intrigue = 12 }
+				modifier = { factor = 1.5 trait = cruel }
+				prestige = 25
+			}
+			40 = {
+				modifier = { factor = 1.5 manann_mood_bad_trigger = yes }
+				add_trait = wounded
+				detract_society_currency_trivial_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+	option = { # Share the loot
+		name = EVTOPTBseas23
+		scaled_wealth = { value = -0.15 min = -15 max = -100 }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 0.3 trait = greedy }
+		}
+	}
+	option = { # Fight the mate for the ship
+		name = EVTOPTCseas23
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.3 martial = 18 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				prestige = 50
+				sea_deed_effect = yes
+			}
+			40 = {
+				modifier = { factor = 1.5 NOT = { martial = 8 } }
+				modifier = { factor = 1.3 trait = craven }
+				modifier = { factor = 1.3 manann_mood_bad_trigger = yes }
+				add_trait = wounded
+				detract_society_currency_minor_effect = yes
+				# Marooned by the mate: the castaway's saga
+				# (WHG_castaway_events.txt)
+				if = {
+					limit = { castaway_candidate_trigger = yes }
+					random = {
+						chance = 20
+						set_character_flag = castaway_by_mutiny
+						character_event = { id = castaway.1 }
+					}
+				}
+			}
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = duelist }
+			modifier = { factor = 0 trait = craven }
+		}
+	}
+}
+
+# seas.24 A rival under sail
+# Another captain crosses the bow. In the right sea it is a sea lord of the
+# lore in person: Luthor Harkon off Lustria, Lokhir Fellheart in the western
+# seas, Duriath Helbane in the north-west, the jarl of Skeggi. Never the
+# captain's own people (the "no meeting yourself" rule), and only while the
+# lord lives. A friend shares a bottle and the news; anyone else is a rival
+# to beat, to parley with, or to avoid.
+# Scope: ROOT is the captain. event_target:sea_rival is the named lord.
+character_event = {
+	id = seas.24
+	desc = {
+		trigger = { event_target:sea_rival = { has_character_flag = sea_named_harkon } }
+		text = EVTDESCseas24_harkon
+	}
+	desc = {
+		trigger = { event_target:sea_rival = { has_character_flag = sea_named_lokhir } }
+		text = EVTDESCseas24_lokhir
+	}
+	desc = {
+		trigger = { event_target:sea_rival = { has_character_flag = sea_named_helbane } }
+		text = EVTDESCseas24_helbane
+	}
+	desc = {
+		trigger = { event_target:sea_rival = { has_character_flag = sea_named_skeggi } }
+		text = EVTDESCseas24_skeggi
+	}
+	desc = {
+		trigger = {
+			NOT = {
+				event_target:sea_rival = {
+					OR = {
+						has_character_flag = sea_named_harkon
+						has_character_flag = sea_named_lokhir
+						has_character_flag = sea_named_helbane
+						has_character_flag = sea_named_skeggi
+					}
+				}
+			}
+		}
+		text = EVTDESCseas24
+	}
+	picture = {
+		trigger = { event_target:sea_rival = { has_character_flag = sea_named_harkon } }
+		picture = GFX_evt_nurgle_pirate
+	}
+	picture = {
+		trigger = {
+			event_target:sea_rival = {
+				OR = {
+					has_character_flag = sea_named_lokhir
+					has_character_flag = sea_named_helbane
+				}
+			}
+		}
+		picture = GFX_evt_dark_elf_corsair
+	}
+	picture = {
+		trigger = { event_target:sea_rival = { has_character_flag = sea_named_skeggi } }
+		picture = GFX_evt_longships_at_sea_oldgods
+	}
+	picture = {
+		trigger = {
+			NOT = {
+				event_target:sea_rival = {
+					OR = {
+						has_character_flag = sea_named_harkon
+						has_character_flag = sea_named_lokhir
+						has_character_flag = sea_named_helbane
+						has_character_flag = sea_named_skeggi
+					}
+				}
+			}
+		}
+		picture = GFX_evt_pirate_captain
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	immediate = {
+		sea_pick_named_rival_effect = yes
+	}
+
+	option = { # A friend: share a bottle and the news
+		name = EVTOPTDseas24
+		trigger = { event_target:sea_rival = { sea_named_lord_friendly_trigger = yes } }
+		sea_take_prize_small_effect = yes
+		event_target:sea_rival = {
+			opinion = { modifier = opinion_sea_shared_bottle who = ROOT years = 10 }
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { # Run out the guns
+		name = EVTOPTAseas24
+		trigger = {
+			NOT = { event_target:sea_rival = { sea_named_lord_friendly_trigger = yes } }
+		}
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.3 martial = 18 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				modifier = { factor = 0.7 event_target:sea_rival = { martial = 14 } }
+				prestige = 75
+				sea_take_prize_effect = yes
+				sea_deed_effect = yes
+				if = {
+					limit = { event_target:sea_rival = { always = yes } }
+					event_target:sea_rival = {
+						prestige = -50
+						opinion = { modifier = opinion_sea_bested_me who = ROOT years = 10 }
+					}
+				}
+			}
+			50 = {
+				modifier = { factor = 1.5 NOT = { martial = 8 } }
+				modifier = { factor = 1.3 trait = craven }
+				modifier = { factor = 1.3 manann_mood_bad_trigger = yes }
+				modifier = { factor = 1.4 event_target:sea_rival = { martial = 14 } }
+				prestige = -25
+				random = { chance = 50 add_trait = wounded }
+				detract_society_currency_minor_effect = yes
+				if = {
+					limit = { event_target:sea_rival = { always = yes } }
+					event_target:sea_rival = { prestige = 25 }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 2 trait = wroth }
+			modifier = { factor = 0.2 trait = craven }
+		}
+	}
+	option = { # Parley
+		name = EVTOPTBseas24
+		trigger = {
+			NOT = { event_target:sea_rival = { sea_named_lord_friendly_trigger = yes } }
+		}
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 diplomacy = 12 }
+				sea_take_prize_small_effect = yes
+			}
+			40 = {
+				scaled_wealth = { value = -0.1 min = -10 max = -75 }
+			}
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 diplomacy = 12 }
+		}
+	}
+	option = { # Give her a wide berth
+		name = EVTOPTCseas24
+		trigger = {
+			NOT = { event_target:sea_rival = { sea_named_lord_friendly_trigger = yes } }
+		}
+		prestige = -10
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = craven }
+		}
+	}
+}
+
+# seas.25 A derelict
+# A ship drifts with no one at the helm. Search her (treasure, nothing, or a
+# curse), burn her as an offering, or leave her to the sea.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.25
+	desc = EVTDESCseas25
+	picture = GFX_evt_pirate_ship
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Search her
+		name = EVTOPTAseas25
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 manann_mood_good_trigger = yes }
+				sea_take_prize_effect = yes
+			}
+			30 = {
+				custom_tooltip = { text = sea_derelict_empty_tt }
+			}
+			20 = {
+				modifier = { factor = 2 manann_mood_bad_trigger = yes }
+				manann_mood_curse_effect = yes
+				random = { chance = 50 add_trait = ill }
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+	option = { # Burn her for the sea
+		name = EVTOPTBseas25
+		manann_mood_up_effect = yes
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = zealous }
+		}
+	}
+	option = { # Leave her be
+		name = EVTOPTCseas25
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = craven }
+		}
+	}
+}
+
+# seas.26 An island not on the charts
+# Chart it (a lead for the colonies and exploration half), bury a chest of
+# loot to dig up later (seas.34), or maroon the crew's troublemakers.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.26
+	desc = EVTDESCseas26
+	picture = {
+		trigger = { has_character_flag = sea_in_lustria }
+		picture = GFX_evt_lustria_jungle
+	}
+	picture = {
+		trigger = { NOT = { has_character_flag = sea_in_lustria } }
+		picture = GFX_evt_pirate_ship
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Chart it
+		name = EVTOPTAseas26
+		add_character_modifier = { name = sea_island_charts years = 10 }
+		prestige = 25
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 learning = 12 }
+		}
+	}
+	option = { # Bury the chest here
+		name = EVTOPTBseas26
+		trigger = {
+			wealth = 50
+			NOT = { has_character_flag = sea_buried_treasure }
+		}
+		wealth = -50
+		set_character_flag = sea_buried_treasure
+		custom_tooltip = { text = sea_buried_treasure_tt }
+		character_event = { id = seas.34 days = 1825 random = 1825 }
+		ai_chance = {
+			factor = 15
+			modifier = { factor = 0 NOT = { wealth = 300 } }
+		}
+	}
+	option = { # Maroon the troublemakers
+		name = EVTOPTCseas26
+		prestige = 10
+		manann_mood_up_effect = yes
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+}
+
+# seas.27 A navy on the horizon
+# The navy of this sea hunts the captain: the Imperial Navy or Norse
+# longships in the Sea of Claws, Bretonnian sea lords and the Lothern Sea
+# Guard in the west, Sartosa's pirate princes and Estalian treasure guards
+# in the Tilean Sea, the Sultan's war-dhows off Araby, the Vampire Coast's
+# drowned fleet, Lizardmen or Amazons off Lustria, a Black Ark off
+# Naggaroth, Cathayan junks in the east, daemon ships in the north, a rival
+# clan's rat-ships below. Never the captain's own people.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.27
+	desc = { trigger = { has_character_flag = sea_navy_imperial } text = EVTDESCseas27_imperial }
+	desc = { trigger = { has_character_flag = sea_navy_norse } text = EVTDESCseas27_norse }
+	desc = { trigger = { has_character_flag = sea_navy_bretonnian } text = EVTDESCseas27_bretonnian }
+	desc = { trigger = { has_character_flag = sea_navy_asur } text = EVTDESCseas27_asur }
+	desc = { trigger = { has_character_flag = sea_navy_sartosan } text = EVTDESCseas27_sartosan }
+	desc = { trigger = { has_character_flag = sea_navy_estalian } text = EVTDESCseas27_estalian }
+	desc = { trigger = { has_character_flag = sea_navy_araby } text = EVTDESCseas27_araby }
+	desc = { trigger = { has_character_flag = sea_navy_vampire } text = EVTDESCseas27_vampire }
+	desc = { trigger = { has_character_flag = sea_navy_lizardmen } text = EVTDESCseas27_lizardmen }
+	desc = { trigger = { has_character_flag = sea_navy_amazon } text = EVTDESCseas27_amazon }
+	desc = { trigger = { has_character_flag = sea_navy_druchii } text = EVTDESCseas27_druchii }
+	desc = { trigger = { has_character_flag = sea_navy_cathay } text = EVTDESCseas27_cathay }
+	desc = { trigger = { has_character_flag = sea_navy_daemon } text = EVTDESCseas27_daemon }
+	desc = { trigger = { has_character_flag = sea_navy_skaven } text = EVTDESCseas27_skaven }
+	desc = { trigger = { has_character_flag = sea_navy_hunters } text = EVTDESCseas27_hunters }
+	picture = {
+		trigger = { has_character_flag = sea_navy_druchii }
+		picture = GFX_evt_dark_elf_black_ark
+	}
+	picture = {
+		trigger = { has_character_flag = sea_navy_asur }
+		picture = GFX_evt_high_elf_ship
+	}
+	picture = {
+		trigger = { has_character_flag = sea_navy_norse }
+		picture = GFX_evt_longships_at_sea_oldgods
+	}
+	picture = {
+		trigger = {
+			NOR = {
+				has_character_flag = sea_navy_druchii
+				has_character_flag = sea_navy_asur
+				has_character_flag = sea_navy_norse
+			}
+		}
+		picture = GFX_evt_naval_battle
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	immediate = {
+		sea_pick_navy_effect = yes
+	}
+
+	option = { # Give battle
+		name = EVTOPTAseas27
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.3 martial = 18 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				prestige = 75
+				sea_take_prize_effect = yes
+				sea_deed_effect = yes
+			}
+			50 = {
+				modifier = { factor = 1.5 NOT = { martial = 8 } }
+				modifier = { factor = 1.3 trait = craven }
+				modifier = { factor = 1.3 manann_mood_bad_trigger = yes }
+				modifier = { factor = 1.3 has_character_flag = sea_navy_druchii }
+				modifier = { factor = 1.3 has_character_flag = sea_navy_daemon }
+				prestige = -25
+				add_trait = wounded
+				detract_society_currency_minor_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 0.2 trait = craven }
+		}
+	}
+	option = { # Crowd on sail and run
+		name = EVTOPTBseas27
+		random_list = {
+			65 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.5 manann_mood_good_trigger = yes }
+				custom_tooltip = { text = sea_escaped_tt }
+			}
+			35 = {
+				modifier = { factor = 1.5 manann_mood_bad_trigger = yes }
+				scaled_wealth = { value = -0.15 min = -15 max = -100 }
+				random = { chance = 30 add_trait = wounded }
+			}
+		}
+		ai_chance = { factor = 40 }
+	}
+	option = { # Pay them off
+		name = EVTOPTCseas27
+		trigger = {
+			wealth = 50
+			NOR = {
+				has_character_flag = sea_navy_daemon
+				has_character_flag = sea_navy_vampire
+			}
+		}
+		wealth = -50
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 trait = craven }
+			modifier = { factor = 0.3 trait = greedy }
+		}
+	}
+
+	after = {
+		sea_clear_navy_effect = yes
+	}
+}
+
+# seas.28 A port of call
+# The port of this sea (GetSeaPort): sell the plunder, carouse, hire hands,
+# or buy charts.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.28
+	desc = EVTDESCseas28
+	picture = GFX_evt_pirate_port
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Sell the plunder
+		name = EVTOPTAseas28
+		sea_take_prize_small_effect = yes
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+	option = { # Carouse
+		name = EVTOPTBseas28
+		prestige = 25
+		random = {
+			chance = 15
+			modifier = { factor = 0 trait = temperate }
+			add_trait = drunkard
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = gluttonous }
+			modifier = { factor = 0 trait = temperate }
+		}
+	}
+	option = { # Hire hands
+		name = EVTOPTCseas28
+		trigger = { wealth = 25 }
+		wealth = -25
+		add_society_currency_minor_effect = yes
+		ai_chance = { factor = 20 }
+	}
+	option = { # Buy charts
+		name = EVTOPTDseas28
+		trigger = {
+			wealth = 25
+			NOT = { has_character_modifier = sea_island_charts }
+		}
+		wealth = -25
+		add_character_modifier = { name = sea_island_charts years = 10 }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 learning = 12 }
+		}
+	}
+}
+
+# seas.29 The sea power speaks
+# When the sea is fond of the captain, its power sends fair winds. When it
+# is black with hatred, its servant rises from the waves and names a price:
+# Manann's son Triton, a shark of Stromfels, a cold sending of Mathlann.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.29
+	desc = {
+		trigger = { NOT = { manann_mood_bad_trigger = yes } }
+		text = EVTDESCseas29
+	}
+	desc = {
+		trigger = { manann_mood_bad_trigger = yes }
+		text = EVTDESCseas29b
+	}
+	picture = {
+		trigger = { NOT = { manann_mood_bad_trigger = yes } }
+		picture = GFX_evt_priest_blessing
+	}
+	picture = {
+		trigger = { manann_mood_bad_trigger = yes }
+		picture = GFX_evt_ship_storm
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Thanks be to the sea
+		name = EVTOPTAseas29
+		trigger = { NOT = { manann_mood_bad_trigger = yes } }
+		manann_mood_up_effect = yes
+		add_character_modifier = { name = sea_fair_winds years = 5 }
+		piety = 10
+	}
+	option = { # Pay the price
+		name = EVTOPTBseas29
+		trigger = {
+			manann_mood_bad_trigger = yes
+			wealth = 50
+		}
+		scaled_wealth = { value = -0.3 min = -50 max = -250 }
+		manann_mood_up_effect = yes
+		manann_mood_up_effect = yes
+		ai_chance = { factor = 60 }
+	}
+	option = { # Defy it
+		name = EVTOPTCseas29
+		trigger = { manann_mood_bad_trigger = yes }
+		random_list = {
+			30 = {
+				modifier = { factor = 2 trait = brave }
+				prestige = 100
+				sea_deed_effect = yes
+			}
+			70 = {
+				manann_mood_curse_effect = yes
+				add_trait = wounded
+				random = { chance = 20 add_maimed_trait_effect = yes }
+			}
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = proud }
+		}
+	}
+}
+
+# seas.30 A wonder of this sea
+# Each sea has its own: Karybdis and the ice of the Sea of Claws, the ghost
+# ships of the Great Ocean, the wreckers' lights of the Pirate Coast, the
+# djinn-haunted reefs of Araby, the dead calms of the Southern Sea, the
+# siren calls that drag ships to the Vampire Coast, the icebergs and sorcerous
+# mists of Naggaroth, the illusions of the Shifting Isles, the typhoons of the
+# east, warp storms in the north, cavern collapses below. Steer into it for
+# glory, or give it a wide berth.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.30
+	desc = { trigger = { has_character_flag = sea_in_claws } text = EVTDESCseas30_claws }
+	desc = { trigger = { has_character_flag = sea_in_western } text = EVTDESCseas30_western }
+	desc = { trigger = { has_character_flag = sea_in_tilean } text = EVTDESCseas30_tilean }
+	desc = { trigger = { has_character_flag = sea_in_araby } text = EVTDESCseas30_araby }
+	desc = { trigger = { has_character_flag = sea_in_southern } text = EVTDESCseas30_southern }
+	desc = { trigger = { has_character_flag = sea_in_lustria } text = EVTDESCseas30_lustria }
+	desc = { trigger = { has_character_flag = sea_in_naggaroth } text = EVTDESCseas30_naggaroth }
+	desc = { trigger = { has_character_flag = sea_in_ulthuan } text = EVTDESCseas30_ulthuan }
+	desc = { trigger = { has_character_flag = sea_in_east } text = EVTDESCseas30_east }
+	desc = { trigger = { has_character_flag = sea_in_chaos } text = EVTDESCseas30_chaos }
+	desc = { trigger = { has_character_flag = sea_in_skaven } text = EVTDESCseas30_skaven }
+	picture = GFX_evt_ship_storm
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	trigger = {
+		OR = {
+			has_character_flag = sea_in_claws
+			has_character_flag = sea_in_western
+			has_character_flag = sea_in_tilean
+			has_character_flag = sea_in_araby
+			has_character_flag = sea_in_southern
+			has_character_flag = sea_in_lustria
+			has_character_flag = sea_in_naggaroth
+			has_character_flag = sea_in_ulthuan
+			has_character_flag = sea_in_east
+			has_character_flag = sea_in_chaos
+			has_character_flag = sea_in_skaven
+		}
+	}
+
+	option = { # Steer into it
+		name = EVTOPTAseas30
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.3 martial = 18 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				prestige = 75
+				learning = 1
+				sea_deed_effect = yes
+			}
+			50 = {
+				modifier = { factor = 1.5 NOT = { martial = 8 } }
+				modifier = { factor = 1.3 trait = craven }
+				modifier = { factor = 1.3 manann_mood_bad_trigger = yes }
+				add_trait = wounded
+				manann_mood_down_effect = yes
+			}
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 2 trait = ambitious }
+		}
+	}
+	option = { # Give it a wide berth
+		name = EVTOPTBseas30
+		ai_chance = { factor = 50 }
+	}
+}
+
+# seas.31 A sleeping coast
+# Druchii and Arabyan slavers find a fishing coast asleep: fill the pens, or
+# leave it for another night.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.31
+	desc = EVTDESCseas31
+	picture = {
+		trigger = { sea_voice_druchii_trigger = yes }
+		picture = GFX_evt_dark_elf_corsair
+	}
+	picture = {
+		trigger = { NOT = { sea_voice_druchii_trigger = yes } }
+		picture = GFX_evt_pirate_crew
+	}
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Fill the pens
+		name = EVTOPTAseas31
+		slave_gain_two_lots_effect = yes
+		prestige = 25
+		sea_deed_effect = yes
+		ai_chance = { factor = 80 }
+	}
+	option = { # Another night
+		name = EVTOPTBseas31
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = kind }
+		}
+	}
+}
+
+# seas.34 X marks the spot
+# Years later the captain sails back for the buried chest: twice what went
+# in, or someone dug first, or the map was wrong all along.
+# Scope: ROOT is the captain (seas.26).
+character_event = {
+	id = seas.34
+	desc = EVTDESCseas34
+	picture = GFX_evt_treasure_madness
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.26
+
+	trigger = { has_character_flag = sea_buried_treasure }
+
+	option = { # Dig!
+		name = EVTOPTAseas34
+		clr_character_flag = sea_buried_treasure
+		random_list = {
+			60 = {
+				wealth = 100
+				prestige = 25
+			}
+			25 = {
+				custom_tooltip = { text = sea_treasure_dug_tt }
+			}
+			15 = {
+				custom_tooltip = { text = sea_treasure_wrong_map_tt }
+				prestige = -10
+			}
+		}
+	}
+}
+
+###############################################################################
+# Flagships and raiders
+###############################################################################
+
+# seas.40 A flagship comes to hand
+# Rare, once a lifetime: a landed sea lord without a flagship comes by a
+# small one. A prize taken off the coast, a hull sold by a drunk shipwright,
+# or a wreck in the shallows that could be raised. Captains of the sea
+# societies are offered one more often.
+# Scope: ROOT is the sea lord.
+character_event = {
+	id = seas.40
+	desc = {
+		text = EVTDESCseas40_prize
+		trigger = { has_character_flag = sea_hull_prize }
+	}
+	desc = {
+		text = EVTDESCseas40_shipwright
+		trigger = { has_character_flag = sea_hull_shipwright }
+	}
+	desc = {
+		text = EVTDESCseas40_wreck
+		trigger = { has_character_flag = sea_hull_wreck }
+	}
+	picture = GFX_evt_pirate_ship
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_five_year_pulse, list sea_flagships
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		is_adult = yes
+		sea_pirate_lord_trigger = yes
+		sea_has_flagship_trigger = no
+		NOT = { has_character_flag = sea_had_flagship_event }
+		is_inaccessible_trigger = no
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2.5 sea_captain_trigger = yes }
+		modifier = { factor = 0.5 war = yes }
+	}
+
+	immediate = {
+		set_character_flag = sea_had_flagship_event
+		random_list = {
+			40 = { set_character_flag = sea_hull_prize }
+			30 = { set_character_flag = sea_hull_shipwright }
+			30 = { set_character_flag = sea_hull_wreck }
+		}
+	}
+
+	option = { # The prize is mine
+		name = EVTOPTAseas40
+		trigger = { has_character_flag = sea_hull_prize }
+		add_artifact = small_flagship
+		prestige = 25
+		ai_chance = { factor = 100 }
+	}
+	option = { # Pay the man
+		name = EVTOPTBseas40
+		trigger = {
+			has_character_flag = sea_hull_shipwright
+			wealth = 50
+		}
+		wealth = -50
+		add_artifact = small_flagship
+		ai_chance = { factor = 70 }
+	}
+	option = { # Pour him another, and another
+		name = EVTOPTCseas40
+		trigger = {
+			has_character_flag = sea_hull_shipwright
+			OR = {
+				intrigue = 10
+				trait = drunkard
+				trait = deceitful
+			}
+		}
+		wealth = -15
+		add_artifact = small_flagship
+		random = {
+			chance = 25
+			if = {
+				limit = { NOT = { trait = drunkard } }
+				add_trait = drunkard
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = drunkard }
+		}
+	}
+	option = { # Raise her
+		name = EVTOPTDseas40
+		trigger = {
+			has_character_flag = sea_hull_wreck
+			wealth = 75
+		}
+		wealth = -75
+		add_artifact = small_flagship
+		ai_chance = { factor = 70 }
+	}
+	option = { # The drowned will raise her for me
+		name = EVTOPTEseas40
+		trigger = {
+			has_character_flag = sea_hull_wreck
+			sea_voice_vampire_trigger = yes
+		}
+		add_artifact = small_flagship
+		piety = -10
+		ai_chance = { factor = 200 }
+	}
+	option = { # I have no use for a ship
+		name = EVTOPTFseas40
+		ai_chance = { factor = 5 }
+	}
+
+	after = {
+		clr_character_flag = sea_hull_prize
+		clr_character_flag = sea_hull_shipwright
+		clr_character_flag = sea_hull_wreck
+	}
+}
+
+# seas.41 The shipwrights offer a refit
+# Rare: a sea lord with a flagship, its deeds (or fame) behind it and five
+# years since the last refit is offered the next ship in the line, for gold.
+# Scope: ROOT is the sea lord.
+character_event = {
+	id = seas.41
+	desc = {
+		text = EVTDESCseas41_great
+		trigger = { has_artifact = regular_flagship }
+	}
+	desc = {
+		text = EVTDESCseas41_middle
+		trigger = { NOT = { has_artifact = regular_flagship } }
+	}
+	picture = GFX_evt_pirate_port
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_five_year_pulse, list sea_flagships
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		war = no
+		sea_pirate_lord_trigger = yes
+		OR = {
+			has_artifact = small_flagship
+			has_artifact = regular_flagship
+		}
+		sea_refit_ready_trigger = yes
+		sea_refit_deeds_trigger = yes
+		trigger_if = {
+			limit = { has_artifact = regular_flagship }
+			wealth = 400
+		}
+		trigger_else = {
+			wealth = 200
+		}
+		is_inaccessible_trigger = no
+	}
+
+	option = { # Lay her keel anew
+		name = EVTOPTAseas41
+		sea_pay_refit_effect = yes
+		sea_refit_flagship_effect = yes
+		prestige = 50
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 2 trait = ambitious }
+			modifier = { factor = 0.3 trait = greedy }
+		}
+	}
+	option = { # She serves as she is
+		name = EVTOPTBseas41
+		hidden_effect = {
+			clr_character_flag = sea_refit
+			set_character_flag = sea_refit
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = content }
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+}
+
+# seas.42 The flagship is launched
+# The Refit the Flagship (or Raise a Dragon-ship) decision has been taken;
+# the yards are emptied and the new ship goes down the slip.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.42
+	desc = {
+		text = EVTDESCseas42_great
+		trigger = { has_artifact = enormous_flagship }
+	}
+	desc = {
+		text = EVTDESCseas42_middle
+		trigger = { has_artifact = regular_flagship }
+	}
+	desc = {
+		text = EVTDESCseas42_small
+		trigger = { has_artifact = small_flagship }
+	}
+	picture = GFX_evt_pirate_fleet
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # sea_refit_flagship and sea_raise_dragonship decisions
+
+	option = {
+		name = EVTOPTAseas42
+	}
+}
+
+# seas.43 The raiders come aboard
+# The Recruit Raiders decision has been taken: a band of the captain's own
+# people musters at the capital (sea_spawn_raiders_effect).
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.43
+	desc = EVTDESCseas43
+	picture = GFX_evt_pirate_crew
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # sea_recruit_raiders decision
+
+	option = {
+		name = EVTOPTAseas43
+		sea_spawn_raiders_effect = yes
+	}
+}
+
+###############################################################################
+# The Black Arks
+###############################################################################
+
+# seas.50 The Witch King's answer
+# A Corsair has petitioned Naggarond for an ark (sea_attain_black_ark). The
+# Witch King grants one from the reserve, or keeps the gift and says not
+# yet. Fame and rank sway him; there is nothing to grant when the reserve is
+# empty.
+# Scope: ROOT is the petitioner.
+character_event = {
+	id = seas.50
+	desc = {
+		text = EVTDESCseas50_granted
+		trigger = { has_character_flag = sea_ark_petition_granted }
+	}
+	desc = {
+		text = EVTDESCseas50_refused
+		trigger = { NOT = { has_character_flag = sea_ark_petition_granted } }
+	}
+	picture = GFX_evt_dark_elf_black_ark
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # sea_attain_black_ark decision
+
+	immediate = {
+		if = {
+			limit = { sea_ark_in_reserve_trigger = yes }
+			random_list = {
+				60 = {
+					modifier = { factor = 1.5 society_rank >= 4 }
+					modifier = { factor = 1.3 prestige = 1500 }
+					modifier = { factor = 1.3 martial = 15 }
+					modifier = { factor = 0.6 NOT = { prestige = 500 } }
+					set_character_flag = sea_ark_petition_granted
+				}
+				40 = { }
+			}
+		}
+	}
+
+	option = { # The ark is mine
+		name = EVTOPTAseas50
+		trigger = { has_character_flag = sea_ark_petition_granted }
+		sea_grant_reserve_ark_effect = yes
+		prestige = 100
+	}
+	option = { # I will be patient
+		name = EVTOPTBseas50
+		trigger = { NOT = { has_character_flag = sea_ark_petition_granted } }
+		custom_tooltip = { text = sea_ark_petition_refused_tt }
+	}
+
+	after = {
+		clr_character_flag = sea_ark_petition_granted
+	}
+}
+
+# seas.51 A Black Ark adrift
+# On a voyage a Druchii captain without an ark comes upon one from the
+# reserve, drifting with no fleetmaster: dead of plague, of mutiny, or of
+# something worse below decks. Board her and she is yours.
+# Scope: ROOT is the captain (seas.18).
+character_event = {
+	id = seas.51
+	desc = EVTDESCseas51
+	picture = GFX_evt_dark_elf_black_ark
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Board her
+		name = EVTOPTAseas51
+		random_list = {
+			75 = {
+				modifier = { factor = 1.5 martial = 14 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				sea_grant_reserve_ark_effect = yes
+				prestige = 100
+				sea_deed_effect = yes
+			}
+			25 = {
+				modifier = { factor = 1.5 trait = craven }
+				modifier = { factor = 1.5 manann_mood_bad_trigger = yes }
+				custom_tooltip = { text = sea_ark_adrift_lost_tt }
+				random = { chance = 50 add_trait = wounded }
+			}
+		}
+		ai_chance = { factor = 90 }
+	}
+	option = { # Leave the cursed thing to the sea
+		name = EVTOPTBseas51
+		manann_mood_up_effect = yes
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 3 trait = craven }
+		}
+	}
+}
+
+# seas.52 The challenge for an ark
+# A Corsair Lord has challenged another captain for their ark (sea_seize_
+# black_ark): take her by storm, or buy her crew. The winner keeps the ark,
+# and Naggarond frowns on a captain who takes an ark without leave.
+# Scope: ROOT is the challenger, FROM the ark's captain.
+character_event = {
+	id = seas.52
+	desc = EVTDESCseas52
+	picture = GFX_evt_dark_elf_corsair
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # sea_seize_black_ark decision
+
+	option = { # Storm the gates
+		name = EVTOPTAseas52
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 martial = 15 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 0.7 FROM = { martial = 15 } }
+				modifier = { factor = 0.8 FROM = { trait = brave } }
+				set_character_flag = sea_ark_challenge_won
+			}
+			50 = {
+				add_trait = wounded
+				prestige = -100
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+	option = { # Buy her crew
+		name = EVTOPTBseas52
+		trigger = { wealth = 150 }
+		wealth = -150
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 intrigue = 15 }
+				modifier = { factor = 1.3 trait = deceitful }
+				modifier = { factor = 0.7 FROM = { intrigue = 15 } }
+				modifier = { factor = 0.8 FROM = { trait = paranoid } }
+				set_character_flag = sea_ark_challenge_won
+			}
+			50 = {
+				prestige = -50
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = deceitful }
+		}
+	}
+
+	after = {
+		if = {
+			limit = { has_character_flag = sea_ark_challenge_won }
+			FROM = {
+				random_artifact = {
+					limit = { has_artifact_flag = black_ark }
+					transfer_artifact = { from = FROM to = ROOT }
+				}
+				if = {
+					limit = { sea_has_black_ark_trigger = no }
+					clr_character_flag = ark_captain
+				}
+				opinion = { modifier = opinion_sea_took_my_ark who = ROOT years = 50 }
+			}
+			set_character_flag = ark_captain
+			prestige = 150
+			sea_deed_effect = yes
+			c_naggarond = {
+				holder_scope = {
+					if = {
+						limit = { NOT = { character = ROOT } }
+						opinion = { modifier = opinion_sea_ark_without_leave who = ROOT years = 10 }
+					}
+				}
+			}
+		}
+		else = {
+			FROM = { prestige = 50 }
+		}
+		FROM = { character_event = { id = seas.53 } }
+		clr_character_flag = sea_ark_challenge_won
+	}
+}
+
+# seas.53 The challenge is over
+# The captain hears how the challenge for their ark ended.
+# Scope: ROOT is the ark's captain (or former captain), FROM the
+# challenger.
+character_event = {
+	id = seas.53
+	desc = {
+		text = EVTDESCseas53_lost
+		trigger = { FROM = { has_character_flag = sea_ark_challenge_won } }
+	}
+	desc = {
+		text = EVTDESCseas53_kept
+		trigger = { FROM = { NOT = { has_character_flag = sea_ark_challenge_won } } }
+	}
+	picture = GFX_evt_dark_elf_corsair
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.52
+
+	option = {
+		name = EVTOPTAseas53
+	}
+}
+
+# seas.55 The Witch King remembers
+# Now and then Naggarond hands an ark from the reserve to a deserving
+# Corsair (rank 3 or more, Druchii, on the coast, without one). This keeps
+# the arks moving among the AI too.
+# Scope: ROOT is the Corsair.
+character_event = {
+	id = seas.55
+	desc = EVTDESCseas55
+	picture = GFX_evt_dark_elf_black_ark
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_five_year_pulse, list sea_black_arks
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		society_member_of = adventurers_druchii_corsairs
+		society_rank >= 3
+		sea_ark_worthy_trigger = yes
+		sea_ark_in_reserve_trigger = yes
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 society_rank >= 4 }
+		modifier = { factor = 1.5 prestige = 1500 }
+	}
+
+	option = { # Kneel and accept
+		name = EVTOPTAseas55
+		sea_grant_reserve_ark_effect = yes
+		prestige = 50
+	}
+}
+
+# seas.59 The ark sails for the defender (hidden)
+# A war has begun against a captain of the Black Arks: the ark sails
+# against the attacker.
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = seas.59
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_started
+
+	has_character_flag = ark_captain
+
+	trigger = {
+		sea_ark_can_sail_trigger = yes
+		FROM = { is_landed = yes }
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = ark_enemy }
+		sea_ark_sail_effect = yes
+	}
+}
+
+# seas.60 The ark sails for the attacker (hidden)
+# A captain of the Black Arks has started a war: the ark sails against the
+# defender. Once per war, so the ark is the opening blow.
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = seas.60
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_started
+
+	trigger = {
+		is_landed = yes
+		FROM = { sea_ark_can_sail_trigger = yes }
+	}
+
+	immediate = {
+		save_event_target_as = ark_enemy
+		FROM = { sea_ark_sail_effect = yes }
+	}
+}
+
+# seas.61 The ark awaits your command
+# A player captain is asked whether to send the ark against the enemy.
+# Scope: ROOT is the captain; event_target:ark_enemy the enemy.
+letter_event = {
+	id = seas.61
+	title = EVTTITLEseas61
+	desc = EVTDESCseas61
+	picture = GFX_evt_dark_elf_black_ark
+	is_triggered_only = yes # sea_ark_sail_effect
+
+	option = { # Send the ark
+		name = EVTOPTAseas61
+		set_character_flag = ark_at_sea
+		custom_tooltip = { text = sea_ark_sails_tt }
+		character_event = { id = seas.62 days = 30 random = 30 }
+	}
+	option = { # The ark stays at anchor
+		name = EVTOPTBseas61
+	}
+}
+
+# seas.62 The ark comes ashore (hidden)
+# If the war still runs, the ark's host lands at the enemy port nearest
+# their capital (sea_ark_land_host_effect), and the enemy is told.
+# Scope: ROOT is the captain; event_target:ark_enemy the enemy.
+character_event = {
+	id = seas.62
+	hide_window = yes
+	is_triggered_only = yes # seas.61, sea_ark_sail_effect
+
+	immediate = {
+		clr_character_flag = ark_at_sea
+		if = {
+			limit = {
+				is_alive = yes
+				sea_has_black_ark_trigger = yes
+				event_target:ark_enemy = {
+					is_alive = yes
+					is_landed = yes
+					war_with = ROOT
+				}
+			}
+			sea_ark_land_host_effect = yes
+			event_target:ark_enemy = {
+				character_event = { id = seas.63 }
+				if = { # Renown: Warden of the Shores counts the war if they win it (chronicle.134 - 137)
+					limit = { ai = no culture_group = asur_group }
+					set_character_flag = deed_ark_landed
+				}
+			}
+		}
+	}
+}
+
+# seas.63 A Black Ark off the coast
+# The enemy (a player) learns that an ark's host has come ashore.
+# Scope: ROOT is the enemy, FROM the captain.
+character_event = {
+	id = seas.63
+	desc = EVTDESCseas63
+	picture = GFX_evt_dark_elf_black_ark
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.62
+
+	trigger = { ai = no }
+
+	option = {
+		name = EVTOPTAseas63
+	}
+}
+
+# seas.64 The pens fill (hidden)
+# In a year of war a captain's ark comes home with captives
+# (slave_gain_lot_effect; two lots for a great ark).
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.64
+	hide_window = yes
+
+	is_triggered_only = yes # on_yearly_pulse
+
+	has_character_flag = ark_captain
+
+	trigger = {
+		war = yes
+		is_landed = yes
+		slave_keeper_trigger = yes
+		sea_has_black_ark_trigger = yes
+	}
+
+	immediate = {
+		slave_gain_lot_effect = yes
+		sea_dread_bonus_effect = yes
+		if = {
+			limit = { any_artifact = { has_artifact_flag = ark_great } }
+			slave_gain_lot_effect = yes
+		}
+	}
+}
+
+# seas.65 The fleetmaster is dead (hidden)
+# A captain of the Black Arks dies. A Corsair heir inherits the ark; any
+# other heir loses it to Naggarond, and it goes back to the reserve for the
+# Witch King to hand on.
+# Scope: ROOT is the dead captain.
+character_event = {
+	id = seas.65
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+
+	has_character_flag = ark_captain
+
+	immediate = {
+		if = {
+			limit = {
+				current_heir = { society_member_of = adventurers_druchii_corsairs }
+			}
+			current_heir = { set_character_flag = ark_captain }
+		}
+		else = {
+			sea_return_arks_effect = yes
+		}
+	}
+}
+
+###############################################################################
+# Reputations
+###############################################################################
+
+# seas.70 What the seas whisper
+# A rank 4 captain chooses their reputation (sea_choose_reputation): Dread
+# Captain (more captives, feared), Sea Wolf (raids and battles), Merchant
+# of Plunder (more gold from every prize), The Damned (the Vampire Coast:
+# the drowned rise after victories, seas.72) or the Sworn Admiral of their
+# liege (voiced per people: GetSeaAdmiral). Ten years between changes.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.70
+	desc = EVTDESCseas70
+	picture = GFX_evt_pirate_captain
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # sea_choose_reputation decision
+
+	immediate = {
+		clr_character_flag = sea_reputation_chosen
+		set_character_flag = sea_reputation_chosen
+	}
+
+	option = { # Dread Captain
+		name = EVTOPTAseas70
+		trigger = { NOT = { has_character_modifier = sea_rep_dread } }
+		sea_clear_reputation_effect = yes
+		add_character_modifier = { name = sea_rep_dread duration = -1 }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 3 trait = impaler }
+			modifier = { factor = 2 sea_voice_druchii_trigger = yes }
+		}
+	}
+	option = { # Sea Wolf
+		name = EVTOPTBseas70
+		trigger = { NOT = { has_character_modifier = sea_rep_wolf } }
+		sea_clear_reputation_effect = yes
+		add_character_modifier = { name = sea_rep_wolf duration = -1 }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = brave }
+			modifier = { factor = 2 trait = wroth }
+			modifier = { factor = 2 sea_voice_orc_trigger = yes }
+		}
+	}
+	option = { # Merchant of Plunder
+		name = EVTOPTCseas70
+		trigger = { NOT = { has_character_modifier = sea_rep_merchant } }
+		sea_clear_reputation_effect = yes
+		add_character_modifier = { name = sea_rep_merchant duration = -1 }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = greedy }
+			modifier = { factor = 2 stewardship = 12 }
+			modifier = { factor = 2 sea_voice_araby_trigger = yes }
+		}
+	}
+	option = { # The Damned
+		name = EVTOPTDseas70
+		trigger = {
+			sea_voice_vampire_trigger = yes
+			NOT = { has_character_modifier = sea_rep_damned }
+		}
+		sea_clear_reputation_effect = yes
+		add_character_modifier = { name = sea_rep_damned duration = -1 }
+		ai_chance = { factor = 60 }
+	}
+	option = { # Sworn Admiral
+		name = EVTOPTEseas70
+		trigger = {
+			independent = no
+			NOT = { has_character_modifier = sea_rep_admiral }
+		}
+		sea_clear_reputation_effect = yes
+		add_character_modifier = { name = sea_rep_admiral duration = -1 }
+		set_character_flag = sea_sworn_admiral
+		liege = {
+			opinion = { modifier = opinion_sea_sworn_admiral who = ROOT years = 10 }
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = honest }
+			modifier = { factor = 2 opinion = { who = liege value = 50 } }
+			modifier = { factor = 0.2 trait = ambitious }
+		}
+	}
+}
+
+# seas.71 The admiral is called (hidden)
+# A Sworn Admiral's liege goes to war: the admiral's fleet sails with them,
+# which brings prestige and the liege's favour.
+# Scope: ROOT is the defender, FROM the attacker (the liege).
+character_event = {
+	id = seas.71
+	hide_window = yes
+
+	is_triggered_only = yes # on_war_started
+
+	trigger = {
+		FROM = {
+			any_vassal = { has_character_flag = sea_sworn_admiral }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			any_vassal = {
+				limit = {
+					has_character_flag = sea_sworn_admiral
+					is_landed = yes
+					prisoner = no
+				}
+				prestige = 50
+				reverse_opinion = { modifier = opinion_sea_admiral_answered who = FROM years = 5 }
+				character_event = { id = seas.73 }
+			}
+		}
+	}
+}
+
+# seas.72 The drowned rise
+# The Damned win a battle, and the dead of both sides get up again and walk
+# into the sea to join the captain's crew. Once a year at most.
+# Scope: ROOT is the winning commander's owner.
+character_event = {
+	id = seas.72
+	desc = EVTDESCseas72
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_battle_won_owner
+
+	has_character_flag = sea_reputation_chosen
+
+	trigger = {
+		has_character_modifier = sea_rep_damned
+		NOT = { has_character_modifier = sea_damned_risen_cd }
+		is_landed = yes
+	}
+
+	immediate = {
+		add_character_modifier = { name = sea_damned_risen_cd years = 1 hidden = yes }
+	}
+
+	option = {
+		name = EVTOPTAseas72
+		capital_scope = { save_event_target_as = sea_damned_home }
+		spawn_unit = {
+			province = event_target:sea_damned_home
+			home = event_target:sea_damned_home
+			owner = ROOT
+			troops = {
+				light_infantry = { 400 400 }
+				heavy_infantry = { 100 100 }
+			}
+			attrition = 1
+			maintenance_multiplier = 0
+			disband_on_peace = yes
+			cannot_inherit = yes
+			earmark = sea_damned_risen
+		}
+	}
+}
+
+# seas.73 Your liege calls the fleet
+# A Sworn Admiral learns that their liege has gone to war, and the fleet
+# sails with them.
+# Scope: ROOT is the admiral, FROM the defender of seas.71.
+character_event = {
+	id = seas.73
+	desc = EVTDESCseas73
+	picture = GFX_evt_pirate_fleet
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.71
+
+	trigger = { ai = no }
+
+	option = {
+		name = EVTOPTAseas73
+	}
+}
+
+###############################################################################
+# The legend of the seas
+# When a sea society's legend is full, a captain of the top rank sails a
+# legendary voyage: three famous raids on the ports of their people's route,
+# then a fight with the sea's best. The survivor founds a sea bloodline. The
+# AI's voyage is rolled; a player sails it in person, port by port, unless
+# the warhammer_sea_legend game rule says otherwise.
+###############################################################################
+
+# seas.100 The legend is full (hidden)
+# The legend of the Corsairs, the Wolves of the Sea or the Freigattur is
+# full: progress halts and a rank 4 captain is called (a player if
+# possible), with a fellow captain to sail beside them. Without one, the
+# legend starts again.
+# Scope: ROOT is the grandmaster; FROM the society.
+character_event = {
+	id = seas.100
+	hide_window = yes
+	is_triggered_only = yes # on_society_progress_full
+
+	trigger = {
+		FROM = { sea_legend_society_trigger = yes }
+	}
+
+	immediate = {
+		FROM = {
+			set_flag = block_society_progress
+			save_event_target_as = sea_legend_society
+		}
+		if = {
+			limit = {
+				FROM = {
+					any_society_member = {
+						society_rank == 4
+						is_adult = yes
+						is_inaccessible_trigger = no
+						prisoner = no
+					}
+				}
+			}
+			FROM = {
+				random_society_member = {
+					limit = {
+						society_rank == 4
+						is_adult = yes
+						is_inaccessible_trigger = no
+						prisoner = no
+					}
+					preferred_limit = { ai = no }
+					save_event_target_as = sea_legend_captain
+				}
+				random_society_member = {
+					limit = {
+						society_rank >= 3
+						NOT = { character = event_target:sea_legend_captain }
+						is_adult = yes
+						prisoner = no
+					}
+					save_event_target_as = sea_legend_mate
+				}
+			}
+			event_target:sea_legend_captain = { character_event = { id = seas.101 } }
+		}
+		else = {
+			FROM = {
+				clr_flag = block_society_progress
+				set_society_progress = 0
+			}
+		}
+	}
+}
+
+# seas.101 The legend calls
+# The captain is called to the legendary voyage of their people
+# (GetSeaLegendRoute). A player who sails in person must take the fleet to
+# each port in turn (seas.110), within five years (seas.115); otherwise the
+# voyage is rolled (seas.102). A player may refuse, and the legend passes.
+# Scope: ROOT is the captain; event_target:sea_legend_society the society,
+# event_target:sea_legend_mate a fellow captain (may be unset).
+character_event = {
+	id = seas.101
+	desc = {
+		text = EVTDESCseas101_druchii
+		trigger = { sea_voice_druchii_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas101_vampire
+		trigger = { sea_voice_vampire_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas101_orc
+		trigger = { sea_voice_orc_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas101_norse
+		trigger = { sea_voice_norse_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas101_araby
+		trigger = { sea_voice_araby_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas101_sartosan
+		trigger = { sea_voice_sartosan_trigger = yes }
+	}
+	picture = GFX_evt_pirate_fleet
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.100
+
+	option = { # We sail!
+		name = EVTOPTAseas101
+		set_character_flag = sea_legend_sailing
+		set_character_flag = sea_legend_stop_1
+		prestige = 50
+		if = {
+			limit = { sea_legend_physical_trigger = yes }
+			custom_tooltip = { text = sea_legend_physical_tt }
+			sea_legend_set_heading_effect = yes
+			character_event = { id = seas.115 days = 1825 }
+		}
+		else = {
+			custom_tooltip = { text = sea_legend_rolled_tt }
+			character_event = { id = seas.102 days = 30 random = 30 }
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { # Let another chase the legend
+		name = EVTOPTBseas101
+		trigger = { ai = no }
+		prestige = -100
+		sea_legend_end_effect = yes
+		ai_chance = { factor = 0 }
+	}
+}
+
+# seas.102 A legendary raid
+# The voyage reaches one of the route's three ports. Storm it for a great
+# prize and the legend, or take a ransom and sail on. A port held by the
+# captain's own realm is passed in peace. After the third port comes the
+# sea's best (seas.105).
+# Scope: ROOT is the captain; event_target:sea_legend_port is set here.
+character_event = {
+	id = seas.102
+	desc = {
+		text = EVTDESCseas102_friendly
+		trigger = { event_target:sea_legend_port = { owner = { same_realm = ROOT } } }
+	}
+	desc = {
+		text = EVTDESCseas102
+		trigger = { event_target:sea_legend_port = { NOT = { owner = { same_realm = ROOT } } } }
+	}
+	picture = GFX_evt_pirate_port
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.101, seas.102, seas.110
+
+	trigger = { has_character_flag = sea_legend_sailing }
+
+	immediate = {
+		if = {
+			limit = { is_in_society = yes }
+			society = { save_event_target_as = sea_legend_society }
+		}
+		sea_legend_save_port_effect = yes
+		sea_legend_clear_heading_effect = yes
+	}
+
+	option = { # Storm the harbour!
+		name = EVTOPTAseas102
+		trigger = { event_target:sea_legend_port = { NOT = { owner = { same_realm = ROOT } } } }
+		random_list = {
+			70 = {
+				modifier = { factor = 1.5 martial = 15 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				modifier = { factor = 1.3 event_target:sea_legend_mate = { is_alive = yes } }
+				sea_take_prize_large_effect = yes
+				sea_dread_bonus_effect = yes
+				prestige = 100
+			}
+			30 = {
+				modifier = { factor = 1.5 trait = craven }
+				modifier = { factor = 1.3 manann_mood_bad_trigger = yes }
+				sea_take_prize_small_effect = yes
+				add_trait = wounded
+			}
+		}
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 2 trait = brave }
+		}
+	}
+	option = { # Take the ransom and sail on
+		name = EVTOPTBseas102
+		trigger = { event_target:sea_legend_port = { NOT = { owner = { same_realm = ROOT } } } }
+		sea_take_prize_effect = yes
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = greedy }
+			modifier = { factor = 2 trait = craven }
+		}
+	}
+	option = { # A friendly harbour: take on water and sail on
+		name = EVTOPTCseas102
+		trigger = { event_target:sea_legend_port = { owner = { same_realm = ROOT } } }
+		manann_mood_up_effect = yes
+	}
+
+	after = {
+		if = {
+			limit = { has_character_flag = sea_legend_stop_3 }
+			clr_character_flag = sea_legend_stop_3
+			character_event = { id = seas.105 days = 20 random = 20 }
+		}
+		else_if = {
+			limit = { has_character_flag = sea_legend_stop_2 }
+			clr_character_flag = sea_legend_stop_2
+			set_character_flag = sea_legend_stop_3
+			if = {
+				limit = { sea_legend_physical_trigger = yes }
+				sea_legend_set_heading_effect = yes
+			}
+			else = {
+				character_event = { id = seas.102 days = 40 random = 40 }
+			}
+		}
+		else = {
+			clr_character_flag = sea_legend_stop_1
+			set_character_flag = sea_legend_stop_2
+			if = {
+				limit = { sea_legend_physical_trigger = yes }
+				sea_legend_set_heading_effect = yes
+			}
+			else = {
+				character_event = { id = seas.102 days = 40 random = 40 }
+			}
+		}
+	}
+}
+
+# seas.105 The sea's best
+# At the end of the route the sea sends its champion: an Imperial admiral, a
+# Sea Lord of Ulthuan, a sea dragon or a kraken (never the captain's own
+# people). Win, and the legend is made; lose, and the sea may keep the
+# captain.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.105
+	desc = {
+		text = EVTDESCseas105_admiral
+		trigger = { has_character_flag = sea_legend_foe_admiral }
+	}
+	desc = {
+		text = EVTDESCseas105_sealord
+		trigger = { has_character_flag = sea_legend_foe_sealord }
+	}
+	desc = {
+		text = EVTDESCseas105_dragon
+		trigger = { has_character_flag = sea_legend_foe_dragon }
+	}
+	desc = {
+		text = EVTDESCseas105_kraken
+		trigger = { has_character_flag = sea_legend_foe_kraken }
+	}
+	picture = GFX_evt_naval_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.102
+
+	immediate = {
+		random_list = {
+			30 = {
+				trigger = { sea_can_meet_imperial_trigger = yes }
+				modifier = { factor = 2 sea_voice_norse_trigger = yes }
+				modifier = { factor = 2 sea_voice_orc_trigger = yes }
+				set_character_flag = sea_legend_foe_admiral
+			}
+			30 = {
+				trigger = { sea_can_meet_asur_trigger = yes }
+				modifier = { factor = 3 sea_voice_druchii_trigger = yes }
+				set_character_flag = sea_legend_foe_sealord
+			}
+			20 = {
+				modifier = { factor = 2 sea_voice_norse_trigger = yes }
+				set_character_flag = sea_legend_foe_dragon
+			}
+			20 = {
+				modifier = { factor = 2 sea_voice_vampire_trigger = yes }
+				modifier = { factor = 2 sea_voice_araby_trigger = yes }
+				set_character_flag = sea_legend_foe_kraken
+			}
+		}
+	}
+
+	option = { # Meet them!
+		name = EVTOPTAseas105
+		random_list = {
+			55 = { # Victory
+				modifier = { factor = 1.5 martial = 15 }
+				modifier = { factor = 1.3 martial = 20 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				modifier = { factor = 1.3 event_target:sea_legend_mate = { is_alive = yes } }
+				modifier = { factor = 1.3 sea_has_flagship_trigger = yes }
+				modifier = { factor = 1.5 sea_has_black_ark_trigger = yes }
+				set_character_flag = sea_legend_done
+				prestige = 300
+				sea_deed_effect = yes
+				character_event = { id = seas.106 }
+			}
+			15 = { # Victory, but the captain falls
+				modifier = { factor = 0.5 trait = brave }
+				custom_tooltip = { text = sea_legend_fall_tt }
+				hidden_effect = {
+					if = {
+						limit = { current_heir = { always = yes } }
+						current_heir = {
+							save_event_target_as = sea_legend_heir
+						}
+					}
+					character_event = { id = seas.107 }
+				}
+			}
+			30 = { # Defeat
+				modifier = { factor = 1.5 trait = craven }
+				modifier = { factor = 1.3 manann_mood_bad_trigger = yes }
+				prestige = -100
+				random_list = {
+					60 = { add_maimed_trait_effect = yes }
+					40 = { add_trait = wounded }
+				}
+				custom_tooltip = { text = sea_legend_lost_tt }
+				sea_legend_end_effect = yes
+			}
+		}
+	}
+
+	after = {
+		clr_character_flag = sea_legend_foe_admiral
+		clr_character_flag = sea_legend_foe_sealord
+		clr_character_flag = sea_legend_foe_dragon
+		clr_character_flag = sea_legend_foe_kraken
+	}
+}
+
+# seas.106 The blood of a legend
+# The voyage is done and the captain founds the sea bloodline of their
+# people (sea_legend_found_bloodline_effect). The society's legend starts
+# again, and its other players hear of it (seas.108).
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.106
+	desc = {
+		text = EVTDESCseas106_druchii
+		trigger = { sea_voice_druchii_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas106_vampire
+		trigger = { sea_voice_vampire_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas106_orc
+		trigger = { sea_voice_orc_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas106_norse
+		trigger = { sea_voice_norse_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas106_araby
+		trigger = { sea_voice_araby_trigger = yes }
+	}
+	desc = {
+		text = EVTDESCseas106_sartosan
+		trigger = { sea_voice_sartosan_trigger = yes }
+	}
+	picture = GFX_evt_pirate_captain
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.105
+
+	option = {
+		name = EVTOPTAseas106
+		sea_legend_found_bloodline_effect = yes
+		hidden_effect = {
+			event_target:sea_legend_society = {
+				any_society_member = {
+					limit = {
+						ai = no
+						NOT = { character = ROOT }
+					}
+					character_event = { id = seas.108 }
+				}
+			}
+		}
+		sea_legend_end_effect = yes
+	}
+}
+
+# seas.107 Victory, and the sea takes its price
+# The captain wins and dies in the winning. Their heir founds the bloodline
+# in their name.
+# Scope: ROOT is the captain; event_target:sea_legend_heir the heir.
+character_event = {
+	id = seas.107
+	desc = EVTDESCseas107
+	picture = GFX_evt_naval_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.105
+
+	option = {
+		name = EVTOPTAseas107
+		sea_legend_end_effect = yes
+		if = {
+			limit = { event_target:sea_legend_heir = { is_alive = yes } }
+			event_target:sea_legend_heir = {
+				sea_legend_found_bloodline_effect = yes
+				prestige = 200
+			}
+		}
+		death = { death_reason = death_battle }
+	}
+}
+
+# seas.108 News of a sea legend
+# A player of the same society hears that a captain has made the legend.
+# Scope: ROOT is the player; FROM the captain.
+character_event = {
+	id = seas.108
+	desc = EVTDESCseas108
+	picture = GFX_evt_pirate_ship
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.106
+
+	option = {
+		name = EVTOPTAseas108
+	}
+}
+
+# seas.110 The fleet reaches a port of the legend (hidden)
+# A player sailing the legend in person enters the next port of the route.
+# Scope: ROOT is a commander entering a province.
+character_event = {
+	id = seas.110
+	hide_window = yes
+	is_triggered_only = yes # on_unit_entering_province
+
+	has_character_flag = sea_legend_sailing
+
+	trigger = {
+		sea_legend_physical_trigger = yes
+		sea_legend_at_next_port_trigger = yes
+	}
+
+	immediate = {
+		character_event = { id = seas.102 }
+	}
+}
+
+# seas.115 The legend fades
+# Five years have passed and a player's voyage is still not done: the legend
+# fades, and the society must begin again.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.115
+	desc = EVTDESCseas115
+	picture = GFX_evt_ship_storm
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.101
+
+	trigger = {
+		has_character_flag = sea_legend_sailing
+		NOT = { has_character_flag = sea_legend_done }
+	}
+
+	immediate = {
+		if = {
+			limit = { is_in_society = yes }
+			society = { save_event_target_as = sea_legend_society }
+		}
+	}
+
+	option = {
+		name = EVTOPTAseas115
+		prestige = -100
+		sea_legend_end_effect = yes
+	}
+}
+
+# seas.116 Lost on the voyage (hidden)
+# A captain dies while sailing the legend: the society's legend is freed to
+# begin again.
+# Scope: ROOT is the dead captain.
+character_event = {
+	id = seas.116
+	hide_window = yes
+	is_triggered_only = yes # on_death
+
+	has_character_flag = sea_legend_sailing
+
+	immediate = {
+		if = {
+			limit = { is_in_society = yes }
+			society = {
+				clr_flag = block_society_progress
+				set_society_progress = 0
+			}
+		}
+	}
+}
+
+###############################################################################
+# The Norscan raiders: the Freigattur at sea
+# The raider path of the Freigattur: Bjornling trade voyages, tribute
+# villages, the Hall of Hulls, the Champion's Fleet, the whale road, the
+# seal skerries, a nemesis among the sea-kings, the dwarf sea-king of the
+# north, Skeggi and the saga of Losteriksson, Norse castaways, and the sea
+# traits that come with rank.
+###############################################################################
+
+# seas.121 Halfway across the Sea of Claws
+# A Bjornling trading voyage meets Old World merchants halfway: an honest
+# deal, or the old way after all.
+# Scope: ROOT is the captain (seas.18).
+character_event = {
+	id = seas.121
+	desc = EVTDESCseas121
+	picture = GFX_evt_merchant_ship_at_sea_republic
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # seas.18
+
+	option = { # An honest deal
+		name = EVTOPTAseas121
+		sea_take_prize_effect = yes
+		manann_mood_up_effect = yes
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 2 trait = honest }
+		}
+	}
+	option = { # The old way
+		name = EVTOPTBseas121
+		sea_take_prize_large_effect = yes
+		prestige = -25
+		manann_mood_down_effect = yes
+		sea_deed_effect = yes
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = deceitful }
+			modifier = { factor = 2 trait = greedy }
+		}
+	}
+}
+
+# seas.122 Swords for hire
+# A Bjornling ship is hired to escort a merchant convoy, and other Norse
+# come for it: an honest deal means fighting your own.
+# Scope: ROOT is the captain (seas.18).
+character_event = {
+	id = seas.122
+	desc = EVTDESCseas122
+	picture = GFX_evt_longships_at_sea_oldgods
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # A deal is a deal
+		name = EVTOPTAseas122
+		random_list = {
+			65 = {
+				modifier = { factor = 1.5 martial = 14 }
+				modifier = { factor = 1.3 trait = brave }
+				sea_take_prize_effect = yes
+				prestige = 50
+				sea_deed_effect = yes
+			}
+			35 = {
+				modifier = { factor = 1.5 trait = craven }
+				sea_take_prize_small_effect = yes
+				add_trait = wounded
+			}
+		}
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 2 trait = honest }
+		}
+	}
+	option = { # Join the raiders against the convoy
+		name = EVTOPTBseas122
+		sea_take_prize_large_effect = yes
+		prestige = -50
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = deceitful }
+		}
+	}
+}
+
+# seas.130 The Norse want tribute
+# A Norse raider of the Freigattur demands that the lord's coastal villages
+# pay to be left alone. Pay every year (seas.131), or refuse and see the
+# villages burn (seas.132). The Empire has outlawed it, so an imperial lord
+# who pays angers the Emperor.
+# Scope: ROOT is the lord; FROM the Norse raider.
+letter_event = {
+	id = seas.130
+	desc = EVTDESCseas130
+	border = GFX_event_letter_frame_war
+
+	is_triggered_only = yes # norse_demand_tribute decision
+
+	option = { # Pay them
+		name = EVTOPTAseas130
+		set_character_flag = norse_paying_tribute
+		add_character_modifier = { name = norse_tribute_paid duration = -1 }
+		if = {
+			limit = {
+				top_liege = {
+					NOT = { character = ROOT }
+					has_landed_title = e_the_empire
+				}
+			}
+			top_liege = {
+				opinion = { modifier = opinion_norse_tribute_outlawed who = ROOT years = 10 }
+			}
+		}
+		FROM = {
+			set_character_flag = norse_tribute_taker
+			prestige = 100
+			save_event_target_as = norse_tribute_taker
+		}
+		save_event_target_as = norse_tribute_payer
+		hidden_effect = {
+			FROM = { character_event = { id = seas.131 days = 365 } }
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 3 trait = craven }
+			modifier = { factor = 2 trait = content }
+			modifier = { factor = 0.3 trait = brave }
+			modifier = { factor = 0.3 trait = proud }
+		}
+	}
+	option = { # Not one penny
+		name = EVTOPTBseas130
+		prestige = 25
+		FROM = { character_event = { id = seas.132 days = 30 } }
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = brave }
+			modifier = { factor = 2 trait = proud }
+		}
+	}
+}
+
+# seas.131 The tribute comes (hidden)
+# Every year the tribute lord pays the Norse raider, scaled to his rank,
+# while he still pays and both live. When he stops, the raider learns of
+# it (seas.133).
+# Scope: ROOT is the Norse raider; event_target:norse_tribute_payer the
+# lord.
+character_event = {
+	id = seas.131
+	hide_window = yes
+	is_triggered_only = yes # seas.130, seas.131
+
+	immediate = {
+		if = {
+			limit = {
+				is_alive = yes
+				event_target:norse_tribute_payer = {
+					is_alive = yes
+					has_character_flag = norse_paying_tribute
+				}
+			}
+			event_target:norse_tribute_payer = {
+				if = {
+					limit = { higher_tier_than = DUKE }
+					wealth = -50
+					ROOT = { wealth = 50 }
+				}
+				else_if = {
+					limit = { tier = DUKE }
+					wealth = -30
+					ROOT = { wealth = 30 }
+				}
+				else = {
+					wealth = -15
+					ROOT = { wealth = 15 }
+				}
+			}
+			character_event = { id = seas.131 days = 365 }
+		}
+		else_if = {
+			limit = { is_alive = yes }
+			clr_character_flag = norse_tribute_taker
+			if = {
+				limit = { event_target:norse_tribute_payer = { is_alive = yes } }
+				character_event = { id = seas.133 }
+			}
+		}
+	}
+}
+
+# seas.132 They will not pay
+# The lord refused the tribute (or stopped paying, seas.133): burn the
+# villages, or let it go.
+# Scope: ROOT is the Norse raider; FROM (or event_target:norse_tribute_payer)
+# the lord.
+character_event = {
+	id = seas.132
+	desc = EVTDESCseas132
+	picture = GFX_evt_norscan_raid
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.130
+
+	option = { # Burn the villages
+		name = EVTOPTAseas132
+		FROM = {
+			capital_scope = {
+				add_province_modifier = { name = norse_villages_burned years = 3 }
+			}
+			opinion = { modifier = opinion_norse_burned_villages who = ROOT years = 20 }
+		}
+		sea_take_prize_effect = yes
+		prestige = 50
+		ai_chance = { factor = 80 }
+	}
+	option = { # Let them be
+		name = EVTOPTBseas132
+		prestige = -50
+		ai_chance = { factor = 20 }
+	}
+}
+
+# seas.133 The tribute stops
+# The lord stopped paying: burn the villages, or let it go.
+# Scope: ROOT is the Norse raider; event_target:norse_tribute_payer the
+# lord.
+character_event = {
+	id = seas.133
+	desc = EVTDESCseas133
+	picture = GFX_evt_norscan_raid
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.131
+
+	option = { # Burn the villages
+		name = EVTOPTAseas132
+		event_target:norse_tribute_payer = {
+			capital_scope = {
+				add_province_modifier = { name = norse_villages_burned years = 3 }
+			}
+			opinion = { modifier = opinion_norse_burned_villages who = ROOT years = 20 }
+		}
+		sea_take_prize_effect = yes
+		prestige = 50
+		ai_chance = { factor = 80 }
+	}
+	option = { # Let them be
+		name = EVTOPTBseas132
+		prestige = -50
+		ai_chance = { factor = 20 }
+	}
+}
+
+# seas.135 A new figurehead for the Hall of Hulls
+# The raider's hall, built from the ships they have taken, gains another
+# figurehead: at 3, 6, 10 and 15 deeds at sea (rank 3 and up) the hall
+# grows (hall_of_hulls_1 - 4).
+# Scope: ROOT is the raider (sea_deed_effect).
+character_event = {
+	id = seas.135
+	desc = {
+		text = EVTDESCseas135_first
+		trigger = { NOT = { has_character_flag = hall_of_hulls_2 } }
+	}
+	desc = {
+		text = EVTDESCseas135_more
+		trigger = { has_character_flag = hall_of_hulls_2 }
+	}
+	picture = GFX_evt_longships_at_sea_oldgods
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # sea_deed_effect
+
+	option = {
+		name = EVTOPTAseas135
+		remove_character_modifier = hall_of_hulls_1
+		remove_character_modifier = hall_of_hulls_2
+		remove_character_modifier = hall_of_hulls_3
+		remove_character_modifier = hall_of_hulls_4
+		if = {
+			limit = { has_character_flag = hall_of_hulls_4 }
+			add_character_modifier = { name = hall_of_hulls_4 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_flag = hall_of_hulls_3 }
+			add_character_modifier = { name = hall_of_hulls_3 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_flag = hall_of_hulls_2 }
+			add_character_modifier = { name = hall_of_hulls_2 duration = -1 }
+		}
+		else = {
+			add_character_modifier = { name = hall_of_hulls_1 duration = -1 }
+		}
+	}
+}
+
+# seas.140 The Champion's Fleet
+# Once in a lifetime a Sea King calls the tribes together. The fleet rows
+# up a river to the heart of an enemy at war with them, in this order of
+# preference: Altdorf up the Reik, Middenheim, Marienburg, Erengrad, Praag
+# up the Lynsk. It lands one to two months later (seas.141).
+# Scope: ROOT is the Sea King (norse_champions_fleet decision).
+character_event = {
+	id = seas.140
+	desc = EVTDESCseas140
+	picture = GFX_evt_longships_at_sea_oldgods
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # norse_champions_fleet
+
+	immediate = {
+		if = {
+			limit = { 299 = { owner = { war_with = ROOT } } }
+			299 = { save_event_target_as = champions_landing }
+		}
+		else_if = {
+			limit = { 274 = { owner = { war_with = ROOT } } }
+			274 = { save_event_target_as = champions_landing }
+		}
+		else_if = {
+			limit = { 222 = { owner = { war_with = ROOT } } }
+			222 = { save_event_target_as = champions_landing }
+		}
+		else_if = {
+			limit = { 175 = { owner = { war_with = ROOT } } }
+			175 = { save_event_target_as = champions_landing }
+		}
+		else = {
+			182 = { save_event_target_as = champions_landing }
+		}
+	}
+
+	option = {
+		name = EVTOPTAseas140
+		custom_tooltip = { text = norse_champions_fleet_lands_tt }
+		character_event = { id = seas.141 days = 30 random = 30 }
+	}
+}
+
+# seas.141 The fleet comes up the river (hidden)
+# If the war still runs, the Champion's Fleet lands at the target: a great
+# host of marauders, berserkers and axe-throwers that goes home at peace.
+# The enemy is told (seas.142).
+# Scope: ROOT is the Sea King; event_target:champions_landing the target.
+character_event = {
+	id = seas.141
+	hide_window = yes
+	is_triggered_only = yes # seas.140
+
+	immediate = {
+		if = {
+			limit = {
+				is_alive = yes
+				event_target:champions_landing = { owner = { war_with = ROOT } }
+			}
+			spawn_unit = {
+				province = event_target:champions_landing
+				home = event_target:champions_landing
+				owner = ROOT
+				troops = {
+					heavy_infantry = { 3000 3000 }
+					light_infantry = { 3000 3000 }
+					archers = { 1500 1500 }
+				}
+				attrition = 0.5
+				maintenance_multiplier = 0.25
+				disband_on_peace = yes
+				cannot_inherit = yes
+				earmark = norse_champions_fleet
+			}
+			event_target:champions_landing = {
+				owner = { character_event = { id = seas.142 } }
+			}
+		}
+	}
+}
+
+# seas.142 Longships on the river
+# The enemy (a player) learns that the Champion's Fleet has come.
+# Scope: ROOT is the enemy, FROM the Sea King.
+character_event = {
+	id = seas.142
+	desc = EVTDESCseas142
+	picture = GFX_evt_norscan_raid
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.141
+
+	trigger = { ai = no }
+
+	option = {
+		name = EVTOPTAseas142
+	}
+}
+
+# seas.150 The whale road
+# A Norse crew sights a great whale. Hunt it for oil, meat and bone, or let
+# it pass.
+# Scope: ROOT is the captain (seas.18).
+character_event = {
+	id = seas.150
+	desc = EVTDESCseas150
+	picture = GFX_evt_longships_at_sea_oldgods
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Harpoons!
+		name = EVTOPTAseas150
+		random_list = {
+			70 = {
+				modifier = { factor = 1.3 martial = 12 }
+				modifier = { factor = 1.3 trait = hunter }
+				modifier = { factor = 1.3 manann_mood_good_trigger = yes }
+				sea_take_prize_effect = yes
+				prestige = 25
+				sea_deed_effect = yes
+			}
+			30 = {
+				modifier = { factor = 1.5 manann_mood_bad_trigger = yes }
+				add_trait = wounded
+				custom_tooltip = { text = sea_whale_lost_boat_tt }
+			}
+		}
+		ai_chance = { factor = 80 }
+	}
+	option = { # Let the whale go
+		name = EVTOPTBseas150
+		manann_mood_up_effect = yes
+		ai_chance = { factor = 20 }
+	}
+}
+
+# seas.151 The seal skerries
+# The crew finds a skerry crowded with seals, and an old woman on the rocks
+# who is not quite a woman. Take the pelts, or leave the seal-folk be.
+# Scope: ROOT is the captain (seas.18).
+character_event = {
+	id = seas.151
+	desc = EVTDESCseas151
+	picture = GFX_evt_longships_at_sea_oldgods
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Take the pelts
+		name = EVTOPTAseas151
+		sea_take_prize_small_effect = yes
+		random = {
+			chance = 30
+			manann_mood_curse_effect = yes
+		}
+		ai_chance = { factor = 60 }
+	}
+	option = { # Leave the seal-folk be
+		name = EVTOPTBseas151
+		manann_mood_up_effect = yes
+		random = {
+			chance = 20
+			add_character_modifier = { name = sea_fair_winds years = 2 }
+		}
+		ai_chance = { factor = 40 }
+	}
+}
+
+# seas.152 The nemesis
+# A rival sea-king of the north crosses the captain's wake: the first time
+# a generated Norse sea-king becomes the captain's rival (flag sea_nemesis);
+# after that the two meet again and again, until one of them falls.
+# Scope: ROOT is the captain (seas.18).
+character_event = {
+	id = seas.152
+	desc = {
+		text = EVTDESCseas152_first
+		trigger = { NOT = { any_rival = { has_character_flag = sea_nemesis } } }
+	}
+	desc = {
+		text = EVTDESCseas152_again
+		trigger = { any_rival = { has_character_flag = sea_nemesis } }
+	}
+	picture = GFX_evt_norscan_raid
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	immediate = {
+		if = {
+			limit = { any_rival = { has_character_flag = sea_nemesis } }
+			random_rival = {
+				limit = { has_character_flag = sea_nemesis }
+				save_event_target_as = sea_nemesis
+			}
+		}
+		else = {
+			create_character = {
+				random_traits = yes
+				dynasty = random
+				religion = ROOT
+				culture = ROOT
+				female = no
+				age = 35
+				attributes = { martial = 14 }
+				trait = creature_human
+				trait = ravager
+				trait = brave
+				trait = wroth
+			}
+			new_character = {
+				set_character_flag = sea_nemesis
+				save_event_target_as = sea_nemesis
+				add_rival = ROOT
+				if = {
+					limit = {
+						any_playable_ruler = {
+							culture_group = norscan_group
+							NOT = { character = ROOT }
+						}
+					}
+					random_playable_ruler = {
+						limit = {
+							culture_group = norscan_group
+							NOT = { character = ROOT }
+						}
+						preferred_limit = { society_member_of = norscan_society }
+						save_event_target_as = sea_nemesis_lord
+					}
+					move_character = event_target:sea_nemesis_lord
+				}
+			}
+		}
+	}
+
+	option = { # Ram his ship!
+		name = EVTOPTAseas152
+		random_list = {
+			50 = {
+				modifier = { factor = 1.5 martial = 15 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 sea_has_flagship_trigger = yes }
+				sea_take_prize_effect = yes
+				prestige = 75
+				sea_deed_effect = yes
+				random = {
+					chance = 30
+					event_target:sea_nemesis = { death = { death_reason = death_battle killer = ROOT } }
+				}
+			}
+			50 = {
+				modifier = { factor = 1.5 trait = craven }
+				prestige = -50
+				add_trait = wounded
+				event_target:sea_nemesis = { prestige = 50 }
+			}
+		}
+		ai_chance = { factor = 70 }
+	}
+	option = { # Another day
+		name = EVTOPTBseas152
+		prestige = -25
+		ai_chance = { factor = 30 }
+	}
+}
+
+# seas.153 The dwarf sea-king
+# Off the Sea of Claws coast the captain meets the iron-clad ships of a Norse
+# dwarf sea-king, a hold of the Norse dwarfs that has kept its own navy for
+# generations. Trade, or try the old way against dwarf iron.
+# Scope: ROOT is the captain (seas.18).
+character_event = {
+	id = seas.153
+	desc = EVTDESCseas153
+	picture = GFX_evt_naval_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Trade furs for steel
+		name = EVTOPTAseas153
+		sea_take_prize_small_effect = yes
+		random = {
+			chance = 25
+			add_character_modifier = { name = sea_dwarf_steel years = 10 }
+		}
+		ai_chance = { factor = 70 }
+	}
+	option = { # Board the stunties!
+		name = EVTOPTBseas153
+		random_list = {
+			30 = {
+				modifier = { factor = 1.5 martial = 16 }
+				sea_take_prize_large_effect = yes
+				prestige = 100
+				sea_deed_effect = yes
+			}
+			70 = {
+				add_maimed_trait_effect = yes
+				prestige = -50
+			}
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 2 trait = wroth }
+		}
+	}
+}
+
+# seas.154 Skeggi, and the saga of Losteriksson
+# Far to the west a Norse crew reaches the coast where Losteriksson
+# landed. If the jarl of Skeggi lives and is not the captain or of their
+# own realm, the colony takes them in; otherwise the crew finds
+# Losteriksson's first hall, empty for centuries.
+# Scope: ROOT is the captain (seas.18).
+character_event = {
+	id = seas.154
+	desc = {
+		text = EVTDESCseas154_skeggi
+		trigger = {
+			event_target:sea_lord_skeggi = { sea_named_lord_can_meet_trigger = yes }
+		}
+	}
+	desc = {
+		text = EVTDESCseas154_hall
+		trigger = {
+			NOT = { event_target:sea_lord_skeggi = { sea_named_lord_can_meet_trigger = yes } }
+		}
+	}
+	picture = GFX_evt_lustria_jungle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.18
+
+	option = { # Feast with the jarl of Skeggi
+		name = EVTOPTAseas154
+		trigger = {
+			event_target:sea_lord_skeggi = { sea_named_lord_can_meet_trigger = yes }
+		}
+		event_target:sea_lord_skeggi = {
+			opinion = { modifier = opinion_sea_shared_bottle who = ROOT years = 10 }
+		}
+		opinion = { modifier = opinion_sea_shared_bottle who = event_target:sea_lord_skeggi years = 10 }
+		prestige = 50
+		manann_mood_up_effect = yes
+	}
+	option = { # Search Losteriksson's hall
+		name = EVTOPTBseas154
+		trigger = {
+			NOT = { event_target:sea_lord_skeggi = { sea_named_lord_can_meet_trigger = yes } }
+		}
+		sea_take_prize_effect = yes
+		prestige = 75
+		sea_deed_effect = yes
+	}
+}
+
+# seas.155 Norse sailors on the beach
+# A storm throws a Norse longship onto the shore of a lord of the Sea of
+# Claws. Save the crew, put them to work, or hang them. The Norse hear of
+# it (seas.156).
+# Scope: ROOT is the lord.
+character_event = {
+	id = seas.155
+	desc = EVTDESCseas155
+	picture = GFX_evt_ship_storm
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_five_year_pulse, list sea_norse_castaways
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		is_landed = yes
+		NOT = { culture_group = norscan_group }
+		capital_scope = {
+			any_neighbor_province = { sea_zone_claws_trigger = yes }
+		}
+		any_playable_ruler = { sea_norse_raider_trigger = yes }
+	}
+
+	immediate = {
+		random_playable_ruler = {
+			limit = { sea_norse_raider_trigger = yes }
+			save_event_target_as = sea_castaways_jarl
+		}
+	}
+
+	option = { # Feed them and send them home
+		name = EVTOPTAseas155
+		wealth = -10
+		set_character_flag = sea_saved_norse
+		event_target:sea_castaways_jarl = { character_event = { id = seas.156 days = 60 } }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 3 trait = kind }
+			modifier = { factor = 2 trait = charitable }
+		}
+	}
+	option = { # Put them to work
+		name = EVTOPTBseas155
+		trigger = { slave_keeper_trigger = yes }
+		slave_gain_lot_effect = yes
+		set_character_flag = sea_enslaved_norse
+		event_target:sea_castaways_jarl = { character_event = { id = seas.156 days = 60 } }
+		ai_chance = { factor = 30 }
+	}
+	option = { # Hang them from the cliffs
+		name = EVTOPTCseas155
+		prestige = 25
+		set_character_flag = sea_hanged_norse
+		event_target:sea_castaways_jarl = { character_event = { id = seas.156 days = 60 } }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 2 trait = zealous }
+		}
+	}
+}
+
+# seas.156 What became of our sailors
+# A Norse raider hears how a lord of the coast treated a wrecked Norse crew,
+# and remembers.
+# Scope: ROOT is the Norse raider; FROM the lord.
+character_event = {
+	id = seas.156
+	desc = {
+		text = EVTDESCseas156_saved
+		trigger = { FROM = { has_character_flag = sea_saved_norse } }
+	}
+	desc = {
+		text = EVTDESCseas156_enslaved
+		trigger = { FROM = { has_character_flag = sea_enslaved_norse } }
+	}
+	desc = {
+		text = EVTDESCseas156_hanged
+		trigger = { FROM = { has_character_flag = sea_hanged_norse } }
+	}
+	picture = GFX_evt_longships_at_sea_oldgods
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.155
+
+	option = {
+		name = EVTOPTAseas156
+		if = {
+			limit = { FROM = { has_character_flag = sea_saved_norse } }
+			opinion = { modifier = opinion_norse_saved_our_men who = FROM years = 20 }
+		}
+		else = {
+			opinion = { modifier = opinion_norse_wronged_our_men who = FROM years = 20 }
+		}
+	}
+
+	after = {
+		FROM = {
+			clr_character_flag = sea_saved_norse
+			clr_character_flag = sea_enslaved_norse
+			clr_character_flag = sea_hanged_norse
+		}
+	}
+}
+
+# seas.160 The sea traits come with rank (hidden)
+# Rank brings the sea traits of the north to a Freigattur raider (Viking at
+# rank 2, Ravager at 3, Sea King or Sea Queen at 4) and the Pirate trait to
+# a Wolf of the Sea or a Corsair at rank 2. A Norscan warlord of the land
+# keeps their own trait.
+# Scope: ROOT is the member; FROM the society.
+character_event = {
+	id = seas.160
+	hide_window = yes
+	is_triggered_only = yes # on_character_society_rank_up
+
+	trigger = {
+		NOT = { trait = norscan_warlord }
+		OR = {
+			sea_norse_raider_trigger = yes
+			is_member_of_any_piratic_society_trigger = yes
+		}
+	}
+
+	immediate = {
+		if = {
+			limit = { sea_norse_raider_trigger = yes }
+			if = {
+				limit = {
+					society_rank == 4
+					NOR = { trait = seaking trait = sea_queen }
+				}
+				remove_trait = viking
+				remove_trait = ravager
+				remove_trait = pirate
+				if = {
+					limit = { is_woman_trigger = yes }
+					add_trait = sea_queen
+				}
+				else = {
+					add_trait = seaking
+				}
+			}
+			else_if = {
+				limit = {
+					society_rank == 3
+					NOR = { trait = ravager trait = seaking trait = sea_queen }
+				}
+				remove_trait = viking
+				remove_trait = pirate
+				add_trait = ravager
+			}
+			else_if = {
+				limit = {
+					society_rank == 2
+					NOR = { trait = viking trait = ravager trait = seaking trait = sea_queen trait = pirate }
+				}
+				add_trait = viking
+			}
+		}
+		else_if = {
+			limit = {
+				society_rank >= 2
+				NOR = { trait = pirate trait = viking trait = ravager trait = seaking trait = sea_queen }
+			}
+			add_trait = pirate
+		}
+	}
+}
+
+###############################################################################
+# Tales of the sea
+# Rare meetings for players, each once per game (global flag sea_tale_<x>),
+# each a Warhammer pastiche of a famous sea story or Norse legend, set in
+# the sea where it fits: the one-legged quartermaster, the cursed crew, the
+# castaway, the iron fish, the white leviathan, the floating rafts, the
+# ghost ship, the island of beasts, the serpent's coil, the ship of nails
+# and the green land in the west at sea (seas.199 picks); the hairy
+# breeches, the hall-raider and its mother, the cursed ring and the barrow
+# ship on the Norscan coast (seas.198 picks, five-year pulse).
+###############################################################################
+
+# seas.198 A saga of the north (hidden)
+# A player raider of the Freigattur may live one of the old sagas, each
+# once per game.
+# Scope: ROOT is the raider.
+character_event = {
+	id = seas.198
+	hide_window = yes
+	is_triggered_only = yes # on_five_year_pulse, list sea_norse_sagas
+	only_playable = yes
+	only_capable = yes
+	prisoner = no
+
+	trigger = {
+		ai = no
+		sea_norse_raider_trigger = yes
+		is_landed = yes
+	}
+
+	immediate = {
+		random_list = {
+			10 = {
+				trigger = {
+					NOT = { has_global_flag = sea_tale_breeches }
+					is_woman_trigger = no
+					is_married = no
+					age = 16
+					NOT = { age = 40 }
+				}
+				character_event = { id = seas.208 }
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = sea_tale_hall_raider } }
+				character_event = { id = seas.211 }
+			}
+			10 = {
+				trigger = {
+					NOT = { has_global_flag = sea_tale_ring }
+					NOT = { any_character = { has_artifact = sea_cursed_ring } }
+				}
+				character_event = { id = seas.214 }
+			}
+			10 = {
+				trigger = { NOT = { has_global_flag = sea_tale_barrow } }
+				character_event = { id = seas.215 }
+			}
+			20 = { }
+		}
+	}
+}
+
+# seas.199 A tale of the sea (hidden)
+# Picks a tale that fits the sea the player sails and has not been told
+# this game; with none left, a wonder of this sea instead (seas.30).
+# Scope: ROOT is the captain (seas.18).
+character_event = {
+	id = seas.199
+	hide_window = yes
+	is_triggered_only = yes # seas.18
+
+	immediate = {
+		random_list = {
+			10 = {
+				trigger = {
+					NOT = { has_global_flag = sea_tale_quartermaster }
+					OR = { has_character_flag = sea_in_tilean has_character_flag = sea_in_southern }
+				}
+				character_event = { id = seas.200 }
+			}
+			10 = {
+				trigger = {
+					NOT = { has_global_flag = sea_tale_cursed_crew }
+					OR = { has_character_flag = sea_in_lustria }
+				}
+				character_event = { id = seas.201 }
+			}
+			10 = {
+				trigger = {
+					NOT = { has_global_flag = sea_tale_castaway }
+					OR = { has_character_flag = sea_in_southern has_character_flag = sea_in_western }
+				}
+				character_event = { id = seas.202 }
+			}
+			10 = {
+				trigger = {
+					NOT = { has_global_flag = sea_tale_iron_fish }
+					OR = { has_character_flag = sea_in_western has_character_flag = sea_in_southern has_character_flag = sea_in_east has_character_flag = sea_in_araby has_character_flag = sea_in_ulthuan }
+				}
+				character_event = { id = seas.203 }
+			}
+			10 = {
+				trigger = {
+					NOT = { has_global_flag = sea_tale_leviathan }
+					OR = { has_character_flag = sea_in_claws has_character_flag = sea_in_western }
+				}
+				character_event = { id = seas.204 }
+			}
+			10 = {
+				trigger = {
+					NOT = { has_global_flag = sea_tale_rafts }
+					OR = { has_character_flag = sea_in_chaos has_character_flag = sea_in_skaven }
+				}
+				character_event = { id = seas.205 }
+			}
+			10 = {
+				trigger = {
+					NOT = { has_global_flag = sea_tale_ghost_ship }
+					OR = { has_character_flag = sea_in_western }
+					manann_mood_bad_trigger = yes
+				}
+				character_event = { id = seas.206 }
+			}
+			10 = {
+				trigger = {
+					NOT = { has_global_flag = sea_tale_beast_isle }
+					OR = { has_character_flag = sea_in_lustria has_character_flag = sea_in_east }
+				}
+				character_event = { id = seas.207 }
+			}
+			10 = {
+				trigger = {
+					NOT = { has_global_flag = sea_tale_serpent_coil }
+					OR = { has_character_flag = sea_in_claws }
+					manann_mood_bad_trigger = yes
+				}
+				character_event = { id = seas.209 }
+			}
+			10 = {
+				trigger = {
+					NOT = { has_global_flag = sea_tale_nail_ship }
+					OR = { has_character_flag = sea_in_chaos }
+				}
+				character_event = { id = seas.210 }
+			}
+			10 = {
+				trigger = {
+					NOT = { has_global_flag = sea_tale_green_land }
+					OR = { has_character_flag = sea_in_western has_character_flag = sea_in_claws }
+					sea_voice_norse_trigger = yes
+				}
+				character_event = { id = seas.213 }
+			}
+			1 = {
+				character_event = { id = seas.30 }
+			}
+		}
+	}
+}
+
+# seas.200 The one-legged quartermaster
+# A genial cook with a wooden leg and a foul-mouthed parrot signs on, and
+# by the third week half the crew are his. He knows where an old captain
+# buried his hoard, and he means to have it. Hang him, share the map, or
+# sail off with him as your quartermaster.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.200
+	desc = EVTDESCseas200
+	picture = GFX_evt_pirate_crew
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.199
+
+	immediate = { set_global_flag = sea_tale_quartermaster }
+
+	option = { # Hang him from the yardarm
+		name = EVTOPTAseas200
+		prestige = 50
+		sea_take_prize_small_effect = yes
+	}
+	option = { # Share the map
+		name = EVTOPTBseas200
+		sea_take_prize_large_effect = yes
+		sea_deed_effect = yes
+	}
+	option = { # Make him my quartermaster
+		name = EVTOPTCseas200
+		create_character = {
+			random_traits = no
+			dynasty = none
+			religion = ROOT
+			culture = ROOT
+			female = no
+			age = 50
+			attributes = { stewardship = 12 intrigue = 14 martial = 9 }
+			trait = deceitful
+			trait = gregarious
+			trait = greedy
+			trait = one_legged
+		}
+		new_character = { set_character_flag = sea_quartermaster }
+		sea_take_prize_effect = yes
+	}
+}
+
+# seas.201 The cursed crew
+# A captain whose men turn to bone in the moonlight: they took the gold of
+# a Lustrian temple, and now they can neither die nor feel. They want the
+# last coin back. Return it and lift the curse, or keep it, and with it the
+# curse.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.201
+	desc = EVTDESCseas201
+	picture = GFX_evt_zombies
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.199
+
+	immediate = { set_global_flag = sea_tale_cursed_crew }
+
+	option = { # Give back the last coin
+		name = EVTOPTAseas201
+		manann_mood_up_effect = yes
+		prestige = 100
+	}
+	option = { # Keep the gold, and the curse
+		name = EVTOPTBseas201
+		sea_take_prize_large_effect = yes
+		add_character_modifier = { name = sea_moonlit_curse years = 20 }
+	}
+}
+
+# seas.202 The castaway
+# On an island of the southern seas lives a sailor marooned twenty-eight
+# years ago, with a companion from the mainland and a kingdom of goats.
+# Rescue him for a learned courtier, or leave him his kingdom.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.202
+	desc = EVTDESCseas202
+	picture = GFX_evt_lustria_jungle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.199
+
+	immediate = { set_global_flag = sea_tale_castaway }
+
+	option = { # Take him home
+		name = EVTOPTAseas202
+		create_character = {
+			random_traits = no
+			dynasty = none
+			religion = ROOT
+			culture = ROOT
+			female = no
+			age = 50
+			attributes = { learning = 14 stewardship = 12 diplomacy = 8 }
+			trait = patient
+			trait = humble
+			trait = diligent
+			trait = scholar
+		}
+		new_character = { set_character_flag = sea_castaway_courtier }
+		prestige = 25
+	}
+	option = { # Leave him his kingdom
+		name = EVTOPTBseas202
+		manann_mood_up_effect = yes
+		add_character_modifier = { name = sea_island_charts years = 10 }
+	}
+}
+
+# seas.203 The iron fish
+# A steam-driven iron ship that swims beneath the waves, commanded by a
+# brooding Dawi engineer exiled by his guild. He sinks warships for the
+# grudges of his hold. Trade with him, hunt him, or let him go his way.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.203
+	desc = EVTDESCseas203
+	picture = GFX_evt_naval_battle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.199
+
+	immediate = { set_global_flag = sea_tale_iron_fish }
+
+	option = { # Trade for his charts
+		name = EVTOPTAseas203
+		trigger = { wealth = 50 }
+		wealth = -50
+		add_character_modifier = { name = sea_iron_fish_charts years = 20 }
+	}
+	option = { # Hunt the iron fish
+		name = EVTOPTBseas203
+		random_list = {
+			35 = {
+				modifier = { factor = 1.5 martial = 16 }
+				modifier = { factor = 1.3 sea_has_flagship_trigger = yes }
+				sea_take_prize_large_effect = yes
+				prestige = 150
+				sea_deed_effect = yes
+			}
+			65 = {
+				add_trait = wounded
+				prestige = -50
+			}
+		}
+	}
+	option = { # Let him go his way
+		name = EVTOPTCseas203
+		manann_mood_up_effect = yes
+	}
+}
+
+# seas.204 The white leviathan
+# A captain with a leg of whalebone has hunted a pale sea-monster across
+# every ocean since it took the other one. He begs, then orders, then
+# threatens: join the hunt. Follow him to glory or to ruin.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.204
+	desc = EVTDESCseas204
+	picture = GFX_evt_kraken
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.199
+
+	immediate = { set_global_flag = sea_tale_leviathan }
+
+	option = { # Join the hunt
+		name = EVTOPTAseas204
+		random_list = {
+			40 = {
+				modifier = { factor = 1.5 martial = 16 }
+				modifier = { factor = 1.3 trait = brave }
+				modifier = { factor = 1.3 trait = hunter }
+				prestige = 200
+				sea_deed_effect = yes
+				sea_monster_trophy_effect = yes
+				give_nickname = nick_the_seafarer
+			}
+			45 = {
+				add_maimed_trait_effect = yes
+				prestige = 50
+			}
+			15 = {
+				modifier = { factor = 0.5 trait = brave }
+				death = { death_reason = death_battle }
+			}
+		}
+	}
+	option = { # Let him hunt alone
+		name = EVTOPTBseas204
+		prestige = -25
+	}
+}
+
+# seas.205 The floating rafts
+# Where the coast has drowned, a whole people lives on rafts of lashed hulls.
+# One of them has gills, and swears he knows where dry land lies. Trade for
+# his secret, or plunder the rafts.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.205
+	desc = EVTDESCseas205
+	picture = GFX_evt_ship_storm
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.199
+
+	immediate = { set_global_flag = sea_tale_rafts }
+
+	option = { # Trade for the way to dry land
+		name = EVTOPTAseas205
+		add_character_modifier = { name = sea_island_charts years = 20 }
+		manann_mood_up_effect = yes
+	}
+	option = { # Plunder the rafts
+		name = EVTOPTBseas205
+		sea_take_prize_small_effect = yes
+		slave_gain_lot_effect = yes
+		manann_mood_down_effect = yes
+	}
+}
+
+# seas.206 The ghost ship
+# On a night when the sea is angry a ship comes up against the wind, her
+# sails torn, her captain doomed to sail until someone takes his oath from
+# him. Take the oath, carry his letters home, or flee.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.206
+	desc = EVTDESCseas206
+	picture = GFX_evt_ship_storm
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.199
+
+	immediate = { set_global_flag = sea_tale_ghost_ship }
+
+	option = { # Take the oath
+		name = EVTOPTAseas206
+		add_character_modifier = { name = sea_damned_oath duration = -1 }
+		prestige = 200
+	}
+	option = { # Carry his letters home
+		name = EVTOPTBseas206
+		manann_mood_settle_effect = yes
+		manann_mood_up_effect = yes
+		piety = 50
+	}
+	option = { # Flee!
+		name = EVTOPTCseas206
+		manann_mood_down_effect = yes
+	}
+}
+
+# seas.207 The island of beasts
+# On a hidden island a sorcerer breeds beasts into men, or men into beasts;
+# he is no longer sure which. Kill him, bargain for his creatures, or burn
+# the island.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.207
+	desc = EVTDESCseas207
+	picture = GFX_evt_lustria_jungle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.199
+
+	immediate = { set_global_flag = sea_tale_beast_isle }
+
+	option = { # Kill the sorcerer
+		name = EVTOPTAseas207
+		prestige = 100
+		piety = 50
+		sea_deed_effect = yes
+	}
+	option = { # Buy his creatures
+		name = EVTOPTBseas207
+		trigger = { is_landed = yes }
+		capital_scope = { save_event_target_as = sea_beast_home }
+		spawn_unit = {
+			province = event_target:sea_beast_home
+			home = event_target:sea_beast_home
+			owner = ROOT
+			troops = { heavy_infantry = { 300 300 } }
+			attrition = 1
+			maintenance_multiplier = 0.5
+			disband_on_peace = yes
+			cannot_inherit = yes
+			earmark = sea_beast_isle
+		}
+		piety = -50
+	}
+	option = { # Burn the island
+		name = EVTOPTCseas207
+		manann_mood_up_effect = yes
+	}
+}
+
+# seas.208 The hairy breeches
+# A jarl's daughter is shut in her hall by a serpent coiled round it, and
+# her father has promised her to the man who kills it. A young raider
+# tars his breeches and furs against the venom and goes in. Win the
+# serpent and the bride (a generated jarl's daughter), or leave it.
+# Scope: ROOT is the young raider (seas.198).
+character_event = {
+	id = seas.208
+	desc = EVTDESCseas208
+	picture = GFX_evt_longships_at_sea_oldgods
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.198
+
+	immediate = { set_global_flag = sea_tale_breeches }
+
+	option = { # Tar the breeches
+		name = EVTOPTAseas208
+		random_list = {
+			70 = {
+				modifier = { factor = 1.5 martial = 14 }
+				modifier = { factor = 1.3 trait = brave }
+				prestige = 200
+				sea_deed_effect = yes
+				if = {
+					limit = {
+						is_married = no
+						is_no_females_race = no
+					}
+					create_character = {
+						random_traits = yes
+						dynasty = random
+						religion = ROOT
+						culture = ROOT
+						female = yes
+						age = 18
+						attributes = { diplomacy = 10 }
+						trait = fair
+						trait = brave
+					}
+					new_character = {
+						set_character_flag = sea_jarls_daughter
+						add_spouse = ROOT
+					}
+				}
+			}
+			30 = {
+				add_trait = wounded
+				prestige = -25
+			}
+		}
+	}
+	option = { # Let someone else be eaten
+		name = EVTOPTBseas208
+		prestige = -50
+	}
+}
+
+# seas.209 The serpent's coil
+# On a black day on the Sea of Claws a fisherman baits a line with an ox's
+# head and hooks something vast, something that coils round the bottom of
+# the world. Haul it up, or cut the line.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.209
+	desc = EVTDESCseas209
+	picture = GFX_evt_kraken
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.199
+
+	immediate = { set_global_flag = sea_tale_serpent_coil }
+
+	option = { # Haul!
+		name = EVTOPTAseas209
+		random_list = {
+			30 = {
+				modifier = { factor = 1.5 trait = strong }
+				modifier = { factor = 1.3 trait = brave }
+				prestige = 300
+				sea_deed_effect = yes
+				give_nickname = nick_the_sea_devil
+			}
+			70 = {
+				add_trait = wounded
+				manann_mood_curse_effect = yes
+			}
+		}
+	}
+	option = { # Cut the line!
+		name = EVTOPTBseas209
+		manann_mood_up_effect = yes
+	}
+}
+
+# seas.210 The ship of nails
+# In the Sea of Chaos a hull is being built from the nails of the dead, a
+# ship that is said will sail at the end of the world. Burn it (the doom of
+# the world eases), board it, or flee.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.210
+	desc = EVTDESCseas210
+	picture = GFX_evt_ship_storm
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.199
+
+	immediate = { set_global_flag = sea_tale_nail_ship }
+
+	option = { # Burn it to the waterline
+		name = EVTOPTAseas210
+		trigger = { NOT = { religion_group = chaos_gods_group } }
+		reduce_doom_progress_minor_effect = yes
+		prestige = 150
+		piety = 100
+	}
+	option = { # Lay the last nail
+		name = EVTOPTBseas210
+		trigger = { religion_group = chaos_gods_group }
+		add_doom_progress_minor_effect = yes
+		piety = 200
+	}
+	option = { # Flee
+		name = EVTOPTCseas210
+		add_doom_progress_tiny_effect = yes
+	}
+}
+
+# seas.211 The hall-raider
+# A jarl's mead hall is raided every night by a monster out of the fen; it
+# takes a warrior each time and leaves only blood. Wait for it in the
+# hall with your bare hands, or bring fire. If it dies, its mother comes
+# (seas.212).
+# Scope: ROOT is the raider (seas.198).
+character_event = {
+	id = seas.211
+	desc = EVTDESCseas211
+	picture = GFX_evt_norscan_raid
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.198
+
+	immediate = { set_global_flag = sea_tale_hall_raider }
+
+	option = { # Wait for it in the hall
+		name = EVTOPTAseas211
+		random_list = {
+			65 = {
+				modifier = { factor = 1.5 trait = strong }
+				modifier = { factor = 1.3 martial = 15 }
+				prestige = 150
+				character_event = { id = seas.212 days = 7 }
+			}
+			35 = {
+				add_maimed_trait_effect = yes
+			}
+		}
+	}
+	option = { # Burn the fen
+		name = EVTOPTBseas211
+		prestige = 25
+	}
+}
+
+# seas.212 The mother below the water
+# The monster's mother comes for vengeance and drags a warrior into the
+# mere. Dive after her into the cave beneath the water, where a blade too
+# big for any man hangs on the wall.
+# Scope: ROOT is the raider.
+character_event = {
+	id = seas.212
+	desc = EVTDESCseas212
+	picture = GFX_evt_kraken
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.211
+
+	option = { # Into the mere
+		name = EVTOPTAseas212
+		random_list = {
+			60 = {
+				modifier = { factor = 1.5 trait = strong }
+				modifier = { factor = 1.3 trait = brave }
+				prestige = 300
+				sea_deed_effect = yes
+				if = {
+					limit = { NOT = { any_character = { has_artifact = sea_giants_blade } } }
+					add_artifact = sea_giants_blade
+				}
+			}
+			40 = {
+				add_maimed_trait_effect = yes
+				prestige = 50
+			}
+		}
+	}
+	option = { # Let the mere keep her
+		name = EVTOPTBseas212
+		prestige = -50
+	}
+}
+
+# seas.213 The green land in the west
+# A longship blown off course for weeks sights a green land in the west,
+# rich with timber and grapes. The skalds say Losteriksson found it once;
+# now the captain has. A lead for the colonies of the west.
+# Scope: ROOT is the captain.
+character_event = {
+	id = seas.213
+	desc = EVTDESCseas213
+	picture = GFX_evt_lustria_jungle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.199
+
+	immediate = { set_global_flag = sea_tale_green_land }
+
+	option = {
+		name = EVTOPTAseas213
+		add_character_modifier = { name = sea_island_charts years = 20 }
+		prestige = 100
+		sea_deed_effect = yes
+	}
+}
+
+# seas.214 The cursed ring
+# Off a dead wyrm's hoard comes a gold ring that makes its wearer rich and
+# kills them; it has passed through a dozen hands. Take it, or throw it into
+# the sea.
+# Scope: ROOT is the raider (seas.198).
+character_event = {
+	id = seas.214
+	desc = EVTDESCseas214
+	picture = GFX_evt_treasure_madness
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.198
+
+	immediate = { set_global_flag = sea_tale_ring }
+
+	option = { # It is mine
+		name = EVTOPTAseas214
+		add_artifact = sea_cursed_ring
+	}
+	option = { # Into the sea with it
+		name = EVTOPTBseas214
+		manann_mood_up_effect = yes
+		piety = 50
+	}
+}
+
+# seas.215 The barrow ship
+# An old sea-king lies buried in his ship under a mound on the headland,
+# with his treasure, and a draugr that will not let it go. Fight the
+# draugr, leave an offering, or dig quickly and run.
+# Scope: ROOT is the raider (seas.198).
+character_event = {
+	id = seas.215
+	desc = EVTDESCseas215
+	picture = GFX_evt_viking_funeral_oldgods
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # seas.198
+
+	immediate = { set_global_flag = sea_tale_barrow }
+
+	option = { # Fight the draugr
+		name = EVTOPTAseas215
+		random_list = {
+			55 = {
+				modifier = { factor = 1.5 martial = 15 }
+				modifier = { factor = 1.3 trait = brave }
+				sea_take_prize_large_effect = yes
+				prestige = 150
+				sea_deed_effect = yes
+			}
+			45 = {
+				add_maimed_trait_effect = yes
+			}
+		}
+	}
+	option = { # Leave an offering
+		name = EVTOPTBseas215
+		wealth = -25
+		piety = 75
+		manann_mood_up_effect = yes
+	}
+	option = { # Dig quickly, and run
+		name = EVTOPTCseas215
+		sea_take_prize_effect = yes
+		add_character_modifier = { name = sea_draugr_haunted years = 5 }
+	}
+}

@@ -1,0 +1,2357 @@
+###############################################################################
+# Lovers: affairs, first loves, jealous spouses and happy marriages
+# Namespace: lover (was 64000 - 64140 in the vanilla lovers_events.txt)
+# Faction: Generic
+#
+# The old lover events of the base game. Most are the fallback for players
+# without Way of Life (lacks_dlc), whose lover events (WHG_seduction_events)
+# replace them; the wounded lover, the happy marriage and the endings that
+# other events call run for everyone.
+#
+# Confrontations                       lover.1 - lover.6
+# A sick or wounded lover              lover.10 - lover.11
+# First love                           lover.20 - lover.28
+# Taking a mistress                    lover.30 - lover.35
+# Love and its pleasures               lover.40 - lover.44
+# The end of an affair                 lover.50 - lover.52
+# The strain of an affair              lover.60 - lover.82
+#
+# Fired from: the on_yearly_pulse random_events of 00_on_actions.txt
+#   (1, 5, 10, 11, 20, 30, 40, 41, 42), the on_bi_yearly_pulse lists
+#   lovers_* in wh_on_actions.txt (the old MTTH events), MTTH (82, while in
+#   command), and other events: the Grand Judge (WHG_court_office_events,
+#   51), traits_effects_events (40, 51, 75) and rumours_events (68).
+# Saved: event targets lover_target, lover_teen, lover_crush,
+#   lover_sweetheart; character flags teenage_infatuation, lover_reply_good,
+#   lover_reply_bad, lover_wounded_by_rival, lover_made_infirm,
+#   never_lover, poet_spouse_muse, lost_loving_feeling,
+#   adulterous_affair_public.
+# Scripted triggers and effects: WHG_lover_triggers.txt and
+#   WHG_lover_effects.txt in common/scripted_triggers and scripted_effects.
+# Loc: localisation/00_WHG_lover_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = lover
+
+###############################################################################
+# Confrontations
+###############################################################################
+
+# lover.1 My spouse has a lover
+# Without Way of Life. ROOT learns their spouse has a lover and confronts
+# the spouse (lover.2) or the lover (lover.3). Not in Araby, where the
+# faiths of the court keep many wives.
+# Scope: ROOT is the wronged spouse.
+character_event = {
+	id = lover.1
+	desc = EVTDESClover1
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # on_yearly_pulse random_events, 00_on_actions.txt
+	lacks_dlc = "Way of Life"
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		cant_love_trigger = yes
+		NOR = { religion = ormazd religion = kitabid }
+		spouse = {
+			NOR = { religion = ormazd religion = kitabid }
+			in_command = no
+			war = no
+			is_abroad = no
+			is_alive = yes
+			has_lover = yes
+			prisoner = no
+			NOT = { is_lover = ROOT }
+			any_lover = { NOT = { character = ROOT } }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = envious }
+	}
+
+	immediate = {
+		spouse = {
+			random_lover = {
+				limit = { NOT = { character = ROOT } }
+				save_event_target_as = lover_target
+			}
+		}
+	}
+
+	option = { # Confront my spouse
+		name = EVTOPTAlover1
+		spouse = { character_event = { id = lover.2 tooltip = EVTTOOLTIPlover2 } }
+	}
+	option = { # Confront the lover
+		name = EVTOPTBlover1
+		event_target:lover_target = {
+			character_event = { id = lover.3 tooltip = EVTTOOLTIPlover3 }
+		}
+	}
+}
+
+# lover.2 Confronted by my spouse
+# The cheating spouse refuses to give up the lover (the other is angry) or
+# ends it (the other is merely irritated).
+# Scope: ROOT is the cheating spouse, FROM the wronged one.
+character_event = {
+	id = lover.2
+	desc = EVTDESClover2
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # lover.1, lover.5
+
+	option = { # I will not give them up
+		name = EVTOPTAlover2
+		FROM = { reverse_opinion = { modifier = opinion_angry who = ROOT years = 2 } }
+	}
+	option = { # It is over
+		name = EVTOPTBlover2
+		random_lover = { limit = { NOT = { character = FROM } } lover_end_affair_effect = yes }
+		FROM = { reverse_opinion = { modifier = opinion_irritated who = ROOT years = 2 } }
+	}
+}
+
+# lover.3 Confronted by the spouse
+# The lover is told to leave someone's husband or wife alone. Refuse, end
+# it, or threaten: a strong lover may beat the spouse (lover.4, 1 in 5), a
+# clever one arrange an accident or a poisoning (1 in 10 each).
+# Scope: ROOT is the lover, FROM the wronged spouse.
+character_event = {
+	id = lover.3
+	desc = EVTDESClover3
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # lover.1
+
+	option = { # Refuse
+		name = EVTOPTAlover3
+		FROM = { reverse_opinion = { modifier = opinion_angry who = ROOT years = 2 } }
+	}
+	option = { # End it
+		name = EVTOPTBlover3
+		FROM = {
+			spouse = { lover_end_affair_effect = yes }
+			reverse_opinion = { modifier = opinion_irritated who = ROOT years = 2 }
+		}
+	}
+	option = { # I will claw your eyes out
+		name = EVTOPTClover3
+		tooltip_info = martial
+		trigger = { martial = 10 FROM = { NOT = { trait = wounded } } }
+		FROM = {
+			random = {
+				chance = 20
+				set_character_flag = lover_wounded_by_rival
+				character_event = { id = lover.4 tooltip = EVTTOOLTIPlover4 }
+			}
+			reverse_opinion = { modifier = opinion_love_rival who = ROOT years = 5 }
+		}
+	}
+	option = { # Your meddling will cost you
+		name = EVTOPTDlover3
+		tooltip_info = intrigue
+		trigger = { intrigue = 10 FROM = { NOT = { trait = wounded } } }
+		FROM = {
+			random_list = {
+				10 = {
+					set_character_flag = lover_wounded_by_rival
+					character_event = { id = lover.4 days = 14 tooltip = EVTTOOLTIPlover4 }
+				}
+				10 = {
+					set_character_flag = lover_made_infirm
+					character_event = { id = lover.4 days = 7 tooltip = EVTTOOLTIPlover4b }
+				}
+				80 = { }
+			}
+			reverse_opinion = { modifier = opinion_love_rival who = ROOT years = 5 }
+		}
+	}
+}
+
+# lover.4 Hurt by the rival
+# The spouse is wounded, or (poisoned) left infirm, by the lover.
+# Fixed: the old intrigue path could roll both the wound and the poison and
+# send the event twice.
+# Scope: ROOT is the wronged spouse, FROM the lover.
+character_event = {
+	id = lover.4
+	desc = { trigger = { has_character_flag = lover_made_infirm } text = EVTDESClover4b }
+	desc = { trigger = { NOT = { has_character_flag = lover_made_infirm } } text = EVTDESClover4 }
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # lover.3
+
+	option = {
+		name = EVTOPTAlover4
+		if = { limit = { has_character_flag = lover_made_infirm } add_trait = infirm }
+		else = { add_trait = wounded }
+		clr_character_flag = lover_made_infirm
+		clr_character_flag = lover_wounded_by_rival
+		FROM = { reverse_opinion = { modifier = opinion_love_rival who = ROOT years = 5 } }
+	}
+}
+
+# lover.5 The ruler confronts a cheating spouse
+# Without Way of Life. A ruler confronts the spouse about a lover at court
+# (lover.2).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = lover.5
+	desc = EVTDESClover5
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # on_yearly_pulse random_events, 00_on_actions.txt
+	lacks_dlc = "Way of Life"
+	only_rulers = yes
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		cant_love_trigger = yes
+		spouse = {
+			cant_love_trigger = yes
+			in_command = no
+			war = no
+			is_abroad = no
+			is_alive = yes
+			prisoner = no
+			NOT = { trait = incapable }
+			any_lover = {
+				is_abroad = no
+				prisoner = no
+				NOT = { trait = incapable }
+				NOT = { character = ROOT }
+			}
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = envious }
+	}
+
+	option = {
+		name = EVTOPTAlover5
+		spouse = { character_event = { id = lover.2 tooltip = EVTTOOLTIPlover2 } }
+	}
+}
+
+###############################################################################
+# A sick or wounded lover
+###############################################################################
+
+# lover.10 A sick lover
+# Without Way of Life or Reaper's Due. A lover is ill or pneumonic. Nurse
+# them (a chance to recover; they are glad), pay for a physician (a better
+# chance) or end the affair.
+# Scope: ROOT is the ruler, event_target:lover_target the lover.
+character_event = {
+	id = lover.10
+	desc = EVTDESClover10
+	picture = GFX_evt_illness
+
+	is_triggered_only = yes # on_yearly_pulse random_events, 00_on_actions.txt
+	lacks_dlc = "Way of Life"
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		NOT = { has_dlc = "Reapers" }
+		cant_love_trigger = yes
+		NOT = { trait = cruel }
+		any_lover = {
+			cant_love_trigger = yes
+			is_abroad = no
+			OR = { is_ill = yes trait = pneumonic }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 0.5 is_ill = yes }
+		modifier = { factor = 2 trait = kind }
+	}
+
+	immediate = {
+		random_lover = {
+			limit = { is_abroad = no OR = { is_ill = yes trait = pneumonic } }
+			save_event_target_as = lover_target
+		}
+	}
+
+	option = { # Nurse them
+		name = EVTOPTAlover10
+		ai_chance = { factor = 50 }
+		event_target:lover_target = {
+			lover_sickbed_effect = yes
+			opinion = { modifier = opinion_glad who = ROOT years = 1 }
+		}
+	}
+	option = { # Send for a physician
+		name = EVTOPTBlover10
+		ai_chance = { factor = 50 }
+		scaled_wealth = -0.2
+		event_target:lover_target = { lover_sickbed_effect = yes lover_sickbed_effect = yes }
+	}
+	option = { # End it
+		name = EVTOPTClover10
+		ai_chance = { factor = 0 }
+		event_target:lover_target = { lover_end_affair_effect = yes }
+	}
+}
+
+# lover.11 A wounded lover
+# A lover lies wounded. Sit by them (1 in 10 the wound heals, with a scar),
+# pay for a surgeon (1 in 5) or end it.
+# Scope: ROOT is the ruler, event_target:lover_target the lover.
+character_event = {
+	id = lover.11
+	desc = EVTDESClover11
+	picture = GFX_evt_illness
+
+	is_triggered_only = yes # on_yearly_pulse random_events, 00_on_actions.txt
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		cant_love_trigger = yes
+		NOT = { trait = cruel }
+		any_lover = { cant_love_trigger = yes is_abroad = no trait = wounded }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 0.5 is_ill = yes }
+		modifier = { factor = 2 trait = kind }
+	}
+
+	immediate = {
+		random_lover = {
+			limit = { is_abroad = no trait = wounded }
+			save_event_target_as = lover_target
+		}
+	}
+
+	option = { # Sit by them
+		name = EVTOPTAlover11
+		ai_chance = { factor = 50 }
+		event_target:lover_target = {
+			random = { chance = 10 remove_trait = wounded add_scarred_tiered_effect = yes }
+			opinion = { modifier = opinion_glad who = ROOT years = 1 }
+		}
+	}
+	option = { # Pay for a surgeon
+		name = EVTOPTBlover11
+		ai_chance = { factor = 50 }
+		scaled_wealth = -0.2
+		event_target:lover_target = {
+			random = { chance = 20 remove_trait = wounded add_scarred_tiered_effect = yes }
+		}
+	}
+	option = { # End it
+		name = EVTOPTClover11
+		ai_chance = { factor = 0 }
+		event_target:lover_target = { lover_end_affair_effect = yes }
+	}
+}
+
+###############################################################################
+# First love
+###############################################################################
+
+# lover.20 A first love
+# Without Way of Life. An unmarried youth of 12 to 17 falls for a youth of
+# the other sex at court and tells them (4 in 5 the feeling is returned,
+# lover.21), or decides they were not so pretty after all (shy or craven).
+# Fixed: the old event wrote to every youth at court who fit, each with its
+# own answer.
+# Scope: ROOT is the youth, event_target:lover_crush the one they love.
+character_event = {
+	id = lover.20
+	desc = EVTDESClover20
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # on_yearly_pulse random_events, 00_on_actions.txt
+	lacks_dlc = "Way of Life"
+	prisoner = no
+	min_age = 12
+	max_age = 17
+	is_married = no
+
+	trigger = {
+		cant_love_trigger = yes
+		is_no_females_race = no
+		has_epidemic = no
+		is_ill = no
+		is_pregnant = no
+		NOR = { trait = homosexual trait = celibate trait = incapable trait = eunuch }
+		any_courtier = { lover_crush_target_trigger = yes }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { lover_crush_target_trigger = yes }
+			score_value = { value = 10 interesting_courtier_selection_score = yes }
+			save_event_target_as = lover_crush
+		}
+	}
+
+	option = { # Tell them
+		name = EVTOPTAlover20
+		ai_chance = { factor = 95 }
+		event_target:lover_crush = {
+			random_list = {
+				80 = {
+					set_character_flag = lover_reply_good
+					character_event = { id = lover.21 tooltip = EVTTOOLTIPlover21 }
+				}
+				20 = {
+					set_character_flag = lover_reply_bad
+					character_event = { id = lover.21 tooltip = EVTTOOLTIPlover21b }
+				}
+			}
+		}
+	}
+	option = { # Not that pretty anyway
+		name = EVTOPTBlover20
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 15 trait = craven }
+			modifier = { factor = 15 trait = shy }
+		}
+		if = { limit = { NOT = { trait = shy } } add_trait = shy }
+		else_if = { limit = { NOR = { trait = craven trait = berserker } } add_trait = craven }
+	}
+}
+
+# lover.21 A confession
+# The loved one answers, warmly (lover.22) or with scorn (lover.23).
+# Scope: ROOT is the loved one, FROM the youth who confessed.
+character_event = {
+	id = lover.21
+	desc = EVTDESClover21
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # lover.20
+
+	option = { # Yes
+		name = EVTOPTAlover21
+		trigger = { has_character_flag = lover_reply_good }
+		clr_character_flag = lover_reply_good
+		opinion = { modifier = teenage_infatuation who = FROM years = 10 }
+		set_character_flag = teenage_infatuation
+		FROM = { character_event = { id = lover.22 tooltip = EVTTOOLTIPlover22 } }
+	}
+	option = { # Scorn
+		name = EVTOPTBlover21
+		trigger = { has_character_flag = lover_reply_bad }
+		clr_character_flag = lover_reply_bad
+		FROM = { character_event = { id = lover.23 tooltip = EVTTOOLTIPlover23 } }
+	}
+}
+
+# lover.22 The feeling is returned
+# Scope: ROOT is the youth, FROM the loved one.
+character_event = {
+	id = lover.22
+	desc = EVTDESClover22
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # lover.21
+
+	option = {
+		name = EVTOPTAlover22
+		opinion = { modifier = teenage_infatuation who = FROM years = 10 }
+		set_character_flag = teenage_infatuation
+	}
+}
+
+# lover.23 Scorned
+# Retreat into shyness, chastity (cynicism in Araby) or cowardice, or try
+# harder next time (ambitious, proud or brave).
+# Scope: ROOT is the youth, FROM the one who scorned them.
+character_event = {
+	id = lover.23
+	desc = EVTDESClover23
+	picture = GFX_evt_bad_news
+
+	is_triggered_only = yes # lover.21
+
+	option = { # I am a failure
+		name = EVTOPTAlover23
+		random_list = {
+			30 = { trigger = { NOT = { trait = berserker } } add_trait = craven }
+			30 = {
+				if = { limit = { religion_group = ormazd_gods_group } add_trait = cynical }
+				else = { add_trait = chaste }
+			}
+			30 = { add_trait = shy }
+		}
+	}
+	option = { # Who dares wins
+		name = EVTOPTBlover23
+		random_list = {
+			30 = { add_trait = ambitious }
+			30 = { add_trait = proud }
+			30 = { add_trait = brave }
+		}
+	}
+}
+
+# lover.25 First love grown up
+# Without Way of Life. Two young adults who were sweethearts as youths are
+# still fond of each other. It turns to love (lover.26: lovers) or they say
+# it was a thing of their youth (lover.27).
+# Was MTTH 120 months; now the bi-yearly list lovers_sweethearts.
+# Scope: ROOT is one sweetheart, event_target:lover_sweetheart the other.
+character_event = {
+	id = lover.25
+	desc = EVTDESClover25
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_sweethearts
+	lacks_dlc = "Way of Life"
+	has_character_flag = teenage_infatuation
+	min_age = 18
+	max_age = 25
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		cant_love_trigger = yes
+		has_lover = no
+		any_courtier = { lover_sweetheart_grown_trigger = yes }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { lover_sweetheart_grown_trigger = yes }
+			save_event_target_as = lover_sweetheart
+		}
+	}
+
+	option = { # It is love
+		name = EVTOPTAlover25
+		event_target:lover_sweetheart = {
+			hidden_effect = {
+				remove_opinion = { who = ROOT modifier = teenage_infatuation }
+				reverse_remove_opinion = { who = ROOT modifier = teenage_infatuation }
+			}
+			character_event = { id = lover.26 tooltip = EVTTOOLTIPlover26 }
+		}
+	}
+	option = { # Something of our youth
+		name = EVTOPTBlover25
+		event_target:lover_sweetheart = {
+			hidden_effect = {
+				remove_opinion = { who = ROOT modifier = teenage_infatuation }
+				reverse_remove_opinion = { who = ROOT modifier = teenage_infatuation }
+			}
+			reverse_opinion = { modifier = childhood_sweetheart who = ROOT years = 50 }
+			character_event = { id = lover.27 tooltip = EVTTOOLTIPlover27 }
+		}
+	}
+}
+
+# lover.26 Love
+# Scope: ROOT is the sweetheart, FROM the other.
+character_event = {
+	id = lover.26
+	desc = EVTDESClover26
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # lover.25
+
+	option = {
+		name = EVTOPTAlover26
+		if = {
+			limit = { is_no_females_race = no FROM = { is_no_females_race = no } }
+			add_lover = FROM
+		}
+	}
+}
+
+# lover.27 Only a memory
+# Agree it was a thing of youth, or say you loved them (scorned love).
+# Scope: ROOT is the sweetheart, FROM the other.
+character_event = {
+	id = lover.27
+	desc = EVTDESClover27
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # lover.25
+
+	option = { # Yes, it was
+		name = EVTOPTAlover27
+		opinion = { modifier = childhood_sweetheart who = FROM years = 50 }
+	}
+	option = { # But I loved you
+		name = EVTOPTBlover27
+		opinion = { modifier = love_scorned who = FROM years = 50 }
+	}
+}
+
+# lover.28 My child is in love
+# Without Way of Life. A ruler sees that a child of 13 to 19 at court is
+# sweet on a courtier. Smile at it, hope it passes, or part them (both
+# stressed; the child is angry).
+# Was MTTH 120 months; now the bi-yearly list lovers_parents.
+# Scope: ROOT is the parent, event_target:lover_teen the child.
+character_event = {
+	id = lover.28
+	desc = EVTDESClover28
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_parents
+	lacks_dlc = "Way of Life"
+	only_rulers = yes
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		cant_love_trigger = yes
+		any_child = {
+			cant_love_trigger = yes
+			has_character_flag = teenage_infatuation
+			age = 13
+			NOT = { age = 20 }
+			is_abroad = no
+			prisoner = no
+			is_ruler = no
+			NOT = { trait = incapable }
+			any_courtier = { lover_teen_pair_trigger = yes }
+		}
+	}
+
+	immediate = {
+		random_child = {
+			limit = {
+				has_character_flag = teenage_infatuation
+				age = 13
+				NOT = { age = 20 }
+				is_abroad = no
+				prisoner = no
+				is_ruler = no
+				any_courtier = { lover_teen_pair_trigger = yes }
+			}
+			save_event_target_as = lover_teen
+			random_courtier = {
+				limit = { lover_teen_pair_trigger = yes }
+				save_event_target_as = lover_crush
+			}
+		}
+	}
+
+	option = { # How sweet
+		name = EVTOPTAlover28
+		event_target:lover_teen = { opinion = { modifier = opinion_happy who = ROOT years = 2 } }
+	}
+	option = { # It will pass
+		name = EVTOPTBlover28
+		if = { limit = { trait = chaste } prestige = -10 }
+		event_target:lover_teen = { opinion = { modifier = opinion_glad who = ROOT years = 2 } }
+	}
+	option = { # Part them
+		name = EVTOPTClover28
+		event_target:lover_crush = {
+			add_trait = stressed
+			remove_opinion = { who = event_target:lover_teen modifier = teenage_infatuation }
+			reverse_remove_opinion = {
+				who = event_target:lover_teen
+				modifier = teenage_infatuation
+			}
+			clr_character_flag = teenage_infatuation
+		}
+		event_target:lover_teen = {
+			add_trait = stressed
+			opinion = { modifier = opinion_angry who = ROOT years = 5 }
+			clr_character_flag = teenage_infatuation
+		}
+	}
+}
+
+###############################################################################
+# Taking a mistress
+###############################################################################
+
+# lover.30 A wife grown cold
+# Without Way of Life. A married ruler whose wife is sick, past 45 or
+# barren thinks of a lady of the court. Take her openly (lustful; the wife
+# may hear, lover.31), discreetly (deceitful; less likely to be found out),
+# or refuse the sin (piety; chaste, zealous or, rarely, celibate in the Old
+# World faiths). The lady answers in lover.32.
+# Scope: ROOT is the ruler, event_target:lover_target the lady.
+character_event = {
+	id = lover.30
+	desc = EVTDESClover30
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # on_yearly_pulse random_events, 00_on_actions.txt
+	lacks_dlc = "Way of Life"
+	only_men = yes
+	only_rulers = yes
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		cant_love_trigger = yes
+		is_no_females_race = no
+		fertility = 0.5
+		has_epidemic = no
+		is_ill = no
+		has_lover = no
+		NOT = { trait = homosexual }
+		NOT = { has_character_flag = never_lover }
+		any_courtier = { lover_mistress_target_trigger = yes }
+		spouse = {
+			is_alive = yes
+			is_abroad = no
+			prisoner = no
+			OR = { has_epidemic = yes is_ill = yes age = 45 NOT = { fertility = 0.2 } }
+		}
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { lover_mistress_target_trigger = yes }
+			score_value = { value = 10 interesting_courtier_selection_score = yes }
+			save_event_target_as = lover_target
+		}
+	}
+
+	option = { # Openly
+		name = EVTOPTAlover30
+		piety = -10
+		if = { limit = { NOT = { trait = lustful } } add_trait = lustful }
+		spouse = {
+			random = {
+				chance = 50
+				opinion = { modifier = opinion_angry who = ROOT years = 5 }
+				hidden_effect = { character_event = { id = lover.31 } }
+			}
+		}
+		event_target:lover_target = {
+			character_event = { id = lover.32 tooltip = EVTTOOLTIPlover32 }
+		}
+	}
+	option = { # Discreetly
+		name = EVTOPTBlover30
+		if = { limit = { NOT = { trait = deceitful } } add_trait = deceitful }
+		spouse = {
+			random = {
+				chance = 25
+				opinion = { modifier = opinion_angry who = ROOT years = 5 }
+				hidden_effect = { character_event = { id = lover.31 } }
+			}
+		}
+		event_target:lover_target = {
+			character_event = { id = lover.32 tooltip = EVTTOOLTIPlover32 }
+		}
+	}
+	option = { # It is a sin
+		name = EVTOPTClover30
+		piety = 10
+		random_list = {
+			50 = { }
+			20 = {
+				modifier = { factor = 1.25 NOT = { religion_group = old_world_group } }
+				if = { limit = { religion_group = old_world_group } add_trait = chaste }
+				else = { piety = 5 }
+			}
+			25 = { add_trait = zealous }
+			5 = {
+				modifier = { factor = 0 NOT = { religion_group = old_world_group } }
+				add_trait = celibate
+			}
+		}
+	}
+}
+
+# lover.31 The wife finds out
+# The wife learns of the mistress. She is stressed and goes to have it out
+# with her husband (lover.35).
+# Scope: ROOT is the wife, FROM the husband.
+character_event = {
+	id = lover.31
+	desc = EVTDESClover31
+	picture = GFX_evt_bad_news
+
+	is_triggered_only = yes # lover.30
+
+	option = {
+		name = EVTOPTAlover31
+		add_trait = stressed
+		FROM = { character_event = { id = lover.35 tooltip = EVTTOOLTIPlover35 } }
+	}
+}
+
+# lover.32 The lord's advances
+# The lady accepts (lover.33) or scorns him (lover.34).
+# Scope: ROOT is the lady, FROM the ruler.
+character_event = {
+	id = lover.32
+	desc = EVTDESClover32
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # lover.30
+
+	option = { # Accept
+		name = EVTOPTAlover32
+		ai_chance = {
+			factor = 70
+			modifier = { factor = 2 trait = lustful }
+			modifier = { factor = 0.25 trait = chaste }
+			modifier = { factor = 0.5 NOT = { opinion = { who = FROM value = 0 } } }
+		}
+		FROM = { character_event = { id = lover.33 tooltip = EVTTOOLTIPlover33 } }
+	}
+	option = { # Scorn
+		name = EVTOPTBlover32
+		ai_chance = { factor = 30 }
+		FROM = { character_event = { id = lover.34 tooltip = EVTTOOLTIPlover34 } }
+	}
+}
+
+# lover.33 She accepts
+# Scope: ROOT is the ruler, FROM the lady.
+character_event = {
+	id = lover.33
+	desc = EVTDESClover33
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # lover.32
+
+	option = {
+		name = EVTOPTAlover33
+		if = {
+			limit = { is_no_females_race = no FROM = { is_no_females_race = no } }
+			add_lover = FROM
+		}
+	}
+}
+
+# lover.34 She scorns him
+# The ruler loses face and will not try this again.
+# Scope: ROOT is the ruler, FROM the lady.
+character_event = {
+	id = lover.34
+	desc = EVTDESClover34
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # lover.32
+
+	option = {
+		name = EVTOPTAlover34
+		set_character_flag = never_lover
+		prestige = -10
+		opinion = { modifier = opinion_dislike who = FROM years = 5 }
+	}
+}
+
+# lover.35 The wife's fury
+# Scope: ROOT is the husband, FROM the wife.
+character_event = {
+	id = lover.35
+	desc = EVTDESClover35
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # lover.31
+
+	option = {
+		name = EVTOPTAlover35
+		FROM = { opinion = { modifier = opinion_angry who = ROOT years = 1 } }
+	}
+}
+
+###############################################################################
+# Love and its pleasures
+###############################################################################
+
+# lover.40 In love with my own spouse
+# A ruler finds they have fallen for their own spouse, who likes them well
+# and has no other lover. Embrace it (lovers) or deny it (spurned). Comes
+# without Way of Life from the yearly pulse, and for everyone from the
+# poet's muse (traits_effects_events, flag poet_spouse_muse).
+# Fixed: the poet's muse path was blocked for Way of Life owners by the
+# event's DLC check.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = lover.40
+	desc = EVTDESClover40
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # on_yearly_pulse random_events; traits_effects_events
+	only_rulers = yes
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		cant_love_trigger = yes
+		OR = {
+			has_character_flag = poet_spouse_muse
+			AND = {
+				NOT = { has_dlc = "Way of Life" }
+				is_married = yes
+				has_lover = no
+				NOR = { trait = homosexual trait = celibate }
+				spouse = {
+					cant_love_trigger = yes
+					is_ruler = no
+					prisoner = no
+					is_alive = yes
+					is_abroad = no
+					has_lover = no
+					reverse_opinion = { who = ROOT value = 20 }
+					NOT = { has_opinion_modifier = { who = ROOT modifier = opinion_spurned } }
+					NOT = {
+						reverse_has_opinion_modifier = { who = ROOT modifier = opinion_spurned }
+					}
+				}
+			}
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = kind }
+		modifier = { factor = 2 trait = charitable }
+		modifier = { factor = 2 trait = gregarious }
+		modifier = { factor = 0.1 trait = cruel }
+		modifier = { factor = 0.1 trait = wroth }
+		modifier = { factor = 0.1 trait = envious }
+		modifier = { factor = 2 spouse = { trait = kind } }
+		modifier = { factor = 2 spouse = { trait = charitable } }
+		modifier = { factor = 2 spouse = { trait = gregarious } }
+		modifier = { factor = 0.1 spouse = { trait = cruel } }
+		modifier = { factor = 0.1 spouse = { trait = wroth } }
+		modifier = { factor = 0.1 spouse = { trait = envious } }
+	}
+
+	option = { # Embrace it
+		name = EVTOPTAlover40
+		piety = 5
+		clr_character_flag = poet_spouse_muse
+		spouse = {
+			if = {
+				limit = { is_no_females_race = no ROOT = { is_no_females_race = no } }
+				add_lover = ROOT
+			}
+		}
+	}
+	option = { # Deny it
+		name = EVTOPTBlover40
+		clr_character_flag = poet_spouse_muse
+		spouse = { opinion = { modifier = opinion_spurned who = ROOT years = 10 } }
+	}
+}
+
+# lover.41 A week with my lover
+# Without Way of Life. Take her to a quiet hunting lodge, throw a feast for
+# her (the wife, if any, is angry), or go drinking with friends instead
+# (the affair ends).
+# Scope: ROOT is the ruler, event_target:lover_target the lover.
+character_event = {
+	id = lover.41
+	desc = EVTDESClover41
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # on_yearly_pulse random_events, 00_on_actions.txt
+	lacks_dlc = "Way of Life"
+	only_rulers = yes
+	capable_only = yes
+	prisoner = no
+	war = no
+
+	trigger = {
+		in_command = no
+		is_abroad = no
+		any_lover = { is_woman_trigger = yes prisoner = no NOT = { trait = incapable } }
+	}
+
+	immediate = {
+		random_lover = {
+			limit = { is_woman_trigger = yes prisoner = no NOT = { trait = incapable } }
+			save_event_target_as = lover_target
+		}
+	}
+
+	option = { # The hunting lodge
+		name = EVTOPTAlover41
+		event_target:lover_target = {
+			add_character_modifier = { name = lovers_retreat duration = 365 }
+		}
+		add_character_modifier = { name = for_the_sake_of_love duration = 30 }
+	}
+	option = { # A feast for her
+		name = EVTOPTBlover41
+		scaled_wealth = -0.05
+		event_target:lover_target = {
+			add_character_modifier = { name = lovers_entertainment duration = 365 }
+		}
+		if = {
+			limit = {
+				is_married = yes
+				spouse = { is_alive = yes prisoner = no is_abroad = no NOT = { is_lover = ROOT } }
+			}
+			spouse = { opinion = { modifier = opinion_angry who = ROOT years = 2 } }
+		}
+	}
+	option = { # Drinking with friends
+		name = EVTOPTClover41
+		event_target:lover_target = { lover_end_affair_effect = yes }
+	}
+}
+
+# lover.42 She wants more
+# Without Way of Life. An ambitious, arbitrary or wroth mistress complains
+# that they never do anything. Throw a great feast (prestige for both; an
+# unmarried lord angers the pious of the realm), take her hunting (she may
+# be hurt), or give her what she deserves (greed; the affair ends).
+# Fixed: the feast always made the lord charitable and the last option
+# always greedy; now only those who are not already.
+# Scope: ROOT is the ruler, event_target:lover_target the lover.
+character_event = {
+	id = lover.42
+	desc = EVTDESClover42
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # on_yearly_pulse random_events, 00_on_actions.txt
+	lacks_dlc = "Way of Life"
+	only_rulers = yes
+	only_men = yes
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		cant_love_trigger = yes
+		is_inaccessible_trigger = no
+		NOT = { trait = homosexual }
+		NOT = { spouse = { is_lover = ROOT } }
+		any_lover = {
+			cant_love_trigger = yes
+			is_woman_trigger = yes
+			is_pregnant = no
+			prisoner = no
+			NOT = { trait = incapable }
+			OR = { trait = ambitious trait = arbitrary trait = wroth }
+		}
+	}
+
+	immediate = {
+		random_lover = {
+			limit = {
+				is_woman_trigger = yes
+				is_pregnant = no
+				prisoner = no
+				NOT = { trait = incapable }
+				OR = { trait = ambitious trait = arbitrary trait = wroth }
+			}
+			save_event_target_as = lover_target
+		}
+	}
+
+	option = { # A great feast
+		name = EVTOPTAlover42
+		scaled_wealth = -0.1
+		prestige = 10
+		if = {
+			limit = { NOT = { trait = charitable } NOT = { trait = greedy } }
+			random = { chance = 25 add_trait = charitable }
+		}
+		if = {
+			limit = { is_married = no }
+			piety = -5
+			any_vassal = {
+				limit = { OR = { piety = 50 trait = zealous is_theocracy = yes } }
+				opinion = { modifier = opinion_angry who = ROOT years = 2 }
+			}
+		}
+		event_target:lover_target = { prestige = 20 }
+	}
+	option = { # Hunting
+		name = EVTOPTBlover42
+		prestige = 10
+		event_target:lover_target = { random = { chance = 10 add_trait = wounded } }
+	}
+	option = { # What she deserves
+		name = EVTOPTClover42
+		if = { limit = { trait = greedy } prestige = 10 }
+		else_if = { limit = { NOT = { trait = charitable } } add_trait = greedy }
+		event_target:lover_target = { lover_end_affair_effect = yes }
+	}
+}
+
+# lover.43 A blissful marriage
+# A married ruler who loves their spouse, and is loved back, is lifted out
+# of stress, illness or melancholy by it. Once in five years.
+# Was MTTH 240 months; now the bi-yearly list lovers_bliss.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = lover.43
+	desc = EVTDESClover43
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_bliss
+	capable_only = yes
+	prisoner = no
+	min_age = 16
+	is_married = yes
+
+	trigger = {
+		cant_love_trigger = yes
+		in_command = no
+		NOT = { has_character_modifier = blissful_timer }
+		OR = { trait = stressed trait = depressed trait = ill }
+		any_spouse = { is_lover = ROOT prisoner = no in_command = no NOT = { trait = incapable } }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = kind }
+		modifier = {
+			factor = 2
+			OR = {
+				has_focus = focus_family
+				any_spouse = { is_lover = ROOT has_focus = focus_family }
+			}
+		}
+		modifier = { factor = 1.33 trait = charitable }
+		modifier = { factor = 0.8 trait = wroth }
+		modifier = { factor = 0.67 trait = envious }
+		modifier = { factor = 0.67 trait = arbitrary }
+		modifier = { factor = 0.2 trait = cruel }
+	}
+
+	immediate = {
+		add_character_modifier = { name = blissful_timer duration = 1825 hidden = yes }
+	}
+
+	option = {
+		name = EVTOPTAlover43
+		trigger = { trait = stressed }
+		remove_trait = stressed
+	}
+	option = {
+		name = EVTOPTBlover43
+		trigger = { trait = ill }
+		remove_trait = ill
+	}
+	option = {
+		name = EVTOPTClover43
+		trigger = { trait = depressed }
+		remove_trait = depressed
+	}
+}
+
+# lover.44 A gift for my love
+# Without Way of Life. An unmarried ruler surprises a lover with a poem
+# (half the time it lands), a flower or a precious trinket.
+# Was MTTH 600 months; now the bi-yearly list lovers_gifts.
+# Scope: ROOT is the ruler, event_target:lover_target the lover.
+character_event = {
+	id = lover.44
+	desc = EVTDESClover44
+	picture = GFX_evt_market
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_gifts
+	lacks_dlc = "Way of Life"
+	only_rulers = yes
+	min_age = 16
+	capable_only = yes
+	war = no
+	is_married = no
+
+	trigger = {
+		cant_love_trigger = yes
+		in_command = no
+		is_inaccessible_trigger = no
+		any_lover = { cant_love_trigger = yes is_abroad = no prisoner = no }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = kind }
+		modifier = { factor = 2 trait = charitable }
+		modifier = { factor = 0.67 trait = wroth }
+		modifier = { factor = 0.67 trait = cruel }
+		modifier = { factor = 0.4 trait = depressed }
+	}
+
+	immediate = {
+		random_lover = {
+			limit = { is_abroad = no prisoner = no }
+			save_event_target_as = lover_target
+		}
+	}
+
+	option = { # A poem
+		name = EVTOPTAlover44
+		event_target:lover_target = {
+			random = { chance = 50 add_character_modifier = { name = love_poem duration = 360 } }
+		}
+	}
+	option = { # A flower
+		name = EVTOPTBlover44
+		event_target:lover_target = {
+			add_character_modifier = { name = beautiful_flower duration = 360 }
+		}
+	}
+	option = { # A precious trinket
+		name = EVTOPTClover44
+		scaled_wealth = -0.05
+		event_target:lover_target = {
+			add_character_modifier = { name = precious_item duration = 360 }
+		}
+	}
+}
+
+###############################################################################
+# The end of an affair
+###############################################################################
+
+# lover.50 Love grows cold (pulse)
+# Hidden. Without Way of Life, a lover who has cooled towards ROOT, or
+# whom ROOT has cooled to, may lead to a parting (lover.51).
+# Was MTTH 120 months; now the bi-yearly list lovers_cooling.
+# Scope: ROOT is the ruler or courtier.
+character_event = {
+	id = lover.50
+	hide_window = yes
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_cooling
+	lacks_dlc = "Way of Life"
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		cant_love_trigger = yes
+		any_lover = { lover_cooling_trigger = yes }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.25 trait = wroth }
+		modifier = { factor = 1.25 trait = envious }
+		modifier = { factor = 1.25 trait = cruel }
+		modifier = { factor = 1.25 trait = drunkard }
+	}
+
+	immediate = {
+		character_event = { id = lover.51 }
+	}
+}
+
+# lover.51 That loving feeling is gone
+# ROOT ends the affair with the lover who has cooled most (else any lover).
+# Also called by the Grand Judge (WHG_court_office_events) and the trait
+# events.
+# Fixed: the old event carried the DLC check of its pulse, so with Way of
+# Life the Grand Judge's and the trait events' calls did nothing and the
+# judge's flag stayed set.
+# Scope: ROOT is the one who ends it.
+character_event = {
+	id = lover.51
+	desc = EVTDESClover51
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # lover.50, lover.82, judge.42 / judge.43, traits_effects_events
+
+	trigger = {
+		has_lover = yes
+	}
+
+	option = {
+		name = EVTOPTAlover51
+		clr_character_flag = lost_loving_feeling # set by the Grand Judge chain
+		if = {
+			limit = { any_lover = { lover_cooling_trigger = yes } }
+			random_lover = { limit = { lover_cooling_trigger = yes } lover_end_affair_effect = yes }
+		}
+		else = { random_lover = { lover_end_affair_effect = yes } }
+	}
+}
+
+# lover.52 It is over
+# The lover is told the affair is over, and the bond ends.
+# Scope: ROOT is the lover who is left, FROM the one who left.
+character_event = {
+	id = lover.52
+	desc = EVTDESClover52
+	picture = GFX_evt_bad_news
+
+	is_triggered_only = yes # lover_end_affair_effect
+
+	option = {
+		name = EVTOPTAlover52
+		remove_lover = FROM
+	}
+}
+
+###############################################################################
+# The strain of an affair
+# All without Way of Life. Each was MTTH 120 - 1200 months and is now in a
+# bi-yearly list lovers_* in wh_on_actions.txt, except lover.82 (MTTH
+# while in command).
+###############################################################################
+
+# lover.60 In love with a married woman
+# A kind, just, charitable or honest unmarried lord loves a married woman.
+# Write poems of his pain (humble), drown it in wine (drunkard; not for the
+# devout of Araby), pray (zealous) or let her go.
+# Scope: ROOT is the lord, event_target:lover_target the lady.
+character_event = {
+	id = lover.60
+	desc = EVTDESClover60
+	picture = GFX_evt_bad_news
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_married_woman
+	lacks_dlc = "Way of Life"
+	only_men = yes
+	only_rulers = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = no
+	is_married = no
+
+	trigger = {
+		cant_love_trigger = yes
+		in_command = no
+		is_ill = no
+		NOT = { trait = drunkard }
+		OR = { trait = kind trait = just trait = charitable trait = honest }
+		any_lover = { lover_affair_partner_trigger = yes is_woman_trigger = yes is_married = yes }
+	}
+
+	immediate = {
+		random_lover = {
+			limit = { is_woman_trigger = yes is_married = yes }
+			save_event_target_as = lover_target
+		}
+	}
+
+	option = { # A poem of my pain
+		name = EVTOPTAlover60
+		if = { limit = { NOT = { trait = humble } } random = { chance = 25 add_trait = humble } }
+	}
+	option = { # Wine
+		name = EVTOPTBlover60
+		trigger = { OR = { NOT = { religion_group = ormazd_gods_group } trait = cynical } }
+		random = { chance = 25 add_trait = drunkard }
+	}
+	option = { # Prayer
+		name = EVTOPTClover60
+		if = { limit = { NOT = { trait = zealous } } add_trait = zealous }
+	}
+	option = { # Let her go
+		name = EVTOPTDlover60
+		event_target:lover_target = { lover_end_affair_effect = yes }
+	}
+}
+
+# lover.61 Another man's wife
+# A good-hearted lord tires of loving another man's wife. End it, try a
+# little longer (a chance of stress, a chance she ends it) or insist on it
+# (stress).
+# Scope: ROOT is the lord, event_target:lover_target the lady.
+character_event = {
+	id = lover.61
+	desc = EVTDESClover61
+	picture = GFX_evt_bad_news
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_married_woman
+	lacks_dlc = "Way of Life"
+	only_rulers = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = no
+
+	trigger = {
+		cant_love_trigger = yes
+		in_command = no
+		OR = { trait = kind trait = just trait = charitable trait = honest }
+		any_lover = {
+			cant_love_trigger = yes
+			is_woman_trigger = yes
+			is_married = yes
+			NOT = { spouse = { character = ROOT } }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.25 trait = stressed }
+		modifier = { factor = 1.25 trait = drunkard }
+		modifier = { factor = 2 trait = chaste }
+		modifier = { factor = 0.67 trait = lustful }
+	}
+
+	immediate = {
+		random_lover = {
+			limit = {
+				is_woman_trigger = yes
+				is_married = yes
+				NOT = { spouse = { character = ROOT } }
+			}
+			save_event_target_as = lover_target
+		}
+	}
+
+	option = { # And so it ends
+		name = EVTOPTAlover61
+		event_target:lover_target = { lover_end_affair_effect = yes }
+	}
+	option = { # Maybe it can still work
+		name = EVTOPTBlover61
+		if = {
+			limit = { NOT = { trait = stressed } }
+			random = { chance = 10 add_trait = stressed }
+		}
+		random = { chance = 25 event_target:lover_target = { lover_end_affair_effect = yes } }
+	}
+	option = { # I will make it work
+		name = EVTOPTClover61
+		if = {
+			limit = { NOT = { trait = stressed } }
+			random = { chance = 25 add_trait = stressed }
+		}
+	}
+}
+
+# lover.62 A double life
+# A married character with a lover outside the marriage (not in polygamous
+# faiths) feels the strain. End every affair and settle down (a chance of
+# chaste), try harder (stress, or a lover leaves, or the spouse finds out,
+# lover.75), or stop caring about the spouse (the spouse finds out; lustful
+# or cruel).
+# Scope: ROOT is the cheater.
+character_event = {
+	id = lover.62
+	desc = EVTDESClover62
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_double_life
+	lacks_dlc = "Way of Life"
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	is_married = yes
+
+	trigger = {
+		cant_love_trigger = yes
+		has_polygamy = no
+		in_command = no
+		spouse = {
+			cant_love_trigger = yes
+			prisoner = no
+			in_command = no
+			NOT = { trait = incapable }
+		}
+		any_lover = {
+			prisoner = no
+			NOR = { trait = incapable spouse = { character = ROOT } consort = { character = ROOT } }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.25 trait = stressed }
+		modifier = { factor = 1.25 trait = drunkard }
+		modifier = { factor = 2 trait = chaste }
+		modifier = { factor = 0.67 trait = lustful }
+	}
+
+	option = { # Settle down
+		name = EVTOPTAlover62
+		any_lover = {
+			limit = { NOT = { spouse = { character = ROOT } } }
+			lover_end_affair_effect = yes
+		}
+		if = {
+			limit = { NOT = { religion_group = ormazd_gods_group } }
+			random = { chance = 25 add_trait = chaste }
+		}
+	}
+	option = { # Try harder
+		name = EVTOPTBlover62
+		random_list = {
+			50 = { }
+			30 = { add_trait = stressed }
+			10 = {
+				random_lover = {
+					limit = { NOT = { spouse = { character = ROOT } } }
+					lover_end_affair_effect = yes
+				}
+			}
+			10 = { spouse = { character_event = { id = lover.75 tooltip = EVTTOOLTIPlover75 } } }
+		}
+	}
+	option = { # I do not care for my spouse
+		name = EVTOPTClover62
+		spouse = { character_event = { id = lover.75 tooltip = EVTTOOLTIPlover75 } }
+		random_list = {
+			50 = { }
+			25 = { add_trait = lustful }
+			25 = { add_trait = cruel }
+		}
+	}
+}
+
+# lover.63 The wife has other plans
+# A married lord has a night planned with his mistress, and his wife wants
+# him at her side. Go anyway (deceitful; she may be angry), hold a ball and
+# invite the mistress (she may conceive, lover.73, or the wife may meet her,
+# lover.64), or stay with the wife (half the time the mistress leaves him).
+# Scope: ROOT is the lord, event_target:lover_target the mistress.
+character_event = {
+	id = lover.63
+	desc = EVTDESClover63
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_double_life
+	lacks_dlc = "Way of Life"
+	only_men = yes
+	only_rulers = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = no
+	is_married = yes
+
+	trigger = {
+		cant_love_trigger = yes
+		in_command = no
+		is_inaccessible_trigger = no
+		fertility = 0.5
+		spouse = { is_alive = yes prisoner = no is_abroad = no NOT = { trait = incapable } }
+		any_lover = {
+			lover_affair_partner_trigger = yes
+			is_woman_trigger = yes
+			is_pregnant = no
+			is_inaccessible_trigger = no
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.25 trait = stressed }
+		modifier = { factor = 1.25 trait = drunkard }
+		modifier = { factor = 2 trait = chaste }
+		modifier = { factor = 0.67 trait = lustful }
+	}
+
+	immediate = {
+		random_lover = {
+			limit = {
+				lover_affair_partner_trigger = yes
+				is_woman_trigger = yes
+				is_pregnant = no
+				is_inaccessible_trigger = no
+			}
+			save_event_target_as = lover_target
+		}
+	}
+
+	option = { # Go to her anyway
+		name = EVTOPTAlover63
+		random = {
+			chance = 25
+			spouse = { opinion = { modifier = opinion_angry who = ROOT years = 5 } }
+		}
+		if = { limit = { NOT = { trait = deceitful } } add_trait = deceitful }
+	}
+	option = { # A ball, and she is invited
+		name = EVTOPTBlover63
+		random_list = {
+			80 = { }
+			10 = {
+				event_target:lover_target = { impregnate_cuckoo = ROOT }
+				hidden_effect = { character_event = { id = lover.73 days = 2 random = 2 } }
+			}
+			10 = { spouse = { character_event = { id = lover.64 tooltip = EVTTOOLTIPlover64 } } }
+		}
+	}
+	option = { # Stay with my wife
+		name = EVTOPTClover63
+		random = { chance = 50 event_target:lover_target = { lover_end_affair_effect = yes } }
+	}
+}
+
+# lover.64 The wife meets the mistress
+# The wife sees her husband with his mistress at the ball, and hates him
+# for it (lover.65).
+# Scope: ROOT is the wife, FROM the husband.
+character_event = {
+	id = lover.64
+	desc = EVTDESClover64
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # lover.63
+
+	option = {
+		name = EVTOPTAlover64
+		opinion = { modifier = opinion_hate who = FROM years = 10 }
+		FROM = { character_event = { id = lover.65 tooltip = EVTTOOLTIPlover65 } }
+	}
+}
+
+# lover.65 My wife hates me
+# Scope: ROOT is the husband, FROM the wife.
+character_event = {
+	id = lover.65
+	desc = EVTDESClover65
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # lover.64
+
+	option = {
+		name = EVTOPTAlover65
+		reverse_opinion = { modifier = opinion_hate who = FROM years = 10 }
+	}
+}
+
+# lover.66 The wife goes on pilgrimage
+# A lord of the Old World faiths whose devout wife goes to spend a season
+# at a shrine of Shallya has the house to himself and his mistress. Make
+# the most of it (lustful; she may conceive, lover.73), be discreet
+# (deceitful; less likely), keep it to friendship (craven, or she leaves)
+# or work instead (she leaves).
+# Fixed: the old event asked for a wife of the real-world christian faiths,
+# so it never fired.
+# Scope: ROOT is the lord, event_target:lover_target the mistress.
+character_event = {
+	id = lover.66
+	desc = EVTDESClover66
+	picture = GFX_evt_monastery_nuns
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_double_life
+	lacks_dlc = "Way of Life"
+	only_men = yes
+	only_rulers = yes
+	religion_group = old_world_group
+	min_age = 16
+	capable_only = yes
+	is_married = yes
+
+	trigger = {
+		cant_love_trigger = yes
+		fertility = 0.5
+		spouse = {
+			cant_love_trigger = yes
+			is_alive = yes
+			is_abroad = no
+			prisoner = no
+			religion_group = old_world_group
+			NOT = { trait = incapable }
+		}
+		any_lover = { lover_young_mistress_trigger = yes }
+	}
+
+	immediate = {
+		random_lover = {
+			limit = { lover_young_mistress_trigger = yes }
+			save_event_target_as = lover_target
+		}
+	}
+
+	option = { # Make the most of it
+		name = EVTOPTAlover66
+		random = { chance = 25 add_trait = lustful }
+		random = {
+			chance = 50
+			piety = -10
+			event_target:lover_target = { impregnate_cuckoo = ROOT }
+			hidden_effect = { character_event = { id = lover.73 days = 2 random = 2 } }
+		}
+	}
+	option = { # Be discreet
+		name = EVTOPTBlover66
+		if = {
+			limit = { NOT = { trait = deceitful } }
+			random = { chance = 25 add_trait = deceitful }
+		}
+		random = {
+			chance = 20
+			piety = -10
+			event_target:lover_target = { impregnate_cuckoo = ROOT }
+			hidden_effect = { character_event = { id = lover.73 days = 2 random = 2 } }
+		}
+	}
+	option = { # Only as friends
+		name = EVTOPTClover66
+		random_list = {
+			50 = { }
+			25 = { trigger = { NOR = { trait = craven trait = berserker } } add_trait = craven }
+			25 = { event_target:lover_target = { lover_end_affair_effect = yes } }
+		}
+	}
+	option = { # Work instead
+		name = EVTOPTDlover66
+		event_target:lover_target = { lover_end_affair_effect = yes }
+	}
+}
+
+# lover.67 Eloping
+# Two unmarried young lovers, neither a ruler, run off and marry. Their
+# liege hears of it (lover.68).
+# Scope: ROOT is one of the lovers.
+character_event = {
+	id = lover.67
+	desc = EVTDESClover67
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_elope
+	lacks_dlc = "Way of Life"
+	min_age = 16
+	max_age = 40
+	capable_only = yes
+	prisoner = no
+	is_married = no
+
+	trigger = {
+		cant_love_trigger = yes
+		is_ruler = no
+		is_consort = no
+		NOT = { num_of_lovers = 2 }
+		OR = { trait = ambitious trait = gregarious trait = proud }
+		any_lover = { lover_elope_partner_trigger = yes }
+	}
+
+	immediate = {
+		random_lover = {
+			limit = { lover_elope_partner_trigger = yes }
+			save_event_target_as = lover_target
+		}
+	}
+
+	option = {
+		name = EVTOPTAlover67
+		piety = 5
+		event_target:lover_target = { add_spouse = ROOT }
+		liege = { character_event = { id = lover.68 tooltip = EVTTOOLTIPlover68 } }
+	}
+}
+
+# lover.68 The liege hears of an elopement
+# Jail the pair (3 in 4) or banish them, or let it go (prestige). Also
+# fired by the rumour events (rumours_events.txt).
+# Scope: ROOT is the liege, FROM one of the newlyweds.
+character_event = {
+	id = lover.68
+	desc = EVTDESClover68
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # lover.67, rumours_events
+
+	option = { # Punish them
+		name = EVTOPTAlover68
+		random_list = {
+			75 = {
+				FROM = {
+					character_event = { id = lover.69 tooltip = EVTTOOLTIPlover69 }
+					spouse = { character_event = { id = lover.69 tooltip = EVTTOOLTIPlover69 } }
+				}
+			}
+			25 = {
+				FROM = {
+					character_event = { id = lover.70 tooltip = EVTTOOLTIPlover70 }
+					spouse = { character_event = { id = lover.70 tooltip = EVTTOOLTIPlover70 } }
+				}
+			}
+		}
+	}
+	option = { # Let it go
+		name = EVTOPTBlover68
+		prestige = -10
+	}
+}
+
+# lover.69 Imprisoned
+# Scope: ROOT is a newlywed, FROM the liege.
+character_event = {
+	id = lover.69
+	desc = EVTDESClover69
+	picture = GFX_evt_into_the_dungeon
+
+	is_triggered_only = yes # lover.68
+
+	immediate = {
+		imprison = FROM
+	}
+
+	option = {
+		name = EVTOPTAlover69
+		opinion = { modifier = opinion_angry who = FROM years = 10 }
+	}
+}
+
+# lover.70 Banished
+# Scope: ROOT is a newlywed, FROM the liege.
+character_event = {
+	id = lover.70
+	desc = EVTDESClover70
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # lover.68
+
+	option = {
+		name = EVTOPTAlover70
+		banish = yes
+		opinion = { modifier = opinion_angry who = FROM years = 10 }
+	}
+}
+
+# lover.71 A childless marriage
+# A ruler of 25 to 40 and a loving spouse have no children. Pray for one
+# (any faith; a chance the spouse grows more fertile), or try every night
+# (stress; a better chance, or ill health).
+# The two prayer options (the Old World and Araby) are one.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = lover.71
+	desc = EVTDESClover71
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_childless
+	lacks_dlc = "Way of Life"
+	only_rulers = yes
+	min_age = 25
+	max_age = 40
+	capable_only = yes
+	prisoner = no
+	war = no
+	is_married = yes
+
+	trigger = {
+		in_command = no
+		NOT = { num_of_children = 1 }
+		spouse = {
+			is_alive = yes
+			is_abroad = no
+			prisoner = no
+			is_lover = ROOT
+			NOT = { num_of_children = 1 }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 NOT = { fertility = 0.4 } }
+	}
+
+	option = { # Pray for a child
+		name = EVTOPTAlover71
+		random_list = {
+			70 = { }
+			20 = { spouse = { fertility = 0.2 } }
+			10 = { spouse = { fertility = 0.1 } }
+		}
+	}
+	option = { # Every night
+		name = EVTOPTBlover71
+		add_trait = stressed
+		random_list = {
+			40 = { }
+			30 = { spouse = { fertility = 0.2 } }
+			20 = { spouse = { fertility = 0.1 } }
+			10 = { health = -2 }
+		}
+	}
+}
+
+# lover.72 Comfort after a quarrel
+# A stressed lord whose wife dislikes him finds comfort with his mistress.
+# Retire to a quiet manor with her (no more stress; she may conceive), have
+# her at the castle (the wife may find out, lover.74), or need no comfort
+# (proud, or she leaves).
+# Scope: ROOT is the lord, event_target:lover_target the mistress.
+character_event = {
+	id = lover.72
+	desc = EVTDESClover72
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_double_life
+	lacks_dlc = "Way of Life"
+	only_men = yes
+	only_rulers = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = no
+	is_married = yes
+	trait = stressed
+
+	trigger = {
+		is_inaccessible_trigger = no
+		cant_love_trigger = yes
+		in_command = no
+		fertility = 0.4
+		spouse = { is_ruler = no has_opinion_modifier = { who = ROOT modifier = opinion_dislike } }
+		any_lover = { lover_young_mistress_trigger = yes is_inaccessible_trigger = no }
+	}
+
+	immediate = {
+		random_lover = {
+			limit = { lover_young_mistress_trigger = yes is_inaccessible_trigger = no }
+			save_event_target_as = lover_target
+		}
+	}
+
+	option = { # A quiet manor
+		name = EVTOPTAlover72
+		remove_trait = stressed
+		random = {
+			chance = 25
+			event_target:lover_target = { impregnate_cuckoo = ROOT }
+			hidden_effect = { character_event = { id = lover.73 days = 2 random = 2 } }
+		}
+	}
+	option = { # Here at the castle
+		name = EVTOPTBlover72
+		random_list = {
+			50 = { remove_trait = stressed }
+			25 = {
+				event_target:lover_target = { impregnate_cuckoo = ROOT }
+				hidden_effect = { character_event = { id = lover.73 days = 2 random = 2 } }
+			}
+			25 = { spouse = { character_event = { id = lover.74 tooltip = EVTTOOLTIPlover74 } } }
+		}
+	}
+	option = { # I need no comfort
+		name = EVTOPTClover72
+		random_list = {
+			50 = { }
+			25 = { trigger = { NOT = { trait = proud } } add_trait = proud }
+			25 = { event_target:lover_target = { lover_end_affair_effect = yes } }
+		}
+	}
+}
+
+# lover.73 A child on the way
+# The lord learns that his mistress is with child.
+# Scope: ROOT is the lord.
+character_event = {
+	id = lover.73
+	desc = EVTDESClover73
+	picture = GFX_evt_pregnancy
+
+	is_triggered_only = yes # lover.63, lover.66, lover.72
+
+	option = {
+		name = EVTOPTAlover73
+		prestige = 5
+	}
+}
+
+# lover.74 My husband is unfaithful
+# The wife finds the mistress in her own castle (wroth; angry).
+# Scope: ROOT is the wife, FROM the husband.
+character_event = {
+	id = lover.74
+	desc = EVTDESClover74
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # lover.72
+
+	option = {
+		name = EVTOPTAlover74
+		if = { limit = { NOT = { trait = wroth } } add_trait = wroth }
+		opinion = { modifier = opinion_angry who = FROM years = 5 }
+	}
+}
+
+# lover.75 The spouse finds out
+# The betrayed spouse becomes the cheater's rival, and the cheater is
+# grievously offended in turn. Also fired by the trait events
+# (traits_effects_events).
+# Scope: ROOT is the betrayed spouse, FROM the cheater.
+character_event = {
+	id = lover.75
+	desc = EVTDESClover75
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # lover.62, lover.76 - lover.77, traits_effects_events
+
+	option = {
+		name = EVTOPTAlover75
+		FROM = {
+			add_rival = ROOT
+			opinion = { modifier = grievously_offended who = ROOT years = 10 }
+		}
+	}
+}
+
+# lover.76 A suspicious spouse
+# The spouse asks where the ruler goes at night. Say it is none of their
+# business (proud, or they find out), claim important work (deceitful, or
+# they find out), make empty promises, or stay home more (humble, or a
+# lover leaves).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = lover.76
+	desc = EVTDESClover76
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_suspicion
+	lacks_dlc = "Way of Life"
+	only_rulers = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = no
+	is_married = yes
+
+	trigger = {
+		cant_love_trigger = yes
+		in_command = no
+		spouse = { is_alive = yes is_abroad = no prisoner = no NOT = { trait = incapable } }
+		any_lover = { lover_affair_partner_trigger = yes ROOT = { NOT = { is_consort = PREV } } }
+	}
+
+	option = { # None of your business
+		name = EVTOPTAlover76
+		random_list = {
+			50 = { spouse = { character_event = { id = lover.75 tooltip = EVTTOOLTIPlover75 } } }
+			25 = { trigger = { NOT = { trait = proud } } add_trait = proud }
+			25 = { }
+		}
+	}
+	option = { # Important work
+		name = EVTOPTBlover76
+		random_list = {
+			50 = { }
+			25 = { trigger = { NOT = { trait = deceitful } } add_trait = deceitful }
+			25 = { spouse = { character_event = { id = lover.75 tooltip = EVTTOOLTIPlover75 } } }
+		}
+	}
+	option = { # Empty promises
+		name = EVTOPTClover76
+		random_list = {
+			70 = { }
+			20 = { trigger = { NOT = { trait = deceitful } } add_trait = deceitful }
+			10 = { spouse = { character_event = { id = lover.75 tooltip = EVTTOOLTIPlover75 } } }
+		}
+	}
+	option = { # Stay home more
+		name = EVTOPTDlover76
+		random_list = {
+			50 = { }
+			25 = { trigger = { NOT = { trait = humble } } add_trait = humble }
+			25 = {
+				random_lover = {
+					limit = {
+						lover_affair_partner_trigger = yes
+						ROOT = { NOT = { is_consort = PREV } }
+					}
+					lover_end_affair_effect = yes
+				}
+			}
+		}
+	}
+}
+
+# lover.77 A jealous lover
+# The lover thinks the ruler loves the spouse more. Buy an expensive gift
+# (the spouse may find out), take them away for a while (lustful; the
+# spouse may find out), soothe them with words (slothful, or worse), or
+# agree (cruel or honest; the lover leaves).
+# Scope: ROOT is the ruler, event_target:lover_target the lover.
+character_event = {
+	id = lover.77
+	desc = EVTDESClover77
+	picture = GFX_evt_quarrel
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_suspicion
+	lacks_dlc = "Way of Life"
+	only_rulers = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = no
+	is_married = yes
+
+	trigger = {
+		cant_love_trigger = yes
+		in_command = no
+		is_pregnant = no
+		spouse = { is_alive = yes is_abroad = no prisoner = no NOT = { trait = incapable } }
+		any_lover = { lover_affair_partner_trigger = yes is_abroad = no is_pregnant = no }
+	}
+
+	immediate = {
+		random_lover = {
+			limit = { lover_affair_partner_trigger = yes is_abroad = no is_pregnant = no }
+			save_event_target_as = lover_target
+		}
+	}
+
+	option = { # An expensive gift
+		name = EVTOPTAlover77
+		scaled_wealth = -0.2
+		random = {
+			chance = 25
+			spouse = { character_event = { id = lover.75 tooltip = EVTTOOLTIPlover75 } }
+		}
+	}
+	option = { # Away together
+		name = EVTOPTBlover77
+		if = { limit = { NOT = { trait = lustful } } random = { chance = 75 add_trait = lustful } }
+		random = {
+			chance = 50
+			spouse = { character_event = { id = lover.75 tooltip = EVTTOOLTIPlover75 } }
+		}
+	}
+	option = { # Sweet words
+		name = EVTOPTClover77
+		random_list = {
+			50 = { }
+			30 = { trigger = { NOT = { trait = slothful } } add_trait = slothful }
+			10 = { spouse = { character_event = { id = lover.75 tooltip = EVTTOOLTIPlover75 } } }
+			10 = { event_target:lover_target = { lover_end_affair_effect = yes } }
+		}
+	}
+	option = { # You are right
+		name = EVTOPTDlover77
+		random_list = {
+			50 = { trigger = { NOT = { trait = cruel } } add_trait = cruel }
+			50 = { trigger = { NOT = { trait = honest } } add_trait = honest }
+		}
+		event_target:lover_target = { lover_end_affair_effect = yes }
+	}
+}
+
+# lover.78 The affair made public
+# The ruler's spouse, no longer fond of them, tells the court about the
+# affair (once per spouse). Disown it (prestige; every lover leaves; chaste
+# or humble) or shrug it off (piety; a chance of cynical).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = lover.78
+	desc = EVTDESClover78
+	picture = GFX_evt_scandal
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_scandal
+	lacks_dlc = "Way of Life"
+	only_rulers = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = no
+	is_married = yes
+
+	trigger = {
+		cant_love_trigger = yes
+		in_command = no
+		any_lover = { cant_love_trigger = yes NOT = { spouse = { character = ROOT } } }
+		spouse = {
+			is_alive = yes
+			is_abroad = no
+			prisoner = no
+			NOT = { has_character_flag = adulterous_affair_public }
+			NOT = { opinion = { who = ROOT value = -20 } }
+		}
+	}
+
+	option = { # Disown it
+		name = EVTOPTAlover78
+		spouse = { set_character_flag = adulterous_affair_public }
+		prestige = -25
+		any_lover = {
+			limit = { NOT = { spouse = { character = ROOT } } }
+			lover_end_affair_effect = yes
+		}
+		random_list = {
+			50 = {
+				if = { limit = { religion_group = ormazd_gods_group } piety = 5 }
+				else = { add_trait = chaste }
+			}
+			50 = { add_trait = humble }
+		}
+	}
+	option = { # Shrug it off
+		name = EVTOPTBlover78
+		spouse = { set_character_flag = adulterous_affair_public }
+		piety = -25
+		random = { chance = 25 add_trait = cynical }
+	}
+}
+
+# lover.79 A wife's open affair
+# A lord with no lover of his own sees his wife flaunt hers. Bear it
+# (prestige; perhaps craven), jail the lover (if he is the lord's own man),
+# jail the wife, or both. The jailed one's close family resent it.
+# Fixed: the jail options asked for a lover who was the lord's liege or
+# above, so a lord could only jail his own overlord.
+# Scope: ROOT is the lord.
+character_event = {
+	id = lover.79
+	desc = EVTDESClover79
+	picture = GFX_evt_scandal
+
+	is_triggered_only = yes # on_bi_yearly_pulse list lovers_scandal
+	lacks_dlc = "Way of Life"
+	only_men = yes
+	only_rulers = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = no
+	is_married = yes
+
+	trigger = {
+		cant_love_trigger = yes
+		in_command = no
+		has_lover = no
+		spouse = {
+			cant_love_trigger = yes
+			is_alive = yes
+			is_abroad = no
+			prisoner = no
+			is_ruler = no
+			any_lover = { NOT = { character = ROOT } }
+		}
+	}
+
+	immediate = {
+		spouse = {
+			random_lover = {
+				limit = { NOT = { character = ROOT } }
+				preferred_limit = { lover_own_subject_trigger = yes }
+				save_event_target_as = lover_target
+			}
+		}
+	}
+
+	option = { # Bear it
+		name = EVTOPTAlover79
+		prestige = -50
+		random = { chance = 10 if = { limit = { NOT = { trait = berserker } } add_trait = craven } }
+	}
+	option = { # Jail him
+		name = EVTOPTBlover79
+		trigger = { event_target:lover_target = { lover_own_subject_trigger = yes } }
+		prestige = -10
+		event_target:lover_target = {
+			imprison = ROOT
+			hidden_effect = { character_event = { id = lover.80 } }
+			lover_imprisoned_kin_anger_effect = yes
+		}
+	}
+	option = { # Jail her
+		name = EVTOPTClover79
+		prestige = -20
+		spouse = {
+			imprison = ROOT
+			hidden_effect = { character_event = { id = lover.81 } }
+			lover_imprisoned_kin_anger_effect = yes
+		}
+	}
+	option = { # Jail them both
+		name = EVTOPTDlover79
+		trigger = { event_target:lover_target = { lover_own_subject_trigger = yes } }
+		prestige = -25
+		event_target:lover_target = {
+			imprison = ROOT
+			hidden_effect = { character_event = { id = lover.80 } }
+			lover_imprisoned_kin_anger_effect = yes
+		}
+		spouse = {
+			imprison = ROOT
+			hidden_effect = { character_event = { id = lover.81 } }
+			lover_imprisoned_kin_anger_effect = yes
+		}
+	}
+}
+
+# lover.80 The wife's lover is jailed
+# Scope: ROOT is the lover, FROM the lord.
+character_event = {
+	id = lover.80
+	desc = EVTDESClover80
+	picture = GFX_evt_into_the_dungeon
+
+	is_triggered_only = yes # lover.79
+
+	option = {
+		name = EVTOPTAlover80
+	}
+}
+
+# lover.81 The wife is jailed
+# Scope: ROOT is the wife, FROM the lord.
+character_event = {
+	id = lover.81
+	desc = EVTDESClover81
+	picture = GFX_evt_into_the_dungeon
+
+	is_triggered_only = yes # lover.79
+
+	option = {
+		name = EVTOPTAlover81
+	}
+}
+
+# lover.82 Far from my love
+# A commander at war with one lover misses them. Stay faithful (a chance of
+# honest), pray (a chance of zealous, or chaste; piety in Araby), or find
+# comfort elsewhere (deceitful; 1 in 4 the old love fades, lover.51).
+# The prayer options for the Old World and Araby are one.
+# Scope: ROOT is the commander.
+character_event = {
+	id = lover.82
+	desc = EVTDESClover82
+	picture = GFX_evt_bad_news
+
+	lacks_dlc = "Way of Life"
+	only_men = yes
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	war = yes
+
+	trigger = {
+		cant_love_trigger = yes
+		in_command = yes
+		has_lover = yes
+		NOT = { num_of_lovers = 2 }
+		NOR = { trait = honest trait = chaste trait = deceitful }
+		NOT = { num_of_traits = 7 }
+	}
+
+	mean_time_to_happen = {
+		months = 1200
+		modifier = { factor = 0.5 trait = stressed }
+		modifier = { factor = 0.5 trait = depressed }
+	}
+
+	option = { # Stay faithful
+		name = EVTOPTAlover82
+		random = { chance = 25 add_trait = honest }
+	}
+	option = { # Pray
+		name = EVTOPTBlover82
+		random_list = {
+			50 = { }
+			25 = { add_trait = zealous }
+			25 = {
+				if = { limit = { religion_group = ormazd_gods_group } piety = 5 }
+				else = { add_trait = chaste }
+			}
+		}
+	}
+	option = { # Comfort elsewhere
+		name = EVTOPTClover82
+		add_trait = deceitful
+		random = { chance = 25 character_event = { id = lover.51 tooltip = EVTTOOLTIPlover51 } }
+	}
+}

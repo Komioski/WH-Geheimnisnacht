@@ -13,7 +13,7 @@
 # The Wounded Bear (great quest)             ursun.1 - 9
 # Waking Day                                 ursun.20 - 21
 # Dazh's Hearthfires                         ursun.30 - 32
-# Tor's Oath                                 ursun.40 - 46
+# Tor's Oath                                 ursun.40 - 47
 # Miska's Barrow                             ursun.50 - 51
 # The Ungol Spirit-Paths                     ursun.60 - 62
 # Tainted blood                              ursun.70
@@ -22,7 +22,8 @@
 # ursun_omens (ursun.1); the bi-yearly list
 # ursun_long_sleep (ursun.9); the five-year lists ursun_waking (20 - 21),
 # ursun_spirit_paths (60 - 62) and ursun_tainted (ursun.70); ursun.30 on_siege_over_winner;
-# ursun.40 on_war_started; ursun.42, 43 and 44 on the three war ends.
+# ursun.40 on_war_started; ursun.42, 43 and 44 on the three war ends;
+# ursun.47 on_yearly_pulse (oath released at peace).
 # Decisions in decisions/WHG_kislev_faith_decisions.txt fire ursun.32 and
 # ursun.50. kislev.60 (the Dazh birth rite) skips a ruler with a cold hearth.
 # Scripted triggers: common/scripted_triggers/wh_kislev_faith_triggers.txt
@@ -226,8 +227,16 @@ character_event = {
 			}
 			character_event = { id = ursun.4 months = 6 }
 		}
-		else = {
+		else_if = {
+			limit = { is_alive = yes }
 			character_event = { id = ursun.8 days = 30 }
+		}
+		else = { # The speaker fell leading the company: the Long Sleep without ursun.8
+			set_global_flag = ursun_wounded_bear_done
+			any_character = {
+				limit = { ursun_kislev_lord_trigger = yes }
+				add_character_modifier = { name = ursun_long_sleep years = 25 }
+			}
 		}
 	}
 }
@@ -405,7 +414,18 @@ character_event = {
 			}
 			40 = {
 				event_target:ursun_leader = { death = { death_reason = death_accident_bear } }
-				character_event = { id = ursun.8 }
+				if = {
+					limit = { is_alive = yes }
+					character_event = { id = ursun.8 }
+				}
+				else = { # The speaker was the one the bear killed
+					hidden_tooltip = {
+						any_character = {
+							limit = { ursun_kislev_lord_trigger = yes }
+							add_character_modifier = { name = ursun_long_sleep years = 25 }
+						}
+					}
+				}
 			}
 		}
 		ai_chance = {
@@ -820,13 +840,17 @@ character_event = {
 	is_triggered_only = yes # on_war_started
 
 	immediate = {
+		# The oath is tied to this war's foe (flag ursun_tor_vs@<foe>), so a
+		# second war cannot decide it (ursun.42 - 44 check the pair).
 		if = {
 			limit = { ursun_tor_oath_candidate_trigger = yes }
+			FROM = { save_event_target_as = ursun_tor_foe }
 			character_event = { id = ursun.41 }
 		}
 		FROM = {
 			if = {
 				limit = { ursun_tor_oath_candidate_trigger = yes }
+				ROOT = { save_event_target_as = ursun_tor_foe }
 				character_event = { id = ursun.41 }
 			}
 		}
@@ -851,6 +875,7 @@ character_event = {
 	option = {
 		name = EVTOPTAursun41
 		set_character_flag = ursun_tor_sworn
+		set_character_flag = ursun_tor_vs@event_target:ursun_tor_foe
 		add_character_modifier = { name = ursun_tor_oath duration = -1 }
 		custom_tooltip = { text = ursun_tor_oath_tt }
 		ai_chance = {
@@ -879,12 +904,14 @@ character_event = {
 
 	immediate = {
 		if = {
-			limit = { has_character_flag = ursun_tor_sworn }
+			limit = { has_character_flag = ursun_tor_sworn has_character_flag = ursun_tor_vs@FROM }
+			clr_character_flag = ursun_tor_vs@FROM
 			character_event = { id = ursun.45 }
 		}
 		FROM = {
 			if = {
-				limit = { has_character_flag = ursun_tor_sworn }
+				limit = { has_character_flag = ursun_tor_sworn has_character_flag = ursun_tor_vs@ROOT }
+				clr_character_flag = ursun_tor_vs@ROOT
 				character_event = { id = ursun.46 }
 			}
 		}
@@ -902,12 +929,14 @@ character_event = {
 
 	immediate = {
 		if = {
-			limit = { has_character_flag = ursun_tor_sworn }
+			limit = { has_character_flag = ursun_tor_sworn has_character_flag = ursun_tor_vs@FROM }
+			clr_character_flag = ursun_tor_vs@FROM
 			character_event = { id = ursun.46 }
 		}
 		FROM = {
 			if = {
-				limit = { has_character_flag = ursun_tor_sworn }
+				limit = { has_character_flag = ursun_tor_sworn has_character_flag = ursun_tor_vs@ROOT }
+				clr_character_flag = ursun_tor_vs@ROOT
 				character_event = { id = ursun.45 }
 			}
 		}
@@ -924,11 +953,19 @@ character_event = {
 	is_triggered_only = yes # on_war_ended_whitepeace
 
 	immediate = {
-		clr_character_flag = ursun_tor_sworn
-		remove_character_modifier = ursun_tor_oath
-		FROM = {
+		if = {
+			limit = { has_character_flag = ursun_tor_vs@FROM }
+			clr_character_flag = ursun_tor_vs@FROM
 			clr_character_flag = ursun_tor_sworn
 			remove_character_modifier = ursun_tor_oath
+		}
+		FROM = {
+			if = {
+				limit = { has_character_flag = ursun_tor_vs@ROOT }
+				clr_character_flag = ursun_tor_vs@ROOT
+				clr_character_flag = ursun_tor_sworn
+				remove_character_modifier = ursun_tor_oath
+			}
 		}
 	}
 }
@@ -989,6 +1026,24 @@ character_event = {
 			change_martial = 1
 		}
 		prestige = 100
+	}
+}
+
+# ursun.47 Hidden. The oath's war ended without a verdict (invalidated, or a
+# leader died): at peace, the oath is released.
+# Scope: ROOT is a sworn lord. Fired by on_yearly_pulse.
+character_event = {
+	id = ursun.47
+	hide_window = yes
+	is_triggered_only = yes # on_yearly_pulse
+
+	has_character_flag = ursun_tor_sworn
+
+	trigger = { war = no }
+
+	immediate = {
+		clr_character_flag = ursun_tor_sworn
+		remove_character_modifier = ursun_tor_oath
 	}
 }
 

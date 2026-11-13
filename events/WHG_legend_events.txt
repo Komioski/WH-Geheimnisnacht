@@ -1,0 +1,1107 @@
+###############################################################################
+# Legends of the Old World: the Herrimault and the burning rift
+# Namespace: legend (was 10000 - 10109 in the vanilla legends_events.txt)
+# Faction: Generic
+# Serves: player rulers of the Old World faiths (Part 1), every player
+#   ruler (Part 2)
+#
+# Part 1: the Herrimault               legend.1 - legend.30
+#   An outlaw of the greenwood robs the ruler's tax carts and feeds the
+#   poor. The ruler may trap him at an archery contest, go into the woods
+#   in disguise, ride with his band, hang him or take him into service.
+#   (was the Robin Hood chain, 10000 - 10042)
+# Part 2: the burning rift            legend.100 - legend.109
+#   A chasm opens in the ruler's lands and breathes fire and screams. It
+#   can be ignored for a while, then must be closed by prayer, by feeding
+#   it, by filling it with stones or by a sacrifice.
+#   (was the Gates of Hell chain, 10100 - 10109)
+#
+# Fired from: the on_five_year_pulse random_events list legends in
+#   wh_on_actions.txt (1, 100). Everything else follows from those.
+# Saved: event targets legend_outlaw, legend_sweetheart, legend_sacrifice;
+#   character flags legend_outlaw_hunt (the chain runs), legend_outlaw_met,
+#   legend_outlaw_dead, legend_outlaw_wed, legend_rift_<way>; global flag
+#   robin_hood_existed (once per game).
+# Scripted triggers and effects: WHG_legend_triggers.txt and
+#   WHG_legend_effects.txt in common/scripted_triggers and scripted_effects.
+# Loc: localisation/00_WHG_legend_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = legend
+
+###############################################################################
+# Part 1: the Herrimault
+###############################################################################
+
+# legend.1 The Herrimault
+# An outlaw in the ruler's woods robs tax carts and gives the coin to the
+# poor, and the peasants sing of him. Wish him well (prestige; a noble may
+# come to complain, legend.2), swear to catch him (a chance of diligent or
+# deceitful; a noble complains), or let it be (a chance of content). Either
+# way the ruler's council brings it up within the year (legend.4).
+# Once per game. Players of the Old World faiths with bandits or unrest in
+# their lands.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.1
+	title = EVTNAMElegend1
+	desc = EVTDESClegend1
+	picture = GFX_evt_bandits
+
+	is_triggered_only = yes # on_five_year_pulse random list legends
+	ai = no
+	religion_group = old_world_group
+	min_age = 20
+	prisoner = no
+	capable_only = yes
+	war = no
+
+	trigger = {
+		NOT = { has_global_flag = robin_hood_existed }
+		in_command = no
+		is_ill = no
+		is_inaccessible_trigger = no
+		any_demesne_province = {
+			OR = { has_province_modifier = highway_robber_band revolt_risk = 0.05 }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 0.8 trait = just }
+		modifier = { factor = 5 trait = arbitrary }
+		modifier = { factor = 0.8 trait = charismatic_negotiator }
+		modifier = { factor = 3 trait = midas_touched }
+	}
+
+	immediate = {
+		set_global_flag = robin_hood_existed
+		set_character_flag = legend_outlaw_hunt
+	}
+
+	option = { # Wish him well
+		name = EVTOPTAlegend1
+		prestige = 10
+		random = {
+			chance = 60
+			narrative_event = { id = legend.2 days = 5 random = 10 tooltip = EVTTOOLTIPlegend2 }
+		}
+		hidden_effect = { narrative_event = { id = legend.4 days = 300 random = 120 } }
+	}
+	option = { # I will catch him
+		name = EVTOPTBlegend1
+		if = {
+			limit = { NOT = { trait = diligent } }
+			random = { chance = 25 add_trait = diligent }
+		}
+		else_if = {
+			limit = { NOT = { trait = deceitful } }
+			random = { chance = 25 add_trait = deceitful }
+		}
+		random = {
+			chance = 40
+			narrative_event = { id = legend.2 days = 5 random = 10 tooltip = EVTTOOLTIPlegend2 }
+		}
+		hidden_effect = { narrative_event = { id = legend.4 days = 200 random = 120 } }
+	}
+	option = { # Let it be
+		name = EVTOPTClegend1
+		if = { limit = { NOT = { trait = content } } random = { chance = 25 add_trait = content } }
+		hidden_effect = { narrative_event = { id = legend.4 days = 365 random = 180 } }
+	}
+}
+
+# legend.2 A noble complains
+# A noble of the court was robbed in the woods (a lady of her jewels or a
+# lord of his purse and his dignity). Pay them off, or promise that
+# something will be done (a chance of diligent or ambitious).
+# Fixed: the old pair of events (one per sex) used break = yes, and the
+# lord's version could never give ambitious after diligent.
+# Scope: ROOT is the ruler, event_target:legend_complainer the noble.
+narrative_event = {
+	id = legend.2
+	title = EVTNAMElegend2
+	desc = {
+		trigger = { event_target:legend_complainer = { is_woman_trigger = yes } }
+		text = EVTDESClegend2
+	}
+	desc = {
+		trigger = { event_target:legend_complainer = { is_woman_trigger = no } }
+		text = EVTDESClegend2b
+	}
+	picture = GFX_evt_bandits
+
+	is_triggered_only = yes # legend.1
+
+	trigger = {
+		any_courtier = { legend_complainer_trigger = yes }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { legend_complainer_trigger = yes }
+			save_event_target_as = legend_complainer
+		}
+	}
+
+	option = { # Pay them off
+		name = EVTOPTAlegend2
+		scaled_wealth = -0.02
+		set_character_flag = legend_outlaw_ignored
+	}
+	option = { # Something will be done
+		name = EVTOPTBlegend2
+		set_character_flag = legend_outlaw_angered
+		if = {
+			limit = { NOT = { trait = diligent } }
+			random = { chance = 25 add_trait = diligent }
+		}
+		else_if = {
+			limit = { NOT = { trait = ambitious } }
+			random = { chance = 25 add_trait = ambitious }
+		}
+	}
+}
+
+# legend.4 A trap for the outlaw
+# The council asks what to do about the Herrimault. Leave it (prestige, and
+# a craven or slothful streak), hold an archery contest no outlaw could
+# resist (legend.5), or go into the woods in disguise (legend.10).
+# Was MTTH 12 months on a flag; now scheduled by legend.1.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.4
+	title = EVTNAMElegend4
+	desc = { trigger = { has_character_flag = legend_outlaw_angered } text = EVTDESClegend4b }
+	desc = {
+		trigger = { NOT = { has_character_flag = legend_outlaw_angered } }
+		text = EVTDESClegend4
+	}
+	picture = GFX_evt_council
+
+	is_triggered_only = yes # legend.1
+	has_character_flag = legend_outlaw_hunt
+
+	trigger = {
+		is_alive = yes
+		prisoner = no
+		is_incapable = no
+	}
+
+	option = { # Too risky
+		name = EVTOPTAlegend4
+		prestige = -10
+		if = { limit = { NOR = { trait = craven trait = berserker } } add_trait = craven }
+		else_if = { limit = { NOT = { trait = slothful } } add_trait = slothful }
+		legend_outlaw_end_effect = yes
+	}
+	option = { # An archery contest
+		name = EVTOPTBlegend4
+		random_courtier = {
+			limit = { is_adult = yes }
+			opinion = { modifier = clever_deceive who = ROOT years = 5 }
+		}
+		narrative_event = { id = legend.5 days = 5 random = 10 tooltip = EVTTOOLTIPlegend5 }
+	}
+	option = { # Into the woods in disguise
+		name = EVTOPTClegend4
+		prestige = 10
+		if = { limit = { NOT = { trait = deceitful } } add_trait = deceitful }
+		else_if = { limit = { NOT = { trait = patient } } add_trait = patient }
+		narrative_event = { id = legend.10 days = 1 random = 3 tooltip = EVTTOOLTIPlegend10 }
+	}
+}
+
+# legend.5 The archery contest
+# Every bowman of the realm comes for the silver arrow. Half the time the
+# outlaw is taken (legend.6); half the time an old man wins and is gone
+# before the prize is cold (legend.7).
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.5
+	title = EVTNAMElegend5
+	desc = EVTDESClegend5
+	picture = GFX_evt_longbowman
+
+	is_triggered_only = yes # legend.4
+
+	option = {
+		name = EVTOPTAlegend5
+		prestige = 15
+		random_list = {
+			50 = {
+				narrative_event = { id = legend.6 days = 5 random = 10 tooltip = EVTTOOLTIPlegend6 }
+			}
+			50 = {
+				narrative_event = { id = legend.7 days = 5 random = 10 tooltip = EVTTOOLTIPlegend7 }
+			}
+		}
+	}
+}
+
+# legend.6 The outlaw in chains
+# The Herrimault is caught at the contest. Hang him (legend_outlaw_hang_effect)
+# or pardon him and take his band into service as gamekeepers
+# (legend_outlaw_pardon_effect).
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.6
+	title = EVTNAMElegend6
+	desc = EVTDESClegend6
+	picture = GFX_evt_large_army
+
+	is_triggered_only = yes # legend.5
+
+	option = { # Hang him
+		name = EVTOPTAlegend6
+		legend_outlaw_hang_effect = yes
+	}
+	option = { # Pardon him
+		name = EVTOPTBlegend6
+		legend_outlaw_pardon_effect = yes
+	}
+}
+
+# legend.7 An old man wins
+# A bent old man splits the winning arrow and vanishes with the prize.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.7
+	title = EVTNAMElegend7
+	desc = EVTDESClegend7
+	picture = GFX_evt_longbowman
+
+	is_triggered_only = yes # legend.5
+
+	option = {
+		name = EVTOPTAlegend7
+		narrative_event = { id = legend.8 days = 5 random = 10 tooltip = EVTTOOLTIPlegend8 }
+	}
+}
+
+# legend.8 It did not work
+# The old man was the outlaw. Give up (prestige, and the brave, honest and
+# proud of the court think less of the ruler) or try the disguise
+# (legend.10).
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.8
+	title = EVTNAMElegend8
+	desc = EVTDESClegend8
+	picture = GFX_evt_council
+
+	is_triggered_only = yes # legend.7
+
+	option = { # Leave them be
+		name = EVTOPTAlegend8
+		prestige = -10
+		any_courtier = {
+			limit = { OR = { trait = brave trait = honest trait = proud } }
+			opinion = { modifier = opinion_disapprove who = ROOT years = 5 }
+		}
+		legend_outlaw_end_effect = yes
+	}
+	option = { # Into the woods
+		name = EVTOPTBlegend8
+		narrative_event = { id = legend.10 days = 1 random = 3 tooltip = EVTTOOLTIPlegend10 }
+	}
+}
+
+# legend.10 In disguise
+# The ruler dresses as a pedlar and goes into the woods. The disguise may
+# fail (legend.11), the ruler may stumble on the outlaws' camp (legend.12)
+# or meet the giant on the bridge (legend.13). A ruler who turns back may
+# still be found out (1 in 10).
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.10
+	title = EVTNAMElegend10
+	desc = EVTDESClegend10
+	picture = GFX_evt_bandits
+
+	is_triggered_only = yes # legend.4, legend.8
+
+	option = { # Go
+		name = EVTOPTAlegend10
+		random_list = {
+			30 = {
+				narrative_event = {
+					id = legend.11
+					days = 5
+					random = 10
+					tooltip = EVTTOOLTIPlegend11
+				}
+			}
+			30 = {
+				narrative_event = {
+					id = legend.12
+					days = 5
+					random = 10
+					tooltip = EVTTOOLTIPlegend12
+				}
+			}
+			30 = {
+				narrative_event = {
+					id = legend.13
+					days = 5
+					random = 10
+					tooltip = EVTTOOLTIPlegend13
+				}
+			}
+		}
+	}
+	option = { # Turn back
+		name = EVTOPTBlegend10
+		if = { limit = { trait = deceitful } remove_trait = deceitful }
+		if = {
+			limit = { NOT = { trait = slothful } }
+			random = { chance = 25 add_trait = slothful }
+		}
+		random_list = {
+			90 = { legend_outlaw_end_effect = yes }
+			10 = { hidden_effect = { narrative_event = { id = legend.11 days = 10 random = 30 } } }
+		}
+	}
+}
+
+# legend.11 Found out
+# The outlaws see through the disguise and send the ruler home in shame,
+# and a new robber band takes heart.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.11
+	title = EVTNAMElegend11
+	desc = EVTDESClegend11
+	picture = GFX_evt_bandits
+
+	is_triggered_only = yes # legend.10
+
+	option = {
+		name = EVTOPTAlegend11
+		legend_outlaw_outfoxed_effect = yes
+	}
+}
+
+# legend.12 The outlaws' camp
+# The ruler stumbles on the camp. Join the feast (legend.17) or slip away
+# (outfoxed, and the robbers grow bold).
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.12
+	title = EVTNAMElegend12
+	desc = EVTDESClegend12
+	picture = GFX_evt_bandits
+
+	is_triggered_only = yes # legend.10
+
+	option = { # Join them
+		name = EVTOPTAlegend12
+		prestige = 10
+		narrative_event = { id = legend.17 days = 5 random = 10 tooltip = EVTTOOLTIPlegend17 }
+	}
+	option = { # Slip away
+		name = EVTOPTBlegend12
+		legend_outlaw_outfoxed_effect = yes
+	}
+}
+
+# legend.13 The giant on the bridge
+# A huge outlaw with a quarterstaff bars the bridge. Fight him (win,
+# legend.14; lose, legend.15; or be found out, legend.16) or turn back
+# (craven, or deceitful for one who already is; outfoxed).
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.13
+	title = EVTNAMElegend13
+	desc = EVTDESClegend13
+	picture = GFX_evt_melee
+
+	is_triggered_only = yes # legend.10
+
+	option = { # Fight
+		name = EVTOPTAlegend13
+		random_list = {
+			30 = {
+				modifier = { factor = 1.5 martial = 12 }
+				modifier = { factor = 1.5 trait = strong }
+				narrative_event = {
+					id = legend.14
+					days = 5
+					random = 10
+					tooltip = EVTTOOLTIPlegend14
+				}
+			}
+			30 = {
+				modifier = { factor = 1.5 trait = weak }
+				narrative_event = {
+					id = legend.15
+					days = 5
+					random = 10
+					tooltip = EVTTOOLTIPlegend15
+				}
+			}
+			30 = {
+				narrative_event = {
+					id = legend.16
+					days = 5
+					random = 10
+					tooltip = EVTTOOLTIPlegend16
+				}
+			}
+		}
+	}
+	option = { # Turn back
+		name = EVTOPTBlegend13
+		if = { limit = { NOR = { trait = craven trait = berserker } } add_trait = craven }
+		else_if = { limit = { NOT = { trait = deceitful } } add_trait = deceitful }
+		legend_outlaw_outfoxed_effect = yes
+	}
+}
+
+# legend.14 The giant goes into the river
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.14
+	title = EVTNAMElegend14
+	desc = EVTDESClegend14
+	picture = GFX_evt_melee
+
+	is_triggered_only = yes # legend.13
+
+	option = {
+		name = EVTOPTAlegend14
+		prestige = 10
+		narrative_event = { id = legend.17 days = 1 tooltip = EVTTOOLTIPlegend17 }
+	}
+}
+
+# legend.15 The ruler goes into the river
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.15
+	title = EVTNAMElegend15
+	desc = EVTDESClegend15
+	picture = GFX_evt_melee
+
+	is_triggered_only = yes # legend.13
+
+	option = {
+		name = EVTOPTAlegend15
+		prestige = -10
+		narrative_event = { id = legend.17 days = 1 tooltip = EVTTOOLTIPlegend17 }
+	}
+}
+
+# legend.16 The disguise slips
+# The giant knocks the ruler's hood back and knows the face from the
+# coins. The ruler is beaten and robbed (and may be wounded) and sent home.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.16
+	title = EVTNAMElegend16
+	desc = EVTDESClegend16
+	picture = GFX_evt_bloody_man
+
+	is_triggered_only = yes # legend.13
+
+	option = {
+		name = EVTOPTAlegend16
+		scaled_wealth = -0.02
+		random = { chance = 10 add_trait = wounded }
+		legend_outlaw_outfoxed_effect = yes
+	}
+}
+
+# legend.17 Around the outlaws' fire
+# The ruler is welcomed at the outlaws' fire. Ride with them against a
+# tax collector (legend.18), go with them on a night's adventure
+# (legend.19), betray them to the guard (legend.21; the dishonest of the
+# court admire the trick), or pay for the ale and go home (outfoxed).
+# Fixed: the last option used the text of another event.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.17
+	title = EVTNAMElegend17
+	desc = EVTDESClegend17
+	picture = GFX_evt_bandits
+
+	is_triggered_only = yes # legend.12, legend.14, legend.15
+
+	option = { # Ride against the tax collector
+		name = EVTOPTAlegend17
+		narrative_event = { id = legend.18 days = 5 random = 10 tooltip = EVTTOOLTIPlegend18 }
+	}
+	option = { # A night's adventure
+		name = EVTOPTBlegend17
+		narrative_event = { id = legend.19 days = 5 random = 10 tooltip = EVTTOOLTIPlegend19 }
+	}
+	option = { # Call the guard
+		name = EVTOPTClegend17
+		any_courtier = {
+			limit = { NOT = { trait = honest } }
+			opinion = { modifier = clever_deceive who = ROOT years = 2 }
+		}
+		narrative_event = { id = legend.21 days = 5 random = 10 tooltip = EVTTOOLTIPlegend21 }
+	}
+	option = { # Pay for the ale and go
+		name = EVTOPTDlegend17
+		scaled_wealth = -0.02
+		legend_outlaw_outfoxed_effect = yes
+	}
+}
+
+# legend.18 Robbing the tax collector
+# The band robs the ruler's own tax collector and hands the silver out in
+# the villages. Have them seized (legend.21), go home and leave them be
+# (met the outlaws; one robber band leaves), or remember the way to the
+# camp for an ambush (legend.22).
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.18
+	title = EVTNAMElegend18
+	desc = EVTDESClegend18
+	picture = GFX_evt_carriage
+
+	is_triggered_only = yes # legend.17
+
+	option = { # This has gone too far
+		name = EVTOPTAlegend18
+		narrative_event = { id = legend.21 days = 5 random = 10 tooltip = EVTTOOLTIPlegend21 }
+	}
+	option = { # Leave them be
+		name = EVTOPTBlegend18
+		scaled_wealth = -0.02
+		legend_outlaw_friends_effect = yes
+	}
+	option = { # Now I know the way
+		name = EVTOPTClegend18
+		narrative_event = { id = legend.22 days = 5 random = 10 tooltip = EVTTOOLTIPlegend22 }
+	}
+}
+
+# legend.19 A night's adventure
+# The band frees a poacher from a cruel lord's gibbet. Seize them
+# (legend.21), set an ambush (legend.22), enjoy it (legend.20), or go home
+# and leave them be.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.19
+	title = EVTNAMElegend19
+	desc = EVTDESClegend19
+	picture = GFX_evt_bandits
+
+	is_triggered_only = yes # legend.17
+
+	option = { # Seize them
+		name = EVTOPTAlegend19
+		narrative_event = { id = legend.21 days = 5 random = 10 tooltip = EVTTOOLTIPlegend21 }
+	}
+	option = { # This is wrong
+		name = EVTOPTBlegend19
+		narrative_event = { id = legend.22 days = 5 random = 10 tooltip = EVTTOOLTIPlegend22 }
+	}
+	option = { # That was fun
+		name = EVTOPTClegend19
+		narrative_event = { id = legend.20 days = 5 random = 10 tooltip = EVTTOOLTIPlegend20 }
+	}
+	option = { # Leave them be
+		name = EVTOPTDlegend19
+		scaled_wealth = -0.02
+		legend_outlaw_friends_effect = yes
+	}
+}
+
+# legend.20 That was fun
+# The ruler rides home with a grin and a story nobody will believe.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.20
+	title = EVTNAMElegend20
+	desc = EVTDESClegend20
+	picture = GFX_evt_bandits
+
+	is_triggered_only = yes # legend.19
+
+	option = {
+		name = EVTOPTAlegend20
+		legend_outlaw_friends_effect = yes
+	}
+}
+
+# legend.21 The outlaw before the throne
+# The Herrimault is brought in chains. Hang him or pardon him.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.21
+	title = EVTNAMElegend21
+	desc = EVTDESClegend21
+	picture = GFX_evt_bandits
+
+	is_triggered_only = yes # legend.17, legend.18, legend.19
+
+	option = { # Hang him
+		name = EVTOPTAlegend21
+		legend_outlaw_hang_effect = yes
+	}
+	option = { # Pardon him
+		name = EVTOPTBlegend21
+		legend_outlaw_pardon_effect = yes
+	}
+}
+
+# legend.22 Ambush in the greenwood
+# The ruler's men fall on the camp. Kill them all (a chance of a wound,
+# wroth or cruel; the band is gone) or spare the leader and take the band
+# into service.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.22
+	title = EVTNAMElegend22
+	desc = EVTDESClegend22
+	picture = GFX_evt_battle
+
+	is_triggered_only = yes # legend.18, legend.19
+
+	option = { # Kill them all
+		name = EVTOPTAlegend22
+		random = { chance = 30 add_trait = wounded }
+		random_demesne_province = {
+			limit = { has_province_modifier = highway_robber_band }
+			remove_province_modifier = highway_robber_band
+		}
+		legend_outlaw_hang_effect = yes
+	}
+	option = { # Spare the leader
+		name = EVTOPTBlegend22
+		legend_outlaw_pardon_effect = yes
+	}
+}
+
+# legend.30 The outlaw weds
+# The pardoned Herrimault marries his sweetheart at court.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.30
+	title = EVTNAMElegend30
+	desc = EVTDESClegend30
+	picture = GFX_evt_marriage
+
+	is_triggered_only = yes # legend_outlaw_pardon_effect
+
+	trigger = {
+		event_target:legend_outlaw = { is_alive = yes }
+		event_target:legend_sweetheart = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAlegend30
+		set_character_flag = legend_outlaw_wed
+		event_target:legend_outlaw = {
+			add_spouse = event_target:legend_sweetheart
+			if = {
+				limit = {
+					is_no_females_race = no
+					event_target:legend_sweetheart = { is_no_females_race = no }
+				}
+				hidden_effect = { add_lover = event_target:legend_sweetheart }
+			}
+		}
+	}
+}
+
+###############################################################################
+# Part 2: the burning rift
+###############################################################################
+
+# legend.100 A rift in the earth
+# A chasm opens in the ruler's lands, and fiery stones fly from it. Ignore
+# it (a chance of slothful, or content for the already slothful) or go and
+# look (legend.101 soon). Ignored, it gets worse within a year or so.
+# Was MTTH 10000 months on every player ruler.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.100
+	title = EVTNAMElegend100
+	desc = EVTDESClegend100
+	picture = GFX_evt_pagan
+
+	is_triggered_only = yes # on_five_year_pulse random list legends
+	only_playable = yes
+	min_age = 20
+	max_age = 100
+	capable_only = yes
+	prisoner = no
+	war = no
+
+	trigger = {
+		in_command = no
+		primary_title = { temporary = no }
+		is_inaccessible_trigger = no
+		legend_rift_open_trigger = no
+		NOR = {
+			has_character_modifier = exorcism_gateshell
+			has_character_modifier = cattle_gateshell
+			has_character_modifier = stones_gateshell
+			has_character_modifier = sacrifice_gateshell
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = wroth }
+		modifier = { factor = 0.67 trait = chaste }
+	}
+
+	option = { # Ignore it
+		name = EVTOPTAlegend100
+		add_character_modifier = { name = flaming_gap duration = 730 }
+		if = {
+			limit = { NOT = { trait = slothful } }
+			random = { chance = 25 add_trait = slothful }
+		}
+		else_if = {
+			limit = { NOT = { trait = content } }
+			random = { chance = 25 add_trait = content }
+		}
+		hidden_effect = { narrative_event = { id = legend.101 days = 300 random = 200 } }
+	}
+	option = { # Go and look
+		name = EVTOPTBlegend100
+		add_character_modifier = { name = flaming_gap duration = 730 }
+		narrative_event = { id = legend.101 days = 5 random = 10 tooltip = EVTTOOLTIPlegend101 }
+	}
+}
+
+# legend.101 Fire and stones
+# The rift spits fire and burning stones. Keep ignoring it (the peasants of
+# the capital grow upset) or look deeper (legend.102 soon); ignored, the
+# screams start within a year or so. Was MTTH 12 months.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.101
+	title = EVTNAMElegend101
+	desc = EVTDESClegend101
+	picture = GFX_evt_pagan
+
+	is_triggered_only = yes # legend.100
+
+	trigger = {
+		has_character_modifier = flaming_gap
+	}
+
+	option = { # Keep ignoring it
+		name = EVTOPTAlegend101
+		remove_character_modifier = flaming_gap
+		add_character_modifier = { name = wailing_gap duration = 730 }
+		capital_scope = { add_province_modifier = { name = peasants_upset duration = 730 } }
+		hidden_effect = { narrative_event = { id = legend.102 days = 300 random = 200 } }
+	}
+	option = { # Look deeper
+		name = EVTOPTBlegend101
+		remove_character_modifier = flaming_gap
+		add_character_modifier = { name = wailing_gap duration = 730 }
+		narrative_event = { id = legend.102 days = 5 random = 10 tooltip = EVTTOOLTIPlegend102 }
+	}
+}
+
+# legend.102 The screaming
+# Screams and pleas rise from the rift, in voices the villagers swear they
+# know. Keep ignoring it (the worst modifier, for four years, and the chain
+# ends) or try to close it (legend.103).
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.102
+	title = EVTNAMElegend102
+	desc = EVTDESClegend102
+	picture = GFX_evt_pagan
+
+	is_triggered_only = yes # legend.101
+
+	trigger = {
+		has_character_modifier = wailing_gap
+	}
+
+	option = { # Keep ignoring it
+		name = EVTOPTAlegend102
+		remove_character_modifier = wailing_gap
+		add_character_modifier = { name = gates_hell duration = 1530 }
+	}
+	option = { # Close it
+		name = EVTOPTBlegend102
+		custom_tooltip = { text = EVTTOOLTIPlegend103 }
+		remove_character_modifier = wailing_gap
+		add_character_modifier = { name = gates_hell duration = 730 }
+		narrative_event = { id = legend.103 days = 5 random = 10 }
+	}
+}
+
+# legend.103 How to close the rift
+# Pray it shut (any faith but the Chaos gods), feed it cattle (50 gold;
+# not for the greedy), fill it with stones, or give it the heir, a son of
+# 10 to 19 years: what the realm holds most dear.
+# Fixed: going back from a choice found the event's own flag still set and
+# ended the chain; the old way flags were never cleared, so later rifts
+# showed more than one ending.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.103
+	title = EVTNAMElegend103
+	desc = EVTDESClegend103
+	picture = GFX_evt_pagan
+
+	is_triggered_only = yes # legend.102, legend.104 - legend.107, legend.109
+
+	trigger = {
+		has_character_modifier = gates_hell
+	}
+
+	immediate = {
+		legend_rift_clear_effect = yes
+	}
+
+	option = { # Pray it shut
+		name = EVTOPTAlegend103
+		trigger = { NOT = { religion_group = chaos_gods_group } }
+		narrative_event = { id = legend.104 days = 5 random = 10 tooltip = EVTTOOLTIPlegend104 }
+	}
+	option = { # Feed it cattle
+		name = EVTOPTBlegend103
+		trigger = { wealth = 50 NOT = { trait = greedy } }
+		narrative_event = { id = legend.105 days = 5 random = 10 tooltip = EVTTOOLTIPlegend105 }
+	}
+	option = { # Fill it with stones
+		name = EVTOPTClegend103
+		narrative_event = { id = legend.106 days = 5 random = 10 tooltip = EVTTOOLTIPlegend106 }
+	}
+	option = { # What we hold most dear
+		name = EVTOPTDlegend103
+		trigger = { any_child = { legend_rift_sacrifice_trigger = yes } }
+		random_child = {
+			limit = { legend_rift_sacrifice_trigger = yes }
+			save_event_target_as = legend_sacrifice
+		}
+		narrative_event = { id = legend.107 days = 5 random = 10 tooltip = EVTTOOLTIPlegend107 }
+	}
+}
+
+# legend.104 Prayer at the rift
+# The priests pray over the rift: 9 in 10 it closes (legend.108), else it
+# does not (legend.109). The ruler may also think again (legend.103).
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.104
+	title = EVTNAMElegend104
+	desc = EVTDESClegend104
+	picture = GFX_evt_pagan
+
+	is_triggered_only = yes # legend.103
+
+	option = {
+		name = EVTOPTAlegend104
+		random_list = {
+			90 = {
+				set_character_flag = legend_rift_prayer
+				narrative_event = {
+					id = legend.108
+					days = 5
+					random = 10
+					tooltip = EVTTOOLTIPlegend108
+				}
+			}
+			10 = {
+				narrative_event = {
+					id = legend.109
+					days = 5
+					random = 10
+					tooltip = EVTTOOLTIPlegend109
+				}
+			}
+		}
+	}
+	option = { # Think again
+		name = EVTOPTBlegend104
+		narrative_event = { id = legend.103 days = 5 random = 10 tooltip = EVTTOOLTIPlegend103 }
+	}
+}
+
+# legend.105 Cattle for the rift
+# Herds are driven into the rift (50 gold): 9 in 10 it closes.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.105
+	title = EVTNAMElegend105
+	desc = EVTDESClegend105
+	picture = GFX_evt_pagan
+
+	is_triggered_only = yes # legend.103
+
+	option = {
+		name = EVTOPTAlegend105
+		wealth = -50
+		random_list = {
+			90 = {
+				set_character_flag = legend_rift_cattle
+				narrative_event = {
+					id = legend.108
+					days = 5
+					random = 10
+					tooltip = EVTTOOLTIPlegend108
+				}
+			}
+			10 = { narrative_event = { id = legend.109 days = 30 tooltip = EVTTOOLTIPlegend109 } }
+		}
+	}
+	option = { # Think again
+		name = EVTOPTBlegend105
+		narrative_event = { id = legend.103 days = 5 random = 10 tooltip = EVTTOOLTIPlegend103 }
+	}
+}
+
+# legend.106 Stones for the rift
+# The peasants roll boulders into the rift: 9 in 10 it closes.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.106
+	title = EVTNAMElegend106
+	desc = EVTDESClegend106
+	picture = GFX_evt_pagan
+
+	is_triggered_only = yes # legend.103
+
+	option = {
+		name = EVTOPTAlegend106
+		random_list = {
+			90 = {
+				set_character_flag = legend_rift_stones
+				narrative_event = {
+					id = legend.108
+					days = 5
+					random = 10
+					tooltip = EVTTOOLTIPlegend108
+				}
+			}
+			10 = {
+				narrative_event = {
+					id = legend.109
+					days = 5
+					random = 10
+					tooltip = EVTTOOLTIPlegend109
+				}
+			}
+		}
+	}
+	option = { # Think again
+		name = EVTOPTBlegend106
+		narrative_event = { id = legend.103 days = 5 random = 10 tooltip = EVTTOOLTIPlegend103 }
+	}
+}
+
+# legend.107 What we hold most dear
+# The heir is thrown into the rift: 9 in 10 it closes. A pacifist faith
+# costs piety. The ruler may still change their mind.
+# Scope: ROOT is the ruler, event_target:legend_sacrifice the son.
+narrative_event = {
+	id = legend.107
+	title = EVTNAMElegend107
+	desc = EVTDESClegend107
+	picture = GFX_evt_pagan
+
+	is_triggered_only = yes # legend.103
+
+	trigger = {
+		event_target:legend_sacrifice = { is_alive = yes prisoner = no }
+	}
+
+	option = {
+		name = EVTOPTAlegend107
+		pacifists_lose_piety_effect = yes
+		event_target:legend_sacrifice = {
+			death = { death_reason = death_murder_fall killer = ROOT }
+		}
+		random_list = {
+			90 = {
+				set_character_flag = legend_rift_sacrifice
+				narrative_event = {
+					id = legend.108
+					days = 5
+					random = 10
+					tooltip = EVTTOOLTIPlegend108
+				}
+			}
+			10 = {
+				narrative_event = {
+					id = legend.109
+					days = 5
+					random = 10
+					tooltip = EVTTOOLTIPlegend109
+				}
+			}
+		}
+	}
+	option = { # I cannot
+		name = EVTOPTBlegend107
+		narrative_event = { id = legend.103 days = 5 random = 10 tooltip = EVTTOOLTIPlegend103 }
+	}
+}
+
+# legend.108 The rift is closed
+# The rift closes, and the way it was closed is remembered for five years:
+# prayer (learning, the faithful), cattle (stewardship), stones (martial,
+# prestige) or sacrifice (intrigue, and dread).
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.108
+	title = EVTNAMElegend108
+	desc = EVTDESClegend108
+	picture = GFX_evt_pagan
+
+	is_triggered_only = yes # legend.104 - legend.107
+
+	option = {
+		name = EVTOPTAlegend108
+		trigger = { has_character_flag = legend_rift_prayer }
+		add_character_modifier = { name = exorcism_gateshell duration = 1825 }
+		remove_character_modifier = gates_hell
+		legend_rift_clear_effect = yes
+	}
+	option = {
+		name = EVTOPTBlegend108
+		trigger = { has_character_flag = legend_rift_cattle }
+		add_character_modifier = { name = cattle_gateshell duration = 1825 }
+		remove_character_modifier = gates_hell
+		legend_rift_clear_effect = yes
+	}
+	option = {
+		name = EVTOPTClegend108
+		trigger = { has_character_flag = legend_rift_stones }
+		add_character_modifier = { name = stones_gateshell duration = 1825 }
+		remove_character_modifier = gates_hell
+		legend_rift_clear_effect = yes
+	}
+	option = {
+		name = EVTOPTDlegend108
+		trigger = { has_character_flag = legend_rift_sacrifice }
+		add_character_modifier = { name = sacrifice_gateshell duration = 1825 }
+		remove_character_modifier = gates_hell
+		legend_rift_clear_effect = yes
+	}
+}
+
+# legend.109 The rift is still open
+# Nothing worked; the ruler loses face and must choose again.
+# Scope: ROOT is the ruler.
+narrative_event = {
+	id = legend.109
+	title = EVTNAMElegend109
+	desc = EVTDESClegend109
+	picture = GFX_evt_pagan
+
+	is_triggered_only = yes # legend.104 - legend.107
+
+	option = {
+		name = EVTOPTAlegend109
+		prestige = -15
+		narrative_event = { id = legend.103 days = 5 random = 10 tooltip = EVTTOOLTIPlegend103 }
+	}
+}

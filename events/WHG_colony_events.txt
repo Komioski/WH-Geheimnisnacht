@@ -1,7 +1,8 @@
 ###############################################################################
 # Colonies
-# Namespace: colony (was HColony.2 in WH_Colonies.txt and HighElfColony.1 in
-#   wh_high_elf_colony_events.txt)
+# Namespace: colony (was HColony.2 in WH_Colonies.txt, HighElfColony.1 in
+#   wh_high_elf_colony_events.txt, and DoWA.40 - 54 and DoWA.90 - 92 in
+#   DoW_Adventurers.txt)
 # Faction: Diplomacy & realms
 # Serves: the Phoenix King, and the human, elf and Chaos Dwarf realms that
 #   hold land far from home
@@ -13,6 +14,9 @@
 #
 # The choice of lord                    colony.1
 # The colony is founded                 colony.2
+# Tribute from the colony              colony.10 - colony.13
+# The colony asks for help             colony.20 - colony.25
+# A governor for the New World         colony.30 - colony.32
 #
 # Callers: the decisions create_new_colony and create_new_colony_2 - _7 in
 #   decisions/dow_new_world.txt and create_new_colony in
@@ -165,5 +169,558 @@ narrative_event = {
 
 	after = {
 		colony_cleanup = yes
+	}
+}
+
+###############################################################################
+# Tribute, aid and governors of the human colonies
+# (was DoWA.40 - 54 and DoWA.90 - 92 in DoW_Adventurers.txt)
+#
+# A human colony, a tributary of type colony (Marienburg's, Tilea's and
+# Estalia's holdings in Lustria and the Southlands), may send gold home to
+# its overlord (decision donate_tribute_to_overlord), who keeps it or
+# shares it with the great lords. In a war against foreigners the colony
+# may beg for help (decision call_overlord_assistance): the overlord may
+# join the war, pay for soldiers himself, tax his kings for it, or refuse.
+# The Asur colonies have their own versions (asur.36 - 44,
+# WHG_asur_events.txt).
+#
+# A human lord of the Old World, or of Araby and beyond, who wins a county
+# in the New World may name a governor to hold it and choose what to build
+# there, or keep it himself.
+#
+# Tribute from the colony              colony.10 - colony.13
+# The colony asks for help             colony.20 - colony.25
+# A governor for the New World         colony.30 - colony.32
+#
+# Callers: colony.10 and colony.20 from the decisions in
+#   decisions/dow_new_world.txt; colony.30 from on_new_holder_usurpation
+#   (dow_on_actions.txt).
+# Saved: event target colonial_overlord (set by the decision); character
+#   flag colony_governor_pending; character modifiers donated_to_overlord
+#   and asked_overlord_assistance (set by the decisions).
+###############################################################################
+
+# colony.10 Tribute for the homeland
+# The colony's lord has set aside 100 gold for the overlord (the decision
+# took it). Send it with honour, or with a list of complaints about the
+# taxes; the overlord hears of it (colony.11).
+# Scope: ROOT is the colony's lord. event_target:colonial_overlord.
+character_event = {
+	id = colony.10
+	desc = EVTDESCcolony10
+	picture = GFX_evt_dockyard
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # donate_tribute_to_overlord
+
+	option = {
+		name = EVTOPTAcolony10
+		event_target:colonial_overlord = { character_event = { id = colony.11 days = 30 random = 7 } }
+		ai_chance = { factor = 80 }
+	}
+	option = {
+		name = EVTOPTBcolony10
+		set_character_flag = colony_tribute_grudging
+		event_target:colonial_overlord = { character_event = { id = colony.11 days = 30 random = 7 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = greedy }
+			modifier = { factor = 2 trait = envious }
+			modifier = { factor = 2 trait = arbitrary }
+		}
+	}
+}
+
+# colony.11 Tribute from the colony
+# The overlord keeps the 100 gold (the great lords resent it, colony.12) or
+# shares it: 15 for each duke or king of his realm out of the 100, the
+# rest for himself (colony.13). He thinks better of a colony that sends gold without
+# complaint.
+# Scope: ROOT is the overlord. FROM is the colony's lord.
+character_event = {
+	id = colony.11
+	desc = {
+		text = EVTDESCcolony11
+		trigger = { FROM = { NOT = { has_character_flag = colony_tribute_grudging } } }
+	}
+	desc = {
+		text = EVTDESCcolony11_grudging
+		trigger = { FROM = { has_character_flag = colony_tribute_grudging } }
+	}
+	picture = GFX_evt_dockyard
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # colony.10
+
+	immediate = {
+		if = {
+			limit = { FROM = { NOT = { has_character_flag = colony_tribute_grudging } } }
+			opinion = { modifier = opinion_colonial_tribute who = FROM years = 5 }
+		}
+		FROM = { clr_character_flag = colony_tribute_grudging }
+	}
+
+	option = { # Keep it
+		name = EVTOPTAcolony11
+		wealth = 100
+		any_vassal = {
+			limit = {
+				higher_tier_than = COUNT
+				is_theocracy = no
+			}
+			character_event = { id = colony.12 days = 1 }
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 3 trait = greedy }
+			modifier = { factor = 2 trait = cruel }
+		}
+	}
+	option = { # Share it
+		name = EVTOPTBcolony11
+		wealth = 100
+		any_vassal = {
+			limit = {
+				higher_tier_than = COUNT
+				is_theocracy = no
+			}
+			ROOT = { wealth = -15 } # each share comes out of the 100
+			character_event = { id = colony.13 days = 1 }
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 trait = kind }
+			modifier = { factor = 4 trait = charitable }
+			modifier = { factor = 2 trait = just }
+		}
+	}
+}
+
+# colony.12 The tribute is kept
+# Scope: ROOT is a great vassal. FROM is the overlord.
+character_event = {
+	id = colony.12
+	desc = EVTDESCcolony12
+	picture = GFX_evt_dockyard
+
+	is_triggered_only = yes # colony.11
+
+	option = {
+		name = EVTOPTAcolony12
+		opinion = { modifier = opinion_witheld_tribute who = FROM years = 10 }
+	}
+}
+
+# colony.13 The tribute is shared
+# Scope: ROOT is a great vassal. FROM is the overlord.
+character_event = {
+	id = colony.13
+	desc = EVTDESCcolony13
+	picture = GFX_evt_dockyard
+
+	is_triggered_only = yes # colony.11
+
+	option = {
+		name = EVTOPTAcolony13
+		wealth = 15
+	}
+}
+
+# colony.20 The colony asks for help
+# The colony is at war with foreigners and begs its overlord for help. Go to
+# war beside it (the kings of the realm are told, colony.24, and the colony
+# hears, colony.23); pay 150 gold for soldiers (colony.21); make the kings
+# pay for them (colony.22, colony.21); or refuse, losing face (colony.25).
+# Scope: ROOT is the overlord. FROM is the colony's lord.
+character_event = {
+	id = colony.20
+	desc = EVTDESCcolony20
+	picture = GFX_evt_dockyard
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # call_overlord_assistance
+
+	option = { # Go to war beside them
+		name = EVTOPTAcolony20
+		join_defender_wars = FROM
+		join_attacker_wars = FROM
+		any_vassal = {
+			limit = {
+				tier = KING
+				is_theocracy = no
+			}
+			character_event = { id = colony.24 days = 1 }
+		}
+		opinion = { modifier = opinion_asked_assistance who = FROM years = 15 }
+		FROM = { character_event = { id = colony.23 days = 1 } }
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 1.25 FROM = { has_character_modifier = donated_to_overlord } }
+			modifier = { factor = 0.1 FROM = { any_war = { attacker = { war_score = -10 } } } }
+			modifier = { factor = 0.25 FROM = { any_war = { defender = { war_score = 30 } } } }
+			modifier = { factor = 2 FROM = { any_war = { defender = { NOT = { war_score = -30 } } } } }
+			modifier = { factor = 0.75 NOT = { opinion = { who = FROM value = 0 } } }
+			modifier = { factor = 0.5 war = yes }
+		}
+	}
+	option = { # Pay for soldiers
+		name = EVTOPTBcolony20
+		trigger = { wealth = 150 }
+		wealth = -150
+		opinion = { modifier = opinion_asked_assistance who = FROM years = 10 }
+		FROM = { character_event = { id = colony.21 days = 3 } }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 1.5 stewardship = 12 }
+			modifier = { factor = 0.25 trait = greedy }
+		}
+	}
+	option = { # The kings will pay
+		name = EVTOPTCcolony20
+		trigger = {
+			any_vassal = {
+				tier = KING
+				is_theocracy = no
+			}
+		}
+		any_vassal = {
+			limit = {
+				tier = KING
+				is_theocracy = no
+			}
+			character_event = { id = colony.22 days = 1 }
+		}
+		opinion = { modifier = opinion_asked_assistance who = FROM years = 10 }
+		FROM = { character_event = { id = colony.21 days = 3 } }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 0.5 trait = just }
+			modifier = { factor = 0.5 trait = kind }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTDcolony20
+		prestige = -150
+		FROM = { character_event = { id = colony.25 days = 1 } }
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 2 any_war = { defender = { NOT = { war_score = 10 } } } }
+			modifier = { factor = 1.25 war = yes }
+			modifier = { factor = 0.75 FROM = { has_character_modifier = donated_to_overlord } }
+			modifier = { factor = 0.5 is_friend = FROM }
+			modifier = { factor = 0.5 opinion = { who = FROM value = 50 } }
+			modifier = { factor = 2 NOT = { opinion = { who = FROM value = -25 } } }
+		}
+	}
+}
+
+# colony.21 Help from the homeland
+# 150 gold and two companies of archers and foot from the overlord.
+# Scope: ROOT is the colony's lord. FROM is the overlord.
+character_event = {
+	id = colony.21
+	desc = EVTDESCcolony21
+	picture = GFX_evt_dockyard
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # colony.20
+
+	option = {
+		name = EVTOPTAcolony21
+		wealth = 150
+		opinion = { modifier = opinion_funded_colony who = FROM years = 10 }
+		capital_scope = {
+			ROOT = {
+				spawn_unit = {
+					province = PREV
+					home = PREV
+					owner = THIS
+					troops = { archers = { 100 100 } light_infantry = { 150 150 } }
+					attrition = 1.0
+					earmark = colony_forces
+				}
+				spawn_unit = {
+					province = PREV
+					home = PREV
+					owner = THIS
+					troops = { archers = { 100 100 } light_infantry = { 150 150 } }
+					attrition = 1.0
+					earmark = colony_forces
+				}
+			}
+		}
+	}
+}
+
+# colony.22 A tax for the colony
+# Scope: ROOT is a king of the overlord's realm. FROM is the overlord.
+character_event = {
+	id = colony.22
+	desc = EVTDESCcolony22
+	picture = GFX_evt_dockyard
+
+	is_triggered_only = yes # colony.20
+
+	option = {
+		name = EVTOPTAcolony22
+		wealth = -15
+		ai_chance = { factor = 50 }
+	}
+	option = {
+		name = EVTOPTBcolony22
+		wealth = -15
+		opinion = { modifier = opinion_paid_for_colony who = FROM years = 15 }
+		ai_chance = { factor = 50 }
+	}
+}
+
+# colony.23 The homeland sails to war
+# Scope: ROOT is the colony's lord. FROM is the overlord.
+character_event = {
+	id = colony.23
+	desc = EVTDESCcolony23
+	picture = GFX_evt_dockyard
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # colony.20
+
+	option = {
+		name = EVTOPTAcolony23
+		opinion = { modifier = opinion_joined_colony who = FROM years = 15 }
+	}
+}
+
+# colony.24 Called to the colony's war
+# Scope: ROOT is a king of the overlord's realm. FROM is the overlord.
+character_event = {
+	id = colony.24
+	desc = EVTDESCcolony24
+	picture = GFX_evt_dockyard
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # colony.20
+
+	option = {
+		name = EVTOPTAcolony24
+		ai_chance = { factor = 50 }
+	}
+	option = {
+		name = EVTOPTBcolony24
+		opinion = { modifier = opinion_colonial_war who = FROM years = 15 }
+		ai_chance = { factor = 50 }
+	}
+}
+
+# colony.25 No help is coming
+# Scope: ROOT is the colony's lord. FROM is the overlord.
+character_event = {
+	id = colony.25
+	desc = EVTDESCcolony25
+	picture = GFX_evt_dockyard
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # colony.20
+
+	option = {
+		name = EVTOPTAcolony25
+		opinion = { modifier = opinion_abandoned_colony who = FROM years = 10 }
+	}
+}
+
+# colony.30 A county in the New World (hidden)
+# A human lord, not of Chaos, whose top liege rules from outside the New
+# World, wins a county there (on_new_holder_usurpation): he is asked whom to
+# make its governor (colony.31). Once at a time. Not for a county won by a
+# Venturer's Colonial Charter war, where venture.40 asks instead.
+# Scope: ROOT is the new holder. FROM is the county title.
+character_event = {
+	id = colony.30
+	hide_window = yes
+
+	is_triggered_only = yes # on_new_holder_usurpation
+
+	only_rulers = yes
+
+	trigger = {
+		trait = creature_human
+		NOT = { religion_group = chaos_gods_group }
+		NOT = { has_character_flag = colony_governor_pending }
+		FROM = {
+			tier = COUNT
+			location = {
+				region = world_new_world
+				NOT = { has_province_flag = venture_colony_new } # A Venturer's charter: venture.40 asks
+			}
+		}
+		top_liege = {
+			capital_scope = { NOT = { region = world_new_world } }
+		}
+	}
+
+	immediate = {
+		set_character_flag = colony_governor_pending
+		FROM = { save_event_target_as = colonial_territory_capital }
+		character_event = { id = colony.31 days = 3 }
+	}
+}
+
+# colony.31 A governor for the New World
+# The county lies far across the sea. Make the steward its governor, or a
+# capable courtier, or a new man who has asked for the post, or keep it.
+# A governor gets the county and some gold to start with (colony.32). The
+# new man leaves court if he is not chosen.
+# Scope: ROOT is the new holder. event_target:colonial_territory_capital.
+character_event = {
+	id = colony.31
+	desc = EVTDESCcolony31
+	picture = GFX_evt_questing_ocean
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # colony.30
+
+	immediate = {
+		clr_character_flag = colony_governor_pending
+		job_steward = { save_event_target_as = governor_candidate_1 }
+		random_courtier = {
+			limit = {
+				is_adult = yes
+				is_landed = no
+				prisoner = no
+				is_incapable = no
+				stewardship = 10
+				NOT = { character = event_target:governor_candidate_1 }
+			}
+			preferred_limit = { trait = creature_human }
+			save_event_target_as = governor_candidate_2
+		}
+		create_random_steward = {
+			dynasty = none
+			religion = ROOT
+			culture = ROOT
+			age = 32
+			attributes = {
+				martial = 9
+				diplomacy = 9
+				stewardship = 9
+				intrigue = 5
+				learning = 5
+			}
+			random_traits = yes
+		}
+		new_character = { save_event_target_as = governor_candidate_3 }
+	}
+
+	option = {
+		name = EVTOPTAcolony31
+		trigger = {
+			event_target:governor_candidate_1 = {
+				is_landed = no
+				prisoner = no
+			}
+		}
+		show_portrait = event_target:governor_candidate_1
+		event_target:governor_candidate_1 = { save_event_target_as = new_governor }
+		ai_chance = { factor = 20 }
+	}
+	option = {
+		name = EVTOPTBcolony31
+		trigger = { event_target:governor_candidate_2 = { always = yes } }
+		show_portrait = event_target:governor_candidate_2
+		event_target:governor_candidate_2 = { save_event_target_as = new_governor }
+		ai_chance = { factor = 20 }
+	}
+	option = {
+		name = EVTOPTCcolony31
+		show_portrait = event_target:governor_candidate_3
+		event_target:governor_candidate_3 = { save_event_target_as = new_governor }
+		ai_chance = { factor = 20 }
+	}
+	option = { # Keep it
+		name = EVTOPTDcolony31
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 NOT = { num_of_count_titles = 3 } }
+		}
+	}
+
+	after = {
+		if = {
+			limit = { event_target:new_governor = { always = yes } }
+			event_target:colonial_territory_capital = { grant_title = event_target:new_governor }
+			character_event = { id = colony.32 days = 1 }
+		}
+		# The new man who asked for the post leaves if he did not get it
+		event_target:governor_candidate_3 = {
+			if = {
+				limit = { is_landed = no }
+				hidden_effect = { banish = yes }
+			}
+		}
+	}
+}
+
+# colony.32 Building the colony
+# What does the governor build? A fort (a castle holding, half a year's
+# income), a trading post (a city holding, the same), a generous purse
+# (twice a year's income, 200 to 400 gold) or nothing more. He starts with
+# 50 gold either way.
+# Scope: ROOT is the liege. event_target:new_governor,
+#   event_target:colonial_territory_capital.
+character_event = {
+	id = colony.32
+	desc = EVTDESCcolony32
+	picture = GFX_evt_questing_ocean
+	border = GFX_event_normal_frame_economy
+	portrait = event_target:new_governor
+
+	is_triggered_only = yes # colony.31
+
+	immediate = {
+		event_target:new_governor = { wealth = 50 }
+	}
+
+	option = { # A fort
+		name = EVTOPTAcolony32
+		trigger = {
+			scaled_wealth = 0.5
+			event_target:colonial_territory_capital = { location = { num_of_empty_holdings = 1 } }
+		}
+		scaled_wealth = -0.5
+		event_target:colonial_territory_capital = {
+			location = {
+				build_holding = { type = castle holder = event_target:new_governor }
+			}
+		}
+		ai_chance = { factor = 30 }
+	}
+	option = { # A trading post
+		name = EVTOPTBcolony32
+		trigger = {
+			scaled_wealth = 0.5
+			event_target:colonial_territory_capital = { location = { num_of_empty_holdings = 1 } }
+		}
+		scaled_wealth = -0.5
+		event_target:colonial_territory_capital = {
+			location = {
+				build_holding = { type = city holder = event_target:new_governor }
+			}
+		}
+		ai_chance = { factor = 30 }
+	}
+	option = { # A generous purse
+		name = EVTOPTCcolony32
+		trigger = { wealth = 200 }
+		transfer_scaled_wealth = {
+			to = event_target:new_governor
+			value = 2
+			min = 200
+			max = 400
+		}
+		ai_chance = { factor = 20 }
+	}
+	option = { # Nothing more
+		name = EVTOPTDcolony32
+		ai_chance = { factor = 20 }
 	}
 }

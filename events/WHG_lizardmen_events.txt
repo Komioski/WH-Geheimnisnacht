@@ -19,10 +19,11 @@
 # The Slann wakes for war       lizardmen.85 - lizardmen.94
 # Investigating alignment plot  lizardmen.100 - lizardmen.115
 # Debug                         lizardmen.120
+# The host crosses the sea      lizardmen.130 - lizardmen.133
 #
 # Fired from common/on_actions/wh_on_actions.txt (pulses, on_death, wars,
 # sieges), common/cb_types/cb_types_lizardman.txt, decisions/wh_lustria_decisions.txt,
-# decisions/wh_racial_decisions.txt and events/antoch_events.txt.
+# decisions/wh_racial_decisions.txt and jade.2 (Part 3).
 # Shared code: common/scripted_effects/wh_lizardmen_effects.txt
 # Localisation: localisation/00_WHG_lizardmen_events.csv
 # Full list with callers: docs/events/event_database.csv
@@ -31,6 +32,7 @@
 #
 # Also in this file (each part keeps its own header and namespace):
 #   Lustria: the living jungle, jungle beasts and incursions, the Egg of (namespace lustria, was WHG_lustria_events)
+#   The Staff of Jade: the war on the Knights of Antoch (namespace jade, was antoch_events)
 ###############################################################################
 
 namespace = lizardmen
@@ -695,7 +697,7 @@ letter_event = {
 				random = {
 					chance = 25
 					# Loyalists flock to the liege's banner
-					character_event = { id = 45002 days = 120 }
+					character_event = { id = civilwar.5 days = 120 }
 				}
 			}
 		}
@@ -714,9 +716,9 @@ letter_event = {
 						# Nothing
 						50 = { }
 						# A great number of rebels flock to the revolter's banner
-						30 = { character_event = { id = 45000 days = 17 } }
+						30 = { character_event = { id = civilwar.1 days = 17 } }
 						# Rebels flock to the revolter's banner
-						20 = { character_event = { id = 45004 days = 17 } }
+						20 = { character_event = { id = civilwar.2 days = 17 } }
 					}
 				}
 				if = {
@@ -728,9 +730,9 @@ letter_event = {
 						# Nothing
 						75 = { }
 						# A great number of rebels flock to the revolter's banner
-						5 = { character_event = { id = 45000 days = 17 } }
+						5 = { character_event = { id = civilwar.1 days = 17 } }
 						# Rebels flock to the revolter's banner
-						20 = { character_event = { id = 45004 days = 17 } }
+						20 = { character_event = { id = civilwar.2 days = 17 } }
 					}
 				}
 			}
@@ -3035,14 +3037,17 @@ long_character_event = {
 		trigger = { event_target:tablet_kingdom = { always = yes } }
 		piety = 50
 		set_character_flag = sanctioned_by_slann
-		spawn_fleet = {
-			province = closest
-			owner = ROOT
-			match_character = ROOT
-			match_mult = 2
-			match_min = 100
-			disband_on_peace = yes
-			earmark = liz_fleet
+		if = { # The AI sails with the host instead (lizardmen.130)
+			limit = { ai = no }
+			spawn_fleet = {
+				province = closest
+				owner = ROOT
+				match_character = ROOT
+				match_mult = 2
+				match_min = 100
+				disband_on_peace = yes
+				earmark = liz_fleet
+			}
 		}
 		war = {
 			casus_belli = tablet_search
@@ -3101,16 +3106,9 @@ long_character_event = {
 		name = EVTOPTAlizardmen83
 		piety = 50
 		decadence = -1
-		spawn_fleet = {
-			province = closest
-			owner = ROOT
-			match_character = ROOT
-			match_mult = 2
-			match_min = 50
-			disband_on_peace = yes
-			earmark = liz_fleet
-		}
 		join_attacker_wars = FROM
+		event_target:tablet_holder = { save_event_target_as = liz_crossing_enemy }
+		liz_crossing_joiner_effect = yes
 		ai_chance = {
 			factor = 75
 			modifier = { factor = 10 trait = creature_slann }
@@ -3387,7 +3385,7 @@ character_event = {
 }
 
 # lizardmen.93 Wake the Slann
-# From the awaken_slann decision and antoch.1: the Slann wakes, or keeps
+# From the awaken_slann decision and jade.2: the Slann wakes, or keeps
 # sleeping. A Slann sleeps more soundly when lazy or content, and wakes
 # sooner when the realm is losing.
 # Scope: ROOT is the Slann, FROM the Skink.
@@ -4612,6 +4610,118 @@ character_event = {
 }
 
 ###############################################################################
+# The host crosses the sea
+# A Lustrian ruler of the Old Ones at war with a realm beyond the New World
+# cannot reach it on foot, and the AI never boards the fleets it is given.
+# So the host sails on its own: some two to three months after the war
+# starts it comes ashore at a port of the enemy, sized by the ruler's rank.
+# The AI always sends it; a player may send it or sail with the fleet
+# decision instead. Rulers who join the jade war or the tablet war get the
+# same crossing.
+###############################################################################
+
+# lizardmen.130 The host takes ship
+# Hidden, on_war_started. Sends the crossing to the attacker (AI) or asks
+# the player (lizardmen.132).
+# Scope: ROOT is the defender, FROM the attacker.
+character_event = {
+	id = lizardmen.130
+	hide_window = yes
+	is_triggered_only = yes # on_war_started
+
+	trigger = {
+		liz_crossing_enemy_trigger = yes
+		FROM = {
+			liz_crossing_ruler_trigger = yes
+			NOT = { has_character_flag = liz_crossing_at_sea }
+		}
+	}
+
+	immediate = {
+		save_event_target_as = liz_crossing_enemy
+		FROM = {
+			if = {
+				limit = { ai = yes }
+				set_character_flag = liz_crossing_at_sea
+				character_event = { id = lizardmen.131 days = 60 random = 30 }
+			}
+			else = {
+				letter_event = { id = lizardmen.132 }
+			}
+		}
+	}
+}
+
+# lizardmen.131 The host comes ashore
+# Hidden. If the war with the enemy still runs, the host lands at the
+# enemy's port nearest their capital (liz_crossing_land_host_effect) and
+# the enemy is told (lizardmen.133).
+# Scope: ROOT is the Old Ones ruler; event_target:liz_crossing_enemy the
+# enemy.
+character_event = {
+	id = lizardmen.131
+	hide_window = yes
+	is_triggered_only = yes # lizardmen.130, lizardmen.132, liz_crossing_joiner_effect (lizardmen.83, jade.4)
+
+	immediate = {
+		clr_character_flag = liz_crossing_at_sea
+		if = {
+			limit = {
+				is_alive = yes
+				event_target:liz_crossing_enemy = {
+					is_alive = yes
+					is_landed = yes
+					war_with = ROOT
+				}
+			}
+			liz_crossing_land_host_effect = yes
+			event_target:liz_crossing_enemy = {
+				character_event = { id = lizardmen.133 }
+			}
+		}
+	}
+}
+
+# lizardmen.132 Across the Great Ocean
+# A player of the Old Ones at war beyond the New World sends the host by
+# sea, landing in two to three months, or sails it with the fleet decision.
+# Scope: ROOT is the player; event_target:liz_crossing_enemy the enemy.
+letter_event = {
+	id = lizardmen.132
+	title = EVTTITLElizardmen132
+	desc = EVTDESClizardmen132
+	picture = GFX_evt_lizardmen_saurus
+	is_triggered_only = yes # lizardmen.130
+
+	option = { # Send the host
+		name = EVTOPTAlizardmen132
+		set_character_flag = liz_crossing_at_sea
+		custom_tooltip = { text = EVTTOOLTIPlizardmen132 }
+		character_event = { id = lizardmen.131 days = 60 random = 30 }
+	}
+	option = { # We will sail ourselves
+		name = EVTOPTBlizardmen132
+	}
+}
+
+# lizardmen.133 They come from the sea
+# The enemy learns the host has landed.
+# Scope: ROOT is the enemy, FROM the Old Ones ruler.
+character_event = {
+	id = lizardmen.133
+	title = EVTTITLElizardmen133
+	desc = EVTDESClizardmen133
+	picture = GFX_evt_lizardmen_saurus
+	is_triggered_only = yes # lizardmen.131
+
+	trigger = { ai = no }
+
+	option = {
+		name = EVTOPTAlizardmen133
+	}
+}
+
+###############################################################################
 # Debug
 ###############################################################################
 
@@ -4629,7 +4739,6 @@ character_event = {
 	}
 }
 
-
 ###############################################################################
 # Lustria: the living jungle, jungle beasts and incursions, the Egg of
 # Quango, the explore-ruins job events and the quest for the Fountain of
@@ -4646,6 +4755,7 @@ character_event = {
 # The Egg of Quango             lustria.40
 # Exploring the ruins (job)     lustria.45 - lustria.48, 122001
 # The Fountain of Youth         lustria.60 - lustria.93
+# Sacking the temple cities     lustria.100 - lustria.108
 #
 # Fired from common/on_actions/wh_on_actions.txt (startup, pulses, rebels,
 # sieges), common/job_actions/00_job_actions.txt (lustria.45 and 122001 are
@@ -4908,7 +5018,10 @@ character_event = {
 			is_disease_immune_race = no
 			any_courtier = {
 				is_disease_immune_race = no
-				location = { region = world_new_world_lustria has_province_modifier = lustria_jungle }
+				location = {
+					region = world_new_world_lustria
+					has_province_modifier = lustria_jungle
+				}
 			}
 		}
 	}
@@ -4958,10 +5071,7 @@ character_event = {
 	option = {
 		name = OK
 		event_target:target_character = {
-			if = {
-				limit = { has_dlc = "Reapers" }
-				add_symptom_effect = yes
-			}
+			if = { limit = { has_dlc = "Reapers" } add_symptom_effect = yes }
 			else_if = { # without Reaper's Due: an illness turns into a jungle fever
 				limit = { trait = ill }
 				random_list = {
@@ -4972,10 +5082,7 @@ character_event = {
 					20 = { add_trait = pneumonic nurgle_blessing_check_effect = yes }
 				}
 			}
-			else = {
-				add_trait = ill
-				nurgle_blessing_check_effect = yes
-			}
+			else = { add_trait = ill nurgle_blessing_check_effect = yes }
 		}
 	}
 }
@@ -7528,7 +7635,9 @@ character_event = {
 }
 
 # lustria.93 The Pools of Rejuvenation
-# The quest is over: the Elixir of Eternal Youth.
+# The quest is over: the Elixir of Eternal Youth. The flag found_the_pools
+# stays for life: the finder may build a garden Fountain of Youth without
+# being a mystic, and its water does more for them (wonder.54).
 # Scope: ROOT is the quester.
 long_character_event = {
 	id = lustria.93
@@ -7545,9 +7654,493 @@ long_character_event = {
 			set_character_flag = amb_fountain_found
 		}
 		add_artifact = elixir_of_eternal_youth
+		set_character_flag = found_the_pools # garden fountain (wonder.54)
+		character_event = { id = chronicle.142 } # Deed: Youth Everlasting (WHG_chronicle_events)
 		remove_trait = questing
 		if = { limit = { trait = creature_skink } piety = 150 decadence = -10 }
 		if = { limit = { trait = creature_amazon } piety = 150 decadence = -10 }
 		ai_chance = { factor = 1 }
+	}
+}
+
+###############################################################################
+# Sacking the temple cities
+# When an outsider storms a holding in a Lustrian province of the Old Ones,
+# the warriors loot the plazas and the step-pyramids. Most raids bring back
+# gold, some run into the Skinks, the jungle fevers or the Temple Guard, and
+# a lucky few carry off a golden relic of the Old Ones.
+# (Revived from the cut Norscan looting events NORLUS.1-11, which had no
+# caller.)
+#
+# The sack                      lustria.100
+# Gold of the plazas            lustria.101 - lustria.103
+# The price of greed            lustria.104 - lustria.106
+# The gods watch                lustria.107 - lustria.108
+#
+# Fired from: on_siege_over_winner (common/on_actions/wh_on_actions.txt).
+# Saved: character flag lustria_sack_recent (one sack every two years),
+#   lustria_relic_taken (one relic per lifetime); event targets
+#   sacked_holding, sacked_province.
+###############################################################################
+
+# lustria.100 The sack of a temple city
+# on_siege_over_winner: an outsider takes a holding in a Lustrian province of
+# the Old Ones and picks how the sack turns out.
+# Scope: ROOT is the winner, FROM the holding.
+character_event = {
+	id = lustria.100
+	hide_window = yes
+
+	is_triggered_only = yes # on_siege_over_winner
+
+	trigger = {
+		is_ruler = yes
+		NOT = { religion_group = old_ones_group }
+		NOT = { trait = creature_amazon }
+		OR = {
+			NOT = { has_character_flag = lustria_sack_recent }
+			had_character_flag = { flag = lustria_sack_recent days = 730 }
+		}
+		FROM = { location = { region = world_new_world_lustria religion_group = old_ones_group } }
+	}
+
+	immediate = {
+		clr_character_flag = lustria_sack_recent
+		set_character_flag = lustria_sack_recent
+		FROM = {
+			save_event_target_as = sacked_holding
+			location = { save_event_target_as = sacked_province }
+		}
+		random_list = {
+			30 = { character_event = { id = lustria.101 } }
+			20 = { character_event = { id = lustria.102 } }
+			10 = {
+				modifier = { factor = 3 event_target:sacked_holding = { holding_type = temple } }
+				character_event = { id = lustria.103 }
+			}
+			10 = { character_event = { id = lustria.104 } }
+			8 = {
+				modifier = { factor = 0 trait = ill }
+				modifier = { factor = 0 has_disease_trigger = yes }
+				character_event = { id = lustria.105 }
+			}
+			3 = {
+				modifier = { factor = 0 is_adult = no }
+				modifier = { factor = 0.5 trait = craven }
+				modifier = { factor = 2 trait = brave }
+				character_event = { id = lustria.106 }
+			}
+			4 = {
+				modifier = { factor = 0 has_character_flag = lustria_relic_taken }
+				modifier = { factor = 0 any_artifact = { artifact = temple_city_gold } }
+				character_event = { id = lustria.107 }
+			}
+			5 = { character_event = { id = lustria.108 } }
+		}
+	}
+}
+
+# lustria.101 A modest haul
+# Scope: ROOT is the winner.
+character_event = {
+	id = lustria.101
+	desc = EVTDESClustria101
+	picture = GFX_evt_lustria_jungle
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # lustria.100
+
+	option = {
+		name = EVTOPTAlustria101
+		scaled_wealth = { value = 0.5 min = 50 max = 200 }
+		prestige = 50
+	}
+}
+
+# lustria.102 A rich haul
+# Scope: ROOT is the winner.
+character_event = {
+	id = lustria.102
+	desc = EVTDESClustria102
+	picture = GFX_evt_lustria_jungle
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # lustria.100
+
+	option = {
+		name = EVTOPTAlustria102
+		scaled_wealth = { value = 1 min = 100 max = 400 }
+		prestige = 100
+	}
+}
+
+# lustria.103 The temple is stripped
+# The raiders strip the gold plates from a step-pyramid. The temple city will
+# not forget it.
+# Scope: ROOT is the winner.
+character_event = {
+	id = lustria.103
+	desc = EVTDESClustria103
+	picture = GFX_evt_lustria_jungle
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # lustria.100
+
+	option = {
+		name = EVTOPTAlustria103
+		scaled_wealth = { value = 2 min = 200 max = 750 }
+		prestige = 200
+		event_target:sacked_province = {
+			add_province_modifier = { name = depopulated_1 duration = 1825 }
+		}
+	}
+}
+
+# lustria.104 Skink ambush
+# Scope: ROOT is the winner.
+character_event = {
+	id = lustria.104
+	desc = EVTDESClustria104
+	picture = GFX_evt_lustria_jungle
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # lustria.100
+
+	option = {
+		name = EVTOPTAlustria104
+		trigger = { NOT = { trait = wounded } }
+		add_trait = wounded
+		prestige = -50
+		character_event = { id = traitnote.280 } # wounded notice
+	}
+	option = {
+		name = EVTOPTBlustria104
+		trigger = { trait = wounded }
+		remove_trait = wounded
+		add_maimed_trait_effect = yes
+		prestige = -100
+	}
+}
+
+# lustria.105 Jungle fever
+# Scope: ROOT is the winner.
+character_event = {
+	id = lustria.105
+	desc = EVTDESClustria105
+	picture = GFX_evt_lustria_jungle
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # lustria.100
+
+	option = {
+		name = EVTOPTAlustria105
+		if = { limit = { has_dlc = "Reapers" } add_symptom_effect = yes }
+		else = { add_trait = ill }
+		nurgle_blessing_check_effect = yes
+		scaled_wealth = { value = 0.25 min = 25 max = 100 }
+	}
+}
+
+# lustria.106 The Temple Guard
+# The looter pushes for the heart of the city and meets the Saurus of the
+# Temple Guard. Only a lucky few live through it.
+# Scope: ROOT is the winner.
+character_event = {
+	id = lustria.106
+	desc = EVTDESClustria106
+	picture = GFX_evt_lizardmen_saurus
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # lustria.100
+
+	option = {
+		name = EVTOPTAlustria106
+		lustria_temple_guard_death_effect = yes
+	}
+}
+
+# lustria.107 A golden relic
+# The warriors bring back a golden relic of the Old Ones. Keep it, or melt it
+# down for the gold.
+# Scope: ROOT is the winner.
+character_event = {
+	id = lustria.107
+	desc = EVTDESClustria107
+	picture = GFX_evt_lustria_jungle
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # lustria.100
+
+	immediate = {
+		set_character_flag = lustria_relic_taken
+	}
+
+	option = { # keep it
+		name = EVTOPTAlustria107
+		add_artifact = temple_city_gold
+		prestige = 100
+		ai_chance = { factor = 70 }
+	}
+	option = { # melt it down
+		name = EVTOPTBlustria107
+		scaled_wealth = { value = 1.5 min = 150 max = 500 }
+		ai_chance = { factor = 30 modifier = { factor = 2 trait = greedy } }
+	}
+}
+
+# lustria.108 The gods take notice
+# Scope: ROOT is the winner.
+character_event = {
+	id = lustria.108
+	desc = EVTDESClustria108
+	picture = GFX_evt_lustria_jungle
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # lustria.100
+
+	option = {
+		name = EVTOPTAlustria108
+		scaled_wealth = { value = 0.5 min = 50 max = 200 }
+		piety = 150
+		prestige = 100
+	}
+}
+
+###############################################################################
+# The Staff of Jade: the Lizardmen war on the Knights of Antoch
+# Namespace: jade (was antoch.0 - antoch.5, antoch.201 in antoch_events.txt)
+# Faction: Lizardmen & Amazons
+# Serves: the Lizardmen and the Bretonnian Knights of Antoch who hold the staff
+#
+# The Bretonnian Knights of Antoch carried the Staff of Jade out of
+# Lustria. At the start of the game the ruler of Itza may send the hosts of
+# the Old Ones over the ocean to take it back (any Lizardman emperor of
+# Lustria can decide the same later). Every independent Old Ones ruler is
+# called to the attack, and every independent ruler of the Lady to the
+# defence. When Chaos runs high, a Lizardman who holds the staff can spend it
+# in a great ritual that pushes the winds of Chaos back to the poles.
+#
+# Calling the war               jade.1 - jade.3
+# Joining the war               jade.4 - jade.5
+# The ritual of the staff       jade.10 - jade.11
+#
+# Fired from: on_startup (wh_on_actions.txt, jade.1);
+#   decisions/wh_lustria_decisions.txt (reclaim_the_staff_of_jade: jade.2,
+#   destroy_the_staff_of_jade: jade.10); reclaiming_the_staff_of_jade_cb
+#   on_add in common/cb_types/ka_cb_types.txt (jade.3).
+# Saved: global flags the_staff_of_jade, reclaiming_the_staff_of_jade,
+#   destroy_the_staff_of_jade; title flag reclaimation_instigator; event
+#   target jade_keeper.
+# Loc: localisation/00_WHG_lizardmen_events.csv
+###############################################################################
+
+namespace = jade
+
+# jade.1 The staff calls (game start)
+# At the start the host hands the ruler of Itza the choice of war (jade.2).
+# Scope: ROOT is the multiplayer host.
+character_event = {
+	id = jade.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_startup
+	only_playable = yes
+
+	trigger = {
+		is_multiplayer_host_character = yes
+		NOT = { has_global_flag = the_staff_of_jade }
+		k_itza = { holder_scope = { culture_group = lizardman_group } }
+	}
+
+	immediate = {
+		set_global_flag = the_staff_of_jade
+		k_itza = { holder_scope = { letter_event = { id = jade.2 } } }
+	}
+}
+
+# jade.2 Reclaim the Staff of Jade
+# A Lizardman ruler declares the holy war on the holder of the staff and
+# wakes a sleeping Slann vassal (lizardmen.93), or waits for a better time.
+# Scope: ROOT is the Lizardman ruler; event_target:jade_keeper the holder.
+letter_event = {
+	id = jade.2
+	title = EVTTITLEjade
+	desc = EVTDESCjade2
+	picture = GFX_evt_lizardmen_temples
+
+	is_triggered_only = yes # jade.1, reclaim_the_staff_of_jade decision
+	culture_group = lizardman_group
+
+	immediate = {
+		random_character = {
+			limit = { has_artifact = staff_of_jade is_alive = yes }
+			save_event_target_as = jade_keeper
+		}
+	}
+
+	option = { # In the name of the Great Plan!
+		name = EVTOPTAjade2
+		trigger = {
+			independent = yes
+			religion = old_ones
+			event_target:jade_keeper = { NOT = { same_realm = ROOT } }
+		}
+		primary_title = { set_title_flag = reclaimation_instigator }
+		event_target:jade_keeper = {
+			reverse_war = { target = ROOT casus_belli = reclaiming_the_staff_of_jade_cb }
+		}
+		any_independent_ruler = {
+			limit = { religion = old_ones NOT = { character = ROOT } }
+			character_event = { id = jade.4 days = 7 }
+		}
+		hidden_effect = { # Wake the Slann
+			add_character_modifier = { name = wakeslann_cooldown hidden = yes duration = 1200 }
+			random_vassal = {
+				limit = { trait = creature_slann trait = lizardman_sleepingslann }
+				character_event = { id = lizardmen.93 days = 10 }
+			}
+		}
+		ai_chance = { factor = 90 }
+	}
+	option = { # This is not the time
+		name = EVTOPTBjade2
+		clr_global_flag = the_staff_of_jade
+		ai_chance = { factor = 10 }
+	}
+}
+
+# jade.3 The Lizardmen come for the staff
+# When the war starts, the holder of the staff calls every independent ruler
+# of the Lady to the defence (jade.5).
+# Scope: ROOT is the holder of the staff, FROM the attacker.
+character_event = {
+	id = jade.3
+	hide_window = yes
+
+	is_triggered_only = yes # reclaiming_the_staff_of_jade_cb on_add
+
+	trigger = {
+		has_global_flag = the_staff_of_jade
+		NOT = { has_global_flag = reclaiming_the_staff_of_jade }
+	}
+
+	immediate = {
+		set_global_flag = reclaiming_the_staff_of_jade
+		any_independent_ruler = {
+			limit = { religion = grail NOT = { character = ROOT } }
+			character_event = { id = jade.5 days = 7 }
+		}
+	}
+}
+
+# jade.4 The Great Plan calls
+# An independent ruler of the Old Ones joins the attack (+250 piety) or
+# stays home (-100 piety).
+# Scope: ROOT is the ruler, FROM the attacker.
+character_event = {
+	id = jade.4
+	desc = EVTDESCjade4
+	picture = GFX_evt_lizardmen_temples
+
+	is_triggered_only = yes # jade.2
+	religion = old_ones
+
+	trigger = {
+		independent = yes
+	}
+
+	option = { # Join the attack
+		name = EVTOPTAjade4
+		join_attacker_wars = FROM
+		event_target:jade_keeper = { save_event_target_as = liz_crossing_enemy }
+		liz_crossing_joiner_effect = yes
+		piety = 250
+		ai_chance = { factor = 1 modifier = { factor = 0.2 trait = cynical } }
+	}
+	option = { # Not now
+		name = EVTOPTBjade4
+		custom_tooltip = { text = EVTTOOLTIPjade_join_later }
+		piety = -100
+		ai_chance = { factor = 0.25 modifier = { factor = 2 trait = cynical } }
+	}
+}
+
+# jade.5 The Order of Antoch calls
+# An independent ruler of the Lady rides to the defence of the Knights of
+# Antoch (+250 piety) or stays home (-100 piety).
+# Scope: ROOT is the ruler, FROM the holder of the staff.
+character_event = {
+	id = jade.5
+	desc = EVTDESCjade5
+	picture = GFX_evt_lizardmen_temples
+
+	is_triggered_only = yes # jade.3
+	religion = grail
+
+	trigger = {
+		independent = yes
+	}
+
+	option = { # Join the defence
+		name = EVTOPTAjade5
+		join_defender_wars = FROM
+		piety = 250
+		ai_chance = { factor = 1 modifier = { factor = 0.2 trait = cynical } }
+	}
+	option = { # Not now
+		name = EVTOPTBjade5
+		custom_tooltip = { text = EVTTOOLTIPjade_join_later }
+		piety = -100
+		ai_chance = { factor = 0.5 modifier = { factor = 2 trait = cynical } }
+	}
+}
+
+# jade.10 The ritual of the staff
+# With Chaos running high, the Lizardman who holds the staff spends it in
+# a great ritual: the staff shatters and the doom falls to nothing. Every
+# other player hears of it (jade.11).
+# Scope: ROOT is the Lizardman ruler.
+letter_event = {
+	id = jade.10
+	title = EVTTITLEjade
+	desc = EVTDESCjade10
+	picture = GFX_evt_lizardmen_temples
+
+	is_triggered_only = yes # destroy_the_staff_of_jade decision
+
+	trigger = {
+		has_artifact = staff_of_jade
+		culture_group = lizardman_group
+		OR = { is_doom_high_trigger = yes is_doom_very_high_trigger = yes }
+	}
+
+	option = { # Just as the Old Ones intended!
+		name = EVTOPTAjade10
+		custom_tooltip = {
+			text = EVTTOOLTIPjade10
+			hidden_effect = { unsafe_destroy_artifact = staff_of_jade }
+		}
+		reduce_doom_progress_reset_effect = yes
+		piety = 500
+		prestige = 500
+		any_player = {
+			limit = { NOT = { character = ROOT } }
+			character_event = { id = jade.11 days = 7 }
+		}
+	}
+}
+
+# jade.11 News: the winds of Chaos pushed back
+# Scope: ROOT is a player, FROM the Lizardman who did it.
+character_event = {
+	id = jade.11
+	title = EVTTITLEjade
+	desc = EVTDESCjade11
+	picture = GFX_evt_lizardmen_temples
+
+	is_triggered_only = yes # jade.10
+
+	option = {
+		name = EVTOPTAjade11
 	}
 }

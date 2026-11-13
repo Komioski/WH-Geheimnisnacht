@@ -17,6 +17,16 @@
 # Children                             family.40 - family.42
 # Reconciling kin                      family.50 - family.59
 # The children's friendship            family.60 - family.61
+# Part 2: Bastards (namespace bastard), see its header
+#                                      bastard.1 - bastard.81
+# Part 3: Courtly romance (namespace romance), see its header
+#                                      romance.1 - romance.11
+# Part 4: Dynasty requests (namespace dynreq), see its header
+#                                      dynreq.1 - dynreq.12
+# Part 5: Kin who ask for land or a match (namespace kinreq), see its
+#   header                             kinreq.1 - kinreq.34
+# Part 6: The disobedient daughter (namespace daughter), see its header
+#                                      daughter.10 - daughter.302
 #
 # Fired from: on_focus_pulse in 00_on_actions.txt (family.10, 20, 30, 40,
 #   50, 60). Shared triggers and effects are in WHG_focus_triggers.txt and
@@ -51,7 +61,7 @@ character_event = {
 				random = 85
 			}
 			add_trait = proud
-			character_event = { id = 38261 } # Notify proud
+			character_event = { id = traitnote.261 } # Notify proud
 		}
 		if = {
 			limit = {
@@ -59,7 +69,7 @@ character_event = {
 				random = 50
 			}
 			remove_trait = humble
-			character_event = { id = 38312 } # Notify no longer humble
+			character_event = { id = traitnote.312 } # Notify no longer humble
 		}
 		character_event = { id = family.2 days = 7 }
 		if = {
@@ -966,5 +976,3849 @@ character_event = {
 				add_friend = event_target:target_second
 			}
 		}
+	}
+}
+
+###############################################################################
+# Part 2: Bastards (namespace bastard)
+# Faction: Generic
+# Serves: every race with women, and the bastards they bear
+# (was 76000 - 76041 in the vanilla bastard_events.txt)
+#
+# An unwed lord is tempted by a young woman of the court; an unwed daughter
+# hides a child; a spymaster offers to rid the court of a bastard; bastard
+# sons and daughters ask to be made legitimate, are teased by the trueborn
+# children and ask their guardian what the word means. A Slaaneshi lord
+# sees no sin in the night's pleasures.
+#
+# The temptation                    bastard.1
+# The unwed daughter's child        bastard.10 - bastard.14
+# Rid the court of a bastard        bastard.20
+# A bastard asks to be legitimised  bastard.30
+# The bastard's petition            bastard.40 - bastard.42
+# The unwed mother                  bastard.50 - bastard.53
+# A dream is born                   bastard.60
+# Teased by the trueborn            bastard.70
+# What is a bastard?                bastard.80 - bastard.81
+#
+# Callers: on_yearly_pulse random_events in 00_on_actions.txt (1, 10, 20,
+#   30, 40, 50, 60, 70, 80); the rest are follow-ups in this part.
+# Saved: event targets daughter_with_bastard, bastard_child; character
+#   flags raising_bastard, asked_about_bastard, ruler_wants_me_dead,
+#   father_didnt_legitimise, father_legitimise.
+# Shared triggers: bastard_daughter_trigger, bastard_petitioner_trigger
+#   in common/scripted_triggers/wh_bastard_triggers.txt
+###############################################################################
+
+namespace = bastard
+
+# bastard.1 The temptation
+# A young unwed lord is tempted by a young woman of his court. A Slaaneshi
+# lord gains piety for giving in and loses it for refusing.
+# Scope: ROOT is the lord.
+character_event = {
+	id = bastard.1
+	desc = EVTDESCbastard1
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	min_age = 16
+	max_age = 25
+	only_men = yes
+	only_rulers = yes
+	capable_only = yes
+	prisoner = no
+	is_married = no
+	trigger = {
+		is_no_females_race = no
+		NOR = {
+			trait = chaste
+			trait = celibate
+			trait = homosexual
+			trait = eunuch
+			has_lover = yes
+		}
+		fertility = 0.6
+		any_courtier = {
+			is_woman_trigger = yes
+			age = 16
+			NOT = { age = 30 }
+			is_married = no
+		}
+	}
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 trait = lustful }
+		modifier = { factor = 2 trait = gregarious }
+		modifier = { factor = 2 religion = slaanesh }
+		modifier = { factor = 0.5 trait = shy }
+	}
+	option = { # Give in
+		name = EVTOPTAbastard1
+		if = {
+			limit = { religion = slaanesh }
+			piety = 10
+		}
+		else = {
+			piety = -10
+		}
+		if = {
+			limit = { NOT = { trait = lustful } }
+			random = {
+				chance = 50
+				add_trait = lustful
+				hidden_effect = { character_event = { id = traitnote.272 } } # Notify Lustful
+			}
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 3 trait = lustful }
+			modifier = { factor = 3 religion = slaanesh }
+			modifier = { factor = 0.3 trait = zealous }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTBbastard1
+		trigger = { NOT = { religion = slaanesh } }
+		random = {
+			chance = 25
+			add_trait = chaste
+			hidden_effect = { character_event = { id = traitnote.274 } } # Notify Chaste
+		}
+		piety = 5
+		ai_chance = { factor = 50 }
+	}
+	option = { # A Slaaneshi who refuses offends the Prince
+		name = EVTOPTCbastard1
+		trigger = { religion = slaanesh }
+		piety = -10
+		ai_chance = { factor = 5 }
+	}
+}
+
+# bastard.10 The unwed daughter's child
+# A ruler's unwed daughter hid her pregnancy and now shows her child.
+# Hush it up through the spymaster (bastard.11), raise the child, or
+# punish her and give the child away.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = bastard.10
+	desc = EVTDESCbastard10
+	picture = GFX_evt_pregnancy
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	only_playable = yes
+	capable_only = yes
+	trigger = {
+		any_child = { bastard_daughter_trigger = yes }
+		job_spymaster = { is_alive = yes }
+	}
+	immediate = {
+		random_child = {
+			limit = { bastard_daughter_trigger = yes }
+			save_event_target_as = daughter_with_bastard
+		}
+	}
+	option = { # Hush it up
+		name = EVTOPTAbastard10
+		character_event = { id = bastard.11 tooltip = EVTTOOLTIPbastard11 }
+		ai_chance = { factor = 40 }
+	}
+	option = { # Raise the child
+		name = EVTOPTBbastard10
+		event_target:daughter_with_bastard = {
+			create_character = {
+				age = 0
+				trait = bastard
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Set the racial trait
+				set_mother = PREV
+			}
+			opinion = { modifier = opinion_grateful who = ROOT years = 5 }
+		}
+		prestige = -100
+		if = {
+			limit = { NOT = { trait = kind } }
+			random = {
+				chance = 25
+				add_trait = kind
+				hidden_effect = { character_event = { id = traitnote.268 } } # Notify Kind
+			}
+		}
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 2 trait = kind }
+		}
+	}
+	option = { # Punish her
+		name = EVTOPTCbastard10
+		event_target:daughter_with_bastard = {
+			opinion = { modifier = opinion_betrayed who = ROOT years = 20 }
+			if = {
+				limit = {
+					NOR = { religion = ormazd religion = kitabid religion = slaanesh trait = chaste }
+				}
+				add_trait = chaste
+			}
+			health = -1
+		}
+		if = {
+			limit = { NOT = { trait = cruel } }
+			random = {
+				chance = 25
+				add_trait = cruel
+				hidden_effect = { character_event = { id = traitnote.259 } } # Notify Cruel
+			}
+		}
+		ai_chance = {
+			factor = 20
+			modifier = { factor = 3 trait = cruel }
+			modifier = { factor = 0 trait = kind }
+		}
+	}
+}
+
+# bastard.11 The spymaster's advice
+# Scope: ROOT is the ruler.
+character_event = {
+	id = bastard.11
+	desc = EVTDESCbastard11
+	picture = GFX_evt_council
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.10
+	option = { # Hide her, then get rid of the child
+		name = EVTOPTAbastard11
+		scaled_wealth = -0.33
+		random = {
+			chance = 33
+			add_trait = deceitful
+			hidden_effect = { character_event = { id = traitnote.255 } } # Notify Deceitful
+		}
+		random = {
+			chance = 10
+			event_target:daughter_with_bastard = { save_event_target_as = kinslayer_target }
+			add_kinslayer_trait_effect = yes
+		}
+	}
+	option = { # Slay the father, take the child away
+		name = EVTOPTBbastard11
+		scaled_wealth = -0.2
+		piety = -10
+		if = {
+			limit = { NOT = { trait = arbitrary } }
+			random = {
+				chance = 33
+				add_trait = arbitrary
+				hidden_effect = { character_event = { id = traitnote.266 } } # Notify Arbitrary
+			}
+		}
+	}
+	option = { # Just deal with it
+		name = EVTOPTCbastard11
+		if = {
+			limit = { NOT = { trait = trusting } }
+			random = { chance = 33 add_trait = trusting }
+		}
+		job_spymaster = {
+			character_event = { id = bastard.12 tooltip = EVTTOOLTIPbastard12 }
+		}
+	}
+}
+
+# bastard.12 The spymaster's task
+# The spymaster deals with it quietly (and sometimes fails, bastard.13) or
+# lets mother and child live (bastard.14).
+# Scope: ROOT is the spymaster, FROM the ruler.
+character_event = {
+	id = bastard.12
+	desc = EVTDESCbastard12
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.11
+	option = { # Part of the job
+		name = EVTOPTAbastard12
+		prestige = 50
+		if = {
+			limit = { NOT = { intrigue = 12 } }
+			random = {
+				chance = 15
+				FROM = { character_event = { id = bastard.13 tooltip = EVTTOOLTIPbastard13 } }
+			}
+		}
+		ai_chance = {
+			factor = 60
+			modifier = { factor = 0.2 trait = kind }
+		}
+	}
+	option = { # Spare them
+		name = EVTOPTBbastard12
+		change_intrigue = 1
+		event_target:daughter_with_bastard = {
+			create_character = {
+				age = 0
+				trait = bastard
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Set the racial trait
+				set_mother = PREV
+			}
+			opinion = { modifier = opinion_saved_me_and_child who = ROOT years = 5 }
+		}
+		FROM = { character_event = { id = bastard.14 tooltip = EVTTOOLTIPbastard14 } }
+		ai_chance = {
+			factor = 40
+			modifier = { factor = 3 trait = kind }
+		}
+	}
+}
+
+# bastard.13 The spymaster botched it
+# Scope: ROOT is the ruler, FROM the spymaster.
+character_event = {
+	id = bastard.13
+	desc = EVTDESCbastard13
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.12
+	option = { # Imprison the spymaster
+		name = EVTOPTAbastard13
+		FROM = { imprison = ROOT }
+		ai_chance = { factor = 30 }
+	}
+	option = { # Own up
+		name = EVTOPTBbastard13
+		prestige = -20
+		if = {
+			limit = { NOT = { trait = honest } }
+			random = { chance = 33 add_trait = honest }
+		}
+		ai_chance = { factor = 30 }
+	}
+	option = { # Pardon everyone
+		name = EVTOPTCbastard13
+		event_target:daughter_with_bastard = {
+			create_character = {
+				age = 0
+				trait = bastard
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Set the racial trait
+				set_mother = PREV
+			}
+		}
+		ai_chance = { factor = 40 }
+	}
+}
+
+# bastard.14 The spymaster let them live
+# Scope: ROOT is the ruler, FROM the spymaster.
+character_event = {
+	id = bastard.14
+	desc = EVTDESCbastard14
+	picture = GFX_evt_spymaster
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.12
+	option = {
+		name = EVTOPTAbastard14
+		prestige = -5
+	}
+}
+
+# bastard.20 Rid the court of a bastard
+# The spymaster offers to arrange an accident for a young bastard of the
+# ruler. Killing one's own child makes a kinslayer.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = bastard.20
+	desc = EVTDESCbastard20
+	picture = GFX_evt_beheading
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	only_rulers = yes
+	capable_only = yes
+	trigger = {
+		job_spymaster = { NOT = { trait = bastard } }
+		any_child = {
+			trait = bastard
+			NOT = { age = 16 }
+		}
+	}
+	immediate = {
+		random_child = {
+			limit = {
+				trait = bastard
+				NOT = { age = 16 }
+			}
+			save_event_target_as = bastard_child
+		}
+	}
+	option = { # Go ahead
+		name = EVTOPTAbastard20
+		event_target:bastard_child = {
+			set_character_flag = ruler_wants_me_dead
+			random = {
+				chance = 15
+				clr_character_flag = ruler_wants_me_dead
+				if = {
+					limit = { is_invincible_trigger = yes }
+					antideath_effect = yes
+				}
+				else = {
+					ROOT = {
+						event_target:bastard_child = { save_event_target_as = kinslayer_target }
+						add_kinslayer_trait_effect = yes
+					}
+					death = { death_reason = death_murder_fall killer = ROOT }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 100 num_of_children = 5 }
+			modifier = { factor = 0.1 NOT = { num_of_children = 5 } }
+			modifier = { factor = 0 trait = kind }
+		}
+	}
+	option = { # Leave the child be
+		name = EVTOPTBbastard20
+		if = {
+			limit = { NOT = { trait = honest } }
+			random = { chance = 33 add_trait = honest }
+		}
+		ai_chance = { factor = 10 }
+	}
+}
+
+# bastard.30 A bastard asks to be legitimised
+# A grown bastard son or daughter at court asks the parent ruler to make
+# them legitimate.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = bastard.30
+	desc = EVTDESCbastard30
+	picture = GFX_evt_son_asking_father
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	only_rulers = yes
+	capable_only = yes
+	war = no
+	trigger = {
+		in_command = no
+		any_child = { bastard_petitioner_trigger = yes }
+	}
+	immediate = {
+		random_child = {
+			limit = { bastard_petitioner_trigger = yes }
+			save_event_target_as = bastard_child
+		}
+	}
+	option = { # Not a chance
+		name = EVTOPTAbastard30
+		event_target:bastard_child = {
+			opinion = { modifier = denounced_child who = ROOT years = 5 }
+			random = {
+				chance = 33
+				add_trait = wroth
+				hidden_effect = { character_event = { id = traitnote.254 } } # Notify Wroth
+			}
+		}
+		ai_chance = { factor = 30 }
+	}
+	option = { # Not yet
+		name = EVTOPTBbastard30
+		event_target:bastard_child = {
+			random = {
+				chance = 33
+				add_trait = stressed
+				hidden_effect = { character_event = { id = traitnote.282 } } # Notify Stressed
+			}
+		}
+		ai_chance = { factor = 40 }
+	}
+	option = { # Welcome
+		name = EVTOPTCbastard30
+		event_target:bastard_child = {
+			remove_trait = bastard
+			add_trait = legit_bastard
+			opinion = { modifier = opinion_glad who = ROOT years = 5 }
+		}
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 3 trait = kind }
+			modifier = { factor = 2 NOT = { num_of_children = 3 } }
+		}
+	}
+}
+
+# bastard.40 The bastard's petition
+# A grown bastard thinks of asking the father to be included in the
+# succession (bastard.41).
+# Scope: ROOT is the bastard.
+character_event = {
+	id = bastard.40
+	desc = EVTDESCbastard40
+	picture = GFX_evt_son_asking_father
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	trigger = {
+		trait = bastard
+		NOR = {
+			trait = lustful
+			trait = gluttonous
+			trait = greedy
+			trait = slothful
+			trait = envious
+			trait = wroth
+			trait = proud
+			trait = content
+		}
+		father = {
+			war = no
+			in_command = no
+			is_ruler = yes
+			is_liege_of = ROOT
+			opinion = { who = ROOT value = 30 }
+			at_location = ROOT
+		}
+	}
+	option = { # Ask now
+		name = EVTOPTAbastard40
+		father = { character_event = { id = bastard.41 tooltip = EVTTOOLTIPbastard41 } }
+		ai_chance = { factor = 70 }
+	}
+	option = { # Why bother?
+		name = EVTOPTBbastard40
+		piety = 10
+		add_trait = content
+		ai_chance = { factor = 30 }
+	}
+}
+
+# bastard.41 The father is asked
+# Scope: ROOT is the father, FROM the bastard.
+character_event = {
+	id = bastard.41
+	desc = EVTDESCbastard41
+	picture = GFX_evt_son_asking_father
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.40
+	option = { # Unthinkable
+		name = EVTOPTAbastard41
+		FROM = {
+			hidden_effect = {
+				set_character_flag = father_didnt_legitimise
+				character_event = { id = bastard.42 }
+			}
+			opinion = { modifier = denounced_child who = ROOT years = 5 }
+			random = {
+				chance = 33
+				add_trait = wroth
+				hidden_effect = { character_event = { id = traitnote.254 days = 2 } } # Notify Wroth
+			}
+		}
+		ai_chance = { factor = 50 }
+	}
+	option = { # A worthy heir
+		name = EVTOPTBbastard41
+		FROM = {
+			hidden_effect = {
+				set_character_flag = father_legitimise
+				character_event = { id = bastard.42 }
+			}
+			remove_trait = bastard
+			add_trait = legit_bastard
+		}
+		ai_chance = {
+			factor = 50
+			modifier = { factor = 2 opinion = { who = FROM value = 60 } }
+		}
+	}
+}
+
+# bastard.42 The father's answer
+# Scope: ROOT is the bastard, FROM the father.
+character_event = {
+	id = bastard.42
+	desc = EVTDESCbastard42
+	picture = GFX_evt_son_asking_father
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.41
+	option = {
+		name = EVTOPTAbastard42
+		trigger = { has_character_flag = father_didnt_legitimise }
+		clr_character_flag = father_didnt_legitimise
+		opinion = { modifier = denounced_child who = FROM years = 5 }
+	}
+	option = {
+		name = EVTOPTBbastard42
+		trigger = { has_character_flag = father_legitimise }
+		clr_character_flag = father_legitimise
+		opinion = { modifier = opinion_glad who = FROM years = 5 }
+	}
+}
+
+# bastard.50 The unwed mother
+# An unwed mother raising a bastard whose father is away may ask her own
+# father, her liege, for help (bastard.51).
+# Scope: ROOT is the mother.
+character_event = {
+	id = bastard.50
+	desc = EVTDESCbastard50
+	picture = GFX_evt_birth
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	min_age = 16
+	only_women = yes
+	is_married = no
+	trigger = {
+		is_woman_trigger = yes
+		NOT = { has_character_flag = raising_bastard }
+		father = {
+			is_ruler = yes
+			is_liege_of = ROOT
+		}
+		any_child = {
+			age = 5
+			NOT = { age = 16 }
+			trait = bastard
+			father = { is_abroad = yes }
+		}
+	}
+	option = { # Ask my father
+		name = EVTOPTAbastard50
+		set_character_flag = raising_bastard
+		father = { character_event = { id = bastard.51 tooltip = EVTTOOLTIPbastard51 } }
+		ai_chance = { factor = 60 }
+	}
+	option = { # Toil on
+		name = EVTOPTBbastard50
+		set_character_flag = raising_bastard
+		add_trait = stressed
+		ai_chance = { factor = 40 }
+	}
+}
+
+# bastard.51 The daughter asks for help
+# The ruler refuses and blames the daughter, the child, or the child's
+# father (bastard.52, or the father's father, bastard.53).
+# Scope: ROOT is the ruler, FROM the daughter.
+character_event = {
+	id = bastard.51
+	desc = EVTDESCbastard51
+	picture = GFX_evt_daughter_asking_father
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.50
+	option = { # Blame my daughter
+		name = EVTOPTAbastard51
+		prestige = -20
+		FROM = {
+			prestige = -10
+			opinion = { modifier = opinion_crestfallen who = ROOT years = 5 }
+		}
+		ai_chance = { factor = 30 }
+	}
+	option = { # Blame the child
+		name = EVTOPTBbastard51
+		prestige = -20
+		FROM = {
+			random_child = {
+				limit = { trait = bastard }
+				prestige = -10
+				opinion = { modifier = opinion_crestfallen who = ROOT years = 5 }
+			}
+		}
+		ai_chance = { factor = 20 }
+	}
+	option = { # Blame the father
+		name = EVTOPTCbastard51
+		prestige = -20
+		FROM = {
+			random_child = {
+				limit = { trait = bastard }
+				father = {
+					opinion = { modifier = opinion_angry who = ROOT years = 5 }
+					if = {
+						limit = { is_ruler = yes }
+						character_event = { id = bastard.52 tooltip = EVTTOOLTIPbastard52 }
+					}
+					else_if = {
+						limit = { father = { is_ruler = yes } }
+						father = { character_event = { id = bastard.53 tooltip = EVTTOOLTIPbastard53 } }
+					}
+				}
+			}
+		}
+		ai_chance = { factor = 50 }
+	}
+}
+
+# bastard.52 The father is blamed
+# Scope: ROOT is the child's father, FROM the mother's father.
+character_event = {
+	id = bastard.52
+	desc = EVTDESCbastard52
+	picture = GFX_evt_birth
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.51
+	option = { # I am guilty
+		name = EVTOPTAbastard52
+		piety = 10
+		prestige = -25
+		opinion = { modifier = opinion_angry who = FROM years = 5 }
+	}
+	option = { # Not my affair
+		name = EVTOPTBbastard52
+		piety = -5
+		opinion = { modifier = opinion_angry who = FROM years = 5 }
+	}
+}
+
+# bastard.53 The grandfather is blamed
+# Was sent to the child's father though it names his father; now it goes
+# to the grandfather.
+# Scope: ROOT is the child's grandfather, FROM the mother's father.
+character_event = {
+	id = bastard.53
+	desc = EVTDESCbastard53
+	picture = GFX_evt_birth
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.51
+	option = { # I will take care of it
+		name = EVTOPTAbastard53
+		piety = 10
+		prestige = -25
+		opinion = { modifier = opinion_angry who = FROM years = 5 }
+	}
+	option = { # Not my affair, nor my son's
+		name = EVTOPTBbastard53
+		piety = -5
+		opinion = { modifier = opinion_angry who = FROM years = 5 }
+	}
+}
+
+# bastard.60 A dream is born
+# A gifted grown bastard dreams of more than the world will give him.
+# Scope: ROOT is the bastard.
+character_event = {
+	id = bastard.60
+	desc = EVTDESCbastard60
+	picture = GFX_evt_child_sword
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	min_age = 16
+	capable_only = yes
+	trigger = {
+		trait = bastard
+		NOT = { trait = ambitious }
+		OR = {
+			diplomacy = 6
+			learning = 6
+			intrigue = 6
+			stewardship = 6
+			martial = 6
+		}
+	}
+	option = {
+		name = EVTOPTAbastard60
+		add_trait = ambitious
+	}
+}
+
+# bastard.70 Teased by the trueborn
+# A young bastard is teased by the trueborn children at court.
+# Without Conclave only (Conclave has its own childhood events).
+# Scope: ROOT is the child.
+character_event = {
+	id = bastard.70
+	desc = EVTDESCbastard70
+	picture = GFX_evt_child_bully
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	min_age = 6
+	max_age = 16
+	lacks_dlc = "Conclave"
+	trigger = {
+		trait = bastard
+		father = {
+			is_ruler = yes
+			is_liege_of = ROOT
+			any_child = {
+				age = 6
+				NOT = { age = 16 }
+				NOT = { trait = bastard }
+			}
+		}
+	}
+	option = { # Fight back
+		name = EVTOPTAbastard70
+		any_courtier = {
+			limit = {
+				age = 6
+				NOT = { age = 16 }
+			}
+			opinion = { modifier = opinion_despised_fighting_bastard who = ROOT years = 2 }
+		}
+		random = {
+			chance = 30
+			add_trait = wroth
+			hidden_effect = { character_event = { id = traitnote.254 } } # Notify Wroth
+		}
+		random = {
+			chance = 10
+			change_martial = 1
+		}
+	}
+	option = { # Hide
+		name = EVTOPTBbastard70
+		random_list = {
+			50 = {
+				add_trait = craven
+				hidden_effect = { character_event = { id = traitnote.257 } } # Notify Craven
+			}
+			40 = { change_learning = 1 }
+			10 = {
+				any_courtier = {
+					limit = {
+						age = 6
+						NOT = { age = 16 }
+					}
+					opinion = { modifier = opinion_despised_hiding_bastard who = ROOT years = 2 }
+				}
+			}
+		}
+	}
+	option = { # Make friends
+		name = EVTOPTCbastard70
+		random_list = {
+			50 = { change_diplomacy = 1 }
+			30 = {
+				add_trait = shy
+				hidden_effect = { character_event = { id = traitnote.263 } } # Notify Shy
+			}
+			20 = {
+				any_courtier = {
+					limit = {
+						age = 6
+						NOT = { age = 16 }
+					}
+					opinion = { modifier = despised_bastard who = ROOT years = 2 }
+				}
+			}
+		}
+	}
+	option = { # Get even in secret
+		name = EVTOPTDbastard70
+		random_list = {
+			50 = { change_intrigue = 1 }
+			30 = {
+				any_courtier = {
+					limit = {
+						age = 6
+						NOT = { age = 16 }
+					}
+					opinion = { modifier = despised_bastard who = ROOT years = 2 }
+				}
+			}
+			20 = {
+				add_trait = deceitful
+				hidden_effect = { character_event = { id = traitnote.255 } } # Notify Deceitful
+			}
+		}
+	}
+}
+
+# bastard.80 What is a bastard?
+# Without Conclave only.
+# Scope: ROOT is the child.
+character_event = {
+	id = bastard.80
+	desc = EVTDESCbastard80
+	picture = GFX_evt_guardian
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # on_yearly_pulse
+	min_age = 11
+	max_age = 15
+	lacks_dlc = "Conclave"
+	trigger = {
+		trait = bastard
+		has_guardian = yes
+		NOT = { has_character_flag = asked_about_bastard }
+	}
+	option = {
+		name = EVTOPTAbastard80
+		set_character_flag = asked_about_bastard
+		guardian = { character_event = { id = bastard.81 tooltip = EVTTOOLTIPbastard81 } }
+	}
+}
+
+# bastard.81 The guardian is asked
+# Ormazd and Kitabid guardians speak of the parent's sin; Slaaneshi
+# guardians see none.
+# Scope: ROOT is the guardian, FROM the child.
+character_event = {
+	id = bastard.81
+	desc = EVTDESCbastard81
+	picture = GFX_evt_guardian
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes # bastard.80
+	option = { # An abomination
+		name = EVTOPTAbastard81
+		trigger = { NOR = { religion = ormazd religion = kitabid religion = slaanesh } }
+		FROM = {
+			random_list = {
+				80 = {
+					add_trait = chaste
+					hidden_effect = {
+						character_event = { id = traitnote.274 } # Notify Chaste
+						ROOT = { character_event = { id = traitnote.174 } } # Notify child is Chaste
+					}
+				}
+				20 = {
+					add_trait = zealous
+					hidden_effect = {
+						character_event = { id = traitnote.269 } # Notify Zealous
+						ROOT = { character_event = { id = traitnote.169 } } # Notify child is Zealous
+					}
+				}
+			}
+		}
+	}
+	option = { # You will inherit nothing
+		name = EVTOPTBbastard81
+		FROM = {
+			random_list = {
+				80 = {
+					add_trait = humble
+					hidden_effect = {
+						character_event = { id = traitnote.260 } # Notify Humble
+						ROOT = { character_event = { id = traitnote.160 } } # Notify child is Humble
+					}
+				}
+				20 = {
+					add_trait = shy
+					hidden_effect = {
+						character_event = { id = traitnote.263 } # Notify Shy
+						ROOT = { character_event = { id = traitnote.163 } } # Notify child is Shy
+					}
+				}
+			}
+		}
+	}
+	option = { # Make your own way
+		name = EVTOPTCbastard81
+		FROM = {
+			random_list = {
+				80 = {
+					add_trait = ambitious
+					hidden_effect = {
+						character_event = { id = traitnote.278 } # Notify Ambitious
+						ROOT = { character_event = { id = traitnote.178 } } # Notify child is Ambitious
+					}
+				}
+				20 = {
+					add_trait = proud
+					hidden_effect = {
+						character_event = { id = traitnote.261 } # Notify Proud
+						ROOT = { character_event = { id = traitnote.161 } } # Notify child is Proud
+					}
+				}
+			}
+		}
+	}
+	option = { # Your parent sinned
+		name = EVTOPTDbastard81
+		trigger = { OR = { religion = ormazd religion = kitabid } }
+		FROM = {
+			random = {
+				chance = 20
+				add_trait = zealous
+				hidden_effect = {
+					character_event = { id = traitnote.269 } # Notify Zealous
+					ROOT = { character_event = { id = traitnote.169 } } # Notify child is Zealous
+				}
+			}
+		}
+	}
+	option = { # Pleasure made you
+		name = EVTOPTEbastard81
+		trigger = { religion = slaanesh }
+		FROM = {
+			random = {
+				chance = 20
+				add_trait = proud
+				hidden_effect = {
+					character_event = { id = traitnote.261 } # Notify Proud
+					ROOT = { character_event = { id = traitnote.161 } } # Notify child is Proud
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# Part 3: Courtly romance (namespace romance)
+# Faction: Generic
+# Serves: rulers and courtiers of every race that loves before it breeds;
+#   Slaanesh's faithful and the Cult of Pleasure take pride in it
+# (was 449 - 457 in the vanilla birth_events.txt)
+#
+# A courtier catches the liege's eye: the liege may make a move, and the
+# courtier may welcome the night visit, turn it aside or scream for the
+# guards. Two courtiers of the same court may also fall into bed together.
+# Either may bring a child (romance_conception_effect). The vanilla events
+# sent the advance to every fitting courtier at once; now one is picked.
+#
+# The liege and the courtier        romance.1 - romance.7
+# Two courtiers                     romance.10 - romance.11
+#
+# Callers: romance.1 and romance.10 from the yearly romance_at_court list
+#   (wh_on_actions; were MTTH 120 and 4000 months); romance.5 and 6 also
+#   from the rumours in rumours_events.txt.
+# Saved: modifier lustful_affair_timer (four years for the liege, six for a
+#   courtier). Triggers in wh_romance_triggers.txt, effects in
+#   wh_romance_effects.txt.
+###############################################################################
+
+namespace = romance
+
+# romance.1 A courtier catches the eye
+# Hidden. Picks a courtier who might welcome the liege's attention and sends
+# them romance.2. Seducers, hedonists, the lustful and the fair find love
+# more often; the shy, the ugly, the chaste and those with many lovers less.
+# Scope: a landed adult ruler. Fired by the yearly romance_at_court list.
+character_event = {
+	id = romance.1
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		is_playable = yes
+		is_landed = yes
+		age = 16
+		NOT = { age = 66 }
+		prisoner = no
+		is_pregnant = no
+		has_regent = no
+		romance_barred_trigger = no
+		NOT = { trait = disfigured }
+		NOT = { has_character_modifier = lustful_affair_timer }
+		NOT = { spouse = { is_lover = ROOT } }
+		OR = {
+			is_woman_trigger = no
+			NOT = { age = 40 }
+		}
+		OR = {
+			is_married = no
+			NOT = { trait = chaste }
+		}
+		NOT = { num_of_lovers = 5 }
+		any_courtier = { romance_liege_admirer_trigger = yes }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 has_focus = focus_seduction }
+		modifier = { factor = 0.67 num_of_lovers = 1 }
+		modifier = { factor = 0.5 num_of_lovers = 2 }
+		modifier = { factor = 0.25 num_of_lovers = 3 }
+		modifier = { factor = 0.2 num_of_lovers = 4 }
+		modifier = { factor = 0.25 religion_group = ormazd_gods_group }
+		modifier = { factor = 3 trait = homosexual } # Fewer partners to choose from
+		modifier = { factor = 0.5 spouse = { NOT = { age = 30 } } }
+		modifier = { factor = 2 spouse = { age = 45 } }
+		modifier = { factor = 2 trait = hedonist }
+		modifier = { factor = 2 trait = lustful }
+		modifier = { factor = 2 has_fair_trait_trigger = yes }
+		modifier = { factor = 0.5 trait = shy }
+		modifier = { factor = 0.5 has_ugly_trait_trigger = yes }
+		modifier = { factor = 0.1 trait = chaste }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { romance_liege_admirer_trigger = yes }
+			score_value = { # The more interesting courtiers come first
+				value = 10
+				interesting_courtier_selection_score = yes
+			}
+			character_event = { id = romance.2 }
+		}
+	}
+}
+
+# romance.2 The liege's eye
+# The courtier notices the liege's look and may encourage it. Only a player
+# may turn it aside.
+# Scope: the courtier. FROM is the liege.
+character_event = {
+	id = romance.2
+	desc = EVTDESCromance2
+	picture = GFX_evt_lovers
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAromance2 # Encourage
+		FROM = {
+			add_character_modifier = {
+				name = lustful_affair_timer
+				duration = 1460
+				hidden = yes
+			}
+			character_event = { id = romance.3 days = 7 tooltip = EVTTOOLTIPromance3 }
+		}
+	}
+	option = {
+		name = EVTOPTBromance2 # Avoid them
+		trigger = { ai = no }
+		piety = 5
+	}
+}
+
+# romance.3 Making a move
+# The liege may go to the courtier's chamber (romance.4). The faithful of
+# Slaanesh and Atharti and the Cult of Pleasure win favour for it; others
+# lose a little piety. Chaos worshippers are mocked for turning it down.
+# Scope: the liege. FROM is the courtier.
+character_event = {
+	id = romance.3
+	desc = EVTDESCromance3
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAromance3 # Make a move
+		ai_chance = { factor = 90 }
+		FROM = {
+			show_scope_change = no
+			character_event = { id = romance.4 days = 7 tooltip = EVTTOOLTIPromance4 }
+		}
+		if = {
+			limit = { romance_pleasure_faith_trigger = yes }
+			piety = 50
+		}
+		else = {
+			piety = -25
+		}
+	}
+	option = {
+		name = EVTOPTBromance3 # Not appropriate
+		trigger = {
+			NOT = { trait = lustful }
+			NOT = { trait = hedonist }
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 10 trait = chaste }
+			modifier = { factor = 2 trait = shy }
+			modifier = { factor = 0.5 trait = trusting }
+			modifier = { factor = 0.01 has_focus = focus_seduction }
+		}
+		if = {
+			limit = { romance_pleasure_faith_trigger = yes }
+			piety = -10
+		}
+		else_if = {
+			limit = { religion_group = chaos_gods_group }
+			piety = -5
+		}
+		else = {
+			piety = 5
+		}
+	}
+	option = {
+		name = EVTOPTCromance3 # Not my type
+		trigger = {
+			ai = no
+			OR = {
+				trait = lustful
+				trait = hedonist
+			}
+		}
+		prestige = -5
+	}
+}
+
+# romance.4 The door creaks open
+# The courtier welcomes the liege (they become lovers and may conceive),
+# talks them out of it, or screams for the guards.
+# Scope: the courtier. FROM is the liege.
+character_event = {
+	id = romance.4
+	desc = EVTDESCromance4
+	picture = GFX_evt_lovers
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		FROM = { is_alive = yes }
+	}
+
+	option = {
+		name = EVTOPTAromance4 # What took you so long?
+		ai_chance = { factor = 90 }
+		if = {
+			limit = {
+				is_no_females_race = no
+				FROM = { is_no_females_race = no }
+			}
+			add_lover = FROM
+		}
+		FROM = { character_event = { id = romance.5 tooltip = EVTTOOLTIPromance5 } }
+		romance_conception_effect = yes
+	}
+	option = {
+		name = EVTOPTBromance4 # Dissuade
+		trigger = {
+			NOT = { trait = lustful }
+			NOT = { trait = hedonist }
+		}
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 10 trait = chaste }
+			modifier = {
+				factor = 2
+				is_woman_trigger = yes
+				FROM = { is_woman_trigger = no }
+			}
+			modifier = { factor = 2 trait = shy }
+			modifier = { factor = 0.5 trait = trusting }
+			modifier = {
+				factor = 0.1
+				liege = {
+					OR = {
+						trait = seducer
+						trait = seductress
+					}
+				}
+			}
+		}
+		FROM = { character_event = { id = romance.6 tooltip = EVTTOOLTIPromance6 } }
+	}
+	option = {
+		name = EVTOPTCromance4 # Scream for help
+		trigger = {
+			is_woman_trigger = yes
+			FROM = { is_woman_trigger = no }
+			NOT = { trait = lustful }
+			NOT = { trait = hedonist }
+		}
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 10 trait = chaste }
+			modifier = { factor = 2 trait = shy }
+			modifier = { factor = 0.5 trait = trusting }
+			modifier = {
+				factor = 0.01
+				liege = {
+					OR = {
+						trait = seducer
+						trait = seductress
+					}
+				}
+			}
+		}
+		FROM = { character_event = { id = romance.7 tooltip = EVTTOOLTIPromance7 } }
+	}
+}
+
+# romance.5 A good tumble
+# Scope: the liege, or a rumour's lover. FROM is the lover.
+character_event = {
+	id = romance.5
+	desc = EVTDESCromance5
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_intrigue
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAromance5
+	}
+}
+
+# romance.6 Spurned
+# Scope: the one who made the advance. FROM turned it aside.
+character_event = {
+	id = romance.6
+	desc = EVTDESCromance6
+	picture = GFX_evt_quarrel
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAromance6
+		opinion = { who = FROM modifier = opinion_spurned years = 5 }
+	}
+}
+
+# romance.7 Shamed before the guards
+# Scope: the liege. FROM screamed for help.
+character_event = {
+	id = romance.7
+	desc = EVTDESCromance7
+	picture = GFX_evt_quarrel
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAromance7
+		opinion = { who = FROM modifier = opinion_embarrassed years = 5 }
+	}
+}
+
+# romance.10 Two courtiers
+# Hidden. A courtier of a player's or a king's court tries their luck with
+# another courtier (romance.11). The young, the lustful and the neglected
+# stray more often; harems and the liege's own wives and concubines are
+# watched.
+# Scope: an unlanded adult courtier. Fired by the yearly romance_at_court
+#   list.
+character_event = {
+	id = romance.10
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		is_ruler = no
+		is_marriage_adult = yes
+		NOT = { age = 66 }
+		prisoner = no
+		has_lover = no
+		is_pregnant = no
+		is_ill = no
+		NOT = { trait = chaste }
+		romance_barred_trigger = no
+		is_inaccessible_trigger = no
+		OR = {
+			is_woman_trigger = no
+			NOT = { age = 40 }
+		}
+		liege = {
+			OR = {
+				ai = no
+				higher_tier_than = DUKE
+			}
+		}
+		romance_would_stray_trigger = yes
+		liege = { any_courtier = { romance_courtier_match_trigger = yes } }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 2 spouse = { is_ruler = yes } }
+		modifier = { factor = 2 spouse = { has_lover = yes } }
+		modifier = {
+			factor = 2
+			NOT = { age = 30 }
+			spouse = { age = 50 }
+		}
+		modifier = { factor = 3 trait = homosexual } # Fewer partners to choose from
+		modifier = { factor = 3 trait = lustful }
+		modifier = { factor = 2 trait = hedonist }
+		modifier = { factor = 1.33 NOT = { age = 20 } }
+		modifier = {
+			factor = 0.5
+			is_woman_trigger = yes
+			age = 30
+		}
+		modifier = { # Harems are well guarded
+			factor = 0.33
+			is_woman_trigger = yes
+			is_married = yes
+			has_polygamy = yes
+		}
+		modifier = { # The liege's own wives and concubines are watched, unless seduction is their calling
+			factor = 0.33
+			is_woman_trigger = yes
+			NOT = { has_focus = focus_seduction }
+			liege = {
+				OR = {
+					is_consort = ROOT
+					any_spouse = { character = ROOT }
+				}
+			}
+		}
+	}
+
+	immediate = {
+		liege = {
+			random_courtier = {
+				limit = { romance_courtier_match_trigger = yes }
+				score_value = { # The more interesting courtiers come first
+					value = 10
+					interesting_courtier_selection_score = yes
+				}
+				character_event = { id = romance.11 }
+			}
+		}
+	}
+}
+
+# romance.11 An advance between courtiers
+# Hidden. The other courtier takes the advance (they become lovers and may
+# conceive) or turns it down. The ascetic and the chaste refuse, the
+# handsome refuse the plain, and the liege's women are watched.
+# Scope: the courtier who is approached. FROM made the advance.
+character_event = {
+	id = romance.11
+	hide_window = yes
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+		prisoner = no
+		NOT = { trait = incapable }
+		FROM = { is_alive = yes }
+	}
+
+	option = { # Gladly
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 3 trait = lustful }
+			modifier = { factor = 2 trait = hedonist }
+		}
+		if = {
+			limit = {
+				is_no_females_race = no
+				FROM = { is_no_females_race = no }
+			}
+			add_lover = FROM
+		}
+		add_character_modifier = {
+			name = lustful_affair_timer
+			duration = 2190
+			hidden = yes
+		}
+		romance_conception_effect = yes
+	}
+	option = { # No way
+		ai_chance = {
+			factor = 10
+			modifier = {
+				factor = 50
+				OR = {
+					is_ascetic_trigger = yes
+					trait = chaste
+				}
+			}
+			modifier = { # A fine catch turns down a poor one
+				factor = 30
+				romance_poor_catch_trigger = no
+				FROM = {
+					OR = {
+						has_ugly_trait_trigger = yes
+						trait = dwarf
+						trait = imbecile
+					}
+					NOT = { trait = seducer }
+					NOT = { trait = seductress }
+				}
+			}
+			modifier = {
+				factor = 100
+				romance_poor_catch_trigger = no
+				FROM = {
+					trait = inbred
+					NOT = { trait = seducer }
+					NOT = { trait = seductress }
+				}
+			}
+			modifier = { # The liege's wives and concubines are watched
+				factor = 60
+				is_woman_trigger = yes
+				has_polygamy = no
+				NOT = { has_focus = focus_seduction }
+				liege = {
+					OR = {
+						is_consort = ROOT
+						any_spouse = { character = ROOT }
+					}
+				}
+			}
+			modifier = { # Harems are especially well guarded
+				factor = 200
+				is_woman_trigger = yes
+				is_married = yes
+				has_polygamy = yes
+			}
+		}
+		reverse_opinion = { who = FROM modifier = opinion_spurned years = 5 }
+	}
+}
+
+###############################################################################
+# Part 4: Dynasty requests (namespace dynreq)
+# Faction: Generic
+# Serves: landless members of every dynasty, and the kin who hold its land
+# (was 66000 - 66110 in the vanilla dynasty_events.txt)
+#
+# A landless kinsman with children of his own sees an old, childless
+# relative holding land (only among the peoples who pass land by blood:
+# men, Dawi, elves and halflings, not the Dark Gods' faithful or the
+# undead; dynreq_inheritance_people_trigger), and asks for a claim on it or for a title outright.
+# A landless claimant may also beg the head of the family, if he is his
+# liege, to go to war for a claim. The vanilla request (66000) was
+# commented out, leaving the claim and title answers with no caller; it is
+# back, at a rare decade roll, and a granted title is never the elder's
+# capital or primary title.
+#
+# The request                         dynreq.1
+# A claim, or a title                 dynreq.2 - dynreq.3
+# Fight for my claim                  dynreq.10 - dynreq.12
+#
+# Callers: dynreq.1 from the decade dynasty_requests list (wh_on_actions;
+#   was 250 in the yearly vanilla list, then cut); dynreq.10 from the
+#   yearly random list in 00_on_actions.txt.
+# Saved: event targets claimant and claimant_claim (dynreq.12). Triggers in
+#   WHG_family_triggers.txt.
+###############################################################################
+
+namespace = dynreq
+
+# dynreq.1 My share of the inheritance
+# A landless kinsman with children asks an old, childless relative for a
+# claim on one of their titles, or, if the elder holds more than one, for a
+# title outright.
+# Scope: a landless, able adult with a child. Fired by the decade
+#   dynasty_requests list (wh_on_actions).
+character_event = {
+	id = dynreq.1
+	desc = EVTDESC66000
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes
+
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		dynreq_inheritance_people_trigger = yes
+		num_of_children = 1
+		is_landed = no
+		NOT = { trait = eunuch }
+		NOT = { trait = in_hiding }
+		is_ascetic_trigger = no
+		OR = {
+			diplomacy = 12
+			intrigue = 12
+		}
+		any_dynasty_member = { dynreq_childless_elder_trigger = yes }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 3 trait = ambitious }
+		modifier = { factor = 2 trait = proud }
+		modifier = { factor = 2 trait = greedy }
+		modifier = { factor = 0.5 trait = content }
+		modifier = { factor = 0.5 trait = humble }
+		modifier = { factor = 0.5 trait = shy }
+		modifier = { factor = 0.5 is_ill = yes }
+		modifier = { factor = 0.5 is_lunatic_trigger = yes }
+	}
+
+	option = { # A claim
+		name = EVTOPTA66000
+		ai_chance = { factor = 1 }
+		random_dynasty_member = {
+			limit = { dynreq_childless_elder_trigger = yes }
+			character_event = { id = dynreq.2 days = 17 tooltip = EVTTOOLTIP66010 }
+		}
+	}
+	option = { # A title
+		name = EVTOPTB66000
+		trigger = {
+			any_dynasty_member = {
+				dynreq_childless_elder_trigger = yes
+				demesne_size = 2
+				any_demesne_title = {
+					tier = COUNT
+					is_primary_holder_title = no
+					location = { is_capital = no }
+				}
+			}
+		}
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 2 trait = ambitious }
+		}
+		random_dynasty_member = {
+			limit = {
+				dynreq_childless_elder_trigger = yes
+				demesne_size = 2
+				any_demesne_title = {
+					tier = COUNT
+					is_primary_holder_title = no
+					location = { is_capital = no }
+				}
+			}
+			character_event = { id = dynreq.3 days = 17 tooltip = EVTTOOLTIP66020 }
+		}
+	}
+	option = { # Better not
+		name = EVTOPTCdynreq1
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 3 trait = content }
+		}
+	}
+}
+
+# dynreq.2 A kinsman asks for a claim
+# Grant a claim on one of the elder's lesser titles, or refuse.
+# Scope: ROOT is the elder. FROM: the kinsman (dynreq.1).
+character_event = {
+	id = dynreq.2
+	desc = EVTDESC66010
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # dynreq.1
+
+	option = { # Grant the claim
+		name = EVTOPTA66010
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 FROM = { diplomacy = 14 } }
+			modifier = { factor = 2 FROM = { martial = 14 } }
+			modifier = { factor = 2 FROM = { intrigue = 14 } }
+			modifier = { factor = 1.5 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 2 opinion = { who = FROM value = 50 } }
+			modifier = { factor = 3 opinion = { who = FROM value = 75 } }
+			modifier = { factor = 0.5 trait = greedy }
+		}
+		prestige = -5
+		if = {
+			limit = { any_demesne_title = { is_primary_holder_title = no } }
+			random_demesne_title = {
+				limit = { is_primary_holder_title = no }
+				add_claim = FROM
+			}
+		}
+		else = {
+			random_demesne_title = { add_claim = FROM }
+		}
+		FROM = { opinion = { modifier = opinion_grateful who = ROOT years = 5 } }
+	}
+	option = { # Refuse
+		name = EVTOPTB66010
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 0 opinion = { who = FROM value = 80 } }
+		}
+		FROM = { opinion = { modifier = dynastic_refused_claim who = ROOT years = 5 } }
+	}
+}
+
+# dynreq.3 A kinsman asks for a title
+# Grant one of the elder's lesser counties (never the capital or the
+# primary title), or refuse.
+# Scope: ROOT is the elder. FROM: the kinsman (dynreq.1).
+character_event = {
+	id = dynreq.3
+	desc = EVTDESC66020
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # dynreq.1
+
+	option = { # Grant the title
+		name = EVTOPTA66020
+		trigger = {
+			any_demesne_title = {
+				tier = COUNT
+				is_primary_holder_title = no
+				location = { is_capital = no }
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 FROM = { diplomacy = 14 } }
+			modifier = { factor = 2 FROM = { martial = 14 } }
+			modifier = { factor = 2 FROM = { intrigue = 14 } }
+			modifier = { factor = 1.5 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 2 opinion = { who = FROM value = 50 } }
+			modifier = { factor = 3 opinion = { who = FROM value = 75 } }
+			modifier = { factor = 0.5 trait = greedy }
+		}
+		prestige = -5
+		random_demesne_title = {
+			limit = {
+				tier = COUNT
+				is_primary_holder_title = no
+				location = { is_capital = no }
+			}
+			grant_title = FROM
+		}
+		FROM = { opinion = { modifier = opinion_grateful who = ROOT years = 5 } }
+	}
+	option = { # Refuse
+		name = EVTOPTB66020
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 0 opinion = { who = FROM value = 80 } }
+		}
+		FROM = { opinion = { modifier = dynastic_refused_title who = ROOT years = 5 } }
+	}
+}
+
+# dynreq.10 A landless claimant
+# Hidden. Finds a landless kinsman of the head with a claim the head could
+# press, and has him ask (dynreq.11).
+# Scope: ROOT is a ruler at peace, of a people that presses claims for kin
+#   (dynreq_war_people_trigger), whose realm lets vassals wage war. Fired by
+#   the yearly random list in 00_on_actions.txt.
+character_event = {
+	id = dynreq.10
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	capable_only = yes
+	prisoner = no
+	min_age = 16
+
+	trigger = {
+		dynreq_war_people_trigger = yes
+		has_regent = no
+		war = no
+		is_tributary = no
+		is_nomadic = no
+		top_liege = {
+			OR = {
+				AND = {
+					has_dlc = "Conclave"
+					NOT = { has_law = vassal_wars_law_2 }
+				}
+				AND = {
+					NOT = { has_dlc = "Conclave" }
+					NOR = {
+						has_law = crown_authority_2
+						has_law = crown_authority_3
+						has_law = crown_authority_4
+					}
+				}
+			}
+		}
+		any_dynasty_member = { dynreq_war_claimant_trigger = yes }
+	}
+
+	immediate = {
+		random_dynasty_member = {
+			limit = { dynreq_war_claimant_trigger = yes }
+			character_event = { id = dynreq.11 }
+		}
+	}
+}
+
+# dynreq.11 My rightful land
+# The claimant may ask the head to fight for the claim.
+# Scope: ROOT is the claimant. FROM: the dynasty head (dynreq.10).
+character_event = {
+	id = dynreq.11
+	desc = EVTDESC66100
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # dynreq.10
+
+	option = { # Ask for the war
+		name = EVTOPTA66100
+		FROM = { character_event = { id = dynreq.12 days = 9 tooltip = EVTTOOLTIP66110 } }
+	}
+	option = { # Let it lie
+		name = EVTOPTBdynreq11
+		ai_chance = { factor = 0 }
+	}
+}
+
+# dynreq.12 Fight for my kinsman's claim
+# The head goes to war for the claim, or refuses and loses face. The claim
+# is checked again, since it may have vanished in the nine days.
+# Scope: ROOT is the dynasty head. FROM: the claimant (dynreq.11).
+character_event = {
+	id = dynreq.12
+	desc = EVTDESC66110
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # dynreq.11
+
+	trigger = {
+		war = no
+		FROM = {
+			is_alive = yes
+			is_landed = no
+			any_claim = { dynreq_war_claim_trigger = yes }
+		}
+	}
+
+	immediate = {
+		FROM = {
+			save_event_target_as = claimant
+			random_claim = {
+				limit = { dynreq_war_claim_trigger = yes }
+				save_event_target_as = claimant_claim
+			}
+		}
+	}
+
+	option = { # To war
+		name = EVTOPTA66110
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 FROM = { diplomacy = 14 } }
+			modifier = { factor = 2 FROM = { martial = 14 } }
+			modifier = { factor = 2 FROM = { intrigue = 14 } }
+			modifier = { factor = 1.5 opinion = { who = FROM value = 25 } }
+			modifier = { factor = 2 opinion = { who = FROM value = 50 } }
+			modifier = { factor = 3 opinion = { who = FROM value = 75 } }
+			modifier = { factor = 0.5 trait = craven }
+			modifier = { factor = 0.5 trait = content }
+		}
+		event_target:claimant_claim = {
+			reverse_unsafe_war = {
+				target = event_target:claimant
+				casus_belli = other_claim
+				thirdparty = ROOT
+			}
+		}
+		FROM = { opinion = { modifier = opinion_grateful who = ROOT years = 5 } }
+	}
+	option = { # Refuse
+		name = EVTOPTB66110
+		ai_chance = {
+			factor = 2
+			modifier = { factor = 0 opinion = { who = FROM value = 80 } }
+		}
+		FROM = { opinion = { modifier = dynastic_refused_war who = ROOT years = 5 } }
+		prestige = -10
+	}
+}
+
+###############################################################################
+# Part 5: Kin who ask for land or a match (namespace kinreq)
+# Faction: Generic
+# Serves: every ruler's close kin; the land and marriage requests only
+#   without Conclave, whose own favours and interactions replace them
+# (was 37000 - 37255 in the vanilla family_events.txt)
+#
+# A close relative with the ambition for land asks the liege for a county.
+# A promise must be kept, or the kinsman may flee to a foreign court of
+# the same faith and come back a year later with an army, a fleet and a
+# claim. A close relative who wants to marry asks the liege for a match,
+# reminds the liege of a promise, or weds a courtier in secret. Without
+# Conclave only, as the Conclave favours replace them; a parent may also be
+# asked through the trait events (various_traits_events 65074).
+# A spouse with the same education may help with the ruler's studies
+# (any DLC).
+#
+# A county of my own              kinreq.1 - kinreq.8
+# The pretender                   kinreq.10 - kinreq.13
+# A match of my own               kinreq.20 - kinreq.28
+# A spouse who shares my studies  kinreq.30 - kinreq.34
+#
+# Callers: wh_on_actions.txt lists kin_asks_land (1) and kin_reminds_match
+#   (25) on the yearly pulse, kin_asks_match (20) on the bi-yearly pulse,
+#   kin_weds_in_secret (27) on the five-year pulse (were MTTH 9, 4, 24 and
+#   120 months); 00_on_actions.txt on_yearly_pulse random_events (30, was
+#   37250); various_traits_events.txt 65074 (22).
+# Saved: character flags flag_promised_title, flag_denied_title,
+#   flag_later_title, flag_promised_marriage, flag_denied_marriage,
+#   spouse_offered_help, claimant_adventurer (cleared by the claim CB);
+#   character modifiers promised_a_title, promised_a_marriage; event
+#   targets kinreq_old_liege, kinreq_host, kinreq_landing.
+# Dropped: 37255, which gave a newly married character an opinion of
+#   itself; the ambition's own effect already rewards the liege.
+###############################################################################
+
+namespace = kinreq
+
+###############################################################################
+# A county of my own (kinreq.1 - kinreq.8)
+###############################################################################
+
+# kinreq.1 A county of my own
+# A close relative with the ambition for land asks the liege for a county.
+# Scope: the relative. Fired by on_yearly_pulse (list kin_asks_land).
+character_event = {
+	id = kinreq.1
+	desc = EVTDESCkinreq1
+	picture = {
+		trigger = { is_woman_trigger = yes }
+		picture = GFX_evt_daughter_asking_mother
+	}
+	picture = {
+		trigger = { is_woman_trigger = no }
+		picture = GFX_evt_son_asking_father
+	}
+
+	is_triggered_only = yes # on_yearly_pulse kin_asks_land list
+	has_ambition = obj_wants_landed_title
+	lacks_dlc = "Zeus"
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		independent = no
+		NOT = { has_character_flag = flag_denied_title }
+		NOT = { has_character_flag = flag_promised_title }
+		OR = {
+			NOT = { has_character_flag = flag_later_title }
+			had_character_flag = { flag = flag_later_title days = 1825 }
+		}
+		liege = {
+			OR = {
+				AND = {
+					ROOT = { is_woman_trigger = yes }
+					has_religion_feature = religion_matriarchal
+				}
+				AND = {
+					ROOT = { is_woman_trigger = no }
+					NOT = { has_religion_feature = religion_matriarchal }
+				}
+			}
+			OR = {
+				war = no
+				ai = yes
+			}
+			is_close_relative = ROOT
+			any_demesne_title = { kinreq_county_to_give_trigger = yes }
+		}
+	}
+
+	weight_multiplier = { # Was the old MTTH, inverted
+		days = 1
+		modifier = { factor = 2 trait = ambitious }
+		modifier = { factor = 2 trait = diligent }
+		modifier = { factor = 0.2 trait = slothful }
+		modifier = { factor = 0.2 trait = content }
+	}
+
+	option = {
+		name = EVTOPTAkinreq1
+		liege = { character_event = { id = kinreq.2 days = 3 tooltip = EVTTOOLTIPkinreq2 } }
+	}
+}
+
+# kinreq.2 A kinsman asks for land
+# Scope: the liege; FROM is the relative. Fired by kinreq.1.
+character_event = {
+	id = kinreq.2
+	desc = EVTDESCkinreq2
+	picture = {
+		trigger = { FROM = { is_woman_trigger = yes } }
+		picture = GFX_evt_daughter_asking_mother
+	}
+	picture = {
+		trigger = { FROM = { is_woman_trigger = no } }
+		picture = GFX_evt_son_asking_father
+	}
+
+	is_triggered_only = yes # kinreq.1
+
+	option = { # Promise a county
+		name = EVTOPTAkinreq2
+		FROM = { character_event = { id = kinreq.3 tooltip = EVTTOOLTIPkinreq3 } }
+	}
+	option = { # Not yet
+		name = EVTOPTBkinreq2
+		trigger = { NOT = { diplomacy = 8 } }
+		FROM = { character_event = { id = kinreq.5 tooltip = EVTTOOLTIPkinreq5 } }
+		if = {
+			limit = {
+				ai = no
+				independent = yes
+				FROM = {
+					kinreq_may_rebel_trigger = yes
+					has_character_flag = flag_later_title
+				}
+			}
+			custom_tooltip = { text = evt_relative_might_revolt }
+		}
+	}
+	option = { # The temple has need of you
+		name = EVTOPTCkinreq2
+		tooltip_info = diplomacy
+		trigger = {
+			religion_group = old_world_group
+			diplomacy = 8
+		}
+		FROM = { character_event = { id = kinreq.4 tooltip = EVTTOOLTIPkinreq4 } }
+	}
+	option = { # A gentle no
+		name = EVTOPTDkinreq2
+		tooltip_info = diplomacy
+		trigger = {
+			NOT = { religion_group = old_world_group }
+			diplomacy = 8
+		}
+		FROM = { character_event = { id = kinreq.4 tooltip = EVTTOOLTIPkinreq4 } }
+	}
+}
+
+# kinreq.3 A promise of land
+# The relative waits, and reminds the liege in one to three years.
+# Scope: the relative; FROM is the liege. Fired by kinreq.2.
+character_event = {
+	id = kinreq.3
+	desc = EVTDESCkinreq3
+	picture = {
+		trigger = { is_woman_trigger = yes }
+		picture = GFX_evt_daughter_asking_mother
+	}
+	picture = {
+		trigger = { is_woman_trigger = no }
+		picture = GFX_evt_son_asking_father
+	}
+
+	is_triggered_only = yes # kinreq.2
+
+	option = {
+		name = EVTOPTAkinreq3
+		opinion = {
+			who = FROM
+			modifier = opinion_promised_title
+			months = 12
+		}
+		set_character_flag = flag_promised_title
+		add_character_modifier = { name = promised_a_title duration = -1 }
+		hidden_tooltip = {
+			if = {
+				limit = { trait = ambitious }
+				character_event = { id = kinreq.6 days = 365 random = 50 }
+			}
+			else_if = {
+				limit = {
+					OR = {
+						trait = slothful
+						trait = content
+					}
+				}
+				character_event = { id = kinreq.6 days = 865 random = 200 }
+			}
+			else = {
+				character_event = { id = kinreq.6 days = 385 random = 200 }
+			}
+		}
+	}
+}
+
+# kinreq.4 Refused
+# Scope: the relative; FROM is the liege. Fired by kinreq.2.
+character_event = {
+	id = kinreq.4
+	desc = EVTDESCkinreq4
+	picture = GFX_evt_bad_news
+
+	is_triggered_only = yes # kinreq.2
+
+	option = {
+		name = EVTOPTAkinreq4
+		opinion = {
+			who = FROM
+			modifier = opinion_denied_title
+			months = 60
+		}
+		set_character_flag = flag_denied_title
+	}
+}
+
+# kinreq.5 Not yet
+# The first time the relative waits five years; the second time the
+# relative may flee abroad and come back with an army (kinreq.10).
+# Scope: the relative; FROM is the liege. Fired by kinreq.2.
+character_event = {
+	id = kinreq.5
+	desc = EVTDESCkinreq5
+	picture = GFX_evt_bad_news
+
+	is_triggered_only = yes # kinreq.2
+
+	option = { # I will ask again
+		name = EVTOPTAkinreq5
+		trigger = { NOT = { has_character_flag = flag_later_title } }
+		set_character_flag = flag_later_title
+	}
+	option = { # Not again
+		name = EVTOPTBkinreq5
+		trigger = { has_character_flag = flag_later_title }
+		ai_chance = { factor = 750 }
+		opinion = {
+			who = FROM
+			modifier = opinion_denied_title
+			months = 120
+		}
+		clr_character_flag = flag_later_title
+		set_character_flag = flag_denied_title
+	}
+	option = { # Then I will take it
+		name = EVTOPTCkinreq5
+		trigger = {
+			has_character_flag = flag_later_title
+			kinreq_may_rebel_trigger = yes
+			liege = { independent = yes }
+		}
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2.5 trait = ambitious }
+			modifier = { factor = 5 religion_group = ormazd_gods_group }
+			modifier = { factor = 0.25 trait = slothful }
+		}
+		kinreq_flee_abroad_effect = yes
+	}
+}
+
+# kinreq.6 The promise recalled
+# Scope: the relative. Fired by kinreq.3.
+character_event = {
+	id = kinreq.6
+	desc = EVTDESCkinreq6
+	picture = {
+		trigger = { is_woman_trigger = yes }
+		picture = GFX_evt_daughter_asking_mother
+	}
+	picture = {
+		trigger = { is_woman_trigger = no }
+		picture = GFX_evt_son_asking_father
+	}
+
+	is_triggered_only = yes # kinreq.3
+
+	trigger = {
+		independent = no
+		is_ruler = no
+		prisoner = no
+		NOT = { trait = incapable }
+		has_ambition = obj_wants_landed_title
+		has_character_flag = flag_promised_title
+		liege = { any_demesne_title = { kinreq_county_to_give_trigger = yes } }
+	}
+
+	option = {
+		name = EVTOPTAkinreq6
+		liege = { character_event = { id = kinreq.7 tooltip = EVTTOOLTIPkinreq7 } }
+	}
+}
+
+# kinreq.7 The kinsman is back
+# Scope: the liege; FROM is the relative. Fired by kinreq.6.
+character_event = {
+	id = kinreq.7
+	desc = EVTDESCkinreq7
+	picture = {
+		trigger = { FROM = { is_woman_trigger = yes } }
+		picture = GFX_evt_daughter_asking_mother
+	}
+	picture = {
+		trigger = { FROM = { is_woman_trigger = no } }
+		picture = GFX_evt_son_asking_father
+	}
+
+	is_triggered_only = yes # kinreq.6
+
+	trigger = {
+		FROM = { is_alive = yes }
+	}
+
+	option = { # Keep the promise
+		name = EVTOPTAkinreq7
+		random_demesne_title = {
+			limit = { kinreq_county_to_give_trigger = yes }
+			grant_title = FROM
+		}
+	}
+	option = { # Break it
+		name = EVTOPTBkinreq7
+		FROM = { character_event = { id = kinreq.8 days = 2 tooltip = EVTTOOLTIPkinreq8 } }
+		if = {
+			limit = {
+				ai = no
+				independent = yes
+				FROM = { kinreq_may_rebel_trigger = yes }
+			}
+			custom_tooltip = { text = evt_relative_might_revolt }
+		}
+	}
+}
+
+# kinreq.8 A broken promise
+# Scope: the relative; FROM is the liege. Fired by kinreq.7.
+character_event = {
+	id = kinreq.8
+	desc = EVTDESCkinreq8
+	picture = GFX_evt_bad_news
+
+	is_triggered_only = yes # kinreq.7
+
+	option = { # An outrage
+		name = EVTOPTAkinreq8
+		ai_chance = { factor = 500 }
+		opinion = {
+			who = FROM
+			modifier = opinion_broken_title_promise
+			months = 120
+		}
+		clr_character_flag = flag_promised_title
+		remove_character_modifier = promised_a_title
+		set_character_flag = flag_denied_title
+	}
+	option = { # Then I will take it
+		name = EVTOPTCkinreq5
+		trigger = {
+			kinreq_may_rebel_trigger = yes
+			liege = { independent = yes }
+		}
+		ai_chance = {
+			factor = 100
+			modifier = { factor = 2.5 trait = ambitious }
+			modifier = { factor = 5 religion_group = ormazd_gods_group }
+			modifier = { factor = 0.25 trait = slothful }
+		}
+		kinreq_flee_abroad_effect = yes
+	}
+}
+
+###############################################################################
+# The pretender (kinreq.10 - kinreq.13)
+###############################################################################
+
+# kinreq.10 Into exile (hidden)
+# The relative flees to the court of an independent ruler of the same
+# faith within 400 of the old liege's capital.
+# Scope: the relative. Fired by kinreq.5 and kinreq.8 (through
+# kinreq_flee_abroad_effect), 45 days later.
+character_event = {
+	id = kinreq.10
+
+	hide_window = yes
+
+	is_triggered_only = yes # kinreq_flee_abroad_effect
+
+	trigger = {
+		independent = no
+		is_ruler = no
+		prisoner = no
+		NOT = { trait = incapable }
+		event_target:kinreq_old_liege = {
+			is_alive = yes
+			independent = yes
+			capital_scope = {
+				any_independent_ruler = { kinreq_exile_host_trigger = yes }
+			}
+		}
+	}
+
+	immediate = {
+		event_target:kinreq_old_liege = {
+			capital_scope = {
+				random_independent_ruler = {
+					limit = { kinreq_exile_host_trigger = yes }
+					save_event_target_as = kinreq_host
+				}
+			}
+		}
+		event_target:kinreq_host = { character_event = { id = kinreq.11 } }
+		move_character = event_target:kinreq_host
+	}
+}
+
+# kinreq.11 A pretender at court
+# Notice for the host.
+# Scope: the host; FROM is the pretender. Fired by kinreq.10.
+character_event = {
+	id = kinreq.11
+	desc = EVTDESCkinreq11
+	picture = GFX_evt_large_army
+
+	is_triggered_only = yes # kinreq.10
+
+	option = {
+		name = EVTOPTAkinreq11
+		hidden_tooltip = {
+			event_target:kinreq_old_liege = { character_event = { id = kinreq.12 } }
+		}
+	}
+}
+
+# kinreq.12 The traitor abroad
+# The old liege hears where the relative went; the pretender strikes a
+# year later.
+# Scope: the old liege; FROM is the host. Fired by kinreq.11.
+character_event = {
+	id = kinreq.12
+	desc = EVTDESCkinreq12
+	picture = GFX_evt_large_army
+
+	is_triggered_only = yes # kinreq.11
+
+	option = {
+		name = EVTOPTAkinreq12
+		opinion = {
+			who = FROMFROM
+			modifier = opinion_traitor
+		}
+		hidden_tooltip = {
+			opinion = {
+				who = FROMFROM
+				modifier = opinion_targeted_by_adventurer
+				months = 12
+			}
+			FROMFROM = { character_event = { id = kinreq.13 days = 365 } }
+		}
+	}
+}
+
+# kinreq.13 The pretender strikes (hidden)
+# The pretender, still at the host's court, raises an army and a fleet at
+# the host's capital, takes four captains, and claims a secondary empire or
+# kingdom of the old liege, or else the primary title.
+# Scope: the pretender; FROM is the old liege. Fired by kinreq.12.
+character_event = {
+	id = kinreq.13
+
+	hide_window = yes
+
+	is_triggered_only = yes # kinreq.12
+
+	trigger = {
+		independent = no
+		is_ruler = no
+		prisoner = no
+		NOT = { trait = incapable }
+		FROM = {
+			is_alive = yes
+			independent = yes
+		}
+		liege = { character = event_target:kinreq_host }
+	}
+
+	immediate = {
+		liege = { capital_scope = { save_event_target_as = kinreq_landing } }
+		set_defacto_liege = ROOT
+		create_title = {
+			tier = DUKE
+			landless = yes
+			temporary = yes
+			culture = ROOT
+			name = "CLAIMANT_ADVENTURE"
+			holder = ROOT
+		}
+		set_character_flag = claimant_adventurer
+		event_target:kinreq_landing = {
+			ROOT = {
+				random_list = {
+					34 = {
+						spawn_unit = {
+							province = PREV
+							home = PREV
+							owner = THIS
+							leader = THIS
+							match_character = FROM
+							match_mult = 0.75
+							match_min = 1800
+							match_max = 30000
+							attrition = 0.25
+							earmark = claimant_adventure
+							disband_on_peace = yes
+						}
+					}
+					33 = {
+						spawn_unit = {
+							province = PREV
+							home = PREV
+							owner = THIS
+							leader = THIS
+							match_character = FROM
+							match_mult = 0.6
+							match_min = 1800
+							match_max = 30000
+							attrition = 0.25
+							earmark = claimant_adventure
+							disband_on_peace = yes
+						}
+					}
+					33 = {
+						spawn_unit = {
+							province = PREV
+							home = PREV
+							owner = THIS
+							leader = THIS
+							match_character = FROM
+							match_mult = 0.45
+							match_min = 1800
+							match_max = 30000
+							attrition = 0.25
+							earmark = claimant_adventure
+							disband_on_peace = yes
+						}
+					}
+				}
+			}
+		}
+		kinreq_pretender_captains_effect = yes
+		spawn_fleet = {
+			province = closest # The nearest sea zone
+			owner = ROOT
+			disband_on_peace = yes
+			troops = { galleys = { 150 150 } }
+			earmark = claimant_adventure
+		}
+		FROM = {
+			if = { # A secondary empire first
+				limit = { num_of_emperor_titles = 2 }
+				random_demesne_title = {
+					limit = {
+						tier = EMPEROR
+						is_primary_holder_title = no
+					}
+					add_claim = ROOT
+					holder_scope = {
+						reverse_war = {
+							target = ROOT
+							casus_belli = claim
+							thirdparty_title = PREV
+						}
+					}
+				}
+			}
+			else_if = { # Then a secondary kingdom
+				limit = { num_of_king_titles = 2 }
+				random_demesne_title = {
+					limit = {
+						tier = KING
+						is_primary_holder_title = no
+					}
+					add_claim = ROOT
+					holder_scope = {
+						reverse_war = {
+							target = ROOT
+							casus_belli = claim
+							thirdparty_title = PREV
+						}
+					}
+				}
+			}
+			if = { # Else the primary title
+				limit = { NOT = { war_with = ROOT } }
+				primary_title = {
+					add_claim = ROOT
+					holder_scope = {
+						reverse_war = {
+							target = ROOT
+							casus_belli = claim
+							thirdparty_title = PREV
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# A match of my own (kinreq.20 - kinreq.28)
+###############################################################################
+
+# kinreq.20 Who wants to marry? (hidden)
+# A player picks a close unwed relative of the Old World faiths at court
+# with the ambition to marry, who asks for a match.
+# Scope: a player ruler of the Old World faiths. Fired by on_bi_yearly_pulse
+# (list kin_asks_match).
+character_event = {
+	id = kinreq.20
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_bi_yearly_pulse kin_asks_match list
+	ai = no
+	religion_group = old_world_group
+	lacks_dlc = "Zeus"
+	capable_only = yes
+	prisoner = no
+	war = no
+
+	trigger = {
+		any_courtier = { kinreq_wants_match_trigger = yes }
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { kinreq_wants_match_trigger = yes }
+			character_event = { id = kinreq.21 }
+		}
+	}
+}
+
+# kinreq.21 The relative asks (hidden)
+# Passes the ask on to the liege with FROM set to the relative.
+# Scope: the relative. Fired by kinreq.20.
+character_event = {
+	id = kinreq.21
+
+	hide_window = yes
+
+	is_triggered_only = yes # kinreq.20
+
+	immediate = {
+		liege = { character_event = { id = kinreq.22 days = 3 } }
+	}
+}
+
+# kinreq.22 A kinsman asks for a match
+# Scope: the liege; FROM is the relative. Fired by kinreq.21 and by
+# various_traits_events 65074.
+character_event = {
+	id = kinreq.22
+	desc = EVTDESCkinreq22
+	picture = GFX_evt_marriage
+
+	is_triggered_only = yes # kinreq.21, various_traits_events 65074
+
+	option = { # I will find you a match
+		name = EVTOPTAkinreq22
+		FROM = { character_event = { id = kinreq.23 tooltip = EVTTOOLTIPkinreq23 } }
+	}
+	option = { # The temple has need of you
+		name = EVTOPTBkinreq22
+		trigger = {
+			religion_group = old_world_group
+			FROM = { religion_group = old_world_group }
+		}
+		FROM = { character_event = { id = kinreq.24 tooltip = EVTTOOLTIPkinreq24 } }
+	}
+}
+
+# kinreq.23 A match promised
+# Scope: the relative; FROM is the liege. Fired by kinreq.22.
+character_event = {
+	id = kinreq.23
+	desc = EVTDESCkinreq23
+	picture = GFX_evt_marriage
+
+	is_triggered_only = yes # kinreq.22
+
+	option = {
+		name = EVTOPTAkinreq23
+		set_character_flag = flag_promised_marriage
+		add_character_modifier = { name = promised_a_marriage duration = -1 }
+		opinion = {
+			who = FROM
+			modifier = opinion_promised_marriage
+			months = 60
+		}
+	}
+}
+
+# kinreq.24 No match
+# Scope: the relative; FROM is the liege. Fired by kinreq.22.
+character_event = {
+	id = kinreq.24
+	desc = EVTDESCkinreq24
+	picture = GFX_evt_bad_news
+
+	is_triggered_only = yes # kinreq.22
+
+	option = {
+		name = EVTOPTAkinreq24
+		set_character_flag = flag_denied_marriage
+		opinion = {
+			who = FROM
+			modifier = opinion_denied_marriage
+			months = 60
+		}
+	}
+}
+
+# kinreq.25 The match recalled
+# A year after the promise, the relative reminds the liege.
+# Scope: the relative. Fired by on_yearly_pulse (list kin_reminds_match).
+character_event = {
+	id = kinreq.25
+	desc = EVTDESCkinreq25
+	picture = GFX_evt_marriage
+
+	is_triggered_only = yes # on_yearly_pulse kin_reminds_match list
+	has_character_flag = flag_promised_marriage
+	lacks_dlc = "Zeus"
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+	is_married = no
+
+	trigger = {
+		is_ruler = no
+		is_betrothed = no
+		NOT = { trait = bastard }
+		has_ambition = obj_get_married
+		had_character_flag = { flag = flag_promised_marriage days = 365 }
+		liege = {
+			is_close_relative = ROOT
+			ROOT = { has_opinion_modifier = { who = PREV modifier = opinion_promised_marriage } }
+		}
+	}
+
+	weight_multiplier = { # Was the old MTTH, inverted
+		days = 1
+		modifier = {
+			factor = 4
+			trait = lustful
+			OR = {
+				AND = {
+					is_woman_trigger = yes
+					NOT = { has_religion_feature = religion_matriarchal }
+				}
+				AND = {
+					is_woman_trigger = no
+					has_religion_feature = religion_matriarchal
+				}
+			}
+		}
+		modifier = { factor = 2 trait = ambitious }
+		modifier = { factor = 0.5 trait = slothful }
+		modifier = { factor = 0.2 trait = content }
+	}
+
+	option = {
+		name = EVTOPTAkinreq25
+		liege = { character_event = { id = kinreq.26 days = 3 tooltip = EVTTOOLTIPkinreq26 } }
+	}
+}
+
+# kinreq.26 Where is my match?
+# Scope: the liege; FROM is the relative. Fired by kinreq.25.
+character_event = {
+	id = kinreq.26
+	desc = EVTDESCkinreq26
+	picture = GFX_evt_marriage
+
+	is_triggered_only = yes # kinreq.25
+
+	option = { # Marry a courtier now
+		name = EVTOPTAkinreq26
+		trigger = {
+			FROM = { is_married = no }
+			any_courtier = { kinreq_match_for_from_trigger = yes }
+		}
+		FROM = {
+			remove_character_modifier = promised_a_marriage
+			clr_character_flag = flag_promised_marriage
+		}
+		random_courtier = {
+			limit = { kinreq_match_for_from_trigger = yes }
+			add_spouse = FROM
+		}
+	}
+	option = { # Off to the temple
+		name = EVTOPTBkinreq26
+		trigger = {
+			religion_group = old_world_group
+			FROM = {
+				religion_group = old_world_group
+				is_married = no
+			}
+			any_realm_lord = { is_theocracy = yes }
+		}
+		random_realm_lord = {
+			limit = { is_theocracy = yes }
+			reverse_banish = FROM
+		}
+		FROM = {
+			cancel_ambition = yes
+			remove_character_modifier = promised_a_marriage
+			clr_character_flag = flag_promised_marriage
+			opinion = {
+				who = ROOT
+				modifier = opinion_sent_to_church
+				months = 120
+			}
+		}
+	}
+	option = { # No one fit for you
+		name = EVTOPTCkinreq26
+		trigger = { FROM = { is_married = no } }
+		FROM = {
+			set_character_flag = flag_denied_marriage
+			clr_character_flag = flag_promised_marriage
+			remove_character_modifier = promised_a_marriage
+		}
+	}
+	option = { # You are already married
+		name = EVTOPTDkinreq26
+		trigger = {
+			FROM = {
+				is_married = yes
+				spouse = { is_alive = yes }
+			}
+		}
+	}
+}
+
+# kinreq.27 A secret wedding
+# A relative refused a match weds a courtier without the liege's leave.
+# Scope: the relative. Fired by on_five_year_pulse (list
+# kin_weds_in_secret).
+character_event = {
+	id = kinreq.27
+	desc = {
+		trigger = { is_woman_trigger = no }
+		text = EVTDESCkinreq27
+	}
+	desc = {
+		trigger = { is_woman_trigger = yes }
+		text = EVTDESCkinreq27_woman
+	}
+	picture = GFX_evt_marriage
+
+	is_triggered_only = yes # on_five_year_pulse kin_weds_in_secret list
+	has_character_flag = flag_denied_marriage
+	lacks_dlc = "Zeus"
+	min_age = 16
+	capable_only = yes
+	prisoner = no
+
+	trigger = {
+		is_ruler = no
+		is_betrothed = no
+		has_ambition = obj_get_married
+		liege = {
+			any_courtier = { kinreq_secret_match_trigger = yes }
+		}
+	}
+
+	weight_multiplier = { # Was the old MTTH, inverted
+		days = 1
+		modifier = { factor = 4 trait = lustful }
+		modifier = { factor = 2 trait = ambitious }
+		modifier = { factor = 0.5 trait = slothful }
+		modifier = { factor = 0.2 trait = content }
+	}
+
+	option = {
+		name = EVTOPTAkinreq27
+		liege = {
+			random_courtier = {
+				limit = { kinreq_secret_match_trigger = yes }
+				add_spouse = ROOT
+			}
+		}
+		liege = { character_event = { id = kinreq.28 tooltip = EVTTOOLTIPkinreq28 } }
+	}
+}
+
+# kinreq.28 Wed in secret
+# Scope: the liege; FROM is the relative. Fired by kinreq.27.
+character_event = {
+	id = kinreq.28
+	desc = {
+		trigger = { FROM = { is_woman_trigger = no } }
+		text = EVTDESCkinreq28
+	}
+	desc = {
+		trigger = { FROM = { is_woman_trigger = yes } }
+		text = EVTDESCkinreq28_woman
+	}
+	picture = GFX_evt_marriage
+
+	is_triggered_only = yes # kinreq.27
+
+	option = { # Let it be
+		name = EVTOPTAkinreq28
+		tooltip_info = kind
+		trigger = { trait = kind }
+	}
+	option = { # The insolence
+		name = EVTOPTBkinreq28
+		trigger = { NOT = { trait = kind } }
+		opinion = {
+			who = FROM
+			modifier = opinion_secret_marriage
+			months = 60
+		}
+	}
+	option = { # Throw them both in the dungeon
+		name = EVTOPTCkinreq28
+		trigger = {
+			OR = {
+				trait = wroth
+				trait = envious
+			}
+		}
+		FROM = { imprison = ROOT }
+		FROM = { spouse = { imprison = ROOT } }
+	}
+}
+
+###############################################################################
+# A spouse who shares my studies (kinreq.30 - kinreq.34)
+###############################################################################
+
+# kinreq.30 A spouse of the same learning (hidden)
+# Scope: the character. Fired by on_yearly_pulse (00_on_actions.txt
+# random_events).
+character_event = {
+	id = kinreq.30
+
+	hide_window = yes
+
+	is_triggered_only = yes # on_yearly_pulse random_events
+	min_age = 16
+	only_capable = yes
+	is_married = yes
+
+	trigger = {
+		NOT = { has_character_flag = spouse_offered_help }
+		NOT = { trait = blinded }
+		any_spouse = {
+			has_prev_education_trigger = yes
+			opinion = { who = ROOT value = 20 }
+			is_inaccessible_or_incapable_trigger = no
+		}
+	}
+
+	weight_multiplier = {
+		days = 1
+		modifier = { factor = 2 has_focus = focus_family }
+		modifier = { factor = 1.5 has_pleasant_personality_trigger = yes }
+		modifier = { factor = 0.75 has_unpleasant_personality_trigger = yes }
+		modifier = { factor = 0.5 num_of_lovers = 1 }
+	}
+
+	immediate = {
+		set_character_flag = spouse_offered_help
+		random_spouse = {
+			limit = {
+				has_prev_education_trigger = yes
+				opinion = { who = ROOT value = 20 }
+				is_inaccessible_or_incapable_trigger = no
+			}
+			character_event = { id = kinreq.31 }
+		}
+	}
+}
+
+# kinreq.31 The spouse offers (hidden)
+# Passes the offer back with FROM set to the spouse.
+# Scope: the spouse; FROM is the character. Fired by kinreq.30.
+character_event = {
+	id = kinreq.31
+
+	hide_window = yes
+
+	is_triggered_only = yes # kinreq.30
+
+	immediate = {
+		FROM = { character_event = { id = kinreq.32 days = 1 } }
+	}
+}
+
+# kinreq.32 A fresh pair of eyes
+# Scope: the character; FROM is the spouse. Fired by kinreq.31.
+character_event = {
+	id = kinreq.32
+	desc = EVTDESCkinreq32
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # kinreq.31
+
+	option = { # Accept the help
+		name = EVTOPTAkinreq32
+		custom_tooltip = { text = EVTOPTAkinreq32_tt }
+		hidden_tooltip = { FROM = { character_event = { id = kinreq.33 } } }
+	}
+	option = { # Refuse it
+		name = EVTOPTBkinreq32
+		custom_tooltip = { text = EVTOPTBkinreq32_tt }
+		random = {
+			chance = 30
+			add_trait_proud_effect = yes
+		}
+		reverse_opinion = {
+			who = FROM
+			modifier = opinion_ungrateful
+			years = 5
+		}
+	}
+}
+
+# kinreq.33 To work (hidden)
+# Scope: the spouse; FROM is the character. Fired by kinreq.32.
+character_event = {
+	id = kinreq.33
+
+	hide_window = yes
+
+	is_triggered_only = yes # kinreq.32
+
+	immediate = {
+		FROM = { character_event = { id = kinreq.34 days = 7 } }
+	}
+}
+
+# kinreq.34 Kindred minds
+# Scope: the character; FROM is the spouse. Fired by kinreq.33.
+character_event = {
+	id = kinreq.34
+	desc = EVTDESCkinreq34
+	picture = GFX_evt_courtiers_talking
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # kinreq.33
+
+	option = { # Finish the work together
+		name = EVTOPTAkinreq34
+		custom_tooltip = { text = EVTOPTAkinreq34_tt }
+		opinion = {
+			who = FROM
+			modifier = common_interests_opinion
+			years = 10
+		}
+		reverse_opinion = {
+			who = FROM
+			modifier = common_interests_opinion
+			years = 10
+		}
+		if = {
+			limit = { has_education_martial_trigger = yes }
+			military_techpoints = 50
+		}
+		else_if = {
+			limit = { has_education_stewardship_trigger = yes }
+			economy_techpoints = 50
+		}
+		else_if = {
+			limit = {
+				OR = {
+					has_education_diplomacy_trigger = yes
+					has_education_learning_trigger = yes
+				}
+			}
+			culture_techpoints = 50
+		}
+		else_if = {
+			limit = { has_education_intrigue_trigger = yes }
+			military_techpoints = 15
+			culture_techpoints = 15
+			economy_techpoints = 15
+		}
+	}
+	option = { # To bed instead
+		name = EVTOPTBkinreq34
+		trigger = {
+			NOT = { is_lover = FROM }
+			is_no_females_race = no
+			FROM = { is_no_females_race = no }
+		}
+		custom_tooltip = { text = EVTOPTBkinreq34_tt }
+		add_lover = FROM
+	}
+}
+
+###############################################################################
+# Part 6: The disobedient daughter (namespace daughter)
+# Namespace: daughter (was ZE.1010-1302 in ze_various_events)
+# Faction: Generic
+#
+# A strong-willed daughter of a player turns against an unwanted marriage
+# or the killing of her lover or friend, and may poison or duel her husband,
+# elope abroad, raise a mercenary band, take lovers, torment her spouse,
+# turn heretic or die in prison.
+#   10-15    An unwanted marriage (on_marriage)
+#   30-41    A parent kills her lover or friend (on_death)
+#   100-190  The unhappy daughter acts (yearly pulse)
+#   300-302  She asks to marry her lover (yearly pulse)
+#
+# Restored Nov 12: the Way of Life family refactor (e6717551) wrote over
+# this file and its loc, so the on_actions listed missing events.
+###############################################################################
+namespace = daughter
+
+###############################################################################
+# An unwanted marriage
+###############################################################################
+
+# daughter.10 An unwanted marriage
+# Hidden, on_marriage. A strong-willed daughter of a player is married to
+# someone she does not love and becomes disobedient.
+# Scope: ROOT is her parent, FROM the daughter.
+character_event = {
+	id = daughter.10
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "Zeus"
+		FROM = {
+			is_woman_trigger = yes
+			NOT = { new_character = { is_lover = FROM } }
+			daughter_strong_willed_trigger = yes
+			OR = { father = { character = ROOT ai = no } mother = { character = ROOT ai = no } }
+		}
+	}
+
+	weight_multiplier = {
+		days = 1
+
+		modifier = { factor = 3 OR = { trait = celibate trait = homosexual } }
+	}
+
+	immediate = {
+		FROM = { set_character_flag = disobedient_daughter }
+		character_event = { id = daughter.11 days = 2 }
+	}
+}
+
+# daughter.15 An unwanted marriage
+# Hidden, on_marriage. An already disobedient daughter is married off
+# against her will.
+# Scope: ROOT is the marrying side, FROM the daughter.
+character_event = {
+	id = daughter.15
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "Zeus"
+		FROM = {
+			has_character_flag = disobedient_daughter
+			NOT = { new_character = { is_lover = FROM } }
+		}
+	}
+
+	immediate = {
+		employer = { character_event = { id = daughter.11 } }
+	}
+}
+
+# daughter.11 Annul the marriage
+# The daughter begs her parent to annul the match. Refuse (she stays
+# unhappy, may take a lover or a vow) or annul it at a cost in piety and
+# prestige.
+# Scope: ROOT is the parent or her liege, FROMFROM the daughter.
+character_event = {
+	id = daughter.11
+	title = EVTTITLEdaughter11
+	desc = EVTDESCdaughter11
+	picture = GFX_evt_daughter_asking_father
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaughter11 # Tell her she must accept it
+		FROMFROM = {
+			set_character_flag = disobedient_daughter_unhappy
+			if = {
+				limit = { has_lover = no NOT = { trait = celibate } }
+				random_list = {
+					10 = { add_trait = celibate }
+					10 = {
+						trigger = {
+							ROOT = {
+								any_courtier = {
+									is_ill = no
+									NOT = { trait = incapable }
+									NOT = { trait = celibate }
+									NOT = { has_ugly_trait_trigger = yes }
+									age = 16
+									NOT = { age = 50 }
+									is_no_females_race = no
+								}
+							}
+						}
+						custom_tooltip = { text = disobedient_daughter_takes_lover }
+						ROOT = {
+							random_courtier = {
+								limit = {
+									is_ill = no
+									NOT = { trait = incapable }
+									NOT = { trait = celibate }
+									NOT = { has_ugly_trait_trigger = yes }
+									age = 16
+									NOT = { age = 50 }
+									is_no_females_race = no
+								}
+								if = { limit = { is_no_females_race = no FROMFROM = { is_no_females_race = no } } add_lover = FROMFROM }
+							}
+						}
+					}
+					10 = { }
+				}
+			}
+			opinion = { who = ROOT modifier = opinion_angry years = 3 }
+			spouse = { reverse_opinion = { who = FROMFROM modifier = opinion_hate years = 100 } }
+		}
+	}
+	option = {
+		name = EVTOPTBdaughter11 # Annul the marriage immediately
+		piety = -50
+		prestige = -100
+		FROMFROM = {
+			piety = -50
+			prestige = -50
+			spouse = {
+				save_event_target_as = target_spurned_spouse
+				employer = {
+					opinion = { who = ROOT modifier = grievously_offended years = 5 }
+					hidden_tooltip = { character_event = { id = daughter.12 } }
+				}
+			}
+			remove_spouse = spouse
+		}
+	}
+}
+
+# daughter.12 Marriage annulled
+# The other family hears the match is off.
+# Scope: ROOT is the spurned family's ruler, FROM the parent.
+character_event = {
+	id = daughter.12
+	title = EVTTITLEdaughter11
+	desc = EVTDESCdaughter12
+	picture = GFX_evt_scandal
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaughter12
+		tooltip = {
+			event_target:target_spurned_spouse = { remove_spouse = FROMFROM }
+			opinion = { who = FROM modifier = grievously_offended years = 5 }
+		}
+	}
+}
+
+###############################################################################
+# A lover or friend killed
+###############################################################################
+
+# daughter.30 A lover killed
+# Hidden, on_death. A player executed, murdered, starved or sacrificed their
+# daughter's lover.
+# Scope: ROOT is the dead lover.
+character_event = {
+	id = daughter.30
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	only_men = yes
+
+	trigger = {
+		has_dlc = "Zeus"
+		has_lover = yes
+		OR = {
+			death_execution_trigger = yes
+			death_murder_known_trigger = yes
+			death_reason = death_dungeon
+			death_sacrificed_trigger = yes
+		}
+		any_lover = {
+			OR = {
+				father = { ROOT = { killer = { character = PREVPREV } } ai = no }
+				mother = { ROOT = { killer = { character = PREVPREV } } ai = no }
+			}
+			is_woman_trigger = yes
+			NAND = {
+				ROOT = { death_sacrificed_trigger = yes }
+				trait = zealous
+				ROOT = { killer = { religion = PREVPREV } }
+			}
+			daughter_strong_willed_trigger = yes
+		}
+	}
+
+	immediate = {
+		random_lover = {
+			limit = {
+				is_woman_trigger = yes
+				OR = {
+					father = { ROOT = { killer = { character = PREVPREV } } ai = no }
+					mother = { ROOT = { killer = { character = PREVPREV } } ai = no }
+				}
+				NAND = {
+					ROOT = { death_sacrificed_trigger = yes }
+					trait = zealous
+					ROOT = { killer = { religion = PREVPREV } }
+				}
+				daughter_strong_willed_trigger = yes
+			}
+			save_event_target_as = target_daughter_killed_her_friend
+		}
+		random = { chance = 30 killer = { character_event = { id = daughter.31 days = 5 } } }
+	}
+}
+
+# daughter.31 A lover killed
+# The daughter curses her parent and turns disobedient.
+# Scope: ROOT is the parent, FROM the dead lover.
+character_event = {
+	id = daughter.31
+	desc = EVTDESCdaughter31
+	picture = GFX_evt_daughter_asking_father
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaughter31 # I didn't think you'd mind...
+		event_target:target_daughter_killed_her_friend = {
+			opinion = { who = ROOT modifier = evil_murderer years = 10 }
+			set_character_flag = disobedient_daughter
+			set_character_flag = disobedient_daughter_unhappy
+		}
+	}
+}
+
+# daughter.40 A friend killed
+# Hidden, on_death. A player killed their daughter's friend.
+# Scope: ROOT is the dead friend.
+character_event = {
+	id = daughter.40
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_dlc = "Zeus"
+		any_friend = {
+			is_woman_trigger = yes
+			OR = {
+				ROOT = { death_execution_trigger = yes }
+				ROOT = { death_murder_known_trigger = yes }
+				ROOT = { death_reason = death_dungeon }
+				AND = {
+					OR = {
+						NOT = { trait = zealous }
+						NOT = { ROOT = { killer = { religion = PREVPREV } } }
+					}
+					ROOT = { death_sacrificed_trigger = yes }
+				}
+			}
+			daughter_strong_willed_trigger = yes
+			OR = {
+				father = { ROOT = { killer = { character = PREVPREV } } ai = no }
+				mother = { ROOT = { killer = { character = PREVPREV } } ai = no }
+			}
+		}
+	}
+
+	immediate = {
+		random_friend = {
+			limit = {
+				is_woman_trigger = yes
+				OR = {
+					ROOT = { death_execution_trigger = yes }
+					ROOT = { death_murder_known_trigger = yes }
+					ROOT = { death_reason = death_dungeon }
+					AND = {
+						OR = {
+							NOT = { trait = zealous }
+							NOT = { ROOT = { killer = { religion = PREVPREV } } }
+						}
+						ROOT = { death_sacrificed_trigger = yes }
+					}
+				}
+				daughter_strong_willed_trigger = yes
+				OR = {
+					father = { ROOT = { killer = { character = PREVPREV } } ai = no }
+					mother = { ROOT = { killer = { character = PREVPREV } } ai = no }
+				}
+			}
+			save_event_target_as = target_daughter_killed_her_friend
+		}
+		random = { chance = 30 killer = { character_event = { id = daughter.41 days = 5 } } }
+	}
+}
+
+# daughter.41 A friend killed
+# The daughter curses her parent and turns disobedient.
+# Scope: ROOT is the parent, FROM the dead friend.
+character_event = {
+	id = daughter.41
+	desc = EVTDESCdaughter31
+	picture = GFX_evt_daughter_asking_father
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaughter31 # I didn't think you'd mind...
+		event_target:target_daughter_killed_her_friend = {
+			opinion = { who = ROOT modifier = evil_murderer years = 10 }
+			set_character_flag = disobedient_daughter
+			set_character_flag = disobedient_daughter_unhappy
+		}
+	}
+}
+
+###############################################################################
+# The unhappy daughter acts
+###############################################################################
+
+# daughter.100 The unhappy daughter
+# Hidden, yearly pulse. An unhappy disobedient daughter at court may act.
+# Scope: ROOT is the parent.
+character_event = {
+	id = daughter.100
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	ai = no
+
+	trigger = {
+		any_child = {
+			is_ruler = no
+			is_woman_trigger = yes
+			is_ill = no
+			NOT = { trait = incapable }
+			NOT = { is_inaccessible_trigger = yes }
+			liege = { character = ROOT }
+			has_character_flag = disobedient_daughter
+			has_character_flag = disobedient_daughter_unhappy
+		}
+	}
+
+	immediate = {
+		random_child = {
+			limit = {
+				is_ruler = no
+				is_woman_trigger = yes
+				is_ill = no
+				NOT = { trait = incapable }
+				NOT = { is_inaccessible_trigger = yes }
+				liege = { character = ROOT }
+				has_character_flag = disobedient_daughter
+				has_character_flag = disobedient_daughter_unhappy
+			}
+			character_event = { id = daughter.101 }
+		}
+	}
+}
+
+# daughter.101 The unhappy daughter acts
+# Hidden. Weighted pick: poison or duel her husband, elope abroad, found a
+# mercenary band, take a lover, torment her spouse, turn heretic or die in
+# prison.
+# Scope: ROOT is the daughter.
+character_event = {
+	id = daughter.101
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_list = {
+			10 = { # Murders spouse in sleep
+				modifier = { factor = 0 prisoner = yes }
+				modifier = { factor = 0 OR = { is_married = no spouse = { is_lover = ROOT } } }
+				modifier = { factor = 0 spouse = { ai = no } }
+				modifier = { factor = 0 trait = kind }
+				modifier = { factor = 2 trait = wroth }
+				modifier = { factor = 2 trait = cruel }
+				modifier = {
+					factor = 0.5
+					spouse = {
+						attribute_diff = { attribute = intrigue character = PREV value = 4 }
+					}
+				}
+				modifier = {
+					factor = 0.5
+					spouse = {
+						attribute_diff = { attribute = intrigue character = PREV value = 8 }
+					}
+				}
+				modifier = {
+					factor = 2
+					spouse = {
+						attribute_diff = { attribute = intrigue character = PREV value = -4 }
+					}
+				}
+				modifier = {
+					factor = 2
+					spouse = {
+						attribute_diff = { attribute = intrigue character = PREV value = -8 }
+					}
+				}
+				if = {
+					limit = { father = { ai = no } }
+					father = { character_event = { id = daughter.120 } }
+				}
+				else_if = {
+					limit = { mother = { ai = no } }
+					mother = { character_event = { id = daughter.120 } }
+				}
+			}
+			2 = { # Kills spouse in single combat - only if she is more skilled
+				modifier = { factor = 0 prisoner = yes }
+				modifier = {
+					factor = 0
+					OR = {
+						is_married = no
+						spouse = { is_lover = ROOT }
+						spouse = { combat_rating_diff = { who = ROOT value = 0 } }
+					}
+				}
+				modifier = { factor = 0 spouse = { ai = no } }
+				modifier = { factor = 0 trait = craven }
+				modifier = {
+					factor = 10
+					spouse = { combat_rating_diff = { who = ROOT value = -40 } }
+				}
+				modifier = { factor = 1.5 trait = brave }
+				if = {
+					limit = { father = { ai = no is_liege_of = ROOT } }
+					father = { character_event = { id = daughter.130 } }
+				}
+				else_if = {
+					limit = { mother = { ai = no is_liege_of = ROOT } }
+					mother = { character_event = { id = daughter.130 } }
+				}
+			}
+			5 = { # Elope and settle abroad (divorce spouse, marry any unmarried lover)
+				modifier = { factor = 0 prisoner = yes }
+				modifier = { factor = 0 spouse = { ai = no } }
+				modifier = { factor = 0 trait = craven }
+				modifier = {
+					factor = 0
+					NOT = { any_independent_ruler = { religion_group = ROOT ai = yes } }
+				}
+				character_event = { id = daughter.140 }
+			}
+			5 = { # Elope and start pirate band (mercs, divorce spouse, marry any lover)
+				modifier = { factor = 0 prisoner = yes }
+				modifier = { factor = 0 spouse = { ai = no } }
+				modifier = { factor = 0 trait = craven }
+				modifier = { factor = 2 martial = 9 }
+				modifier = { factor = 3 martial = 15 }
+				if = {
+					limit = { father = { ai = no is_liege_of = ROOT } }
+					father = { character_event = { id = daughter.150 } }
+				}
+				else_if = {
+					limit = { mother = { ai = no is_liege_of = ROOT } }
+					mother = { character_event = { id = daughter.150 } }
+				}
+			}
+			10 = { # Take new lover (remove any chaste trait)
+				modifier = { factor = 0 prisoner = yes }
+				modifier = {
+					factor = 0
+					NOT = {
+						liege = {
+							any_courtier = {
+								ai = yes
+								is_valid_romance_target = ROOT
+								is_no_females_race = no
+								prisoner = no
+								NOT = { character = ROOT }
+								NOT = { num_of_lovers = 5 }
+							}
+						}
+					}
+				}
+				modifier = { factor = 0 num_of_lovers = 5 }
+				modifier = { factor = 0 trait = celibate }
+				modifier = { factor = 3 trait = lustful }
+				modifier = { factor = 1.5 trait = gregarious }
+				modifier = { factor = 1.5 has_fair_trait_trigger = yes }
+				remove_trait = chaste
+				liege = {
+					random_courtier = {
+						limit = {
+							ai = yes
+							is_valid_romance_target = ROOT is_no_females_race = no
+							is_no_females_race = no
+							prisoner = no
+							NOT = { character = ROOT }
+							NOT = { num_of_lovers = 5 }
+						}
+						end_inaccessibility_effect = yes
+						if = { limit = { is_no_females_race = no ROOT = { is_no_females_race = no } } add_lover = ROOT }
+					}
+				}
+			}
+			10 = { # Make spouse stressed, depressed or insane...
+				modifier = { factor = 0 prisoner = yes }
+				modifier = { factor = 0 is_married = no }
+				modifier = { factor = 0 spouse = { ai = no } }
+				modifier = { factor = 0 trait = kind }
+				modifier = { factor = 0.5 trait = humble }
+				modifier = {
+					factor = 2
+					OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+				}
+				modifier = { factor = 2 trait = possessed }
+				modifier = { factor = 2 trait = wroth }
+				modifier = { factor = 2 trait = cruel }
+				spouse = {
+					if = {
+						limit = { trait = depressed }
+						add_trait = lunatic_1
+						set_variable = { which = "lunatic_counter" value = 5 }
+					}
+					if = {
+						limit = {
+							NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+							trait = stressed
+						}
+						add_trait = depressed
+					}
+					if = {
+						limit = {
+							NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+							NOT = { trait = depressed }
+						}
+						add_trait = stressed
+					}
+				}
+			}
+			10 = { # Become a heretic, spit on parent's religion
+				modifier = { factor = 0 NOT = { religion = FROM } }
+				modifier = { factor = 0 religion_group = chaos_gods_group }
+				modifier = { factor = 0 religion_group = greenskin_gods_group } # greenskins never leave their gods
+				modifier = { factor = 0.5 trait = zealous }
+				modifier = { factor = 2 trait = cynical }
+				modifier = { factor = 2 trait = brave }
+				character_event = { id = daughter.180 }
+			}
+			5 = { # If imprisoned, commit suicide in prison
+				modifier = { factor = 0 prisoner = no }
+				modifier = {
+					factor = 0
+					NOT = { trait = stressed }
+					NOT = { trait = depressed }
+					NOR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+				}
+				modifier = { factor = 3 trait = depressed }
+				modifier = {
+					factor = 2
+					OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 }
+				}
+				character_event = { id = daughter.190 }
+			}
+			30 = { # No action
+			}
+		}
+	}
+}
+
+# daughter.120 Poison rumours
+# Her husband died in his sleep and the servants say she did it.
+# Scope: ROOT is the parent, FROM the daughter.
+character_event = {
+	id = daughter.120
+	desc = EVTDESCdaughter120
+	picture = GFX_evt_illness
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaughter120 # Is it true?
+		FROM = {
+			spouse = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_murder_unknown_poison killer = FROM } }
+			}
+		}
+	}
+}
+
+# daughter.130 Killed in the bedchamber
+# She bested her husband with a sword.
+# Scope: ROOT is the parent, FROM the daughter.
+character_event = {
+	id = daughter.130
+	desc = EVTDESCdaughter130
+	picture = GFX_evt_quarrel
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaughter130 # Oh my!
+		FROM = {
+			spouse = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_murder killer = FROM } }
+			}
+		}
+	}
+}
+
+# daughter.140 Eloped abroad
+# Hidden. She divorces, marries a lover and settles in a holding under a
+# foreign ruler of her religion group.
+# Scope: ROOT is the daughter.
+character_event = {
+	id = daughter.140
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_independent_ruler = {
+			limit = {
+				religion_group = ROOT
+				ai = yes
+				any_realm_province = { has_empty_holding = yes }
+			}
+			random_realm_province = {
+				limit = { has_empty_holding = yes }
+				province_event = { id = daughter.141 }
+			}
+		}
+	}
+}
+
+# daughter.141 Eloped abroad
+# Hidden relay that tells her parent.
+# Scope: ROOT is the daughter.
+province_event = {
+	id = daughter.141
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = {
+			if = {
+				limit = { father = { is_liege_of = PREV } }
+				father = { character_event = { id = daughter.142 } }
+			}
+			else_if = {
+				limit = { mother = { is_liege_of = PREV } }
+				mother = { character_event = { id = daughter.142 } }
+			}
+		}
+	}
+}
+
+# daughter.142 Eloped abroad
+# The parent learns she has a castle abroad.
+# Scope: ROOT is the parent, FROM the daughter.
+character_event = {
+	id = daughter.142
+	desc = EVTDESCdaughter142
+	picture = GFX_evt_rider_adventure
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaughter142
+		FROMFROM = {
+			end_inaccessibility_effect = yes #removes in_hiding or in_seclusion
+			remove_spouse = spouse
+			random_lover = {
+				limit = { ai = yes is_married = no is_female = no }
+				add_spouse_matrilineal = PREV
+			}
+		}
+		FROM = {
+			build_holding = { type = castle holder = FROMFROM }
+			owner = { FROMFROM = { set_defacto_liege = PREV } }
+		}
+	}
+}
+
+# daughter.150 A mercenary daughter
+# She ran off and leads a band of cutthroats.
+# Scope: ROOT is the parent, FROM the daughter.
+character_event = {
+	id = daughter.150
+	title = EVTTITLEdaughter150
+	desc = EVTDESCdaughter150
+	picture = GFX_evt_steppe_mercenaries
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaughter150
+		FROM = {
+			end_inaccessibility_effect = yes
+			remove_spouse = spouse
+			random_lover = {
+				limit = { ai = yes is_married = no is_female = no }
+				add_spouse_matrilineal = PREV
+			}
+			hidden_tooltip = {
+				add_trait = adventurer
+				set_character_flag = special_marshal
+				if = {
+					limit = { has_nickname = no }
+					random_list = {
+						10 = { give_nickname = nick_the_red }
+						10 = { give_nickname = nick_the_sea_devil }
+						10 = { give_nickname = nick_the_lioness }
+						10 = { give_nickname = nick_the_flail_of }
+						10 = { give_nickname = nick_the_scourge_of }
+						10 = { give_nickname = nick_the_bold }
+						10 = { give_nickname = nick_the_fearless }
+					}
+				}
+			}
+			create_title = {
+				tier = DUKE
+				name = DISOBEDIENT_DAUGHTER_MERC_BAND
+				landless = yes
+				temporary = yes
+				adventurer = yes
+				custom_created = yes
+				culture = THIS
+				holder = THIS
+				mercenary = yes
+				army_template = mercenary_princess_composition
+				ruler = "CAPTAIN"
+				ruler_female = "CAPTAIN"
+				foa = "CAPTAIN_FOA"
+			}
+			set_defacto_liege = THIS
+		}
+	}
+}
+
+# daughter.180 A heretic daughter
+# She spits on her parent's faith and turns heretic.
+# Scope: ROOT is the parent, FROM the daughter.
+character_event = {
+	id = daughter.180
+	desc = EVTDESCdaughter180
+	picture = GFX_evt_daughter_asking_father
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaughter180
+		FROM = { become_heretic = yes }
+	}
+}
+
+# daughter.190 Death in prison
+# She took her own life in the dungeon.
+# Scope: ROOT is the parent, FROM the daughter.
+character_event = {
+	id = daughter.190
+	desc = EVTDESCdaughter190
+	picture = GFX_evt_into_the_dungeon
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaughter190
+		FROM = {
+			if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+			else = { death = { death_reason = death_suicide } }
+		}
+	}
+}
+
+###############################################################################
+# A love match
+###############################################################################
+
+# daughter.300 Let us marry
+# Hidden, yearly pulse. An unmarried disobedient daughter has a lover.
+# Scope: ROOT is the parent.
+character_event = {
+	id = daughter.300
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	ai = no
+
+	trigger = {
+		any_child = {
+			is_woman_trigger = yes
+			prisoner = no
+			is_ill = no
+			is_married = no
+			any_lover = { ai = yes is_female = no }
+			NOT = { trait = incapable }
+			liege = { character = ROOT }
+			has_character_flag = disobedient_daughter
+		}
+	}
+
+	immediate = {
+		random_child = {
+			limit = {
+				is_woman_trigger = yes
+				prisoner = no
+				is_ill = no
+				is_married = no
+				any_lover = { ai = yes is_female = no }
+				NOT = { trait = incapable }
+				liege = { character = ROOT }
+				has_character_flag = disobedient_daughter
+			}
+			character_event = { id = daughter.301 }
+		}
+	}
+}
+
+# daughter.301 Let us marry
+# Hidden relay from the daughter.
+# Scope: ROOT is the daughter.
+character_event = {
+	id = daughter.301
+
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		random_lover = {
+			limit = { ai = yes is_female = no }
+			save_event_target_as = target_daughter_wants_to_marry
+		}
+		character_event = { id = daughter.302 }
+	}
+}
+
+# daughter.302 Let us marry
+# She asks to marry her lover. Allow it, or refuse and she stays unhappy.
+# Scope: ROOT is the parent, FROM the daughter.
+character_event = {
+	id = daughter.302
+	desc = EVTDESCdaughter302
+	picture = GFX_evt_daughter_asking_father
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAdaughter302 # Yes
+		FROM = { clr_character_flag = disobedient_daughter_unhappy }
+		event_target:target_daughter_wants_to_marry = { add_spouse = FROM }
+		reverse_opinion = { who = FROM modifier = opinion_grateful years = 5 }
+	}
+	option = {
+		name = EVTOPTBdaughter302 # No
+		FROM = { set_character_flag = disobedient_daughter_unhappy }
+		reverse_opinion = { who = FROM modifier = opinion_angry years = 5 }
 	}
 }

@@ -14,7 +14,7 @@
 #   25-30    Marshal job actions (job events 122002-122007 keep numeric ids)
 #   32-35    Cleansing herdstones
 #   37-42    Births: bray shamans and turnskins
-#   44-53    Childhood and horns
+#   44-54    Childhood and horns (54: feral youth comes of age)
 #   55-60    War and raids
 #   61-67    Herdstone rites and prisoners
 #   70-73    Horde retinues
@@ -23,6 +23,9 @@
 #   81       Halfling ambush
 #   85-86    Morrslieb waxes
 #   88-91    Bray shaman omens
+#
+# Reworked (Nov 12): beastmen.51-52 were a child's lust; now feral savagery,
+# and the lustful trait comes at adulthood (beastmen.54, on_adulthood).
 #
 # Shared effects and triggers: common/scripted_effects/wh_beastmen_effects.txt
 # and common/scripted_triggers/wh_beastmen_triggers.txt.
@@ -789,12 +792,18 @@ character_event = {
 
 	immediate = {
 		save_event_target_as = beastmen_migrator
-		create_character = {
-			random_traits = yes
-			dynasty = RANDOM
-			religion = ROOT
-			culture = ROOT
-			trait = creature_beastman
+		# The chieftain left behind is of the migrating ruler's own race: a
+		# greenskin horde (waaagh.60) leaves an orc or goblin, not a beastman.
+		if = {
+			limit = { trait = creature_orc }
+			create_character = { random_traits = yes dynasty = RANDOM religion = ROOT culture = ROOT trait = creature_orc }
+		}
+		else_if = {
+			limit = { trait = creature_goblin }
+			create_character = { random_traits = yes dynasty = RANDOM religion = ROOT culture = ROOT trait = creature_goblin }
+		}
+		else = {
+			create_character = { random_traits = yes dynasty = RANDOM religion = ROOT culture = ROOT trait = creature_beastman }
 		}
 		new_character = { character_event = { id = beastmen.13 } }
 		if = {
@@ -1345,7 +1354,7 @@ character_event = {
 		name = EVTOPTAbeastmen26
 		prestige = 200
 		piety = 50
-		hidden_tooltip = { FROM = { location = { religion = ROOT culture = ROOT } } }
+		hidden_tooltip = { FROM = { location = { if = { limit = { NOT = { religion_group = greenskin_gods_group } } religion = ROOT culture = ROOT } } } } # greenskin lands stay greenskin
 		ai_chance = { factor = 1 }
 	}
 }
@@ -1471,6 +1480,8 @@ character_event = {
 }
 
 # beastmen.28 The land is ours (spread Chaos)
+# As beastmen.26: prestige and piety, and the province takes the liege's
+# culture and religion.
 # Scope: ROOT is the liege, FROM the marshal.
 character_event = {
 	id = beastmen.28
@@ -1484,6 +1495,7 @@ character_event = {
 		name = EVTOPTAbeastmen26
 		prestige = 200
 		piety = 50
+		hidden_tooltip = { FROM = { location = { if = { limit = { NOT = { religion_group = greenskin_gods_group } } religion = ROOT culture = ROOT } } } } # greenskin lands stay greenskin
 		ai_chance = { factor = 1 }
 	}
 }
@@ -1554,7 +1566,7 @@ character_event = {
 					}
 					5 = {
 						change_variable = { which = beastman_despoiler value = 1 }
-						religion = ROOT
+						if = { limit = { NOT = { religion_group = greenskin_gods_group } } religion = ROOT }
 					}
 					5 = {
 						change_variable = { which = beastman_despoiler value = 1 }
@@ -1680,9 +1692,14 @@ character_event = {
 		prestige = 200
 		piety = 50
 		FROM = {
-			location = { province_capital = yes ROOT = { capital = PREV } } #Move the capital
+			location = {
+				if = { # Move the capital, if the liege holds the county's capital holding
+					limit = { owner = { character = ROOT } }
+					ROOT = { capital = PREV }
+				}
+			}
 		}
-		hidden_tooltip = { FROM = { location = { religion = ROOT culture = ROOT } } }
+		hidden_tooltip = { FROM = { location = { if = { limit = { NOT = { religion_group = greenskin_gods_group } } religion = ROOT culture = ROOT } } } } # greenskin lands stay greenskin
 		ai_chance = { factor = 1 }
 	}
 }
@@ -2089,7 +2106,7 @@ character_event = {
 ###############################################################################
 
 # beastmen.44 Beastman childhood
-# Each year a young beastman may grow wrathful, cruel, ambitious or lustful.
+# Each year a young beastman may grow wrathful, envious, ambitious or feral.
 # Scope: ROOT is the child. Fired by on_yearly_childhood_pulse.
 character_event = {
 	id = beastmen.44
@@ -2110,7 +2127,7 @@ character_event = {
 			10 = { character_event = { id = beastmen.45 } } #wroth
 			10 = { character_event = { id = beastmen.47 } } #envious
 			10 = { character_event = { id = beastmen.49 } } #ambitious
-			10 = { character_event = { id = beastmen.51 } } #lustful
+			10 = { character_event = { id = beastmen.51 } } #feral, lustful at adulthood
 			60 = { }
 		}
 	}
@@ -2233,7 +2250,9 @@ character_event = {
 	}
 }
 
-# beastmen.51 Lust
+# beastmen.51 Feral
+# The child turns feral. At adulthood the savagery becomes the rut
+# (beastmen.54, flag beastmen_feral_youth).
 # Scope: ROOT is the child.
 character_event = {
 	id = beastmen.51
@@ -2244,20 +2263,20 @@ character_event = {
 
 	trigger = {
 		trait = creature_beastman
+		NOT = { has_character_flag = beastmen_feral_youth }
 	}
 
 	is_triggered_only = yes
 
 	option = {
 		name = EVTOPTAbeastmen51
-		remove_trait = chaste
-		remove_trait = celibate
-		add_trait = lustful
+		set_character_flag = beastmen_feral_youth
+		custom_tooltip = { text = EVTTOOLTIPbeastmen51 }
 		guardian = { character_event = { id = beastmen.52 } }
 	}
 }
 
-# beastmen.52 Lust: the guardian hears
+# beastmen.52 Feral: the guardian hears
 # Scope: ROOT is the guardian, FROM the child.
 character_event = {
 	id = beastmen.52
@@ -2323,6 +2342,31 @@ character_event = {
 				modifier = { factor = 1.75 mother_even_if_dead = { trait = weak } }
 			}
 		}
+	}
+}
+
+# beastmen.54 The feral youth comes of age
+# The savagery of beastmen.51 turns into the rut.
+# Scope: ROOT is the new adult. Fired by on_adulthood.
+character_event = {
+	id = beastmen.54
+	desc = EVTDESCbeastmen54
+	picture = GFX_evt_beastmen_kids
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_character_flag = beastmen_feral_youth
+		trait = creature_beastman
+	}
+
+	option = {
+		name = EVTOPTAbeastmen54
+		clr_character_flag = beastmen_feral_youth
+		remove_trait = chaste
+		remove_trait = celibate
+		if = { limit = { NOT = { trait = lustful } } add_trait = lustful }
 	}
 }
 
@@ -2484,6 +2528,8 @@ character_event = {
 						random_courtier = {
 							limit = {
 								is_woman_trigger = yes
+								is_adult = yes
+								is_pregnant = no
 								is_ruler = no
 								OR = {
 									trait = creature_human
@@ -2773,19 +2819,9 @@ character_event = {
 		trigger = { capital_scope = { has_province_modifier = beastman_herdstone } }
 		prestige = 125
 		piety = 50
-		hidden_tooltip = {
-			if = {
-				limit = { check_variable = { which = dwarfslaves value = 1 } }
-				change_variable = { which = dwarfslaves value = -1 }
-			}
-			else_if = {
-				limit = { check_variable = { which = humanslaves value = 1 } }
-				change_variable = { which = humanslaves value = -1 }
-			}
-			else_if = {
-				limit = { check_variable = { which = elfslaves value = 1 } }
-				change_variable = { which = elfslaves value = -1 }
-			}
+		if = { # the sacrifice comes out of the slave pens
+			limit = { check_variable = { which = slaves value = 1 } }
+			slave_lose_lot_effect = yes
 		}
 		ai_chance = { factor = 100 }
 	}
@@ -2793,19 +2829,9 @@ character_event = {
 		name = EVTOPTBbeastmen61
 		prestige = 50
 		piety = 10
-		hidden_tooltip = {
-			if = {
-				limit = { check_variable = { which = dwarfslaves value = 1 } }
-				change_variable = { which = dwarfslaves value = -1 }
-			}
-			else_if = {
-				limit = { check_variable = { which = humanslaves value = 1 } }
-				change_variable = { which = humanslaves value = -1 }
-			}
-			else_if = {
-				limit = { check_variable = { which = elfslaves value = 1 } }
-				change_variable = { which = elfslaves value = -1 }
-			}
+		if = { # the sacrifice comes out of the slave pens
+			limit = { check_variable = { which = slaves value = 1 } }
+			slave_lose_lot_effect = yes
 		}
 		ai_chance = { factor = 20 }
 	}
@@ -5311,14 +5337,14 @@ character_event = {
 			random = {
 				chance = 20
 				add_trait = depressed
-				hidden_effect = { character_event = { id = 38288 } } # Notify depressed
+				hidden_effect = { character_event = { id = traitnote.288 } } # Notify depressed
 			}
 		}
 		else = {
 			random = {
 				chance = 20
 				add_trait = stressed
-				hidden_effect = { character_event = { id = 38282 } } # Notify stressed
+				hidden_effect = { character_event = { id = traitnote.282 } } # Notify stressed
 			}
 		}
 		if = {
@@ -5326,7 +5352,7 @@ character_event = {
 			random = {
 				chance = 20
 				add_trait = wroth
-				hidden_effect = { character_event = { id = 38254 } } # Notify wroth
+				hidden_effect = { character_event = { id = traitnote.254 } } # Notify wroth
 			}
 		}
 		brayherd_return_to_road_effect = yes

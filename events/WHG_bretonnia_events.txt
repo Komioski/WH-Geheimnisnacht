@@ -1,0 +1,3235 @@
+###############################################################################
+# Bretonnia: the knights of the Lady and her Damsels
+# Merged in during the Nov 12 deep pass (each keeps its own header below):
+#   Knights Errant: young Bretonnian knights on the road, seeking deeds (namespace errant, was WHG_knights_errant_events)
+#
+#
+# Part 1: The Knights of Bretonnia   bretonnia.2 - bretonnia.507
+# Part 2: The Damsels of the Lady    bretonmagic.1 - bretonmagic.50
+#
+# Was wh_bretonnia_events.txt (ids kept).
+# Loc: localisation/00_WHG_bretonnia_events.csv
+# Shared code: common/scripted_triggers/WHG_bretonnia_triggers.txt,
+#   common/scripted_effects/WHG_bretonnia_effects.txt
+###############################################################################
+
+###############################################################################
+# Part 1: The Knights of Bretonnia (namespace bretonnia)
+# Faction: Bretonnia
+# Serves: the knights of the Lady (knights_of_bretonnia), the King and his
+#   realm
+#
+# A Bretonnian is born a noble, a peasant or one of the clergy; a priestess
+# of the Lady may be a Damsel from the start. Knights rise from Knight
+# Errant to Knight of the Realm, take a vow of the Quest and, if they
+# prove themselves against greed, cowardice, lust and wrath and best the
+# Green Knight, are blessed by the Lady as Grail Knights. Along the way they
+# take the Virtues, ride on quests (trolls, an orc warband, Druchii
+# raiders, a village beset by beastmen, a tithe for the Lady), and the
+# King of Bretonnia holds the crown only as a Grail Knight. When the realm
+# is attacked the Green Knight may ride to its aid.
+#
+#   bretonnia.2 - 3        Birth and class: the knight's rank, peasant,
+#                          noble or clergy (on_startup, on_yearly_pulse,
+#                          on_birth)
+#   bretonnia.6 - 7        The Green Knight rides to the King's aid
+#   bretonnia.8 - 10       The King must be a Grail Knight, and the crown
+#   bretonnia.11           A knight of another faith takes the Grail Quest
+#   bretonnia.100 - 109    The Virtues (decisions)
+#   bretonnia.200 - 207    Joining and rising in the order
+#   bretonnia.300 - 305    A quest is given (on_society_bi_yearly_pulse)
+#   bretonnia.400 - 419    The quests
+#   bretonnia.500 - 507    The Grail Quest: the trials and the Lady
+#
+# Fixed: the knight's death rolls had a break; a knight of another faith
+#   who took the Grail Quest had two options with the same text, and a
+#   Taalite who kept the old gods got the Virtue of Chivalry instead of
+#   Taal's favour; a debug log; a duplicate check on the starting
+#   Damsels; the real-world joke behind the tithe quest (it was
+#   quest_ladys_onlyfans, with a phial of the Lady's bath water) is now
+#   quest_lady_tithe, and the phial holds water from the Lady's lake, with
+#   a gentler chance of sickness. The four yearly trials have the
+#   is_in_society pre-trigger.
+# Callers: wh_on_actions.txt, decisions/wh_bretonnian_decisions.txt
+#   (100 - 109, 11, 203, 204, 418, 419, 504), on_yearly_pulse (507, the mutant check).
+###############################################################################
+
+namespace = bretonnia
+
+# bretonnia.2 A knight wears his rank
+# Hidden. At game start a member of the Knights of Bretonnia gets the trait
+# (and Virtues) for his rank: Knight Errant, Knight of the Realm, Questing
+# Knight or Grail Knight. Fired from on_startup.
+# Scope: ROOT is the character.
+character_event = {
+	id = bretonnia.2
+	hide_window = yes
+	is_triggered_only = yes
+	religion = grail
+	trigger = {
+		is_member_of_bretonnia_trigger = yes
+	}
+	immediate = {
+		if = { limit = { society_rank == 1 } add_trait = bretonnian_knight_errant }
+		if = {
+			limit = { society_rank == 2 }
+			add_character_modifier = { name = virtue_chivalry duration = -1 }
+			add_trait = bretonnian_knight
+		}
+		if = {
+			limit = { society_rank == 3 }
+			add_trait = bretonnian_knight
+			add_character_modifier = { name = virtue_chivalry duration = -1 }
+			add_character_modifier = { name = virtue_quest duration = -1 }
+			set_character_flag = virtue_quest
+		}
+		if = {
+			limit = { society_rank == 4 }
+			add_character_modifier = { name = virtue_chivalry duration = -1 }
+			add_trait = grail_knight
+		}
+	}
+}
+
+# bretonnia.3 Peasant, noble or clergy
+# Hidden. Gives a Bretonnian his class trait: theocracies are clergy (and a
+# woman of the Lady may be born a Damsel, joining the Handmaidens with a lore),
+# feudal lords are nobles, the dynastyless, republics and unlanded are peasants.
+# Fired from on_startup, on_yearly_pulse (back-up) and on_birth.
+# Scope: ROOT is the character.
+character_event = {
+	id = bretonnia.3
+	hide_window = yes
+	religion = grail
+	is_triggered_only = yes
+	immediate = {
+		if = {
+			limit = { is_bretonnian = yes trait = peasant_leader has_class_trait = no }
+			add_trait = peasant
+		}
+		else_if = {
+			limit = { is_bretonnian = yes is_theocracy = yes }
+			add_trait = clergy
+			if = {
+				limit = {
+					NOR = { trait = BretonDamsel trait = fay_enchantress total_years_played >= 1 }
+					is_woman_trigger = yes
+					religion = grail
+				}
+				random_list = {
+					25 = {
+						add_trait = BretonDamsel
+						add_trait = lore_life
+						add_trait = magic_potential_1
+						magic_power_random_effect = yes
+						enable_magic_xp_effect = yes
+						set_character_flag = special_marshal
+						join_society = handmaidens_of_the_lady
+						society_rank_up = 1
+					}
+					25 = {
+						add_trait = BretonDamsel
+						add_trait = lore_beasts
+						add_trait = magic_potential_1
+						magic_power_random_effect = yes
+						enable_magic_xp_effect = yes
+						set_character_flag = special_marshal
+						join_society = handmaidens_of_the_lady
+						society_rank_up = 1
+					}
+					15 = {
+						add_trait = BretonDamsel
+						add_trait = lore_heavens
+						add_trait = magic_potential_2
+						magic_power_random_effect = yes
+						enable_magic_xp_effect = yes
+						set_character_flag = special_marshal
+						join_society = handmaidens_of_the_lady
+						society_rank_up = 1
+					}
+					15 = {
+						add_trait = BretonDamsel
+						add_trait = lore_light
+						add_trait = magic_potential_1
+						magic_power_random_effect = yes
+						enable_magic_xp_effect = yes
+						set_character_flag = special_marshal
+						join_society = handmaidens_of_the_lady
+						society_rank_up = 1
+					}
+					10 = {
+						add_trait = BretonDamsel
+						add_trait = lore_beasts
+						add_trait = lore_life
+						add_trait = magic_potential_3
+						magic_power_random_effect = yes
+						enable_magic_xp_effect = yes
+						set_character_flag = special_marshal
+						join_society = handmaidens_of_the_lady
+						society_rank_up = 2
+					}
+				}
+			}
+		}
+		else_if = {
+			limit = { is_bretonnian = yes dynasty = none has_class_trait = no }
+			add_trait = peasant
+		}
+		else_if = {
+			limit = { is_bretonnian = yes is_feudal = yes has_class_trait = no }
+			add_trait = noble
+		}
+		else_if = {
+			limit = { is_bretonnian = yes is_republic = yes has_class_trait = no }
+			add_trait = peasant
+		}
+		else_if = {
+			limit = { is_bretonnian = yes is_landed = no has_class_trait = no }
+			add_trait = peasant
+		}
+	}
+}
+
+# bretonnia.6 The Green Knight rides to the King's aid
+# Hidden. Once, when the King of Bretonnia loses a battle in a defensive war,
+# the Green Knight (with the Dolorous Blade and Shadow Steed) joins him as a
+# commander; he vanishes again after 6-12 months (bretonnia.7).
+# Fired from on_battle_lost.
+# Scope: ROOT is the King (the losing leader), FROM the opposing leader.
+character_event = {
+	id = bretonnia.6
+	hide_window = yes
+	only_playable = yes
+	war = yes
+	is_triggered_only = yes
+	religion = grail
+	trigger = {
+		has_landed_title = e_bretonnia
+		is_primary_war_defender = yes
+		OR = { # cleared by bretonnia.7; the year guard covers a Green Knight who died first
+			NOT = { has_character_flag = green_knight_help }
+			had_character_flag = { flag = green_knight_help years = 2 }
+		}
+	}
+	immediate = {
+		clr_character_flag = green_knight_help
+		set_character_flag = green_knight_help
+		create_random_soldier = {
+			name = "The Green Knight"
+			random_traits = yes
+			dynasty = none
+			religion = grail
+			culture = old_breton
+			trait = creature_human
+			trait = brilliant_strategist
+			female = no
+			age = 30
+		}
+		new_character = {
+			change_martial = 20
+			add_trait = noble
+			add_trait = green_knight
+			add_trait = brave
+			add_trait = holy_warrior
+			set_character_flag = green_knight
+			add_artifact = dolorous_blade
+			add_artifact = shadow_steed
+			unsafe_give_minor_title = title_commander
+			character_event = { id = bretonnia.7 months = 6 random = 6 }
+		}
+	}
+}
+
+# bretonnia.7 The Green Knight departs
+# Hidden. The Green Knight vanishes and his artifacts are destroyed; the
+# King's green_knight_help flag is cleared so he may come again.
+# Fired from bretonnia.6.
+# Scope: ROOT is the Green Knight, FROM the King.
+character_event = {
+	id = bretonnia.7
+	hide_window = yes
+	is_triggered_only = yes
+	trigger = {
+		has_character_flag = green_knight
+	}
+	immediate = {
+		death = { death_reason = death_vanished }
+		unsafe_destroy_artifact = dolorous_blade
+		unsafe_destroy_artifact = shadow_steed
+		clr_character_flag = green_knight
+		liege = {
+			unsafe_destroy_artifact = dolorous_blade
+			unsafe_destroy_artifact = shadow_steed
+			clr_character_flag = green_knight_help
+		}
+	}
+}
+
+# bretonnia.8 The King must be a Grail Knight
+# The King of Bretonnia who is not a Grail Knight is raised to one (joining
+# the order if he must, and taking the crown via bretonnia.9) or abdicates.
+# Fired from on_yearly_pulse.
+# Scope: ROOT is the King.
+character_event = {
+	id = bretonnia.8
+	desc = EVTDESCbretonnia8
+	picture = GFX_evt_questing_bretonnia
+	only_playable = yes
+	only_independent = yes
+	religion_group = old_world_group
+	is_triggered_only = yes
+	trigger = {
+		has_landed_title = e_bretonnia
+		NOT = { trait = grail_knight }
+	}
+	immediate = { }
+	option = {
+		name = EVTOPTAbretonnia8
+		religion = grail
+		if = {
+			limit = { society_rank == 1 is_member_of_bretonnia_trigger = yes }
+			society_rank_up = 3
+			character_event = { id = bretonnia.9 }
+		}
+		else_if = {
+			limit = { society_rank == 2 is_member_of_bretonnia_trigger = yes }
+			society_rank_up = 2
+			character_event = { id = bretonnia.9 }
+		}
+		else_if = {
+			limit = { society_rank == 3 is_member_of_bretonnia_trigger = yes }
+			society_rank_up = 1
+			character_event = { id = bretonnia.9 }
+		}
+		else_if = {
+			limit = { can_join_society = knights_of_bretonnia }
+			join_society = knights_of_bretonnia
+			society_rank_up = 3
+			character_event = { id = bretonnia.9 }
+		}
+		else = { abdicate = yes }
+		ai_chance = { factor = 5 }
+	}
+	option = {
+		name = EVTOPTBbretonnia8
+		abdicate = yes
+		add_character_modifier = { name = renounced_imperial_throne duration = -1 }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.9 The crown of Bretonnia
+# Hidden. The holder of e_bretonnia gets the Bretonnian crown if he lacks it.
+# Fired from bretonnia.8.
+# Scope: ROOT is the King (FROM is the same character).
+character_event = {
+	id = bretonnia.9
+	hide_window = yes
+	religion = grail
+	is_triggered_only = yes
+	trigger = {
+		has_landed_title = e_bretonnia
+		NOT = { has_artifact = bretonnia_crown }
+	}
+	immediate = {
+		add_artifact = bretonnia_crown
+	}
+}
+
+# bretonnia.10 A crown without a kingdom
+# Hidden. Destroys the Bretonnian crown held by anyone who no longer holds
+# e_bretonnia (no duplicates). Fired from on_bi_yearly_pulse.
+# Scope: ROOT is the character.
+character_event = {
+	id = bretonnia.10
+	hide_window = yes
+	religion = grail
+	is_triggered_only = yes
+	trigger = {
+		NOT = { has_landed_title = e_bretonnia }
+		has_artifact = bretonnia_crown
+	}
+	immediate = {
+		unsafe_destroy_artifact = bretonnia_crown
+	}
+}
+
+# bretonnia.11 A knight of another faith takes the Grail Quest
+# He may give himself wholly to the Lady, or serve her while keeping the
+# favour of his old gods. Fired from decide_upon_grail_quest
+# (decisions/wh_bretonnian_decisions.txt).
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.11
+	desc = EVTDESCbretonnia11
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+	only_playable = yes
+	is_triggered_only = yes
+	option = { # Give yourself wholly to the Lady
+		name = EVTOPTAbretonnia11
+		religion = grail
+		piety = 250
+		ai_chance = { factor = 1 }
+	}
+	option = { # Serve the Lady, keep the gods of your fathers
+		name = EVTOPTBbretonnia11
+		trigger_switch = {
+			on_trigger = religion
+			taalite = { add_character_modifier = { name = follower_of_taalite duration = -1 } }
+			myrmidian = { add_character_modifier = { name = follower_of_myrmidian duration = -1 } }
+			ulrican = { add_character_modifier = { name = follower_of_ulrican duration = -1 } }
+			morrian = { add_character_modifier = { name = follower_of_morrian duration = -1 } }
+			shallyan = { add_character_modifier = { name = follower_of_shallyan duration = -1 } }
+			kislev_gods = { add_character_modifier = { name = follower_of_ursun duration = -1 } }
+			northern_gods = { add_character_modifier = { name = follower_of_dazh duration = -1 } }
+		}
+
+		religion = grail
+		ai_chance = { factor = 1 }
+	}
+}
+###Virtues of Bretonnia###
+# bretonnia.100 The Virtue of Chivalry
+# The knight takes the Virtue of Chivalry, or declines and gets his
+# currency back. Fired from virtue_chivalry_decision.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.100
+	desc = EVTDESCbretonnia100
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia100
+		add_character_modifier = { name = virtue_chivalry duration = -1 }
+		clr_character_flag = getting_virtue_chivalry
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		name = EVTOPTBbretonnia100
+		clr_character_flag = getting_virtue_chivalry
+		add_society_currency_minor_effect = yes
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.101 The Virtues of Knighthood (page 1 of 7)
+# Choose Audacity or Confidence, page on, or close for a refund. Fired from
+# virtue_knighthood_decision and paged from bretonnia.102 and 107.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.101
+	desc = EVTDESCbretonnia101
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	option = {
+		# Virtue of Audacity
+		name = EVTOPTAbretonnia101
+		add_character_modifier = { name = virtue_audacity duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		# Virtue of Confidence
+		name = EVTOPTBbretonnia101
+		add_character_modifier = { name = virtue_confidence duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		#Next
+		name = EVTOPTCbretonnia101
+		hidden_tooltip = { character_event = { id = bretonnia.102 } }
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		#Close
+		name = EVTOPTDbretonnia101
+		clr_character_flag = getting_virtue_knighthood
+		add_society_currency_major_effect = yes
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.102 The Virtues of Knighthood (page 2 of 7)
+# Choose Discipline or Duty, or page on or back.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.102
+	desc = EVTDESCbretonnia102
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	option = {
+		# Virtue of Discipline
+		name = EVTOPTAbretonnia102
+		add_character_modifier = { name = virtue_discipline duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		# Virtue of Duty
+		name = EVTOPTBbretonnia102
+		add_character_modifier = { name = virtue_duty duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		#Next
+		name = EVTOPTCbretonnia102
+		hidden_tooltip = { character_event = { id = bretonnia.103 } }
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		#Back
+		name = EVTOPTDbretonnia102
+		hidden_tooltip = { character_event = { id = bretonnia.101 } }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.103 The Virtues of Knighthood (page 3 of 7)
+# Choose Empathy or Heroism, or page on or back.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.103
+	desc = EVTDESCbretonnia103
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	option = {
+		# Virtue of Empathy
+		name = EVTOPTAbretonnia103
+		add_character_modifier = { name = virtue_empathy duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		# Virtue of Heroism
+		name = EVTOPTBbretonnia103
+		add_character_modifier = { name = virtue_heroism duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		#Next
+		name = EVTOPTCbretonnia103
+		hidden_tooltip = { character_event = { id = bretonnia.104 } }
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		#Back
+		name = EVTOPTDbretonnia103
+		hidden_tooltip = { character_event = { id = bretonnia.102 } }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.104 The Virtues of Knighthood (page 4 of 7)
+# Choose the Ideal or the Impetuous Knight, or page on or back.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.104
+	desc = EVTDESCbretonnia104
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	option = {
+		# Virtue of the Ideal
+		name = EVTOPTAbretonnia104
+		add_character_modifier = { name = virtue_ideal duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		# Virtue of the Impetuous Knight
+		name = EVTOPTBbretonnia104
+		add_character_modifier = { name = virtue_impetuous_knight duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		#Next
+		name = EVTOPTCbretonnia104
+		hidden_tooltip = { character_event = { id = bretonnia.105 } }
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		#Back
+		name = EVTOPTDbretonnia104
+		hidden_tooltip = { character_event = { id = bretonnia.103 } }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.105 The Virtues of Knighthood (page 5 of 7)
+# Choose the Joust or Knightly Temper, or page on or back.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.105
+	desc = EVTDESCbretonnia105
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	option = {
+		# Virtue of the Joust
+		name = EVTOPTAbretonnia105
+		add_character_modifier = { name = virtue_joust duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		# Virtue of Knightly Temper
+		name = EVTOPTBbretonnia105
+		add_character_modifier = { name = virtue_knightly_temper duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		#Next
+		name = EVTOPTCbretonnia105
+		hidden_tooltip = { character_event = { id = bretonnia.106 } }
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		#Back
+		name = EVTOPTDbretonnia105
+		hidden_tooltip = { character_event = { id = bretonnia.104 } }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.106 The Virtues of Knighthood (page 6 of 7)
+# Choose Noble Disdain or the Penitent, or page on or back.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.106
+	desc = EVTDESCbretonnia106
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	option = {
+		# Virtue of Noble Disdain
+		name = EVTOPTAbretonnia106
+		add_character_modifier = { name = virtue_noble_disdain duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		# Virtue of the Penitent
+		name = EVTOPTBbretonnia106
+		add_character_modifier = { name = virtue_penitent duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		#Next
+		name = EVTOPTCbretonnia106
+		hidden_tooltip = { character_event = { id = bretonnia.107 } }
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		#Back
+		name = EVTOPTDbretonnia106
+		hidden_tooltip = { character_event = { id = bretonnia.105 } }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.107 The Virtues of Knighthood (page 7 of 7)
+# Choose Purity or Stoicism; "next" wraps to bretonnia.101, or page back.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.107
+	desc = EVTDESCbretonnia107
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	option = {
+		# Virtue of Purity
+		name = EVTOPTAbretonnia107
+		add_character_modifier = { name = virtue_purity duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		# Virtue of Stoicism
+		name = EVTOPTBbretonnia107
+		add_character_modifier = { name = virtue_stoicism duration = -1 }
+		clr_character_flag = getting_virtue_knighthood
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		#Next
+		name = EVTOPTCbretonnia107
+		hidden_tooltip = { character_event = { id = bretonnia.101 } }
+		ai_chance = { factor = 0 }
+	}
+	option = {
+		#Back
+		name = EVTOPTDbretonnia107
+		hidden_tooltip = { character_event = { id = bretonnia.106 } }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.108 The Virtue of the Quest
+# The knight vows the Quest (virtue_quest), or declines for a refund.
+# Fired from virtue_quest_decision.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.108
+	desc = EVTDESCbretonnia108
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia108
+		add_character_modifier = { name = virtue_quest duration = -1 }
+		set_character_flag = virtue_quest
+		clr_character_flag = getting_virtue_quest
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		name = EVTOPTBbretonnia108
+		clr_character_flag = getting_virtue_quest
+		add_society_currency_minor_effect = yes
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.109 The Grail Virtue
+# A Grail Knight takes the Grail Virtue that matches his Virtue of
+# Knighthood, or declines for a refund. Fired from virtue_grail_quest_decision.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.109
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	desc = { trigger = { has_character_modifier = virtue_audacity } text = EVTDESCbretonnia109A }
+	desc = { trigger = { has_character_modifier = virtue_confidence } text = EVTDESCbretonnia109B }
+	desc = { trigger = { has_character_modifier = virtue_discipline } text = EVTDESCbretonnia109C }
+	desc = { trigger = { has_character_modifier = virtue_duty } text = EVTDESCbretonnia109D }
+	desc = { trigger = { has_character_modifier = virtue_empathy } text = EVTDESCbretonnia109E }
+	desc = { trigger = { has_character_modifier = virtue_heroism } text = EVTDESCbretonnia109F }
+	desc = { trigger = { has_character_modifier = virtue_ideal } text = EVTDESCbretonnia109G }
+	desc = {
+		trigger = { has_character_modifier = virtue_impetuous_knight }
+		text = EVTDESCbretonnia109H
+	}
+	desc = { trigger = { has_character_modifier = virtue_joust } text = EVTDESCbretonnia109I }
+	desc = {
+		trigger = { has_character_modifier = virtue_knightly_temper }
+		text = EVTDESCbretonnia109J
+	}
+	desc = {
+		trigger = { has_character_modifier = virtue_noble_disdain }
+		text = EVTDESCbretonnia109K
+	}
+	desc = { trigger = { has_character_modifier = virtue_penitent } text = EVTDESCbretonnia109L }
+	desc = { trigger = { has_character_modifier = virtue_purity } text = EVTDESCbretonnia109M }
+	desc = { trigger = { has_character_modifier = virtue_stoicism } text = EVTDESCbretonnia109N }
+	option = {
+		name = EVTOPTAbretonnia109
+		add_virtue_grail = yes
+		clr_character_flag = getting_virtue_grail
+		ai_chance = { factor = 1 }
+	}
+	option = {
+		name = EVTOPTBbretonnia109
+		clr_character_flag = getting_virtue_grail
+		add_society_currency_large_effect = yes
+		ai_chance = { factor = 0 }
+	}
+}
+
+###Society###
+# bretonnia.200 Asking to join the Knights of Bretonnia
+# Hidden. Passes the request to the order's leader (bretonnia.201).
+# Fired from on_character_ask_to_join_society.
+# Scope: ROOT is the asker, FROM the society.
+character_event = {
+	id = bretonnia.200
+	hide_window = yes
+	is_triggered_only = yes
+	trigger = {
+		FROM = { leader = { society_member_of = knights_of_bretonnia } }
+	}
+	immediate = {
+		FROM = { leader = { character_event = { id = bretonnia.201 } } }
+	}
+}
+
+# bretonnia.201 The order hears the request
+# Hidden. Ping: the leader sends the asker in (bretonnia.202).
+# Scope: ROOT is the order's leader, FROM the asker.
+character_event = {
+	id = bretonnia.201
+	hide_window = yes
+	is_triggered_only = yes
+	immediate = {
+		FROM = { character_event = { id = bretonnia.202 } }
+	}
+}
+
+# bretonnia.202 Joined the Knights of Bretonnia
+# Hidden. The asker joins the order as a Knight Errant.
+# Scope: ROOT is the asker, FROM the order's leader.
+character_event = {
+	id = bretonnia.202
+	hide_window = yes
+	is_triggered_only = yes
+	immediate = {
+		join_society = knights_of_bretonnia
+		add_trait = bretonnian_knight_errant
+	}
+}
+
+# bretonnia.203 Rank up
+# A Knight Errant becomes a Knight of the Realm, or a Knight of the Realm
+# takes the Quest. Fired from request_to_rank_up_within_bretonnia (ranks 1-2).
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.203
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	trigger = {
+		is_member_of_bretonnia_trigger = yes
+	}
+	desc = { trigger = { society_rank == 1 } text = EVTDESCbretonnia203A }
+	desc = { trigger = { society_rank == 2 } text = EVTDESCbretonnia203B }
+	option = {
+		trigger = { society_rank == 1 }
+		name = EVTOPTAbretonnia203
+		society_rank_up = 1
+		clr_character_flag = has_sent_request_to_rank_up
+		remove_trait = bretonnian_knight_errant
+		add_trait = bretonnian_knight
+	}
+	option = {
+		trigger = { society_rank == 2 }
+		name = EVTOPTBbretonnia203
+		society_rank_up = 1
+		clr_character_flag = has_sent_request_to_rank_up
+		set_character_flag = virtue_quest
+		add_character_modifier = { name = virtue_quest duration = -1 }
+	}
+}
+
+# bretonnia.204 Giving up on the Quest
+# The knight may lay down the Virtue of the Quest, or keep it.
+# Fired from give_up_on_quest_decision.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.204
+	desc = EVTDESCbretonnia204
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia204
+		remove_character_modifier = virtue_quest
+		clr_character_flag = give_up_on_quest
+		ai_chance = { factor = 0 }
+	}
+	option = {
+		name = EVTOPTBbretonnia204
+		clr_character_flag = give_up_on_quest
+		ai_chance = { factor = 1 }
+	}
+}
+
+# bretonnia.205 The order recruits
+# Hidden. An independent Grail ruler (if AI) and up to two AI realm lords and
+# one AI realm character, warriors first, join the order (bretonnia.206).
+# Fired from on_five_year_pulse.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = bretonnia.205
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+	hide_window = yes
+	only_independent = yes
+	religion = grail
+	has_dlc = "Holy Fury"
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_alive = yes
+	}
+
+	immediate = {
+		#And maybe join yourself?
+		if = {
+			limit = { ai = yes can_join_society = knights_of_bretonnia is_in_society = no }
+			character_event = { id = bretonnia.206 }
+		}
+		#Make others join a warrior lodge...
+		any_realm_lord = {
+			limit = {
+				ai = yes
+				forbidden_from_joining_warband_trigger = no
+				is_in_society = no
+				has_secret_religion_trait_trigger = no
+				is_adult = yes
+				NOT = { block_general_event_trigger = yes }
+				is_landed = yes
+				can_join_society = knights_of_bretonnia
+				NOT = { character = ROOT }
+			}
+			score_value = { #Prioritizes selecting some kind of warrior...
+				value = 10
+				warrior_recruit_score = yes
+			}
+			count = 2
+			character_event = { id = bretonnia.206 }
+		}
+		any_realm_character = {
+			limit = {
+				ai = yes
+				can_join_society = knights_of_bretonnia
+				forbidden_from_joining_warband_trigger = no
+				is_in_society = no
+				has_secret_religion_trait_trigger = no
+				is_adult = yes
+				NOT = { block_general_event_trigger = yes }
+			}
+			score_value = { #Prioritizes selecting some kind of warrior...
+				value = 10
+				warrior_recruit_score = yes
+			}
+			count = 1
+			character_event = { id = bretonnia.206 }
+		}
+	}
+}
+
+# bretonnia.206 An AI joins the order
+# Hidden. Joins the Knights of Bretonnia as a Knight Errant.
+# Fired from bretonnia.205.
+# Scope: ROOT is the AI character, FROM the ruler of bretonnia.205.
+character_event = {
+	#AI join event
+	id = bretonnia.206
+	hide_window = yes
+	trigger = {
+		can_join_society = knights_of_bretonnia
+	}
+	is_triggered_only = yes
+	immediate = {
+		join_society = knights_of_bretonnia
+		add_trait = bretonnian_knight_errant
+	}
+}
+
+# bretonnia.207 The AI rises in the order
+# Hidden. Half the time an AI knight of rank 1-3 ranks up (rank 3 straight
+# to Grail Knight, without the trials). Fired from on_five_year_pulse.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.207
+	is_triggered_only = yes
+	is_in_society = yes
+	only_capable = yes
+	hide_window = yes
+	trigger = {
+		is_member_of_bretonnia_trigger = yes
+		OR = { society_rank == 1 society_rank == 2 society_rank == 3 }
+		ai = yes
+	}
+	immediate = {
+		random_list = {
+			50 = { }
+			50 = {
+				if = {
+					limit = {
+						society_rank == 1
+						prisoner = no
+						NOT = { trait = incapable }
+						is_adult = yes
+						ai = yes
+					}
+					society_rank_up = 1
+					clr_character_flag = has_sent_request_to_rank_up
+					remove_trait = bretonnian_knight_errant
+					add_trait = bretonnian_knight
+				}
+				else_if = {
+					limit = {
+						society_rank == 2
+						prisoner = no
+						NOT = { trait = incapable }
+						is_adult = yes
+						ai = yes
+					}
+					society_rank_up = 1
+					clr_character_flag = has_sent_request_to_rank_up
+					set_character_flag = virtue_quest
+					add_character_modifier = { name = virtue_quest duration = -1 }
+				}
+				else_if = {
+					limit = {
+						society_rank == 3
+						prisoner = no
+						NOT = { trait = incapable }
+						is_adult = yes
+						ai = yes
+					}
+					society_rank_up = 1
+					clr_character_flag = has_sent_request_to_rank_up
+					clr_character_flag = defeated_green_knight
+					remove_character_modifier = virtue_quest
+					remove_trait = bretonnian_knight
+					add_trait = grail_knight
+				}
+			}
+		}
+	}
+}
+
+###Questing Setup###
+# bretonnia.300 A quest is given
+# Hidden. Picks a fellow knight in range who likes the knight as questgiver
+# (event_target:event_questgiver) and has him send one of the quests
+# (bretonnia.301 - 305); the AI just rolls success or failure.
+# Fired from on_society_bi_yearly_pulse.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.300
+	hide_window = yes
+	is_triggered_only = yes
+	is_in_society = yes
+	only_capable = yes
+	trigger = {
+		is_member_of_bretonnia_trigger = yes
+		has_any_quest = no
+		NOT = { has_character_modifier = quest_cooldown_timer }
+		NOT = { is_inaccessible_trigger = yes }
+		prisoner = no
+		society = {
+			any_society_member = {
+				NOT = { character = ROOT }
+				prisoner = no
+				is_within_diplo_range = ROOT
+				opinion = { who = ROOT value = 0 }
+			}
+		}
+	}
+	immediate = {
+		#Picks out mission giver
+		random_list = {
+			20 = {
+				#International Knights
+				society = {
+					random_society_member = {
+						limit = {
+							NOT = { character = ROOT }
+							prisoner = no
+							is_within_diplo_range = ROOT
+							opinion = { who = ROOT value = 0 }
+						}
+						save_event_target_as = event_questgiver
+					}
+				}
+			}
+			40 = {
+				#Realm Knights
+				trigger = {
+					society = {
+						any_society_member = {
+							NOT = { character = ROOT }
+							prisoner = no
+							is_within_diplo_range = ROOT
+							opinion = { who = ROOT value = 0 }
+							same_realm = ROOT
+						}
+					}
+				}
+				society = {
+					random_society_member = {
+						limit = {
+							NOT = { character = ROOT }
+							prisoner = no
+							is_within_diplo_range = ROOT
+							opinion = { who = ROOT value = 0 }
+							same_realm = ROOT
+						}
+						save_event_target_as = event_questgiver
+					}
+				}
+			}
+		}
+		random_list = {
+			20 = {
+				trigger = { ai = no }
+				event_target:event_questgiver = {
+					character_event = { id = bretonnia.301 } #Troll Rumors
+				}
+			}
+			20 = {
+				trigger = { ai = no }
+				event_target:event_questgiver = {
+					character_event = { id = bretonnia.302 } #Orc Rumors
+				}
+			}
+			10 = {
+				trigger = { ai = no }
+				event_target:event_questgiver = {
+					character_event = { id = bretonnia.303 } #Attacked by Dark Elf Raiders
+				}
+			}
+			20 = {
+				trigger = { ai = no }
+				event_target:event_questgiver = {
+					character_event = { id = bretonnia.304 } #The Village
+				}
+			}
+			30 = {
+				trigger = { ai = no }
+				event_target:event_questgiver = {
+					character_event = { id = bretonnia.305 } # A tithe for the Lady
+				}
+			}
+			100 = {
+				# AI bypasses missions at times
+				trigger = { ai = yes }
+				random_list = {
+					70 = {
+						modifier = { factor = 0.9 society_influence >= 30 }
+						modifier = { factor = 0.9 society_influence >= 40 }
+						modifier = { factor = 0.8 society_influence >= 50 }
+						modifier = { factor = 0.7 society_influence >= 70 }
+						modifier = { factor = 0.6 society_influence >= 80 }
+						modifier = { factor = 0.5 society_influence >= 90 }
+						add_mission_succeed_influence_effect = yes
+					}
+					30 = { add_mission_fail_influence_effect = yes }
+				}
+			}
+		}
+	}
+}
+
+# bretonnia.301 Troll rumours
+# Hidden. The questgiver passes on the troll rumours (bretonnia.400).
+# Scope: ROOT is the questgiver, FROM the knight.
+character_event = {
+	id = bretonnia.301
+	hide_window = yes
+	is_triggered_only = yes
+	immediate = {
+		FROM = { character_event = { id = bretonnia.400 days = 7 random = 7 } }
+	}
+}
+
+# bretonnia.302 Orc rumours
+# Hidden. The questgiver passes on the orc rumours (bretonnia.404).
+# Scope: ROOT is the questgiver, FROM the knight.
+character_event = {
+	id = bretonnia.302
+	hide_window = yes
+	is_triggered_only = yes
+	immediate = {
+		FROM = { character_event = { id = bretonnia.404 days = 7 random = 7 } }
+	}
+}
+
+# bretonnia.303 Dark Elf raiders
+# Hidden. The questgiver sends the knight to the coast (bretonnia.408).
+# Scope: ROOT is the questgiver, FROM the knight.
+character_event = {
+	id = bretonnia.303
+	hide_window = yes
+	is_triggered_only = yes
+	immediate = {
+		FROM = { character_event = { id = bretonnia.408 days = 7 random = 7 } }
+	}
+}
+
+# bretonnia.304 The village
+# Hidden. The questgiver sends the knight to the village (bretonnia.414).
+# Scope: ROOT is the questgiver, FROM the knight.
+character_event = {
+	id = bretonnia.304
+	hide_window = yes
+	is_triggered_only = yes
+	immediate = {
+		FROM = { character_event = { id = bretonnia.414 days = 7 random = 7 } }
+	}
+}
+
+# bretonnia.305 A tithe for the Lady
+# Hidden. The questgiver asks the tithe of the knight (bretonnia.417).
+# Scope: ROOT is the questgiver, FROM the knight.
+character_event = {
+	id = bretonnia.305
+	hide_window = yes
+	is_triggered_only = yes
+	immediate = {
+		FROM = { character_event = { id = bretonnia.417 days = 7 random = 7 } }
+	}
+}
+
+###Questing###
+# bretonnia.400 Troll rumours
+# A tavern tale of a troll's lair: take the quest (bretonnia.401) or decline.
+# Scope: ROOT is the knight, FROM the questgiver.
+character_event = {
+	id = bretonnia.400
+	desc = EVTDESCbretonnia400 # While visiting a tavern, you hear stories of a nearby cave rumored to be a troll's lair. Do you want to investigate?
+	picture = "GFX_evt_feast"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia400
+		set_quest = quest_troll_rumors
+		character_event = { id = bretonnia.401 }
+	}
+	option = {
+		name = EVTOPTBbretonnia400 # No, I seek greater glories than mere trolls!
+		custom_tooltip = { text = decline_quest_tooltip }
+		add_character_modifier = {
+			#will delay the next quest for a while
+			name = quest_cooldown_timer
+			hidden = yes
+			days = 1000
+		}
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.401 The troll lair
+# Into the cave: martial 10+ wins (bretonnia.402), else 25% win and 75%
+# defeat (bretonnia.403); or turn back in shame.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.401
+	desc = EVTDESCbretonnia401 # After a week of searching, you finally come upon some troll tracks which lead to a dark cave. Preparing yourself as best as you are able, you light some torches and prepare to destroy this threat to the local community.
+	picture = "GFX_evt_bandits"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia401
+		if = {
+			limit = { NOT = { martial = 10 } }
+			hidden_tooltip = {
+				random_list = {
+					75 = { character_event = { id = bretonnia.403 } }
+					25 = { long_character_event = { id = bretonnia.402 } }
+				}
+			}
+		}
+		if = { limit = { martial = 10 } long_character_event = { id = bretonnia.402 } }
+	}
+	option = {
+		name = EVTOPTBbretonnia401 # No, wait... what if there is a dragon over there instead?
+		trigger = { ai = no }
+		prestige = -50
+		add_society_modifier = { modifier = failed_mission years = 10 }
+		clr_quest = quest_troll_rumors
+		add_character_modifier = {
+			#will delay the next quest for a while
+			name = quest_cooldown_timer
+			hidden = yes
+			days = 1000
+		}
+	}
+}
+
+# bretonnia.402 The trolls are slain
+# Treasure, maybe martial, quest success.
+# Scope: ROOT is the knight.
+long_character_event = {
+	id = bretonnia.402
+	desc = EVTDESCbretonnia402 # You march into troll the lair, and though they are strong opponents, they are no match for your superior knightly skill and tactics. After slaying half a dozen of them, you find some treasure and quickly claim it.
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia402 # I dedicate this victory to the Lady!
+		wealth = 10
+		random = { chance = 5 add_trait = wounded }
+		if = { limit = { NOT = { martial = 10 } } random = { chance = 20 change_martial = 1 } }
+		clr_quest = quest_troll_rumors
+		add_society_modifier = { modifier = knights_of_bretonnia_successful_mission years = 10 }
+		character_event = { id = chronicle.113 } # Renown: a knight of many deeds (WHG_chronicle_events)
+		add_society_currency_major_effect = yes
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+	}
+}
+
+# bretonnia.403 The trolls win
+# The knight flees, maybe wounded, maimed or slain; quest failed.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.403
+	desc = EVTDESCbretonnia403 # You march into troll the lair, and quickly find yourself in trouble. Six trolls come at you all at once, and you are hard pressed to make it back to the exit alive!
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia403 # Men, advance in the other direction - quickly!
+		random_list = {
+			60 = { }
+			25 = { add_trait = wounded }
+			10 = { add_trait = maimed }
+			5 = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_battle } }
+			}
+		}
+		clr_quest = quest_troll_rumors
+		add_society_modifier = { modifier = failed_mission years = 10 }
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+	}
+}
+
+# bretonnia.404 Orc rumours
+# An orc band raids nearby: take the quest (bretonnia.405) or decline.
+# Scope: ROOT is the knight, FROM the questgiver.
+character_event = {
+	id = bretonnia.404
+	desc = EVTDESCbretonnia404 # You hear rumors that an orc band is raiding this area. Do you want to investigate?
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia404
+		set_quest = quest_orc_rumors
+		character_event = { id = bretonnia.405 }
+	}
+	option = {
+		name = EVTOPTBbretonnia404 # No, a mere orc band is an unworthy foes!
+		custom_tooltip = { text = decline_quest_tooltip }
+		add_character_modifier = {
+			#will delay the next quest for a while
+			name = quest_cooldown_timer
+			hidden = yes
+			days = 1000
+		}
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.405 The orc warband
+# Charge: martial 15+ wins (bretonnia.406), else 25% win and 75% defeat
+# (bretonnia.407); or turn away in shame.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.405
+	desc = EVTDESCbretonnia405 # After some hard riding you quickly catch up to the orcs. There's about three dozen of them, and you are but a handful.
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia405 # I hope there's enough for all of us!
+		hidden_tooltip = {
+			if = {
+				limit = { NOT = { martial = 15 } }
+				random_list = {
+					75 = { character_event = { id = bretonnia.407 } }
+					25 = { long_character_event = { id = bretonnia.406 } }
+				}
+			}
+			if = { limit = { martial = 15 } long_character_event = { id = bretonnia.406 } }
+		}
+	}
+	option = {
+		name = EVTOPTBbretonnia405 # No, wait. I think I see a giant over there, this way men!
+		trigger = { ai = no }
+		prestige = -50
+		add_society_modifier = { modifier = failed_mission years = 10 }
+		clr_quest = quest_orc_rumors
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+	}
+}
+
+# bretonnia.406 The orcs are routed
+# Wealth, prestige, maybe martial, quest success.
+# Scope: ROOT is the knight.
+long_character_event = {
+	id = bretonnia.406
+	desc = EVTDESCbretonnia406 # You charge into the orcs, and with lance and sword, you drive a deep wedge into their hastily formed ranks. It is a glorious slaughter, and they will now know the folly of raiding in these lands!
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia406 # The Lady granted me my strength!
+		wealth = 5
+		prestige = 50
+		random = { chance = 5 add_trait = wounded }
+		if = { limit = { NOT = { martial = 15 } } random = { chance = 25 change_martial = 1 } }
+		clr_quest = quest_orc_rumors
+		add_society_modifier = { modifier = knights_of_bretonnia_successful_mission years = 10 }
+		character_event = { id = chronicle.113 } # Renown: a knight of many deeds (WHG_chronicle_events)
+		add_society_currency_major_effect = yes
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+	}
+}
+
+# bretonnia.407 The orcs break the charge
+# The knight retreats, maybe wounded, maimed or slain; quest failed.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.407
+	desc = EVTDESCbretonnia407 # As soon as you charge the orcs, they spot you and form ranks. Some of them have great pikes, and as your charge is broken, you suddenly find yourself being attacked from all directions!
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia407 # Men, advance backwards! Double quick!
+		random_list = {
+			55 = { }
+			35 = { add_trait = wounded }
+			5 = { add_trait = maimed }
+			5 = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_battle } }
+			}
+		}
+		add_society_modifier = { modifier = failed_mission years = 10 }
+		clr_quest = quest_orc_rumors
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+	}
+}
+
+# bretonnia.408 Dark Elf raiders
+# Druchii slavers on the beach: charge (martial 15+ wins, bretonnia.409; else
+# 80% win, 20% bretonnia.410) or decline.
+# Scope: ROOT is the knight, FROM the questgiver.
+character_event = {
+	id = bretonnia.408
+	desc = EVTDESCbretonnia408 # As you travel along the sea-line you suddenly see a sleek black ship moored just off the coast. Along the beach, there is a dark elf raiding party, and they have several humans tied together as slaves, ready for transport.
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia408
+		set_quest = quest_dark_elf_raiders
+		if = {
+			limit = { NOT = { martial = 15 } }
+			hidden_tooltip = {
+				random_list = {
+					80 = { character_event = { id = bretonnia.409 } }
+					20 = { character_event = { id = bretonnia.410 } }
+				}
+			}
+		}
+		if = { limit = { martial = 15 } character_event = { id = bretonnia.409 } }
+	}
+	option = {
+		name = EVTOPTBbretonnia408
+		custom_tooltip = { text = decline_quest_tooltip }
+		add_character_modifier = {
+			#will delay the next quest for a while
+			name = quest_cooldown_timer
+			hidden = yes
+			days = 1000
+		}
+	}
+}
+
+# bretonnia.409 The Dark Elves flee
+# The captives are freed; quest success.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.409
+	desc = EVTDESCbretonnia409 # Your mighty charge takes the dark elves completely by surprise, and rather than form a line and seek to repel you, they make a mad dash for their ships. You slay several of them, and free the captives.
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia409
+		wealth = 5
+		random = { chance = 5 add_trait = wounded }
+		if = { limit = { NOT = { martial = 20 } } random = { chance = 25 change_martial = 1 } }
+		clr_quest = quest_dark_elf_raiders
+		add_society_modifier = { modifier = knights_of_bretonnia_successful_mission years = 10 }
+		character_event = { id = chronicle.113 } # Renown: a knight of many deeds (WHG_chronicle_events)
+		add_society_currency_major_effect = yes
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+	}
+}
+
+# bretonnia.410 The sorceress unhorses the knight
+# Retreat (maybe wounded, maimed or slain; quest failed), or a player may
+# charge again (bretonnia.411).
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.410
+	desc = EVTDESCbretonnia410 # The dark elves saw you coming from afar, and quickly form ranks. They have a sorceress with them, and suddenly the air around you explodes with thunder and you are thrown from your horse!
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia410 # Arghh, men *cough* advance... backwards!
+		wealth = -20
+		prestige = -50
+		random_list = {
+			45 = { }
+			25 = { add_trait = wounded }
+			10 = { add_trait = maimed }
+			20 = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_battle } }
+			}
+		}
+		add_society_modifier = { modifier = failed_mission years = 10 }
+		clr_quest = quest_dark_elf_raiders
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+	}
+	option = {
+		name = EVTOPTBbretonnia410 # A true knight never runs from danger!
+		trigger = { ai = no }
+		character_event = { id = bretonnia.411 }
+	}
+}
+
+# bretonnia.411 A desperate charge
+# Even odds of victory (bretonnia.412) or defeat (bretonnia.413).
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.411
+	desc = EVTDESCbretonnia411 # You get back up on your horse, right your lance, spit the blood from your mouth and with a great battle cry you charge the foul sorceress and her cohorts!
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia411 # Forwards! To victory! For the Lady!
+		hidden_tooltip = {
+			random_list = {
+				50 = { character_event = { id = bretonnia.412 } }
+				50 = { character_event = { id = bretonnia.413 } }
+			}
+		}
+	}
+}
+
+# bretonnia.412 The sorceress is put to flight
+# The captives are freed, maybe wounded; quest success.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.412
+	desc = EVTDESCbretonnia412 # The Sorceress casts another spell at you, but as her lightning bolt fails to stop you, she turns and runs and the rest follow. You slaughter many of them, and free the captives.
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia412
+		wealth = 5
+		prestige = 25
+		random_list = {
+			50 = { add_trait = wounded }
+			50 = { }
+		}
+		if = { limit = { NOT = { martial = 25 } } random = { chance = 25 change_martial = 1 } }
+		clr_quest = quest_dark_elf_raiders
+		add_society_modifier = { modifier = knights_of_bretonnia_successful_mission years = 10 }
+		character_event = { id = chronicle.113 } # Renown: a knight of many deeds (WHG_chronicle_events)
+		add_society_currency_major_effect = yes
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+	}
+}
+
+# bretonnia.413 Blasted from the saddle again
+# Wounded or maimed (and a Druchii ruler is offered him, druchii.57 in
+# WHG_druchii_events), or slain; quest failed.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.413
+	desc = EVTDESCbretonnia413 # You rush dark elves, but the sorceress casts another spell at you. Lightning flares around you and you are in excruciating pain as you are one more blasted from your horse. This battle is over!
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia413
+		wealth = -20
+		random_list = {
+			30 = {
+				add_trait = wounded
+				random_playable_ruler = {
+					limit = {
+						culture_group = druchii_group
+						is_landed = yes
+						OR = { tier = DUKE tier = KING tier = EMPEROR }
+					}
+					character_event = { id = druchii.57 } # WHG_druchii_events
+				}
+			}
+			55 = {
+				add_trait = maimed
+				random_playable_ruler = {
+					limit = {
+						culture_group = druchii_group
+						is_landed = yes
+						OR = { tier = DUKE tier = KING tier = EMPEROR }
+					}
+					character_event = { id = druchii.57 } # WHG_druchii_events
+				}
+			}
+			15 = {
+				if = { limit = { is_invincible_trigger = yes } antideath_effect = yes }
+				else = { death = { death_reason = death_battle } }
+			}
+		}
+		add_society_modifier = { modifier = failed_mission years = 10 }
+		clr_quest = quest_dark_elf_raiders
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+	}
+}
+
+# bretonnia.414 The village begs for help
+# Take the quest (bretonnia.415) or decline.
+# Scope: ROOT is the knight, FROM the questgiver.
+character_event = {
+	id = bretonnia.414
+	desc = EVTDESCbretonnia414
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia414
+		set_quest = quest_the_village
+		character_event = { id = bretonnia.415 days = 5 }
+	}
+	option = {
+		name = EVTOPTBbretonnia414
+		custom_tooltip = { text = decline_quest_tooltip }
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.415 Beastmen at the village
+# The knight duels a beastman champion (duel.1); the beastman is despawned
+# by bretonnia.505 and the village celebrates (bretonnia.416).
+# Scope: ROOT is the knight; event_target:combatant_1 the knight,
+#   event_target:combatant_2 the beastman.
+character_event = {
+	id = bretonnia.415
+	desc = EVTDESCbretonnia415
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia415
+		save_event_target_as = combatant_1
+		set_character_flag = duel
+		set_character_flag = flag_duel_no_draws
+		create_random_soldier = {
+			random_traits = yes
+			dynasty = none
+			religion = chaos
+			culture = beastman_main
+			female = no
+			age = 30
+		}
+		new_character = {
+			save_event_target_as = combatant_2
+			ROOT = { set_character_flag = deadly_duel@event_target:combatant_2 } # after combatant_2 exists
+			set_character_flag = flag_duel_no_draws
+			add_trait = brave
+			add_trait = creature_beastman
+			character_event = { id = bretonnia.505 days = 30 }
+			character_event = { id = duel.1 days = 1 }
+		}
+		character_event = { id = bretonnia.416 days = 30 random = 5 }
+	}
+}
+
+# bretonnia.416 The village celebrates
+# Quest success; the knight may become lustful or zealous.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.416
+	desc = EVTDESCbretonnia416
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia416
+		clr_quest = quest_the_village
+		add_society_modifier = { modifier = knights_of_bretonnia_successful_mission years = 10 }
+		character_event = { id = chronicle.113 } # Renown: a knight of many deeds (WHG_chronicle_events)
+		add_society_currency_large_effect = yes
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		add_trait = lustful
+	}
+	option = {
+		name = EVTOPTBbretonnia416
+		clr_quest = quest_the_village
+		add_society_modifier = { modifier = knights_of_bretonnia_successful_mission years = 10 }
+		character_event = { id = chronicle.113 } # Renown: a knight of many deeds (WHG_chronicle_events)
+		add_society_currency_large_effect = yes
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+	}
+	option = {
+		name = EVTOPTCbretonnia416
+		clr_quest = quest_the_village
+		add_society_modifier = { modifier = knights_of_bretonnia_successful_mission years = 10 }
+		character_event = { id = chronicle.113 } # Renown: a knight of many deeds (WHG_chronicle_events)
+		add_society_currency_large_effect = yes
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		add_trait = zealous
+	}
+}
+
+# bretonnia.417 A tithe for the Lady
+# Take the quest (pay via donate_money_to_the_lady_decision) or decline.
+# Scope: ROOT is the knight, FROM the questgiver.
+character_event = {
+	id = bretonnia.417
+	desc = EVTDESCbretonnia417
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia417
+		set_quest = quest_lady_tithe
+	}
+	option = {
+		name = EVTOPTBbretonnia417
+		custom_tooltip = { text = decline_quest_tooltip }
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonnia.418 The tithe is paid
+# 300 gold to the Lady for piety; quest success.
+# Fired from donate_money_to_the_lady_decision (99%).
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.418
+	desc = EVTDESCbretonnia418
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia418
+		clr_quest = quest_lady_tithe
+		add_society_modifier = { modifier = knights_of_bretonnia_successful_mission years = 10 }
+		character_event = { id = chronicle.113 } # Renown: a knight of many deeds (WHG_chronicle_events)
+		add_society_currency_major_effect = yes
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		wealth = -300
+		piety = 300
+		clr_character_flag = donate_money_to_ladys
+	}
+}
+
+# bretonnia.419 A phial of the Lady's lake
+# The tithe is paid and the knight may drink from the phial: sickness, a boon
+# to all skills or (rarely) the Grail; or leave it.
+# Fired from donate_money_to_the_lady_decision (1%).
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.419
+	desc = EVTDESCbretonnia419
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia419
+		clr_quest = quest_lady_tithe
+		add_society_modifier = { modifier = knights_of_bretonnia_successful_mission years = 10 }
+		character_event = { id = chronicle.113 } # Renown: a knight of many deeds (WHG_chronicle_events)
+		add_society_currency_minor_effect = yes
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		wealth = -300
+		piety = 300
+		hidden_tooltip = {
+			random_list = {
+				60 = {
+					add_trait = ill
+					hidden_effect = {
+						if = { limit = { is_disease_immune_race = yes } remove_trait = ill }
+					}
+					health = -1
+				}
+				30 = { }
+				10 = {
+					change_diplomacy = 3
+					change_martial = 3
+					change_stewardship = 3
+					change_intrigue = 3
+					change_learning = 3
+				}
+				2 = {
+					remove_character_modifier = virtue_quest
+					remove_trait = bretonnian_knight
+					remove_trait = bretonnian_knight_errant
+					add_trait = grail_knight
+					character_event = { id = chronicle.115 } # The Green Knight bows (WHG_chronicle_events)
+				}
+			}
+		}
+		clr_character_flag = donate_money_to_ladys
+	}
+	option = {
+		name = EVTOPTBbretonnia419
+		clr_quest = quest_lady_tithe
+		add_society_modifier = { modifier = knights_of_bretonnia_successful_mission years = 10 }
+		character_event = { id = chronicle.113 } # Renown: a knight of many deeds (WHG_chronicle_events)
+		add_society_currency_major_effect = yes
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		wealth = -300
+		piety = 300
+		clr_character_flag = donate_money_to_ladys
+	}
+}
+
+# bretonnia.500 The trial of greed
+# A greedy Questing Knight at a poor shrine gives (loses greedy, gains kind)
+# or a player takes the offerings and fails the Grail Quest.
+# Fired from on_yearly_pulse.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.500
+	is_in_society = yes
+	desc = EVTDESCbretonnia500 # You come across a remote shrine, dedicated to a sighting of The Lady many years ago. Rich offerings are on hand, and the pilgrims ask you to donate to the shrine to help feed the local village.
+	picture = "GFX_evt_tribal_shrine"
+	religion_group = old_world_group
+	min_age = 16
+	is_triggered_only = yes
+	trigger = {
+		society_rank == 3
+		is_member_of_bretonnia_trigger = yes
+		trait = greedy
+		NOT = { has_character_flag = failed_grail_quest }
+	}
+	option = {
+		name = EVTOPTAbretonnia500
+		wealth = -200
+		remove_trait = greedy
+		add_trait = kind
+	}
+	option = {
+		name = EVTOPTBbretonnia500 # Foul peasants - so that's where my tax money went!
+		trigger = { ai = no }
+		wealth = 200
+		set_character_flag = failed_grail_quest
+	}
+}
+
+# bretonnia.501 The trial of cowardice
+# A craven Questing Knight faces a Norscan berserker in a duel (duel.1),
+# becoming brave, or a player rides away and fails the Grail Quest.
+# Fired from on_yearly_pulse.
+# Scope: ROOT is the knight; event_target:combatant_1 the knight,
+#   event_target:combatant_2 the berserker.
+character_event = {
+	id = bretonnia.501
+	is_in_society = yes
+	desc = EVTDESCbretonnia501 # You know you are not the bravest of knights, so when you hear word that a norscan berserker has slain twenty men single-handedly and he suddenly appears over the horizon you are cautious about riding him down, but...
+	picture = "GFX_evt_bretonnians"
+	min_age = 16
+	is_triggered_only = yes
+	trigger = {
+		society_rank == 3
+		is_member_of_bretonnia_trigger = yes
+		trait = craven
+		NOT = { has_character_flag = failed_grail_quest }
+		NOT = { has_character_flag = duel }
+	}
+	option = {
+		name = EVTOPTAbretonnia501
+		save_event_target_as = combatant_1
+		set_character_flag = duel
+		remove_trait = craven
+		add_trait = brave
+		# THE START
+		#Create the character to fight with
+		create_random_soldier = {
+			random_traits = yes
+			dynasty = none
+			religion = norscan_gods
+			culture = aesling #somenorscanculture
+			trait = creature_human
+			trait = skilled_tactician
+			female = no
+			age = 30
+		}
+		#scope to character we created and send him duel init event
+		new_character = {
+			save_event_target_as = combatant_2
+			set_character_flag = duel
+			character_event = { id = bretonnia.505 days = 30 } # the berserker goes when the duel is done
+			character_event = { id = duel.1 }
+		}
+		# THE END
+	}
+	option = {
+		name = EVTOPTBbretonnia501 # I'm all alone, no one will if I just ride away...
+		trigger = { ai = no }
+		set_character_flag = failed_grail_quest
+	}
+}
+
+# bretonnia.502 The trial of lust
+# A lustful or hedonist Questing Knight refuses the barmaid (becomes
+# temperate) or a player indulges and fails the Grail Quest.
+# Fired from on_yearly_pulse.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.502
+	is_in_society = yes
+	desc = EVTDESCbretonnia502 # You are not the purest or most abstinent of knights, and just as you sit in a tavern considering these flaws of yours, a gorgeous barmaid approaches with a large pitcher of wine and a warm inviting smile...
+	picture = "GFX_evt_feast"
+	religion_group = old_world_group
+	min_age = 16
+	is_triggered_only = yes
+	trigger = {
+		society_rank == 3
+		is_member_of_bretonnia_trigger = yes
+		OR = { trait = hedonist trait = lustful }
+		NOT = { has_character_flag = failed_grail_quest }
+	}
+	option = {
+		name = EVTOPTAbretonnia502 # Away with that, temptress! Just water for me from now on.
+		remove_trait = lustful
+		remove_trait = hedonist
+		add_trait = temperate
+	}
+	option = {
+		name = EVTOPTBbretonnia502 # I could indulge myself just once more...
+		trigger = { ai = no }
+		set_character_flag = failed_grail_quest
+	}
+}
+
+# bretonnia.503 The trial of wrath
+# A cruel or wroth Questing Knight restrains himself (becomes temperate) or
+# a player horsewhips the peasant and fails the Grail Quest.
+# Fired from on_yearly_pulse.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.503
+	is_in_society = yes
+	desc = EVTDESCbretonnia503 # While in a tavern, a peasant suddenly bumps into you and spills cheap wine all over you. He yells at you for being in his way, before realizing you are a knight, and then he slowly backs away with a sneer...
+	picture = "GFX_evt_feast"
+	religion = grail
+	min_age = 16
+	is_triggered_only = yes
+	trigger = {
+		society_rank == 3
+		is_member_of_bretonnia_trigger = yes
+		OR = { trait = cruel trait = wroth }
+		NOT = { has_character_flag = failed_grail_quest }
+	}
+	option = {
+		name = EVTOPTAbretonnia503 # *restrain yourself* Be on your way, peasant...
+		remove_trait = wroth
+		remove_trait = cruel
+		add_trait = temperate
+	}
+	option = {
+		name = EVTOPTBbretonnia503 # I'll horsewhip you from here till Cathay, you foul peasant!
+		trigger = { ai = no }
+		set_character_flag = failed_grail_quest
+	}
+}
+
+# bretonnia.504 The Green Knight appears
+# The final trial: the Questing Knight duels the Green Knight (duel.1). The
+# Green Knight is despawned by bretonnia.505; the Lady comes in bretonnia.506.
+# Fired from request_to_rank_up_within_bretonnia (rank 3).
+# Scope: ROOT is the knight; event_target:combatant_1 the knight,
+#   event_target:combatant_2 the Green Knight.
+character_event = {
+	id = bretonnia.504
+	title = EVTNAMEbretonnia504
+	desc = EVTDESCbretonnia504 # You can't believe it... one day while riding in the woods, the Green Knight appears. This is the final test! If you prove worthy and defeat him, the Lady of the Lake will appear and allow you to sip from the Holy Grail!
+	picture = "GFX_evt_bretonnians"
+	is_triggered_only = yes
+	option = {
+		name = EVTOPTAbretonnia504 # Well met, Sir Knight! I am ready for the challenge!
+		set_character_flag = defeated_green_knight
+		save_event_target_as = combatant_1
+		set_character_flag = duel
+		set_character_flag = flag_duel_no_draws
+		# THE START
+		#Create the character to fight with
+		create_random_soldier = {
+			name = "The Green Knight"
+			random_traits = yes
+			dynasty = none
+			religion = grail
+			culture = old_breton
+			trait = creature_human
+			trait = brilliant_strategist
+			female = no
+			age = 30
+		}
+		#scope to character we created and send him duel init event
+		new_character = {
+			change_martial = 10
+			save_event_target_as = combatant_2
+			ROOT = { set_character_flag = deadly_duel@event_target:combatant_2 } # after combatant_2 exists, or the flag names no one
+			set_character_flag = flag_duel_no_draws
+			set_character_flag = flag_duel_no_backsies
+			add_trait = noble
+			add_trait = green_knight
+			add_trait = brave
+			character_event = { id = bretonnia.505 days = 30 }
+			character_event = { id = duel.1 days = 1 }
+		}
+		#Trigger the event to finish the quest - auto cancelled if character is dead.
+		character_event = { id = bretonnia.506 days = 32 random = 5 } # after bretonnia.505
+		# THE END
+	}
+}
+
+# bretonnia.505 The duel foe departs
+# Hidden. Despawns the duel foe (bretonnia.415, 504). If the Green Knight still
+# stands, he was not beaten: the knight has not earned the Grail
+# (bretonnia.506 checks defeated_green_knight) and may ask to rank up again.
+# Scope: ROOT is the duel foe (Green Knight or beastman), FROM the knight.
+character_event = {
+	id = bretonnia.505
+	hide_window = yes
+	is_triggered_only = yes
+	immediate = {
+		FROM = {
+			if = {
+				limit = { has_character_flag = defeated_green_knight }
+				clr_character_flag = defeated_green_knight
+				clr_character_flag = has_sent_request_to_rank_up
+			}
+		}
+		death = { death_reason = death_vanished }
+	}
+}
+
+# bretonnia.506 The Lady appears
+# If the Green Knight fell, the Lady lets the knight sip from the Grail: he
+# becomes a Grail Knight. Fired from bretonnia.504.
+# Scope: ROOT is the knight.
+character_event = {
+	id = bretonnia.506
+	title = EVTNAMEbretonnia506
+	desc = EVTDESCbretonnia506 # It... it's finally happening! The Lady of the Lake appears before you, her grace and beauty beyond compare. Purified from your trials she allows you to sip from the Grail, and you feel vitality and strength flow into you!
+	picture = "GFX_evt_knight_kneeling"
+	is_triggered_only = yes
+	trigger = { has_character_flag = defeated_green_knight } # cleared by bretonnia.505 if the Green Knight lived
+	option = {
+		name = EVTOPTAbretonnia506
+		society_rank_up = 1
+		clr_character_flag = has_sent_request_to_rank_up
+		clr_character_flag = defeated_green_knight
+		remove_character_modifier = virtue_quest
+		remove_trait = bretonnian_knight
+		add_trait = grail_knight
+		character_event = { id = chronicle.115 } # The Green Knight bows (WHG_chronicle_events)
+	}
+}
+
+# bretonnia.507 A mutant cannot be a Grail Knight
+# Hidden. A mutated knight of the order fails the Grail Quest.
+# Fired from on_yearly_pulse.
+# Scope: ROOT is the character.
+character_event = {
+	id = bretonnia.507
+	hide_window = yes
+	only_playable = yes
+	is_triggered_only = yes
+	trigger = {
+		is_mutated_trigger = yes
+		NOT = { trait = grail_knight }
+		is_member_of_bretonnia_trigger = yes
+	}
+	immediate = {
+		set_character_flag = failed_grail_quest
+	}
+}
+
+###############################################################################
+# Part 2: The Damsels of the Lady (namespace bretonmagic, ids kept)
+# Faction: Bretonnia
+# Serves: the Damsels of the Lady (handmaidens_of_the_lady) and the Fay
+#   Enchantress who leads them
+#
+# In Bretonnia magic is the Lady's gift to women. A girl born with it is
+# sought out by the Damsels and taught at the Grail Chapels; a man who
+# works magic is hunted. Every two years each Damsel without a quest may be
+# given one by a Damsel of the highest rank: the hunt for a man who works
+# magic, or a new sister to find and teach. Whoever holds the Fay
+# Enchantress's title (k_cult_of_the_lady) leads the Damsels; a man who
+# comes by it hands it to a woman of the Lady's choosing.
+#
+#   bretonmagic.1          The Damsels' missions (on_society_bi_yearly_pulse)
+#   bretonmagic.2 - 6      The hunt for a man who works magic
+#   bretonmagic.7 - 18     A new Damsel: the quest, the offer, the lessons
+#   bretonmagic.26         A new Fay Enchantress
+#   bretonmagic.50         AI rank-ups (on_five_year_pulse)
+#
+# Rebuilt on the pattern of the Ice Witch Sisterhood (kislev.1 - 40 in
+# WHG_kislev_events.txt), which this chain was copied from. Fixed:
+# - The hunt never ended: the decision that confronts the quarry
+#   (ice_witch_hunt, wh_witch_decisions.txt) was open to Ice Witches only;
+#   a Damsel may take it now, and it fires bretonmagic.4.
+# - The best place to find the quarry (the Damsel's own liege's realm)
+#   checked religion_group = grail, which is a religion, so it never
+#   matched.
+# - A recruit who accepted never became a Damsel: her induction timer sat
+#   in an else with no if. She also moved to a court that was never saved.
+# - The lessons' death rolls killed pupils who could not die, and the
+#   search for a recruit had a stray trigger in its effects.
+# - The texts were the Ice Witches' (Priviet, Kislevite law, a
+#   necromancer's lessons); the Damsels have their own now, and the missing
+#   option texts (ACCEPT, DECLINE, Refuse) are filled.
+# - A new Fay Enchantress is human.
+# Shared code: damsel_* in common/scripted_triggers/WHG_bretonnia_triggers.txt
+#   and common/scripted_effects/WHG_bretonnia_effects.txt; the Ice Witches'
+#   kislev_male_mage_trigger, kislev_save_matriarch_effect and
+#   kislev_lesson_accident_effect.
+# Callers: wh_magic_on_actions.txt (1, 26, 50), the ice_witch_hunt
+#   decision (4), gift_hunt_success_effect and gift_hunt_failed_effect in
+#   wh_magic_gift_effects.txt (5, 6).
+###############################################################################
+
+namespace = bretonmagic
+
+# bretonmagic.1 The Damsels' missions
+# Every two years each Damsel without a quest may be given one by a Damsel
+# of the highest rank: the hunt for a man who works magic, or a new sister
+# to find. The AI sometimes skips the mission and just gains or loses
+# standing.
+# Scope: ROOT is a Damsel.
+character_event = {
+	id = bretonmagic.1
+	hide_window = yes
+
+	is_in_society = yes
+	only_capable = yes
+
+	is_triggered_only = yes # on_society_bi_yearly_pulse
+
+	trigger = {
+		society_member_of = handmaidens_of_the_lady
+		has_any_quest = no
+		NOT = { has_character_modifier = quest_cooldown_timer }
+		is_inaccessible_trigger = no
+		any_society_member = {
+			is_society_grandmaster = yes
+			same_society_as = ROOT
+			NOT = { has_character_flag = own_mission_tombola }
+		}
+	}
+	immediate = {
+		kislev_save_matriarch_effect = yes
+		random_list = {
+			25 = {
+				trigger = {
+					is_landed = yes
+					society_rank = 2
+					age = 16
+					damsel_male_mage_exists_trigger = yes
+				}
+				modifier = { factor = 2 ai = yes society_rank == 2 }
+				event_target:lodge_hero = { character_event = { id = bretonmagic.2 } }
+			}
+			60 = {
+				trigger = { is_landed = yes is_adult = yes damsel_recruit_exists_trigger = yes }
+				modifier = { factor = 5 handmaidens_of_the_lady = { num_of_society_members < 25 } }
+				modifier = { factor = 2.5 society_rank == 3 }
+				modifier = { factor = 5 has_landed_title = k_cult_of_the_lady }
+				modifier = {
+					factor = 0.5
+					handmaidens_of_the_lady = { num_of_society_members = 30 }
+				}
+				modifier = { factor = 0 handmaidens_of_the_lady = { num_of_society_members = 45 } }
+				modifier = { factor = 10 any_child = { damsel_recruit_trigger = yes } }
+				modifier = { factor = 25 ai = yes any_player = { damsel_recruit_trigger = yes } }
+				event_target:lodge_hero = { character_event = { id = bretonmagic.7 } }
+			}
+			75 = {
+				trigger = { ai = yes }
+				modifier = { factor = 0 handmaidens_of_the_lady = { num_of_society_members < 15 } }
+				random_list = {
+					70 = {
+						modifier = { factor = 0.9 society_influence >= 30 }
+						modifier = { factor = 0.9 society_influence >= 40 }
+						modifier = { factor = 0.8 society_influence >= 50 }
+						modifier = { factor = 0.7 society_influence >= 70 }
+						modifier = { factor = 0.6 society_influence >= 80 }
+						modifier = { factor = 0.5 society_influence >= 90 }
+						add_mission_succeed_influence_effect = yes
+					}
+					30 = { add_mission_fail_influence_effect = yes }
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# The hunt for a man who works magic
+###############################################################################
+
+# bretonmagic.2 The hunt is ordered
+# Scope: ROOT is the senior Damsel; FROM the Damsel.
+character_event = {
+	id = bretonmagic.2
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { society_quest_event = { id = bretonmagic.3 days = 7 random = 7 } }
+	}
+}
+
+# bretonmagic.3 A man who works magic
+# The Lady gives magic to women. A man of the realm or of a neighbouring
+# Bretonnian realm has been working it; the Damsel is to find him (the
+# ice_witch_hunt decision starts the confrontation, bretonmagic.4).
+# Scope: ROOT is the Damsel; FROM the senior Damsel.
+society_quest_event = {
+	id = bretonmagic.3
+	desc = EVTDESCbretonmagic3
+
+	is_in_society = yes
+	only_capable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { is_alive = yes }
+		society_member_of = handmaidens_of_the_lady
+		same_society_as = FROM
+		has_any_quest = no
+		NOT = { has_character_modifier = quest_cooldown_timer }
+		is_inaccessible_trigger = no
+		is_landed = yes
+		damsel_male_mage_exists_trigger = yes
+	}
+	immediate = {
+		damsel_find_male_mage_effect = yes
+	}
+
+	quest_target = event_target:male_target
+
+	option = {
+		name = EVTOPTAbretonmagic3
+		set_character_flag = deadly_duel@event_target:male_target
+		event_target:male_target = {
+			show_scope_change = no
+			set_quest_target = { id = quest_ice_witch_hunt holder = ROOT }
+		}
+	}
+	option = {
+		name = EVTOPTBbretonmagic3
+		custom_tooltip = { text = decline_quest_tooltip }
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonmagic.4 The confrontation
+# The Damsel has found her quarry; he is confronted (gift.20 in
+# WHG_magic_events.txt) and his lord decides his fate. The outcome comes
+# back as bretonmagic.5 or bretonmagic.6.
+# Scope: ROOT is the Damsel; FROM the accused.
+character_event = {
+	id = bretonmagic.4
+	desc = EVTDESCbretonmagic4
+	picture = GFX_evt_bretonnians
+
+	is_triggered_only = yes # ice_witch_hunt decision (wh_witch_decisions.txt)
+
+	immediate = {
+		save_event_target_as = witch_hunter
+		FROM = {
+			save_event_target_as = the_accused
+			character_event = { id = gift.20 days = 7 random = 7 }
+		}
+	}
+
+	option = {
+		name = EVTOPTAbretonmagic4
+	}
+}
+
+# bretonmagic.5 The Lady's justice
+# The accused was burned or cut off from the Winds. The Damsel returns with
+# honour.
+# Scope: ROOT is the Damsel.
+character_event = {
+	id = bretonmagic.5
+	desc = EVTDESCbretonmagic5
+	picture = GFX_evt_bretonnians
+
+	is_triggered_only = yes # gift_hunt_success_effect
+
+	trigger = {
+		society_member_of = handmaidens_of_the_lady
+		has_quest = quest_ice_witch_hunt
+	}
+
+	option = {
+		name = EVTOPTAbretonmagic5
+		clr_quest = quest_ice_witch_hunt
+		piety = 100
+		add_society_currency_medium_effect = yes
+		add_legend_progress_trivial_effect = yes
+	}
+}
+
+# bretonmagic.6 The quarry spared
+# The accused's lord showed him mercy, or he drove the Damsel off.
+# Scope: ROOT is the Damsel.
+character_event = {
+	id = bretonmagic.6
+	desc = EVTDESCbretonmagic6
+	picture = GFX_evt_bretonnians
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # gift_hunt_failed_effect
+
+	trigger = {
+		society_member_of = handmaidens_of_the_lady
+		has_quest = quest_ice_witch_hunt
+	}
+
+	option = {
+		name = EVTOPTAbretonmagic6
+		clr_quest = quest_ice_witch_hunt
+		piety = -100
+		add_mission_fail_influence_effect = yes
+	}
+}
+
+###############################################################################
+# A new Damsel
+###############################################################################
+
+# bretonmagic.7 A new Damsel is wanted
+# Scope: ROOT is the senior Damsel; FROM the Damsel.
+character_event = {
+	id = bretonmagic.7
+	hide_window = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { society_quest_event = { id = bretonmagic.8 days = 7 random = 7 } }
+	}
+}
+
+# bretonmagic.8 A girl with the Lady's gift
+# The Damsels name a girl or woman with the gift who is not yet one of them:
+# a player first, then the Damsel's own daughter, a woman of her realm, a
+# girl of her Bretonnian liege's realm or of a neighbouring Bretonnian realm
+# (damsel_find_recruit_effect). The Damsel travels to meet her
+# (bretonmagic.9).
+# Scope: ROOT is the Damsel; FROM the senior Damsel.
+society_quest_event = {
+	id = bretonmagic.8
+	desc = EVTDESCbretonmagic8
+
+	is_in_society = yes
+	only_capable = yes
+
+	is_triggered_only = yes
+
+	trigger = {
+		is_landed = yes
+		is_adult = yes
+		FROM = { is_alive = yes }
+		society_member_of = handmaidens_of_the_lady
+		same_society_as = FROM
+		has_any_quest = no
+		NOT = { has_character_modifier = quest_cooldown_timer }
+		is_inaccessible_trigger = no
+		damsel_recruit_exists_trigger = yes
+	}
+	immediate = {
+		damsel_find_recruit_effect = yes
+	}
+
+	quest_target = event_target:recruit_to_be
+
+	option = {
+		name = EVTOPTAbretonmagic8
+		event_target:recruit_to_be = {
+			show_scope_change = no
+			set_quest_target = { id = quest_damsel_recruit holder = ROOT }
+			set_character_flag = priority_mage_recruit
+		}
+		save_event_target_as = recruiter
+		character_event = { id = bretonmagic.9 days = 6 random = 9 }
+	}
+	option = {
+		name = EVTOPTBbretonmagic8
+		custom_tooltip = { text = decline_quest_tooltip }
+		add_character_modifier = { name = quest_cooldown_timer hidden = yes days = 1000 }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# bretonmagic.9 The Damsel arrives
+# Scope: ROOT is the recruiting Damsel; event_target:recruit_to_be the girl.
+character_event = {
+	id = bretonmagic.9
+	desc = EVTDESCbretonmagic9
+	picture = GFX_evt_bretonnians
+	portrait = event_target:recruit_to_be
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAbretonmagic9
+		event_target:recruit_to_be = {
+			character_event = { id = bretonmagic.10 days = 15 random = 7 }
+		}
+	}
+}
+
+# bretonmagic.10 The Lady's call
+# The girl may join and begin her studies (one to five years, quicker for
+# the clever or those who already know a lore), or refuse if she is grown.
+# A girl of the Fay Enchantress's own lands goes to her court to learn.
+# Scope: ROOT is the recruit; FROM the Damsel.
+character_event = {
+	id = bretonmagic.10
+	desc = EVTDESCbretonmagic10
+	picture = GFX_evt_bretonnians
+	portrait = event_target:recruit_to_be
+
+	is_triggered_only = yes
+
+	option = { # Join
+		name = EVTOPTAbretonmagic10
+		if = {
+			limit = {
+				is_landed = no
+				event_target:recruiter = {
+					OR = {
+						has_landed_title = k_cult_of_the_lady
+						liege = { has_landed_title = k_cult_of_the_lady }
+					}
+				}
+			}
+			move_character = event_target:recruiter
+			set_character_flag = ai_flag_refuse_concubinage
+			set_character_flag = no_court_invites
+		}
+		add_trait = studying_magic
+		join_society = handmaidens_of_the_lady
+		if = {
+			limit = { is_trained_mage_trigger = yes }
+			character_event = { id = bretonmagic.11 years = 1 }
+		}
+		else = {
+			random_list = {
+				20 = {
+					trigger = { learning = 15 }
+					modifier = { factor = 2 learning = 20 }
+					modifier = { factor = 5 trait = genius }
+					character_event = { id = bretonmagic.11 days = 696 }
+				}
+				20 = {
+					modifier = { factor = 2 learning = 12 }
+					modifier = { factor = 2 learning = 15 }
+					modifier = { factor = 2 trait = genius }
+					character_event = { id = bretonmagic.11 years = 3 }
+				}
+				15 = { character_event = { id = bretonmagic.11 years = 4 } }
+				15 = {
+					trigger = { NOT = { learning = 8 } }
+					modifier = { factor = 6 NOT = { learning = 6 } }
+					character_event = { id = bretonmagic.11 years = 5 }
+				}
+			}
+		}
+		FROM = { character_event = { id = bretonmagic.16 } }
+		ai_chance = { factor = 25 }
+	}
+	option = { # Refuse
+		name = EVTOPTBbretonmagic10
+		trigger = { age = 18 }
+		set_character_flag = refused_magical_recruitment
+		prestige = -250
+		FROM = { character_event = { id = bretonmagic.17 } }
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 0.5 diplomacy = 12 }
+			modifier = { factor = 0.5 learning = 12 }
+			modifier = { factor = 0.5 diplomacy = 15 }
+			modifier = { factor = 0.5 learning = 15 }
+			modifier = { factor = 0 OR = { trait = ambitious trait = craven } }
+		}
+	}
+}
+
+# bretonmagic.11 A Damsel of the Lady
+# The pupil's training is done. She becomes a Damsel, learns a lore if she
+# knew none (most often Life or Beasts), and rises to the first rank. Her
+# teacher hears of it (bretonmagic.18).
+# Scope: ROOT is the new Damsel.
+character_event = {
+	id = bretonmagic.11
+	desc = EVTDESCbretonmagic11
+	picture = GFX_evt_bretonnians
+
+	is_triggered_only = yes
+
+	trigger = {
+		society_member_of = handmaidens_of_the_lady
+		NOT = { trait = BretonDamsel }
+	}
+
+	option = {
+		name = EVTOPTAbretonmagic11
+		remove_trait = studying_magic
+		if = { limit = { religion = grail } piety = 100 }
+		add_trait = BretonDamsel
+		if = {
+			limit = { is_trained_mage_trigger = no }
+			prestige = 250
+			damsel_learn_lore_effect = yes
+		}
+		if = {
+			limit = { society_rank == 1 }
+			society_rank_up = { society = handmaidens_of_the_lady rank = 1 }
+		}
+		event_target:recruiter = { character_event = { id = bretonmagic.18 } }
+		ai_chance = { factor = 25 }
+	}
+}
+
+# bretonmagic.12 The lessons
+# Every year or so until her induction the Damsel chooses what to teach:
+# caution, daring or focus (bretonmagic.13 - 15). If the pupil dies or is
+# already a Damsel, the lessons stop.
+# Scope: ROOT is the teacher; event_target:recruit_to_be the pupil.
+character_event = {
+	id = bretonmagic.12
+	desc = EVTDESCbretonmagic12
+	picture = GFX_evt_bretonnians
+	portrait = event_target:recruit_to_be
+
+	is_triggered_only = yes
+
+	trigger = {
+		event_target:recruit_to_be = { is_alive = yes NOT = { trait = BretonDamsel } }
+	}
+	fail_trigger_effect = { damsel_end_lessons_effect = yes }
+
+	option = { # Caution
+		name = EVTOPTAbretonmagic12
+		event_target:recruit_to_be = { character_event = { id = bretonmagic.13 } }
+	}
+	option = { # Daring
+		name = EVTOPTBbretonmagic12
+		event_target:recruit_to_be = { character_event = { id = bretonmagic.14 } }
+	}
+	option = { # Focus
+		name = EVTOPTCbretonmagic12
+		event_target:recruit_to_be = { character_event = { id = bretonmagic.15 } }
+	}
+}
+
+# bretonmagic.13 A lesson in caution
+# The Winds punish the careless. A rash or slow pupil has a small chance to
+# die of the lesson; otherwise she gains Learning and Diplomacy, more surely
+# with a teacher who has magic herself.
+# Scope: ROOT is the pupil; FROM the teacher.
+character_event = {
+	id = bretonmagic.13
+	desc = EVTDESCbretonmagic13
+	picture = GFX_evt_bretonnians
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = BretonDamsel }
+		FROM = { is_alive = yes }
+	}
+	fail_trigger_effect = { damsel_end_lessons_effect = yes }
+
+	option = {
+		name = EVTOPTAbretonmagic13
+		if = {
+			limit = {
+				OR = {
+					AND = { is_adult = no NOT = { learning = 14 } }
+					AND = { is_adult = yes NOT = { learning = 16 } }
+					trait = wroth
+				}
+			}
+			kislev_lesson_accident_effect = yes
+		}
+		hidden_tooltip = {
+			FROM = { character_event = { id = bretonmagic.12 days = 250 random = 150 } }
+			random_list = {
+				50 = { change_learning = 1 change_diplomacy = 1 }
+				50 = { modifier = { factor = 1.45 FROM = { has_magic_power_trigger = no } } }
+			}
+		}
+	}
+}
+
+# bretonmagic.14 A lesson in daring
+# The pupil is pushed to try what she cannot yet do. Timid, content or
+# impatient pupils risk the most; the rewards are broader.
+# Scope: ROOT is the pupil; FROM the teacher.
+character_event = {
+	id = bretonmagic.14
+	desc = EVTDESCbretonmagic14
+	picture = GFX_evt_bretonnians
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = BretonDamsel }
+		FROM = { is_alive = yes }
+	}
+	fail_trigger_effect = { damsel_end_lessons_effect = yes }
+
+	option = {
+		name = EVTOPTAbretonmagic14
+		if = {
+			limit = {
+				OR = {
+					AND = {
+						NOT = { trait = patient }
+						OR = {
+							AND = { is_adult = no NOT = { learning = 10 } }
+							AND = { is_adult = yes NOT = { learning = 12 } }
+						}
+					}
+					trait = content
+					trait = craven
+				}
+			}
+			kislev_lesson_accident_effect = yes
+		}
+		hidden_tooltip = {
+			FROM = { character_event = { id = bretonmagic.12 days = 250 random = 150 } }
+			random_list = {
+				20 = { change_learning = 1 change_martial = 1 }
+				20 = { change_learning = 1 change_intrigue = 1 }
+				20 = { change_learning = 1 change_stewardship = 1 }
+				40 = { modifier = { factor = 1.45 FROM = { has_magic_power_trigger = no } } }
+			}
+		}
+	}
+}
+
+# bretonmagic.15 A lesson in focus
+# Discipline above all. Impatient, stubborn or wrathful pupils risk the
+# most.
+# Scope: ROOT is the pupil; FROM the teacher.
+character_event = {
+	id = bretonmagic.15
+	desc = EVTDESCbretonmagic15
+	picture = GFX_evt_bretonnians
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { trait = BretonDamsel }
+		FROM = { is_alive = yes }
+	}
+	fail_trigger_effect = { damsel_end_lessons_effect = yes }
+
+	option = {
+		name = EVTOPTAbretonmagic15
+		if = {
+			limit = {
+				OR = {
+					AND = {
+						NOT = { trait = temperate }
+						OR = {
+							AND = { is_adult = no NOT = { learning = 10 } }
+							AND = { is_adult = yes NOT = { learning = 12 } }
+						}
+					}
+					trait = ambitious
+					trait = stubborn
+					trait = wroth
+				}
+			}
+			kislev_lesson_accident_effect = yes
+		}
+		hidden_tooltip = {
+			FROM = { character_event = { id = bretonmagic.12 days = 250 random = 150 } }
+			random_list = {
+				50 = { change_learning = 1 }
+				50 = { modifier = { factor = 1.45 FROM = { has_magic_power_trigger = no } } }
+			}
+		}
+	}
+}
+
+# bretonmagic.16 The girl accepts
+# The Damsel starts her lessons (bretonmagic.12).
+# Scope: ROOT is the Damsel; FROM the recruit.
+character_event = {
+	id = bretonmagic.16
+	desc = EVTDESCbretonmagic16
+	picture = GFX_evt_bretonnians
+	portrait = event_target:recruit_to_be
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAbretonmagic16
+		character_event = { id = bretonmagic.12 }
+	}
+}
+
+# bretonmagic.17 The girl refuses
+# Scope: ROOT is the Damsel; FROM the recruit.
+character_event = {
+	id = bretonmagic.17
+	desc = EVTDESCbretonmagic17
+	picture = GFX_evt_mysterious_forest
+	portrait = event_target:recruit_to_be
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAbretonmagic17
+		clr_quest = quest_damsel_recruit
+		add_mission_fail_influence_effect = yes
+	}
+}
+
+# bretonmagic.18 A Damsel made
+# The mission is done. Teacher and pupil may part as friends.
+# Scope: ROOT is the teacher; FROM the new Damsel.
+character_event = {
+	id = bretonmagic.18
+	desc = EVTDESCbretonmagic18
+	picture = GFX_evt_bretonnians
+	portrait = event_target:recruit_to_be
+
+	is_triggered_only = yes
+
+	option = {
+		name = EVTOPTAbretonmagic18
+		clr_quest = quest_damsel_recruit
+		add_society_currency_medium_effect = yes
+		random = { chance = 50 add_friend = FROM }
+	}
+}
+
+###############################################################################
+# The Fay Enchantress
+###############################################################################
+
+# bretonmagic.26 A new Fay Enchantress
+# Hidden. Whoever comes by the Fay Enchantress's title leads the Damsels. A
+# woman becomes the Fay Enchantress herself; a man hands the title to a
+# woman of the Lady's choosing, made for the purpose.
+# Scope: ROOT is the new holder; FROM the title.
+character_event = {
+	id = bretonmagic.26
+	hide_window = yes
+
+	religion = grail
+
+	is_triggered_only = yes # on_new_holder, _inheritance, _usurpation
+
+	trigger = {
+		FROM = { title = k_cult_of_the_lady }
+		NOT = { trait = fay_enchantress }
+	}
+	immediate = {
+		if = {
+			limit = { is_woman_trigger = no }
+			create_character = {
+				culture = breton
+				religion = grail
+				female = yes
+				trait = creature_human
+				attributes = {
+					martial = 6
+					diplomacy = 8
+					stewardship = 8
+					intrigue = 6
+					learning = 12
+				}
+			}
+			new_character = {
+				random_list = {
+					50 = {
+						add_trait = mastermind_theologian
+						add_trait = kind
+						add_trait = trusting
+						change_martial = 2
+					}
+					50 = {
+						add_trait = grey_eminence
+						add_trait = deceitful
+						add_trait = romantic
+						change_intrigue = 2
+					}
+				}
+				random_list = {
+					33 = { add_trait = just add_trait = temperate }
+					33 = { add_trait = brave add_trait = just }
+					33 = { add_trait = brave add_trait = frugal }
+				}
+				damsel_make_fay_enchantress_effect = yes
+				ROOT = { abdicate_to = PREV }
+			}
+		}
+		else = { damsel_make_fay_enchantress_effect = yes }
+	}
+}
+
+###############################################################################
+# AI rank-ups
+###############################################################################
+
+# bretonmagic.50 Rising among the Damsels
+# Every five years an AI Damsel with enough standing may rise a rank (to the
+# highest only if a place is free).
+# Scope: ROOT is an AI Damsel.
+character_event = {
+	id = bretonmagic.50
+	hide_window = yes
+
+	ai = yes
+	is_in_society = yes
+
+	is_triggered_only = yes # on_five_year_pulse
+
+	trigger = {
+		society_member_of = handmaidens_of_the_lady
+		is_inaccessible_or_incapable_trigger = no
+		society_can_rank_up = yes
+		has_society_currency_minor_trigger = yes
+	}
+	immediate = {
+		random_list = {
+			50 = { }
+			50 = {
+				trigger = { society_rank < 3 }
+				society_rank_up = 1
+				detract_society_currency_medium_effect = yes
+			}
+			500 = {
+				trigger = {
+					society_rank == 3
+					NOT = { is_society_rank_full = { society = handmaidens_of_the_lady rank = 4 } }
+				}
+				society_rank_up = 1
+				detract_society_currency_medium_effect = yes
+			}
+		}
+	}
+}
+
+###############################################################################
+# Knights Errant and hedge knights: Bretonnian knights on the road
+# Namespace: errant (was 71000 - 71006 in the vanilla hedge_knights_events.txt)
+# Faction: Bretonnia
+# Serves: rulers of the Lady of the Lake (grail and false grail)
+#
+# Part 1: The visit                                errant.1 - errant.9
+#   (a band of Knights Errant, young nobles seeking the deed that wins their
+#   spurs, or of hedge knights, landless wanderers with no lord, asks for
+#   hospitality (flag errant_band_hedge, 40%); while they stay, one may
+#   be hurt in the lists, one may shine and be taken into service, a proud
+#   courtier may take offence, a girl of the court may be seduced; then they
+#   ride on)
+# Part 2: The marshal's prisoner                   errant.20
+#
+# Callers: errant.1 and errant.20 on the 00_on_actions yearly random_events
+#   list (weight 100 each). The visit runs as a chain: errant.9 picks the
+#   next scene every 20 - 40 days (was five events with MTTH of 20 - 100
+#   days polled every day while the knights stayed).
+# Scripted triggers: common/scripted_triggers/WHG_knights_errant_triggers.txt
+# Scripted effects: common/scripted_effects/WHG_knights_errant_effects.txt
+# Localisation: localisation/00_WHG_bretonnia_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = errant
+
+###############################################################################
+# Part 1: The visit
+###############################################################################
+
+# errant.1 Knights Errant at the gate
+# Yearly random_events (00_on_actions). A small court with a chancellor to
+# receive them is likelier; sick, mad or great rulers are less likely.
+# Scope: ROOT is a ruler of the Lady.
+character_event = {
+	id = errant.1
+	desc = { text = EVTDESCerrant1 trigger = { NOT = { has_character_flag = errant_band_hedge } } }
+	desc = { text = EVTDESCerrant1_hedge trigger = { has_character_flag = errant_band_hedge } }
+	picture = GFX_evt_emissary
+
+	is_triggered_only = yes # on_yearly_pulse random_events
+
+	only_playable = yes
+	min_age = 16
+	prisoner = no
+	war = no
+	religion_group = old_world_group
+
+	trigger = {
+		in_command = no
+		OR = { religion = grail religion = false_grail }
+		NOT = { has_character_flag = errant_visiting }
+		NOT = { has_character_flag = errant_hated }
+		NOT = { has_character_modifier = in_seclusion }
+		any_courtier = { has_job_title = job_chancellor }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.5 trait = gregarious }
+		modifier = { factor = 2.0 prestige = 100 }
+		modifier = { factor = 2.0 tier = COUNT }
+		modifier = { factor = 0.5 tier = KING }
+		modifier = { factor = 0.2 tier = EMPEROR }
+		modifier = { factor = 0.8 OR = { trait = stressed trait = depressed } }
+		modifier = {
+			factor = 0.5
+			OR = { trait = lunatic_1 trait = lunatic_2 trait = lunatic_3 trait = possessed }
+		}
+		modifier = { factor = 0.7 is_ill = yes }
+		modifier = {
+			factor = 0.5
+			OR = { trait = leper trait = infirm trait = incapable trait = drunkard }
+		}
+		modifier = { factor = 0.8 OR = { trait = wounded is_maimed_trigger = yes } }
+	}
+
+	immediate = {
+		clr_character_flag = errant_band_hedge
+		random = { chance = 40 set_character_flag = errant_band_hedge } # hedge knights, not Knights Errant
+	}
+
+	option = { # A lavish feast
+		name = EVTOPTAerrant1
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 2 trait = gregarious }
+			modifier = { factor = 2 trait = charitable }
+			modifier = { factor = 0 trait = greedy }
+			modifier = { factor = 0 trait = shy }
+		}
+		set_character_flag = errant_visiting
+		prestige = 10
+		if = { limit = { trait = greedy } scaled_wealth = -0.4 remove_trait = greedy }
+		else = { scaled_wealth = -0.2 }
+		if = {
+			limit = { NOT = { trait = gregarious } NOT = { trait = shy } }
+			add_trait = gregarious
+		}
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+	option = { # A cold welcome
+		name = EVTOPTBerrant1
+		ai_chance = {
+			factor = 10
+			modifier = {
+				factor = 0
+				OR = { trait = gregarious trait = proud trait = ambitious trait = charitable }
+			}
+		}
+		prestige = 1
+		scaled_wealth = -0.05
+		set_character_flag = errant_visiting
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+	option = { # Turn them away
+		name = EVTOPTCerrant1
+		ai_chance = { factor = 1 modifier = { factor = 0 NOT = { trait = greedy } } }
+		prestige = -5
+		any_courtier = { opinion = { modifier = tight_ruler who = ROOT } }
+		clr_character_flag = errant_band_hedge
+	}
+}
+
+# errant.2 Hurt in the lists
+# A knight is injured in a friendly tilt; the visit ends.
+# Scope: ROOT is the host.
+character_event = {
+	id = errant.2
+	desc = { text = EVTDESCerrant2 trigger = { NOT = { has_character_flag = errant_band_hedge } } }
+	desc = { text = EVTDESCerrant2_hedge trigger = { has_character_flag = errant_band_hedge } }
+	picture = GFX_evt_joust
+
+	is_triggered_only = yes # errant.9
+
+	immediate = {
+		errant_end_visit_effect = yes
+	}
+
+	option = { # Pay his way and send them on
+		name = EVTOPTAerrant2
+		scaled_wealth = -0.05
+		piety = 5
+	}
+	option = { # Let him heal here
+		name = EVTOPTBerrant2
+		prestige = -5
+		piety = 5
+		if = {
+			limit = {
+				NOT = { trait = just }
+				NOT = { trait = arbitrary }
+				NOT = { personality_traits = 5 }
+			}
+			add_trait = just
+		}
+	}
+}
+
+# errant.3 One knight shines
+# Players only: the host may take the young knight into service.
+# Scope: ROOT is the host.
+character_event = {
+	id = errant.3
+	desc = { text = EVTDESCerrant3 trigger = { NOT = { has_character_flag = errant_band_hedge } } }
+	desc = { text = EVTDESCerrant3_hedge trigger = { has_character_flag = errant_band_hedge } }
+	picture = GFX_evt_joust
+
+	is_triggered_only = yes # errant.9
+
+	immediate = {
+		set_character_flag = errant_recruited
+	}
+
+	option = { # Take him into service
+		name = EVTOPTAerrant3
+		scaled_wealth = -0.1
+		if = {
+			limit = { has_character_flag = errant_band_hedge } # a hedge knight: a grown sword with years on the road
+			create_character = {
+				random_traits = no
+				dynasty = none
+				female = no
+				age = 30
+				religion = ROOT
+				culture = ROOT
+				trait = brave
+				trait = humble
+				trait = skilled_tactician
+				health = 10
+				attributes = { martial = 17 }
+			}
+		}
+		else = { # a Knight Errant: a young noble seeking his deed
+			create_character = {
+				random_traits = no
+				dynasty = random
+				female = no
+				age = 16
+				religion = ROOT
+				culture = ROOT
+				trait = brave
+				trait = ambitious
+				trait = humble
+				health = 10
+				attributes = { martial = 15 }
+			}
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # racial trait
+		}
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+	option = { # Praise him before the court
+		name = EVTOPTBerrant3
+		prestige = 5
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+}
+
+# errant.4 A courtier takes offence
+# A proud man of the court is mocked by the knights.
+# Scope: ROOT is the host; errant_offended is the courtier.
+character_event = {
+	id = errant.4
+	desc = { text = EVTDESCerrant4 trigger = { NOT = { has_character_flag = errant_band_hedge } } }
+	desc = { text = EVTDESCerrant4_hedge trigger = { has_character_flag = errant_band_hedge } }
+	picture = GFX_evt_joust
+
+	is_triggered_only = yes # errant.9
+
+	immediate = {
+		random_courtier = {
+			limit = { errant_offended_trigger = yes }
+			score_value = { value = 10 interesting_courtier_selection_score = yes }
+			save_event_target_as = errant_offended
+		}
+	}
+
+	option = { # Throw them out
+		name = EVTOPTAerrant4
+		piety = -10
+		errant_end_visit_effect = yes
+	}
+	option = { # Ignore the complaint
+		name = EVTOPTBerrant4
+		event_target:errant_offended = {
+			opinion = { modifier = ruler_not_respect_rank who = ROOT months = 60 }
+		}
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+}
+
+# errant.5 A girl of the court is seduced
+# Players only. A young unwed woman of the court falls for one of the knights
+# and is with child.
+# Scope: ROOT is the host; errant_seduced is the woman.
+character_event = {
+	id = errant.5
+	desc = EVTDESCerrant5
+	picture = GFX_evt_lovers
+
+	is_triggered_only = yes # errant.9
+
+	immediate = {
+		set_character_flag = errant_seduction
+		random_courtier = {
+			limit = { errant_seduced_trigger = yes }
+			score_value = { value = 10 interesting_courtier_selection_score = yes }
+			save_event_target_as = errant_seduced
+		}
+	}
+
+	option = { # Let it be
+		name = EVTOPTAerrant5
+		piety = -10
+		event_target:errant_seduced = { errant_seducer_effect = yes }
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+	option = { # Throw the knight in the dungeon
+		name = EVTOPTBerrant5
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 100 OR = { trait = cruel trait = zealous } }
+		}
+		event_target:errant_seduced = {
+			errant_seducer_effect = yes
+			new_character = { imprison = ROOT }
+		}
+		hidden_tooltip = { character_event = { id = errant.9 days = 20 random = 20 } }
+	}
+}
+
+# errant.6 The knights ride on
+# Scope: ROOT is the host.
+character_event = {
+	id = errant.6
+	desc = { text = EVTDESCerrant6 trigger = { NOT = { has_character_flag = errant_band_hedge } } }
+	desc = { text = EVTDESCerrant6_hedge trigger = { has_character_flag = errant_band_hedge } }
+	picture = GFX_evt_feast
+
+	is_triggered_only = yes # errant.9
+
+	immediate = {
+		errant_end_visit_effect = yes
+	}
+
+	option = { # A farewell feast
+		name = EVTOPTAerrant6
+		prestige = 10
+		scaled_wealth = -0.05
+	}
+	option = { # Let them go quietly
+		name = EVTOPTBerrant6
+		prestige = -5
+	}
+}
+
+# errant.9 The visit goes on (hidden)
+# Picks the next scene. The knights stay for at most three scenes, then ride
+# on; a recruit makes them leave sooner (was MTTH 40 days, x0.1 with a recruit).
+# Scope: ROOT is the host.
+character_event = {
+	id = errant.9
+	hide_window = yes
+	is_triggered_only = yes # errant.1 - 5
+
+	trigger = {
+		has_character_flag = errant_visiting
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				OR = { prisoner = yes is_alive = no war = yes has_character_flag = errant_scene_3 }
+			}
+			character_event = { id = errant.6 }
+		}
+		else = {
+			if = {
+				limit = { has_character_flag = errant_scene_2 }
+				set_character_flag = errant_scene_3
+			}
+			else_if = {
+				limit = { has_character_flag = errant_scene_1 }
+				set_character_flag = errant_scene_2
+			}
+			else = { set_character_flag = errant_scene_1 }
+			random_list = {
+				30 = { # Hurt in the lists
+					trigger = { errant_first_scene_trigger = yes }
+					character_event = { id = errant.2 }
+				}
+				30 = { # One knight shines
+					trigger = { ai = no errant_first_scene_trigger = yes }
+					character_event = { id = errant.3 }
+				}
+				20 = { # A courtier takes offence
+					trigger = { any_courtier = { errant_offended_trigger = yes } }
+					modifier = { factor = 0.2 has_character_flag = errant_recruited }
+					modifier = { factor = 0.2 has_character_flag = errant_seduction }
+					character_event = { id = errant.4 }
+				}
+				20 = { # A girl of the court is seduced
+					trigger = {
+						ai = no
+						NOT = { has_character_flag = errant_seduction }
+						any_courtier = { errant_seduced_trigger = yes }
+					}
+					modifier = { factor = 0.2 has_character_flag = errant_recruited }
+					character_event = { id = errant.5 }
+				}
+				20 = { # They ride on
+					modifier = { factor = 10 has_character_flag = errant_recruited }
+					character_event = { id = errant.6 }
+				}
+			}
+		}
+	}
+}
+
+###############################################################################
+# Part 2: The marshal's prisoner
+###############################################################################
+
+# errant.20 The marshal has arrested a Knight Errant
+# Yearly random_events (00_on_actions). Freeing him costs the marshal face;
+# leaving him makes the ruler hated by the knights, who stop visiting.
+# Scope: ROOT is a ruler of the Lady.
+character_event = {
+	id = errant.20
+	desc = EVTDESCerrant20
+	picture = GFX_evt_melee
+
+	is_triggered_only = yes # on_yearly_pulse random_events
+
+	only_playable = yes
+	prisoner = no
+	war = no
+	religion_group = old_world_group
+
+	trigger = {
+		in_command = no
+		OR = { religion = grail religion = false_grail }
+		NOT = { has_character_flag = errant_visiting }
+		any_courtier = { has_job_title = job_marshal }
+	}
+
+	option = { # Release him
+		name = EVTOPTAerrant20
+		job_marshal = { prestige = -25 opinion = { modifier = marshal_overruled who = ROOT } }
+		piety = 10
+		clr_character_flag = errant_hated
+	}
+	option = { # Not my concern
+		name = EVTOPTBerrant20
+		job_marshal = { prestige = 25 }
+		prestige = 25
+		piety = -10
+		set_character_flag = errant_hated
+	}
+}

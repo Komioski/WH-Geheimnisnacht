@@ -1,0 +1,3419 @@
+###############################################################################
+# Wonders: names, ruins and the life around great works
+# Namespace: wonder (was LT in the vanilla wonder files)
+# Faction: Generic
+#
+# Part 1: names and descriptions      wonder.1 - wonder.5
+#   (was LT.10000 - 10003 in LT_wonder_maintenance_events.txt)
+# Part 2: life around the wonders     wonder.50 - wonder.64
+#   (was LT.60001 - 60701 in LT_wonder_flavor_event_2.txt)
+# Part 3: the lost book               wonder.100 - wonder.110
+# Part 4: a tomb under the works      wonder.120 - wonder.122
+# Part 5: the armoury's master smith  wonder.130 - wonder.132
+# Part 6: a visit to the dungeons     wonder.140 - wonder.141
+# Part 7: a secluded meeting          wonder.150 - wonder.163
+# Part 8: a burial in the wonder      wonder.170 - wonder.172
+# Part 9: a relic for the shrine      wonder.180 - wonder.181
+# Part 10: the strategic exclaves     wonder.190
+# Part 11: looting a wonder           wonder.200 - wonder.205
+# Part 12: the sack                   wonder.210
+#   (parts 3 - 12 were LT.20001 - 21000 in LT_wonder_flavor_events.txt)
+#
+# Fired from 00_on_actions.txt: on_startup (5), on_wonder_stage_finish (1),
+#   on_wonder_upgrade_finish (2, 4, 50, 190), on_wonder_stage_loot_finish
+#   (3, 205), on_wonder_owner_change (58), on_wonder_construction_start
+#   (120), on_wonder_loot_start (200, 201, 204), on_wonder_restore_finish
+#   (203), on_death (170), on_siege_won_leader (210) and the on_yearly_pulse
+#   random_events (52, 56, 60, 62, 64). The five-year list wonder_books in
+#   wh_on_actions.txt (100). Decisions in wonder_decisions.txt: the
+#   fountain (54), use_scary_upgrade (140), use_secluded_upgrade (150),
+#   store_relic_in_wonder (180). The smith chain armoury.2 in
+#   WHG_armoury_events.txt (130).
+# Saved: event targets target_wonder, target_province,
+#   wonder_owner_original, upgrade_00, upgrade_01 (read by the
+#   wonder_name_text_update and wonder_desc_text_update custom loc); the
+#   lost book's emissary, the_book, book_province, book_province_holder,
+#   book_province_realm; character flags looking_for_a_book,
+#   not_interested_in_books, book_theme_<theme>, book_author_<author>,
+#   book_found_<author>, not_interested_in_ruins, tomb_found_<find>,
+#   big_burial, normal_burial, liked_dead_ruler_@<id>,
+#   hated_dead_ruler_@<id>, looted_wonder_artifact; wonder flags was_ruined,
+#   artifact_was_looted, exclaves_walled, being_looted_<who>.
+# Scripted triggers and effects: WHG_wonder_triggers.txt and
+#   WHG_wonder_effects.txt in common/scripted_triggers and scripted_effects.
+# Custom loc for the lost book: GetBookTheme, GetAuthorTitle and
+#   GetAuthorName in localisation/customizable_localisation/
+#   07_customizable_localisation_wonder_events.txt.
+# Loc: localisation/00_WHG_wonder_events.csv
+# Full list with callers: docs/events/event_database.csv
+###############################################################################
+
+namespace = wonder
+
+###############################################################################
+# Part 1: names and descriptions
+###############################################################################
+
+# wonder.1 A stage is finished
+# Hidden. A wonder that finished a stage takes its first builder's
+# description, unless it is a historical wonder, and gets a new name unless
+# the player renamed it. The name may draw on its finest upgrade.
+# Scope: ROOT is the owner, FROM the wonder, FROMFROM its province.
+character_event = {
+	id = wonder.1
+	hide_window = yes
+
+	is_triggered_only = yes # on_wonder_stage_finish
+
+	immediate = {
+		FROM = {
+			save_event_target_as = target_wonder
+			original_wonder_owner = { save_event_target_as = wonder_owner_original }
+		}
+		FROMFROM = { save_event_target_as = target_province }
+		event_target:target_wonder = {
+			any_upgrade_on_wonder = { # vanilla way: the score picks the upgrade saved
+				limit = { is_active = yes NOT = { has_wonder_upgrade_flag = negative } }
+				score_value = { # A fine upgrade first
+					value = 10
+					fancy_upgrade_selection_score = yes
+				}
+				save_event_target_as = upgrade_00
+			}
+		}
+		wonder_stage_completion_sound_effect = yes
+		event_target:target_wonder = {
+			if = { # A hold or city with a lore name keeps it
+				limit = { has_wonder_flag = wonder_lore_named }
+				event_target:target_province = { wonder_naming_and_describing_effect = yes }
+			}
+			else_if = {
+				limit = {
+					NOR = {
+						has_wonder_flag = wonder_desc_1
+						has_wonder_flag = wonder_desc_2
+						has_wonder_flag = wonder_desc_3
+						has_wonder_flag = wonder_desc_4
+						has_wonder_flag = wonder_desc_5
+						has_wonder_flag = wonder_desc_6
+						has_wonder_flag = wonder_desc_7
+						has_wonder_flag = is_historical
+					}
+				}
+				set_wonder_flag = wonder_desc_1
+			}
+			if = {
+				limit = { NOT = { has_wonder_flag = wonder_lore_named } }
+				set_description = wonder_desc_text_update
+			}
+			if = {
+				limit = {
+					has_custom_name = no
+					NOT = { has_wonder_flag = is_historical }
+					NOT = { has_wonder_flag = wonder_lore_named }
+				}
+				wonder_rename_effect = yes
+			}
+		}
+	}
+}
+
+# wonder.2 An upgrade is finished
+# Hidden. Once a wonder has kept a name or a description long enough (15 to
+# 85 years by step), a new upgrade gives it the next one. The new name or
+# text may name this upgrade and one other.
+# Scope: ROOT is the owner, FROM the upgrade, FROMFROM the wonder,
+# FROMFROMFROM its province.
+character_event = {
+	id = wonder.2
+	hide_window = yes
+
+	is_triggered_only = yes # on_wonder_upgrade_finish
+
+	immediate = {
+		FROM = {
+			save_event_target_as = upgrade_00
+			original_wonder_owner = { save_event_target_as = wonder_owner_original }
+		}
+		FROMFROM = { save_event_target_as = target_wonder }
+		FROMFROMFROM = { save_event_target_as = target_province }
+		event_target:target_wonder = {
+			any_upgrade_on_wonder = { # vanilla way: the score picks the upgrade saved
+				limit = {
+					is_active = yes
+					NOT = { wonder_upgrade = event_target:upgrade_00 }
+					NOT = { has_wonder_upgrade_flag = negative }
+				}
+				score_value = { value = 10 fancy_upgrade_selection_score = yes }
+				save_event_target_as = upgrade_01
+			}
+			if = {
+				limit = {
+					has_custom_name = no
+					NOT = { has_wonder_flag = is_historical }
+					NOT = { has_wonder_flag = wonder_lore_named }
+					OR = {
+						had_flag = { flag = wonder_name_1 years = 55 }
+						had_flag = { flag = wonder_name_2 years = 65 }
+						had_flag = { flag = wonder_name_3 years = 75 }
+						had_flag = { flag = wonder_name_4 years = 85 }
+						had_flag = { flag = wonder_name_5 years = 75 }
+						had_flag = { flag = wonder_name_6 years = 75 }
+					}
+				}
+				wonder_rename_effect = yes
+			}
+			if = {
+				limit = {
+					NOT = { has_wonder_flag = wonder_lore_named }
+					OR = {
+						had_flag = { flag = wonder_desc_1 years = 15 }
+						had_flag = { flag = wonder_desc_2 years = 35 }
+						had_flag = { flag = wonder_desc_3 years = 35 }
+						had_flag = { flag = wonder_desc_4 years = 35 }
+						had_flag = { flag = wonder_desc_5 years = 35 }
+						had_flag = { flag = wonder_desc_6 years = 35 }
+					}
+				}
+				wonder_redescribe_effect = yes
+			}
+			if = { # A hold or city with a lore name keeps it
+				limit = { has_wonder_flag = wonder_lore_named }
+				event_target:target_province = { wonder_naming_and_describing_effect = yes }
+			}
+		}
+	}
+}
+
+# wonder.3 A stage is looted
+# Hidden. A looted wonder becomes "Ruins of ..." if it had reached its third
+# stage and was never renamed, or a "Destroyed ..." otherwise, with a ruined
+# description. The stage flags come from wonder.200 when looting starts.
+# Fixed: the second description sat in an else with a limit (never valid),
+# and the stage flags were cleared on the owner instead of the wonder, so a
+# restored and looted-again wonder kept both.
+# Scope: ROOT is the owner, FROM the wonder, FROMFROM its province.
+character_event = {
+	id = wonder.3
+	hide_window = yes
+
+	is_triggered_only = yes # on_wonder_stage_loot_finish
+
+	immediate = {
+		FROM = {
+			save_event_target_as = target_wonder
+			original_wonder_owner = { save_event_target_as = wonder_owner_original }
+		}
+		FROMFROM = { save_event_target_as = target_province }
+		event_target:target_wonder = {
+			if = {
+				limit = { has_wonder_flag = wonder_stage_3 }
+				if = {
+					limit = { NOT = { has_wonder_flag = was_renamed } }
+					set_name = ruins_of_wonder_name
+				}
+				set_description = ruined_wonder_desc_1
+			}
+			else_if = {
+				limit = { has_wonder_flag = wonder_stage_less_than_3 }
+				set_name = destroyed_wonder_type
+				set_description = ruined_wonder_desc_2
+			}
+			set_wonder_flag = was_renamed
+			clr_wonder_flag = wonder_stage_3
+			clr_wonder_flag = wonder_stage_less_than_3
+		}
+	}
+}
+
+# wonder.4 A statue of a god is raised
+# Hidden. Fixes the God Statue's description to one god of the owner's
+# faith, so the name does not change from month to month.
+# Scope: ROOT is the owner, FROM the upgrade.
+character_event = {
+	id = wonder.4
+	hide_window = yes
+
+	is_triggered_only = yes # on_wonder_upgrade_finish
+
+	immediate = {
+		FROM = {
+			if = {
+				limit = { has_wonder_upgrade = upgrade_statue_god }
+				set_description = upgrade_statue_god_desc
+			}
+		}
+	}
+}
+
+# wonder.5 Lore names at game start
+# Hidden. Once per game, every wonder in a province with a hand-written
+# entry takes its lore name and description: this is how the one Great
+# Dwarf hold wonder (wonder_dawi_hold) becomes Everpeak, Zhufbar, Barak
+# Varr and the rest, and how Altdorf, Nuln and Talabheim get their names.
+# Scope: a player.
+character_event = {
+	id = wonder.5
+	hide_window = yes
+
+	is_triggered_only = yes # on_startup
+
+	trigger = {
+		ai = no
+		NOT = { has_global_flag = wonder_lore_names_set }
+	}
+
+	immediate = {
+		set_global_flag = wonder_lore_names_set
+		any_province = {
+			limit = { has_wonder = yes }
+			wonder_naming_and_describing_effect = yes
+		}
+	}
+}
+
+###############################################################################
+# Part 2: life around the wonders
+###############################################################################
+
+# wonder.50 A town springs up
+# Fifty years after it was begun and with two upgrades, a wonder draws
+# traders and pilgrims who settle around it. Let them stay (a new holding
+# slot) or drive them off and keep what they carried. Once per province.
+# The AI no longer needs 50 gold to welcome them (the town costs nothing).
+# Scope: ROOT is the owner, FROM the upgrade, FROMFROM the wonder,
+# FROMFROMFROM its province.
+character_event = {
+	id = wonder.50
+	title = EVTNAMEwonder50
+	desc = EVTDESCwonder50
+	picture = GFX_evt_construction_site
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_wonder_upgrade_finish, delayed list
+	only_playable = yes
+
+	trigger = {
+		is_inaccessible_trigger = no
+		war = no
+		FROMFROM = { wonder_age = 50 num_of_wonder_upgrades = 2 }
+		FROMFROMFROM = {
+			NOR = { has_province_flag = had_event_LT_60001 num_of_max_settlements = 7 }
+		}
+	}
+
+	immediate = {
+		FROMFROM = { save_event_target_as = target_wonder }
+		FROMFROMFROM = {
+			set_province_flag = had_event_LT_60001
+			save_event_target_as = target_province
+		}
+	}
+
+	option = { # They may stay
+		name = EVTOPTAwonder50
+		event_target:target_province = { add_holding_slot = 1 }
+		ai_chance = { factor = 70 }
+	}
+	option = { # Drive them off
+		name = EVTOPTBwonder50
+		wealth = 40
+		ai_chance = {
+			factor = 30
+			modifier = { factor = 1.5 trait = greedy }
+			modifier = { factor = 1.5 trait = cruel }
+		}
+	}
+}
+
+# wonder.52 The library's shelves
+# A ruler writing a book (WHG_book_events) has a Great Library in the realm;
+# the scribes find what they need there and the book will be finer.
+# Scope: ROOT is the writer.
+character_event = {
+	id = wonder.52
+	title = EVTNAMEwonder52
+	desc = EVTDESCwonder52
+	picture = GFX_evt_open_book_hf
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # on_yearly_pulse random_events (00_on_actions)
+	has_character_flag = currently_working_on_a_book
+
+	trigger = {
+		is_inaccessible_trigger = no
+		war = no
+		any_realm_wonder = { has_wonder = wonder_library }
+	}
+
+	immediate = {
+		random_realm_wonder = {
+			limit = { has_wonder = wonder_library }
+			save_event_target_as = target_wonder
+		}
+	}
+
+	option = {
+		name = EVTOPTAwonder52
+		custom_tooltip = { text = EVTTOOLTIPwonder52 }
+		custom_tooltip = { text = higher_quality_of_book_TT }
+		set_higher_quality_of_book_flags_effect = yes
+	}
+}
+
+# wonder.54 The fountain of youth
+# A ruler drinks from the fountain of the Magnificent Garden (decision,
+# once in ten years, shared with the free drink at Ganaina, amazon.206) and
+# grows two years younger, three for one who found the Pools of Lustria
+# (lustria.93) and knows how to drink. A lunatic leaps in and swallows the
+# water the wrong way, and is two years older for it.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.54
+	title = EVTNAMEwonder54
+	desc = { trigger = { is_lunatic_trigger = no NOT = { has_character_flag = found_the_pools } } text = EVTDESCwonder54 }
+	desc = { trigger = { is_lunatic_trigger = no has_character_flag = found_the_pools } text = EVTDESCwonder54c }
+	desc = { trigger = { is_lunatic_trigger = yes } text = EVTDESCwonder54b }
+	picture = GFX_evt_garden
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # decision in wonder_decisions.txt
+
+	immediate = {
+		random_realm_wonder = {
+			limit = { has_wonder = wonder_garden }
+			save_event_target_as = target_wonder
+		}
+	}
+
+	option = { # Drink
+		name = EVTOPTAwonder54
+		trigger = { is_lunatic_trigger = no }
+		if = {
+			limit = { has_character_flag = found_the_pools }
+			add_age = -3
+		}
+		else = { add_age = -2 }
+	}
+	option = { # Leap in
+		name = EVTOPTBwonder54
+		trigger = { is_lunatic_trigger = yes }
+		add_age = 2
+	}
+}
+
+# wonder.56 An evening at the tavern
+# A stressed ruler with a tavern by one of the realm's wonders is asked out
+# by a friend or a favourite of the court. Drinking the night away lifts the
+# stress (and may start a habit, wonder.57); talking instead warms the
+# friendship.
+# Scope: ROOT is the ruler, event_target:drinking_buddy the companion.
+character_event = {
+	id = wonder.56
+	title = EVTNAMEwonder56
+	desc = EVTDESCwonder56
+	picture = GFX_evt_feast
+	border = GFX_event_normal_frame_diplomacy
+	portrait = event_target:drinking_buddy
+
+	is_triggered_only = yes # on_yearly_pulse random_events (00_on_actions)
+	only_rulers = yes
+	trait = stressed
+
+	trigger = {
+		is_inaccessible_trigger = no
+		any_realm_wonder = { has_wonder_upgrade = upgrade_tavern }
+		OR = { any_friend = { is_landed = yes } any_courtier_or_vassal = { always = yes } }
+	}
+
+	immediate = {
+		save_drinking_character_effect = yes
+		random_realm_wonder = {
+			limit = { has_wonder_upgrade = upgrade_tavern }
+			save_event_target_as = target_wonder
+		}
+	}
+
+	option = { # Drink
+		name = EVTOPTAwonder56
+		remove_trait = stressed
+		if = {
+			limit = { NOT = { trait = drunkard } }
+			custom_tooltip = {
+				text = EVTTOOLTIPwonder56
+				random = { chance = 5 character_event = { id = wonder.57 days = 15 random = 30 } }
+			}
+		}
+	}
+	option = { # Talk instead
+		name = EVTOPTBwonder56
+		event_target:drinking_buddy = {
+			if = {
+				limit = { NOT = { is_friend = ROOT } }
+				opinion = { modifier = opinion_budding_friendship who = ROOT }
+			}
+			else = { opinion = { modifier = kind_pos who = ROOT } }
+		}
+	}
+}
+
+# wonder.57 One more round
+# The ruler keeps going back to the tavern and becomes a drunkard.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.57
+	title = EVTNAMEwonder57
+	desc = EVTDESCwonder57
+	picture = GFX_evt_drunk
+	border = GFX_event_normal_frame_diplomacy
+
+	is_triggered_only = yes # wonder.56
+
+	trigger = {
+		NOT = { trait = drunkard }
+	}
+
+	option = {
+		name = EVTOPTAwonder57
+		add_trait = drunkard
+	}
+}
+
+# wonder.58 The traps of the old owner
+# Two weeks after a wonder with traps changes hands, two courtiers of the
+# new owner wander into its depths and die there (the more beloved first).
+# The old owner, if alive, hears of it (wonder.59). Lizardmen know the
+# traps of the old temples and are spared; a Lizardman owner gets no event.
+# Fixed: the old check looked for a Lizardman culture on the wonder itself.
+# Scope: ROOT is the new owner, FROM the wonder, FROMFROM the old owner.
+character_event = {
+	id = wonder.58
+	title = EVTNAMEwonder58
+	desc = EVTDESCwonder58
+	picture = GFX_evt_died_funeral
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # on_wonder_owner_change, delayed list
+
+	trigger = {
+		NOT = { culture_group = lizardman_group }
+		FROM = { has_wonder_upgrade = upgrade_traps }
+		any_courtier = { count = 2 wonder_trap_victim_trigger = yes }
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = target_wonder }
+		FROMFROM = { save_event_target_as = old_owner }
+		random_courtier = {
+			limit = { wonder_trap_victim_trigger = yes }
+			score_value = { value = 2 beloved_target_selection_score = yes }
+			save_event_target_as = target_courtier
+		}
+		random_courtier = {
+			limit = {
+				wonder_trap_victim_trigger = yes
+				NOT = { character = event_target:target_courtier }
+			}
+			save_event_target_as = target_courtier_2
+		}
+	}
+
+	option = { # Curse them
+		name = EVTOPTAwonder58
+		event_target:target_courtier = { death = { death_reason = death_accident_wonder_traps } }
+		event_target:target_courtier_2 = { death = { death_reason = death_accident_wonder_traps } }
+		if = {
+			limit = { event_target:old_owner = { is_alive = yes } }
+			event_target:old_owner = { character_event = { id = wonder.59 } }
+		}
+	}
+}
+
+# wonder.59 The traps did their work
+# The old owner hears that the traps have taken two of the new owner's
+# court.
+# Scope: ROOT is the old owner, FROM the new owner.
+character_event = {
+	id = wonder.59
+	title = EVTNAMEwonder58
+	desc = EVTDESCwonder59
+	picture = GFX_evt_died_funeral
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.58
+
+	option = {
+		name = EVTOPTAwonder59
+		prestige = 10
+	}
+}
+
+# wonder.60 The liege's praise
+# A vassal who holds a wonder gets a letter of praise from the liege. Thank
+# the liege (each comes to like the other, wonder.61) or take the credit
+# (prestige).
+# Fixed: the old event took the letter writer from the wonder's owner, who
+# is the vassal himself, so the vassal praised and thanked himself.
+# Scope: ROOT is the vassal, event_target:target_liege the liege.
+letter_event = {
+	id = wonder.60
+	desc = EVTDESCwonder60
+	border = GFX_event_letter_frame_diplomacy
+	portrait = event_target:target_liege
+
+	is_triggered_only = yes # on_yearly_pulse random_events (00_on_actions)
+	only_rulers = yes
+
+	trigger = {
+		independent = no
+		any_demesne_province = { has_wonder = yes }
+	}
+
+	immediate = {
+		save_event_target_as = target_vassal
+		liege = { save_event_target_as = target_liege }
+		random_demesne_wonder = { save_event_target_as = target_wonder }
+	}
+
+	option = { # Thank the liege
+		name = EVTOPTAwonder60
+		event_target:target_liege = {
+			opinion = { modifier = opinion_kind who = ROOT }
+			letter_event = { id = wonder.61 days = 3 }
+		}
+		ai_chance = { factor = 100 }
+	}
+	option = { # Take the credit
+		name = EVTOPTBwonder60
+		prestige = 50
+		ai_chance = { factor = 25 modifier = { factor = 4 trait = proud } }
+	}
+}
+
+# wonder.61 The vassal's thanks
+# Scope: ROOT is the liege, FROM the vassal.
+letter_event = {
+	id = wonder.61
+	desc = EVTDESCwonder61
+	border = GFX_event_letter_frame_diplomacy
+
+	is_triggered_only = yes # wonder.60
+
+	option = {
+		name = EVTOPTAwonder61
+		event_target:target_vassal = { opinion = { modifier = opinion_kind who = ROOT } }
+	}
+}
+
+# wonder.62 Crumbling stone
+# A piece falls from a destructible wonder a hundred years old. Pay for the
+# repairs (gold, prestige) or sell the pieces (gold, but people talk).
+# Scope: ROOT is the owner.
+character_event = {
+	id = wonder.62
+	title = EVTNAMEwonder62
+	desc = EVTDESCwonder62
+	picture = GFX_evt_leaning_tower
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_yearly_pulse random_events (00_on_actions)
+	only_rulers = yes
+
+	trigger = {
+		any_realm_wonder = { wonder_age = 100 has_wonder_flag = is_destructible }
+	}
+
+	immediate = {
+		random_realm_wonder = {
+			limit = { wonder_age = 100 has_wonder_flag = is_destructible }
+			save_event_target_as = target_wonder
+		}
+	}
+
+	option = { # Repair it
+		name = EVTOPTAwonder62
+		wealth = -50
+		prestige = 40
+		ai_chance = {
+			factor = 75
+			modifier = { factor = 2 trait = zealous }
+			modifier = { factor = 2 trait = proud }
+			modifier = { factor = 0 NOT = { wealth = 50 } }
+		}
+	}
+	option = { # Sell the pieces
+		name = EVTOPTBwonder62
+		wealth = 100
+		prestige = -20
+		ai_chance = { factor = 25 modifier = { factor = 3 trait = greedy } }
+	}
+}
+
+# wonder.64 A harvest from the wonder
+# A herb garden or deep mines in the realm yield one to three herbs or
+# precious ores (ingredient artifacts), unless the ruler already holds 15
+# ingredients.
+# Fixed: both options had the same name and the herb tooltip, which also
+# read the count after it had been spent (always 0).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.64
+	title = EVTNAMEwonder64
+	desc = EVTDESCwonder64
+	picture = GFX_evt_mysterious_forest
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # on_yearly_pulse random_events (00_on_actions)
+	only_rulers = yes
+
+	trigger = {
+		any_realm_wonder = {
+			OR = { has_wonder_upgrade = upgrade_deepmines has_wonder_upgrade = upgrade_herb_garden }
+		}
+		NOT = { any_artifact = { count = 15 has_artifact_flag = ingredient } }
+	}
+
+	immediate = {
+		random_realm_wonder = {
+			limit = {
+				OR = {
+					has_wonder_upgrade = upgrade_herb_garden
+					has_wonder_upgrade = upgrade_deepmines
+				}
+			}
+			save_event_target_as = target_wonder
+			location = { save_event_target_as = target_province }
+		}
+		random_list = {
+			10 = { set_variable = { which = gath_res value = 1 } }
+			10 = { set_variable = { which = gath_res value = 2 } }
+			10 = { set_variable = { which = gath_res value = 3 } }
+		}
+	}
+
+	option = { # Herbs
+		name = EVTOPTAwonder64
+		trigger = { any_realm_wonder = { has_wonder_upgrade = upgrade_herb_garden } }
+		sound_effect = hermetic_society_acquire_seed
+		custom_tooltip = { text = EVTTOOLTIPwonder64a }
+		hidden_effect = {
+			while = {
+				limit = { check_variable = { which = gath_res value = 1 } }
+				hermetic_add_herbal_ingredient_effect = yes
+				subtract_variable = { which = gath_res value = 1 }
+			}
+		}
+	}
+	option = { # Ore
+		name = EVTOPTBwonder64
+		trigger = { any_realm_wonder = { has_wonder_upgrade = upgrade_deepmines } }
+		sound_effect = hermetic_society_acquire_seed
+		custom_tooltip = { text = EVTTOOLTIPwonder64b }
+		hidden_effect = {
+			while = {
+				limit = { check_variable = { which = gath_res value = 1 } }
+				runesmith_add_misc_ingredient_effect = yes
+				subtract_variable = { which = gath_res value = 1 }
+			}
+		}
+	}
+	after = {
+		set_variable = { which = gath_res value = 0 }
+	}
+}
+
+###############################################################################
+# Part 3: the lost book
+# (was LT.20001 - 20070 in LT_wonder_flavor_events.txt)
+#
+# A ruler whose realm keeps a library upgrade hears of a lost book by a
+# famous author of the old days, and may send a courtier to buy it in a
+# far-off realm. The book may be found, cost more, be stolen by the
+# emissary, or be a forgery that a scholar or the ruler finds out. With a
+# Great Library the ruler can call the scholars of the land to judge it.
+# The authors were Greek and Roman writers in the vanilla chain; now they
+# are writers of Ulthuan, the Empire, Bretonnia, Tilea, Norsca, the Dwarf
+# holds, Nehekhara, Araby and Cathay.
+###############################################################################
+
+# wonder.100 Rumour of a lost book (start)
+# Hidden. An independent ruler with a library upgrade picks the lost book
+# (wonder_book_pick_effect) and the far-off realm where it is said to be,
+# and hears of it two days later (wonder.101).
+# Was on the yearly random_events; now the five-year list wonder_books.
+# Fixed: the book was always sought in a realm of the real-world Muslim
+# faiths; now any distant independent realm.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.100
+	hide_window = yes
+
+	is_triggered_only = yes # on_five_year_pulse list wonder_books (wh_on_actions)
+	only_independent = yes
+	capable_only = yes
+	prisoner = no
+	war = no
+
+	trigger = {
+		is_inaccessible_trigger = no
+		NOR = {
+			has_character_flag = not_interested_in_books
+			has_character_flag = looking_for_a_book
+		}
+		wonder_book_library_trigger = yes
+	}
+
+	immediate = {
+		random_independent_ruler = {
+			limit = { wonder_book_seller_trigger = yes }
+			random_realm_province = {
+				limit = { distance = { who = ROOT value > 500 } }
+				save_event_target_as = book_province
+				holder_scope = { save_event_target_as = book_province_holder }
+			}
+			save_event_target_as = book_province_realm
+		}
+		if = {
+			limit = { event_target:book_province_holder = { always = yes } }
+			set_character_flag = looking_for_a_book
+			wonder_book_pick_effect = yes
+			character_event = { id = wonder.101 days = 2 random = 1 }
+		}
+	}
+}
+
+# wonder.101 The lost book
+# ROOT hears that a book by a famous author is for sale in a far-off realm.
+# Send one of two courtiers (30 gold; wonder_book_send_emissary_effect),
+# wait for a better time, or give up on books for good.
+# Fixed: the second emissary's option sent the book-found and only-a-rumour
+# events the wrong way round; an option for a missing courtier did
+# nothing; a scholar was created at the far court every time and never
+# used.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.101
+	title = EVTNAMEwonder101
+	desc = EVTDESCwonder101
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # wonder.100
+
+	trigger = {
+		is_inaccessible_trigger = no
+		war = no
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = { is_alive = yes }
+			repeat_event = { id = wonder.101 days = 365 random = 50 }
+		}
+	}
+
+	immediate = {
+		random_courtier = {
+			limit = { wonder_emissary_trigger = yes }
+			preferred_limit = { trait = scholar }
+			preferred_limit = { is_smart_trigger = yes }
+			preferred_limit = { learning = 10 }
+			save_event_target_as = possible_emissary1
+		}
+		random_courtier = {
+			limit = {
+				wonder_emissary_trigger = yes
+				NOT = { character = event_target:possible_emissary1 }
+			}
+			preferred_limit = { trait = scholar }
+			preferred_limit = { is_smart_trigger = yes }
+			preferred_limit = { learning = 10 }
+			save_event_target_as = possible_emissary2
+		}
+	}
+
+	option = { # Send the first
+		name = EVTOPTAwonder101
+		trigger = { event_target:possible_emissary1 = { always = yes } }
+		event_target:possible_emissary1 = { save_event_target_as = emissary }
+		wonder_book_send_emissary_effect = yes
+		ai_chance = { factor = 30 modifier = { factor = 0 NOT = { wealth = 50 } } }
+	}
+	option = { # Send the second
+		name = EVTOPTBwonder101
+		trigger = { event_target:possible_emissary2 = { always = yes } }
+		event_target:possible_emissary2 = { save_event_target_as = emissary }
+		wonder_book_send_emissary_effect = yes
+		ai_chance = { factor = 30 modifier = { factor = 0 NOT = { wealth = 50 } } }
+	}
+	option = { # Not now
+		name = EVTOPTCwonder101
+		prestige = -20
+		wonder_book_end_effect = yes
+		ai_chance = { factor = 30 }
+	}
+	option = { # Never again
+		name = EVTOPTDwonder101
+		custom_tooltip = { text = EVTTOOLTIPwonder101 }
+		prestige = -50
+		set_character_flag = not_interested_in_books
+		wonder_book_end_effect = yes
+		ai_chance = { factor = 10 modifier = { factor = 5 NOT = { learning = 6 } } }
+	}
+}
+
+# wonder.102 The emissary is dead
+# The emissary died on the road; their servants bring back what is left.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.102
+	title = EVTNAMEwonder102
+	desc = EVTDESCwonder102
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_religion
+	portrait = event_target:emissary
+
+	is_triggered_only = yes # wonder.103, wonder.104, wonder.107
+
+	immediate = {
+		export_to_variable = { which = money_left value = stewardship who = event_target:emissary }
+	}
+
+	option = {
+		name = EVTOPTAwonder102
+		wealth = money_left
+	}
+
+	after = {
+		set_variable = { which = money_left value = 0 }
+		wonder_book_end_effect = yes
+	}
+}
+
+# wonder.103 Only a rumour
+# The book does not exist. The emissary comes home with the rest of the
+# purse.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.103
+	title = EVTNAMEwonder103
+	desc = EVTDESCwonder103
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_religion
+	portrait = event_target:emissary
+
+	is_triggered_only = yes # wonder_book_send_emissary_effect, wonder.104
+
+	trigger = {
+		is_inaccessible_trigger = no
+		event_target:emissary = { is_alive = yes }
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = { event_target:emissary = { is_alive = no } }
+			character_event = { id = wonder.102 days = 3 }
+		}
+		else_if = {
+			limit = { is_alive = yes }
+			repeat_event = { id = wonder.103 days = 100 random = 10 }
+		}
+	}
+
+	immediate = {
+		wonder_book_emissary_home_effect = yes
+	}
+
+	option = {
+		name = EVTOPTAwonder103
+		wealth = money_left
+	}
+
+	after = {
+		set_variable = { which = money_left value = 0 }
+		wonder_book_end_effect = yes
+	}
+}
+
+# wonder.104 The emissary needs more money
+# A letter: the seller wants more. Send 50 gold (the book is found 3 in 5;
+# an emissary who dislikes the ruler and is not honest may run off with it,
+# wonder.105; or it was a rumour) or call the emissary home.
+# Fixed: the run-off chance looked at the ruler's honesty instead of the
+# emissary's.
+# Scope: ROOT is the ruler.
+letter_event = {
+	id = wonder.104
+	desc = EVTDESCwonder104
+	border = GFX_event_letter_frame_intrigue
+	portrait = event_target:emissary
+
+	is_triggered_only = yes # wonder_book_send_emissary_effect
+
+	trigger = {
+		is_inaccessible_trigger = no
+		war = no
+		event_target:emissary = { is_alive = yes }
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = { event_target:emissary = { is_alive = no } }
+			character_event = { id = wonder.102 days = 3 }
+		}
+		else_if = {
+			limit = { is_alive = yes }
+			repeat_event = { id = wonder.104 days = 100 random = 10 }
+		}
+	}
+
+	option = { # Pay
+		name = EVTOPTAwonder104
+		wealth = -50
+		event_target:emissary = { opinion = { modifier = opinion_grateful who = ROOT years = 5 } }
+		hidden_effect = {
+			random_list = {
+				60 = { character_event = { id = wonder.107 days = 100 random = 50 } }
+				20 = {
+					trigger = {
+						event_target:emissary = {
+							NOR = { trait = honest opinion = { who = ROOT value = 30 } }
+						}
+					}
+					modifier = {
+						factor = 10
+						event_target:emissary = { NOT = { opinion = { who = ROOT value = -10 } } }
+					}
+					modifier = { factor = 3 event_target:emissary = { trait = deceitful } }
+					character_event = { id = wonder.105 days = 50 random = 20 }
+				}
+				20 = { character_event = { id = wonder.103 days = 100 random = 50 } }
+			}
+		}
+		ai_chance = { factor = 50 modifier = { factor = 0 NOT = { wealth = 50 } } }
+	}
+	option = { # Come home
+		name = EVTOPTBwonder104
+		prestige = -10
+		event_target:emissary = { move_character = ROOT remove_trait = travelling }
+		wonder_book_end_effect = yes
+		ai_chance = { factor = 50 }
+	}
+}
+
+# wonder.105 The emissary runs off
+# The emissary has fled with the money. Curse them, or (intrigue 15) pay
+# 10 gold for men to find them (wonder.106).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.105
+	title = EVTNAMEwonder105
+	desc = EVTDESCwonder105
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_intrigue
+	portrait = event_target:emissary
+
+	is_triggered_only = yes # wonder.104
+
+	trigger = {
+		is_inaccessible_trigger = no
+		event_target:emissary = { is_alive = yes }
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = { is_alive = yes event_target:emissary = { is_alive = yes } }
+			repeat_event = { id = wonder.105 days = 200 random = 10 }
+		}
+		else = { wonder_book_end_effect = yes }
+	}
+
+	immediate = {
+		event_target:emissary = {
+			remove_trait = travelling
+			opinion = { modifier = opinion_afraid who = ROOT years = 5 }
+		}
+	}
+
+	option = { # Curse them
+		name = EVTOPTAwonder105
+		opinion = { modifier = opinion_traitor who = event_target:emissary years = 5 }
+	}
+	option = { # Hunt them down
+		name = EVTOPTBwonder105
+		tooltip_info = intrigue
+		trigger = { intrigue = 15 }
+		opinion = { modifier = opinion_traitor who = event_target:emissary years = 5 }
+		wealth = -10
+		custom_tooltip = { text = EVTTOOLTIPwonder105 }
+		hidden_effect = { character_event = { id = wonder.106 days = 50 random = 10 } }
+	}
+
+	after = {
+		wonder_book_end_effect = yes
+	}
+}
+
+# wonder.106 The hunt for the thief
+# The killers find the runaway emissary (7 in 10, twice as likely with
+# intrigue 25), or fail and are traced back to ROOT (event 11).
+# Fixed: while ROOT was away the event retried the runaway event (LT.20035)
+# instead of itself.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.106
+	title = EVTNAMEwonder106
+	desc = {
+		trigger = { has_character_flag = failed_assassination_attempt }
+		text = EVTDESCwonder106b
+	}
+	desc = {
+		trigger = { NOT = { has_character_flag = failed_assassination_attempt } }
+		text = EVTDESCwonder106
+	}
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_intrigue
+	portrait = event_target:emissary
+
+	is_triggered_only = yes # wonder.105
+
+	trigger = {
+		is_inaccessible_trigger = no
+		event_target:emissary = { is_alive = yes }
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = { is_alive = yes event_target:emissary = { is_alive = yes } }
+			repeat_event = { id = wonder.106 days = 20 random = 2 }
+		}
+	}
+
+	immediate = {
+		random_list = {
+			70 = {
+				modifier = { factor = 2 intrigue = 25 }
+				event_target:emissary = {
+					death = { death_reason = death_murder_unknown killer = ROOT }
+				}
+			}
+			30 = {
+				set_character_flag = failed_assassination_attempt
+				event_target:emissary = { save_event_target_as = target_victim }
+			}
+		}
+	}
+
+	option = { # Justice
+		name = EVTOPTAwonder106
+		trigger = { NOT = { has_character_flag = failed_assassination_attempt } }
+	}
+	option = { # They got away
+		name = EVTOPTBwonder106
+		trigger = { has_character_flag = failed_assassination_attempt }
+		character_event = { id = crime.2 } # the attacker is found out
+	}
+}
+
+# wonder.107 The book is found
+# The emissary brings the book home (wonder_book_make_effect; half are
+# forgeries). Read it (learning 6: +1 learning; a forgery is found out,
+# wonder.109), call the scholars to the Great Library (100 gold, 20
+# prestige; wonder.110), or put it on a shelf (20 prestige; a forgery is
+# found out by a visiting scholar in one to two years, wonder.108).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.107
+	title = EVTNAMEwonder107
+	desc = EVTDESCwonder107
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_religion
+	portrait = event_target:emissary
+
+	is_triggered_only = yes # wonder_book_send_emissary_effect, wonder.104
+
+	trigger = {
+		is_inaccessible_trigger = no
+		war = no
+		event_target:emissary = { is_alive = yes }
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = { event_target:emissary = { is_alive = no } }
+			character_event = { id = wonder.102 days = 3 }
+		}
+		else_if = {
+			limit = { is_alive = yes }
+			repeat_event = { id = wonder.107 days = 100 random = 10 }
+		}
+	}
+
+	immediate = {
+		event_target:emissary = { remove_trait = travelling move_character = ROOT }
+		wonder_book_make_effect = yes
+	}
+
+	option = { # Read it
+		name = EVTOPTAwonder107
+		tooltip_info = learning
+		trigger = { learning = 6 }
+		change_learning = 1
+		if = {
+			limit = { event_target:the_book = { has_artifact_flag = fake_antique_book } }
+			character_event = { id = wonder.109 days = 30 random = 10 }
+		}
+		else = { wonder_book_found_effect = yes }
+		ai_chance = { factor = 40 }
+	}
+	option = { # Call the scholars
+		name = EVTOPTBwonder107
+		trigger = { has_wonder = wonder_library }
+		wealth = -100
+		prestige = 20
+		character_event = { id = wonder.110 days = 40 random = 10 }
+		ai_chance = { factor = 40 modifier = { factor = 0 NOT = { wealth = 150 } } }
+	}
+	option = { # On the shelf
+		name = EVTOPTCwonder107
+		prestige = 20
+		if = {
+			limit = { event_target:the_book = { has_artifact_flag = fake_antique_book } }
+			hidden_effect = { character_event = { id = wonder.108 days = 400 random = 300 } }
+		}
+		else = { wonder_book_found_effect = yes }
+		ai_chance = { factor = 20 }
+	}
+
+	after = {
+		event_target:emissary = { opinion = { modifier = opinion_glad who = ROOT years = 5 } }
+	}
+}
+
+# wonder.108 A scholar finds the forgery
+# A visiting scholar shows that the book is a forgery (it becomes the
+# Clever Forgery). Jail the scholar, or reward them and keep them at court.
+# Either way the court knows (Forgery Discovered).
+# Scope: ROOT is the ruler, new_character the scholar.
+character_event = {
+	id = wonder.108
+	title = EVTNAMEwonder108
+	desc = EVTDESCwonder108
+	picture = GFX_evt_scandal
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # wonder.107
+
+	trigger = {
+		is_inaccessible_trigger = no
+		war = no
+		event_target:the_book = { owner = { character = ROOT } }
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = { is_alive = yes event_target:the_book = { owner = { character = ROOT } } }
+			repeat_event = { id = wonder.108 days = 200 random = 10 }
+		}
+		else = { wonder_book_end_effect = yes }
+	}
+
+	immediate = {
+		create_character = {
+			religion = ROOT
+			culture = ROOT
+			dynasty = none
+			age = 46
+			random_traits = yes
+			attributes = { learning = 15 }
+			health = 6
+			trait = scholar
+			trait = honest
+			trait = brave
+		}
+		new_character = {
+			character_event = { id = aiclean.31 } # racial trait
+			save_event_target_as = book_scholar
+		}
+		wonder_book_forgery_effect = yes
+	}
+
+	option = { # Jail the scholar
+		name = EVTOPTAwonder108
+		event_target:book_scholar = { imprison = ROOT }
+		prestige = -50
+		add_character_modifier = { name = caught_with_forgery years = 1 }
+		ai_chance = { factor = 50 }
+	}
+	option = { # Reward the scholar
+		name = EVTOPTBwonder108
+		wealth = -30
+		reverse_opinion = { modifier = opinion_loyal_servant who = event_target:book_scholar }
+		add_character_modifier = { name = caught_with_forgery years = 1 }
+		ai_chance = { factor = 50 modifier = { factor = 0 NOT = { wealth = 50 } } }
+	}
+
+	after = {
+		wonder_book_end_effect = yes
+	}
+}
+
+# wonder.109 I find the forgery
+# Reading the book, ROOT finds it is a forgery (it becomes the Clever
+# Forgery). Learn from it anyway (+1 learning; Forgery Discovered) or burn
+# it.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.109
+	title = EVTNAMEwonder109
+	desc = EVTDESCwonder109
+	picture = GFX_evt_open_book_hf
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # wonder.107
+
+	trigger = {
+		is_inaccessible_trigger = no
+		event_target:the_book = { owner = { character = ROOT } }
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = { is_alive = yes event_target:the_book = { owner = { character = ROOT } } }
+			repeat_event = { id = wonder.109 days = 100 random = 10 }
+		}
+		else = { wonder_book_end_effect = yes }
+	}
+
+	immediate = {
+		hidden_effect = { wonder_book_forgery_effect = yes }
+	}
+
+	option = { # I learned something
+		name = EVTOPTAwonder109
+		prestige = -50
+		change_learning = 1
+		add_character_modifier = { name = caught_with_forgery years = 1 }
+	}
+	option = { # Burn it
+		name = EVTOPTBwonder109
+		prestige = -30
+		new_artifact = { destroy_artifact = yes }
+	}
+
+	after = {
+		wonder_book_end_effect = yes
+	}
+}
+
+# wonder.110 The gathering of scholars
+# Three scholars from nearby courts come to the Great Library to judge the
+# book, and stay at ROOT's court. A real book: 75 prestige, 75 culture
+# points and Patron of the Arts for two years, and a chronicle entry. A
+# forgery: the scholars find it out, but the debate was worth 10 prestige
+# and 25 culture points.
+# Fixed: a forgery gave more (50 points in every field) than a real book;
+# the scholars could be any courtier of the nearby courts, spouses and
+# heirs too (now unwed scholars without office, wonder_book_scholar_trigger).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.110
+	title = EVTNAMEwonder110
+	desc = {
+		trigger = { NOT = { event_target:the_book = { has_artifact_flag = fake_antique_book } } }
+		text = EVTDESCwonder110
+		picture = GFX_evt_gathering_of_minds
+	}
+	desc = {
+		trigger = { event_target:the_book = { has_artifact_flag = fake_antique_book } }
+		text = EVTDESCwonder110b
+		picture = GFX_evt_scandal
+	}
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # wonder.107
+
+	trigger = {
+		is_inaccessible_trigger = no
+		war = no
+		has_wonder = wonder_library
+		event_target:the_book = { owner = { character = ROOT } }
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = {
+				is_alive = yes
+				has_wonder = wonder_library
+				event_target:the_book = { owner = { character = ROOT } }
+			}
+			repeat_event = { id = wonder.110 days = 100 random = 10 }
+		}
+		else = { wonder_book_end_effect = yes }
+	}
+
+	immediate = {
+		while = {
+			count = 3
+			limit = { always = yes } # needed for count to work
+			random_playable_ruler = {
+				limit = {
+					NOT = { character = ROOT }
+					any_realm_province = { distance = { who = ROOT value < 500 } }
+					any_courtier = { wonder_book_scholar_trigger = yes }
+				}
+				random_courtier = {
+					limit = { wonder_book_scholar_trigger = yes }
+					reverse_opinion = { who = ROOT modifier = opinion_grateful_invitation }
+					move_character = ROOT
+				}
+			}
+		}
+	}
+
+	option = { # A true treasure
+		name = EVTOPTAwonder110
+		trigger = { NOT = { event_target:the_book = { has_artifact_flag = fake_antique_book } } }
+		prestige = 75
+		culture_techpoints = 75
+		add_character_modifier = { name = artifact_patron years = 2 }
+		chronicle = { entry = CHRONICLE_wonder110 }
+		wonder_book_found_effect = yes
+	}
+	option = { # A forgery after all
+		name = EVTOPTBwonder110
+		trigger = { event_target:the_book = { has_artifact_flag = fake_antique_book } }
+		hidden_effect = { wonder_book_forgery_effect = yes }
+		prestige = 10
+		culture_techpoints = 25
+	}
+
+	after = {
+		wonder_book_end_effect = yes
+	}
+}
+
+###############################################################################
+# Part 4: a tomb under the works
+# (was LT.20100 - 20110 in LT_wonder_flavor_events.txt)
+###############################################################################
+
+# wonder.120 Digging begins (start)
+# Hidden. When a wonder or upgrade starts building, the diggers may break
+# into an old tomb within 50 to 1950 days (wonder.121).
+# Scope: ROOT is the owner.
+character_event = {
+	id = wonder.120
+	hide_window = yes
+
+	is_triggered_only = yes # on_wonder_construction_start random_events
+	only_independent = yes
+
+	immediate = {
+		character_event = { id = wonder.121 days = 1000 random = 950 }
+	}
+}
+
+# wonder.121 A tomb under the works
+# The diggers at a wonder still being built break into an old tomb. Pay to
+# open it (an accident, nothing, gold, or 1 in 10 a treasure), have it
+# opened by someone who knows the work (learning 15, erudite or architect:
+# no accident, better finds), leave it be, or never be bothered again.
+# Scope: ROOT is the owner, event_target:target_wonder the wonder.
+character_event = {
+	id = wonder.121
+	title = EVTNAMEwonder121
+	desc = EVTDESCwonder121
+	picture = GFX_evt_construction_site
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # wonder.120
+
+	trigger = {
+		is_inaccessible_trigger = no
+		NOT = { has_character_flag = not_interested_in_ruins }
+		any_realm_wonder = { OR = { is_building_wonder = yes is_building_wonder_upgrade = yes } }
+	}
+
+	immediate = {
+		random_realm_wonder = {
+			limit = { OR = { is_building_wonder = yes is_building_wonder_upgrade = yes } }
+			save_event_target_as = target_wonder
+			location = { save_event_target_as = target_province }
+		}
+	}
+
+	option = { # Open it
+		name = EVTOPTAwonder121
+		custom_tooltip = { text = EVTTOOLTIPwonder121 }
+		scaled_wealth = { value = -0.3 min = -10 max = -60 }
+		hidden_effect = {
+			random_list = {
+				10 = { set_character_flag = tomb_found_accident }
+				20 = { set_character_flag = tomb_found_nothing }
+				30 = { set_character_flag = tomb_found_valuables_1 }
+				20 = { set_character_flag = tomb_found_valuables_2 }
+				10 = { set_character_flag = tomb_found_artifact }
+			}
+			character_event = { id = wonder.122 days = 7 random = 3 }
+		}
+	}
+	option = { # Open it with care
+		name = EVTOPTBwonder121
+		trigger = { OR = { learning = 15 trait = erudite trait = architect } }
+		tooltip_info_custom = EVTTOOLTIPwonder121b
+		scaled_wealth = { value = -0.4 min = -20 max = -80 }
+		hidden_effect = {
+			random_list = {
+				20 = { set_character_flag = tomb_found_nothing }
+				35 = { set_character_flag = tomb_found_valuables_1 }
+				25 = { set_character_flag = tomb_found_valuables_2 }
+				10 = { set_character_flag = tomb_found_artifact }
+			}
+			character_event = { id = wonder.122 days = 7 random = 3 }
+		}
+	}
+	option = { # Leave the dead alone
+		name = EVTOPTCwonder121
+	}
+	option = { # Never trouble me with this again
+		name = EVTOPTDwonder121
+		custom_tooltip = { text = EVTTOOLTIPwonder121c }
+		set_character_flag = not_interested_in_ruins
+	}
+}
+
+# wonder.122 What the tomb held
+# An accident (a collapse kills workers: pay the families, or not), nothing,
+# grave goods (keep them, greed, or share them with the workers, charity),
+# or a treasure: an old knight's armour or sword, an emerald sceptre, a
+# saint's finger bone in the lands of the Old World faiths, or a Nehekharan
+# tomb blade in the lands of the Tomb Kings' faith. Each only if ROOT does
+# not have one already.
+# Fixed: the finger bone was an artifact the mod does not have
+# (fingerbone_of_saint; now saintly_finger), the workers' anger flag was
+# set and cleared at once.
+# Scope: ROOT is the owner.
+character_event = {
+	id = wonder.122
+	title = EVTNAMEwonder121
+	desc = {
+		trigger = { has_character_flag = tomb_found_accident }
+		text = EVTDESCwonder122a
+		picture = GFX_evt_dead_body_hf
+	}
+	desc = {
+		trigger = { has_character_flag = tomb_found_nothing }
+		text = EVTDESCwonder122b
+		picture = GFX_evt_bad_news
+	}
+	desc = { trigger = { has_character_flag = tomb_found_valuables_1 } text = EVTDESCwonder122c }
+	desc = { trigger = { has_character_flag = tomb_found_valuables_2 } text = EVTDESCwonder122d }
+	desc = {
+		trigger = { has_character_flag = tomb_found_artifact }
+		text = EVTDESCwonder122e
+		picture = GFX_evt_treasure_chamber
+	}
+	picture = GFX_evt_pagan_artifacts
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # wonder.121
+
+	trigger = {
+		is_inaccessible_trigger = no
+		event_target:target_wonder = { wonder_owner = { character = ROOT } }
+	}
+
+	fail_trigger_effect = { clear_flags_with_prefix = tomb_found_ }
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = tomb_found_artifact }
+			random_list = {
+				20 = {
+					trigger = { NOT = { has_artifact = armor_tier_2 } }
+					add_artifact = armor_tier_2
+					new_artifact = {
+						set_description = wonder_tomb_armor_desc
+						set_creation_date = 1.1.1
+					}
+				}
+				20 = {
+					trigger = { NOT = { has_artifact = sword_tier_2_new } }
+					add_artifact = sword_tier_2_new
+					new_artifact = {
+						set_description = wonder_tomb_sword_desc
+						set_creation_date = 1.1.1
+					}
+				}
+				20 = {
+					trigger = { NOT = { has_artifact = emerald_scepter } }
+					add_artifact = emerald_scepter
+					new_artifact = {
+						set_description = wonder_tomb_scepter_desc
+						set_creation_date = 1.1.1
+					}
+				}
+				20 = {
+					trigger = {
+						NOT = { has_artifact = saintly_finger }
+						event_target:target_province = { religion_group = old_world_group }
+					}
+					add_artifact = saintly_finger
+					new_artifact = { set_creation_date = 1.1.1 }
+				}
+				20 = {
+					trigger = {
+						NOT = { has_artifact = undead_tomb_blade }
+						event_target:target_province = { religion_group = nehekharan_gods_group }
+					}
+					add_artifact = undead_tomb_blade
+					new_artifact = { set_creation_date = 1.1.1 }
+				}
+				1 = {
+					clr_character_flag = tomb_found_artifact
+					set_character_flag = tomb_found_valuables_2
+				}
+			}
+		}
+	}
+
+	option = { # Too bad / bury the dead
+		name = EVTOPTAwonder122
+		trigger = {
+			OR = {
+				has_character_flag = tomb_found_accident
+				has_character_flag = tomb_found_nothing
+			}
+		}
+		if = {
+			limit = { has_character_flag = tomb_found_accident }
+			scaled_wealth = { value = -0.15 min = -20 max = -40 }
+			event_target:target_province = {
+				add_province_modifier = { name = construction_accident duration = 365 }
+			}
+		}
+	}
+	option = { # Pay the families
+		name = EVTOPTBwonder122
+		trigger = { has_character_flag = tomb_found_accident }
+		scaled_wealth = { value = -0.4 min = -40 max = -100 }
+		if = {
+			limit = { trait = greedy }
+			random = { chance = 75 remove_trait_greedy_effect = yes }
+		}
+		else_if = {
+			limit = { NOT = { trait = charitable } }
+			random = { chance = 30 add_trait_charitable_effect = yes }
+		}
+	}
+	option = { # All of it is mine
+		name = EVTOPTCwonder122
+		trigger = {
+			OR = {
+				has_character_flag = tomb_found_valuables_1
+				has_character_flag = tomb_found_valuables_2
+				has_character_flag = tomb_found_artifact
+			}
+		}
+		if = { limit = { has_character_flag = tomb_found_valuables_1 } wealth = 100 }
+		else_if = { limit = { has_character_flag = tomb_found_valuables_2 } wealth = 200 }
+		else = { custom_tooltip = { text = EVTTOOLTIPwonder122 } wealth = 150 }
+		if = {
+			limit = { trait = charitable }
+			random = { chance = 60 remove_trait_charitable_effect = yes }
+		}
+		else_if = {
+			limit = { NOT = { trait = greedy } }
+			random = { chance = 25 add_trait_greedy_effect = yes }
+		}
+	}
+	option = { # Share it with the workers
+		name = EVTOPTDwonder122
+		trigger = {
+			OR = {
+				has_character_flag = tomb_found_valuables_1
+				has_character_flag = tomb_found_valuables_2
+				has_character_flag = tomb_found_artifact
+			}
+		}
+		if = { limit = { has_character_flag = tomb_found_valuables_1 } wealth = 50 }
+		else_if = { limit = { has_character_flag = tomb_found_valuables_2 } wealth = 100 }
+		else = { custom_tooltip = { text = EVTTOOLTIPwonder122 } }
+		if = {
+			limit = { trait = greedy }
+			random = { chance = 60 remove_trait_greedy_effect = yes }
+		}
+		else_if = {
+			limit = { NOT = { trait = charitable } }
+			random = { chance = 25 add_trait_charitable_effect = yes }
+		}
+	}
+
+	after = {
+		clear_flags_with_prefix = tomb_found_
+	}
+}
+
+###############################################################################
+# Part 5: the armoury's master smith
+# (was LT.20201 - 20210 in LT_wonder_flavor_events.txt)
+###############################################################################
+
+# wonder.130 The armoury's master smith
+# A ruler who hired a smith (WHG_armoury_events, armoury.2) has an Armoury
+# upgrade and lets its own master do the work instead. Choose the weapon:
+# a sword (not in Araby or Cathay), a zweihander (the Empire, Tilea and
+# Estalia), a scimitar (Araby and Cathay), a lance, an axe, a mace (not for
+# nomads), a bow (nomads), or armour from an armoursmith. The smith
+# delivers in 40 to 60 days (wonder.131).
+# Scope: ROOT is the ruler, event_target:smith the master smith.
+character_event = {
+	id = wonder.130
+	desc = EVTDESCwonder130
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.2 (WHG_armoury_events)
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+	}
+
+	option = { # A sword
+		name = EVTOPTAwonder130
+		trigger = {
+			has_character_flag = weaponsmith
+			NOR = { religion_group = ormazd_gods_group has_cathayan_religion_trigger = yes }
+		}
+		event_target:smith = { set_character_flag = weapon_sword }
+		scaled_wealth = { value = -1.5 min = -75 max = -150 }
+		ai_chance = { factor = 2 }
+	}
+	option = { # A zweihander
+		name = EVTOPTBwonder130
+		trigger = {
+			has_character_flag = weaponsmith
+			OR = {
+				culture_group = imperial_group
+				culture_group = tilean_group
+				culture_group = estalian_group
+			}
+		}
+		event_target:smith = { set_character_flag = zweihanded_sword }
+		scaled_wealth = { value = -2 min = -100 max = -200 }
+		ai_chance = { factor = 2 }
+	}
+	option = { # A scimitar
+		name = EVTOPTCwonder130
+		trigger = {
+			has_character_flag = weaponsmith
+			OR = { religion_group = ormazd_gods_group has_cathayan_religion_trigger = yes }
+		}
+		event_target:smith = { set_character_flag = weapon_scimitar }
+		scaled_wealth = { value = -1.5 min = -75 max = -150 }
+		ai_chance = { factor = 2 }
+	}
+	option = { # A lance
+		name = EVTOPTDwonder130
+		trigger = { has_character_flag = weaponsmith }
+		event_target:smith = { set_character_flag = weapon_lance }
+		scaled_wealth = { value = -1.5 min = -75 max = -150 }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 2 is_nomadic = yes }
+			modifier = { factor = 2 religion = grail }
+			modifier = { factor = 2 religion = false_grail }
+		}
+	}
+	option = { # An axe
+		name = EVTOPTEwonder130
+		trigger = { has_character_flag = weaponsmith }
+		event_target:smith = { set_character_flag = weapon_axe }
+		scaled_wealth = { value = -1.5 min = -75 max = -150 }
+		ai_chance = { factor = 1 modifier = { factor = 3 is_tribal = yes } }
+	}
+	option = { # A mace
+		name = EVTOPTFwonder130
+		trigger = { has_character_flag = weaponsmith is_nomadic = no }
+		event_target:smith = { set_character_flag = weapon_mace }
+		scaled_wealth = { value = -1.5 min = -75 max = -150 }
+		ai_chance = { factor = 1 modifier = { factor = 5 religion = norscan_gods } }
+	}
+	option = { # A bow
+		name = EVTOPTGwonder130
+		trigger = { has_character_flag = weaponsmith is_nomadic = yes }
+		event_target:smith = { set_character_flag = weapon_bow }
+		scaled_wealth = { value = -1.5 min = -75 max = -150 }
+		ai_chance = { factor = 5 }
+	}
+	option = { # Armour
+		name = EVTOPTHwonder130
+		trigger = { has_character_flag = armorsmith }
+		event_target:smith = { set_character_flag = armor_set }
+		scaled_wealth = { value = -1.5 min = -75 max = -150 }
+	}
+
+	after = {
+		hidden_effect = {
+			event_target:smith = { character_event = { id = wonder.131 days = 50 random = 10 } }
+			clr_character_flag = weaponsmith
+			clr_character_flag = armorsmith
+		}
+	}
+}
+
+# wonder.131 The smith is done
+# Hidden. The smith takes the work to the employer (their liege if the
+# employer has died), wonder.132.
+# Scope: ROOT is the smith.
+character_event = {
+	id = wonder.131
+	hide_window = yes
+
+	is_triggered_only = yes # wonder.130
+
+	immediate = {
+		if = {
+			limit = { NOT = { event_target:smith_employer = { is_alive = yes } } }
+			liege = { save_event_target_as = smith_employer }
+		}
+		event_target:smith_employer = { character_event = { id = wonder.132 } }
+	}
+}
+
+# wonder.132 Fine work from the armoury
+# The master smith hands over the weapon or armour.
+# Fixed: the old event looked for the smith's flags with a chain of if
+# blocks and cleared them on the employer, so they stayed on the smith and
+# a second order could make two weapons.
+# Scope: ROOT is the employer, FROM the smith.
+character_event = {
+	id = wonder.132
+	desc = EVTDESCwonder132
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # wonder.131
+
+	option = {
+		name = EVTOPTAwonder132
+		if = {
+			limit = { FROM = { has_character_flag = weapon_sword } }
+			add_artifact = sword_tier_2_new
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = zweihanded_sword } }
+			add_artifact = zweihander_sword
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_scimitar } }
+			add_artifact = scimitar_tier_2_new
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_lance } }
+			add_artifact = lance_tier_2_new
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_axe } }
+			add_artifact = axe_tier_2_new
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_mace } }
+			add_artifact = mace_tier_2_new
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_bow } }
+			add_artifact = bow_tier_2_new
+		}
+		else = { add_artifact = armor_tier_2 }
+		new_artifact = { set_description = wonder_armory_artifact_desc }
+	}
+
+	after = {
+		FROM = {
+			clr_character_flag = weapon_sword
+			clr_character_flag = zweihanded_sword
+			clr_character_flag = weapon_scimitar
+			clr_character_flag = weapon_lance
+			clr_character_flag = weapon_axe
+			clr_character_flag = weapon_mace
+			clr_character_flag = weapon_bow
+			clr_character_flag = armor_set
+		}
+	}
+}
+
+###############################################################################
+# Part 6: a visit to the dungeons
+# (was LT.20301 - 20310 in LT_wonder_flavor_events.txt)
+###############################################################################
+
+# wonder.140 A visit to the dungeons
+# A ruler with a frightening upgrade (torture chambers, a bone hall)
+# shows it to a guest (decision use_scary_upgrade). Frighten them (they
+# are cowed, or they take it as a threat; a cruel guest laughs, wonder.141),
+# press them for a favour (Conclave), impress a cruel guest, or turn it
+# into a joke for a kind one. Diplomacy helps; a guest of a higher tier,
+# or a brave one, is harder to frighten.
+# Scope: ROOT is the ruler, event_target:target_character the guest.
+character_event = {
+	id = wonder.140
+	desc = {
+		trigger = { event_target:target_character = { is_evil_trigger = no } }
+		text = EVTDESCwonder140
+	}
+	desc = {
+		trigger = { event_target:target_character = { is_evil_trigger = yes } }
+		text = EVTDESCwonder140b
+	}
+	picture = GFX_evt_torture
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # decision use_scary_upgrade (wonder_decisions.txt)
+
+	option = { # Frighten them
+		name = EVTOPTAwonder140
+		random_list = {
+			15 = {
+				modifier = { factor = 0.5 NOT = { diplomacy = 2 } }
+				modifier = { factor = 0.8 NOT = { diplomacy = 6 } }
+				modifier = { factor = 0.8 NOT = { diplomacy = 10 } }
+				modifier = { factor = 1.2 diplomacy = 13 }
+				modifier = { factor = 1.2 diplomacy = 17 }
+				modifier = { factor = 3 event_target:target_character = { trait = craven } }
+				modifier = {
+					factor = 0.4
+					event_target:target_character = { is_evil_trigger = yes }
+				}
+				event_target:target_character = {
+					show_scope_change = no
+					opinion = { modifier = opinion_scared_into_submission who = ROOT months = 24 }
+				}
+			}
+			5 = {
+				modifier = {
+					factor = 3
+					event_target:target_character = { higher_tier_than = ROOT }
+				}
+				modifier = {
+					factor = 3
+					OR = {
+						AND = {
+							event_target:target_character = { tier = EMPEROR }
+							lower_tier_than = KING
+						}
+						AND = { event_target:target_character = { tier = KING } tier = BARON }
+					}
+				}
+				modifier = { factor = 3 event_target:target_character = { trait = brave } }
+				custom_tooltip = { text = EVTTOOLTIPwonder140 }
+				if = {
+					limit = { event_target:target_character = { is_evil_trigger = yes } }
+					hidden_effect = { character_event = { id = wonder.141 } }
+				}
+				else = {
+					event_target:target_character = {
+						show_scope_change = no
+						opinion = { modifier = opinion_threatened_me who = ROOT months = 24 }
+					}
+					prestige = -20
+				}
+			}
+		}
+	}
+	option = { # Press for a favour
+		name = EVTOPTBwonder140
+		trigger = { has_dlc = "Conclave" }
+		random_list = {
+			15 = {
+				modifier = { factor = 0.5 NOT = { diplomacy = 2 } }
+				modifier = { factor = 0.8 NOT = { diplomacy = 6 } }
+				modifier = { factor = 0.8 NOT = { diplomacy = 10 } }
+				modifier = { factor = 1.2 diplomacy = 13 }
+				modifier = { factor = 1.2 diplomacy = 17 }
+				modifier = { factor = 3 event_target:target_character = { trait = craven } }
+				modifier = {
+					factor = 0.4
+					event_target:target_character = { is_evil_trigger = yes }
+				}
+				add_favor = event_target:target_character
+			}
+			5 = {
+				modifier = {
+					factor = 3
+					event_target:target_character = { higher_tier_than = ROOT }
+				}
+				modifier = {
+					factor = 3
+					OR = {
+						AND = {
+							event_target:target_character = { tier = EMPEROR }
+							lower_tier_than = KING
+						}
+						AND = { event_target:target_character = { tier = KING } tier = BARON }
+					}
+				}
+				modifier = { factor = 3 event_target:target_character = { trait = brave } }
+				custom_tooltip = { text = EVTTOOLTIPwonder140b }
+				if = {
+					limit = { event_target:target_character = { is_evil_trigger = yes } }
+					hidden_effect = { character_event = { id = wonder.141 } }
+				}
+				else = {
+					event_target:target_character = {
+						show_scope_change = no
+						opinion = { modifier = opinion_threatened_me who = ROOT months = 24 }
+					}
+					prestige = -20
+				}
+			}
+		}
+	}
+	option = { # Impress a cruel guest
+		name = EVTOPTCwonder140
+		trigger = { event_target:target_character = { is_evil_trigger = yes } }
+		random_list = {
+			5 = {
+				modifier = { factor = 1.2 diplomacy = 13 }
+				modifier = { factor = 1.2 diplomacy = 17 }
+				event_target:target_character = {
+					show_scope_change = no
+					opinion = { modifier = opinion_thoroughly_impressed who = ROOT months = 6 }
+				}
+			}
+			15 = {
+				modifier = { factor = 1.2 diplomacy = 13 }
+				modifier = { factor = 1.2 diplomacy = 17 }
+				event_target:target_character = {
+					show_scope_change = no
+					opinion = { modifier = opinion_impressed who = ROOT months = 6 }
+				}
+			}
+			5 = {
+				modifier = {
+					factor = 2
+					event_target:target_character = { higher_tier_than = ROOT }
+				}
+				event_target:target_character = {
+					show_scope_change = no
+					opinion = { modifier = opinion_unimpressed who = ROOT months = 6 }
+				}
+				prestige = -10
+			}
+		}
+		hidden_effect = { remove_character_modifier = used_scary_upgrade_cd }
+	}
+	option = { # Make a joke of it
+		name = EVTOPTDwonder140
+		trigger = { event_target:target_character = { is_evil_trigger = no } }
+		random_list = {
+			15 = {
+				modifier = { factor = 0.5 NOT = { diplomacy = 2 } }
+				modifier = { factor = 0.8 NOT = { diplomacy = 6 } }
+				modifier = { factor = 1.2 diplomacy = 13 }
+				modifier = { factor = 1.2 diplomacy = 17 }
+				event_target:target_character = {
+					show_scope_change = no
+					opinion = { modifier = opinion_liked_a_good_joke who = ROOT months = 6 }
+				}
+			}
+			5 = {
+				modifier = {
+					factor = 3
+					event_target:target_character = { higher_tier_than = ROOT }
+				}
+				event_target:target_character = {
+					show_scope_change = no
+					opinion = { modifier = opinion_unimpressed who = ROOT months = 6 }
+				}
+			}
+		}
+		hidden_effect = { remove_character_modifier = used_scary_upgrade_cd }
+	}
+}
+
+# wonder.141 They laughed at me
+# A cruel guest was not frightened, only amused.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.141
+	desc = EVTDESCwonder141
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.140
+
+	option = {
+		name = EVTOPTAwonder141
+		event_target:target_character = {
+			show_scope_change = no
+			opinion = { modifier = opinion_unimpressed who = ROOT months = 6 }
+		}
+		prestige = -10
+		random = { chance = 50 add_trait_stressed_effect = yes }
+	}
+}
+
+###############################################################################
+# Part 7: a meeting in a secluded place
+# (was LT.20405 - 20465 in LT_wonder_flavor_events.txt)
+#
+# A ruler whose wonder has a secluded upgrade (a garden, a hidden chamber)
+# invites a guest there (decision use_secluded_upgrade). The guest accepts
+# or refuses; at the meeting the ruler talks, tries to seduce the guest,
+# meets a lover there, or tries to kill the guest. Each side can try to
+# kill the other.
+###############################################################################
+
+# wonder.150 An invitation
+# The guest is invited to the secluded place: accept (wonder.151), refuse
+# (wonder.152, the host is offended), or with diplomacy 15 refuse politely.
+# Scope: ROOT is the guest, FROMFROM the host.
+character_event = {
+	id = wonder.150
+	desc = EVTDESCwonder150
+	picture = GFX_evt_noble_in_castle
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # decision use_secluded_upgrade (wonder_decisions.txt)
+
+	trigger = {
+		event_target:target_wonder = { wonder_owner = { character = FROMFROM } }
+	}
+
+	option = { # Accept
+		name = EVTOPTAwonder150
+		hidden_effect = { FROMFROM = { character_event = { id = wonder.151 } } }
+		ai_chance = { factor = 2 modifier = { factor = 4 opinion = { who = FROMFROM value = 25 } } }
+	}
+	option = { # Refuse
+		name = EVTOPTBwonder150
+		hidden_effect = { FROMFROM = { character_event = { id = wonder.152 } } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 10 NOT = { opinion = { who = FROMFROM value = -25 } } }
+		}
+	}
+	option = { # Refuse politely
+		name = EVTOPTCwonder150
+		tooltip_info = diplomacy
+		trigger = { diplomacy = 15 }
+		set_character_flag = polite_refuse
+		hidden_effect = { FROMFROM = { character_event = { id = wonder.152 } } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 10 NOT = { opinion = { who = FROMFROM value = -25 } } }
+		}
+	}
+}
+
+# wonder.151 The meeting
+# Talk (wonder.153), try to seduce the guest (wonder.155; likely only with
+# a guest who may love the host), meet a lover there (stress may go,
+# romance may bud; wonder.157), or try to kill the guest (intrigue 15 or a
+# scheming nature; wonder.159).
+# Scope: ROOT is the host, FROM the guest.
+character_event = {
+	id = wonder.151
+	desc = EVTDESCwonder151
+	picture = GFX_evt_castle_garden
+	border = GFX_event_normal_frame_intrigue
+	portrait = event_target:target_character
+
+	is_triggered_only = yes # wonder.150
+
+	option = { # Talk
+		name = EVTOPTAwonder151
+		hidden_effect = { FROM = { character_event = { id = wonder.153 days = 1 } } }
+		tooltip = {
+			random_list = {
+				20 = {
+					modifier = { factor = 10 FROM = { NOT = { diplomacy = 8 } } }
+					modifier = { factor = 0 FROM = { diplomacy = 15 } }
+				}
+				60 = { opinion = { modifier = opinion_impressed who = FROM months = 24 } }
+				20 = {
+					modifier = { factor = 0 FROM = { NOT = { diplomacy = 8 } } }
+					modifier = { factor = 5 FROM = { diplomacy = 15 } }
+					opinion = { modifier = opinion_thoroughly_impressed who = FROM months = 24 }
+				}
+			}
+		}
+	}
+	option = { # Seduce
+		name = EVTOPTBwonder151
+		trigger = {
+			is_no_females_race = no
+			FROM = { is_no_females_race = no }
+			NOT = { is_lover = FROM }
+		}
+		if = {
+			limit = { wonder_may_seduce_trigger = yes }
+			custom_tooltip = { text = EVTTOOLTIPwonder151 }
+		}
+		else = { custom_tooltip = { text = EVTTOOLTIPwonder151b } }
+		FROM = {
+			character_event = { id = wonder.155 days = 1 }
+			clr_character_flag = dummy # shows the guest's portrait in the option
+		}
+	}
+	option = { # Meet my lover
+		name = EVTOPTCwonder151
+		trigger = { is_lover = FROM }
+		custom_tooltip = { text = EVTTOOLTIPwonder151c }
+		FROM = { character_event = { id = wonder.157 days = 1 } clr_character_flag = dummy }
+		if = { limit = { trait = stressed } random = { chance = 30 remove_trait = stressed } }
+		random = { chance = 30 opinion = { modifier = opinion_budding_romance who = FROM } }
+		tooltip = {
+			random = {
+				chance = 30
+				reverse_opinion = { modifier = opinion_budding_romance who = FROM }
+			}
+		}
+	}
+	option = { # Kill them
+		name = EVTOPTDwonder151
+		trigger = { wonder_murderous_host_trigger = yes }
+		tooltip_info_custom = EVTTOOLTIPwonder151d
+		custom_tooltip = { text = EVTTOOLTIPwonder151e }
+		hidden_effect = { FROM = { character_event = { id = wonder.159 days = 1 } } }
+		FROM = { clr_character_flag = dummy }
+	}
+}
+
+# wonder.152 The guest refused
+# The host is offended, unless the guest refused politely.
+# Scope: ROOT is the host, FROM the guest.
+character_event = {
+	id = wonder.152
+	desc = EVTDESCwonder152
+	picture = GFX_evt_castle_garden
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.150
+
+	option = {
+		name = EVTOPTAwonder152
+		if = {
+			limit = { FROM = { NOT = { has_character_flag = polite_refuse } } }
+			opinion = { modifier = opinion_refused_invitation_to_meet who = FROM }
+		}
+	}
+
+	after = {
+		FROM = { clr_character_flag = polite_refuse }
+	}
+}
+
+# wonder.153 A good talk
+# The guest is thoroughly impressed, impressed (the host hears it,
+# wonder.154) or unmoved; the host's diplomacy decides.
+# Scope: ROOT is the guest, FROM the host.
+character_event = {
+	id = wonder.153
+	desc = EVTDESCwonder153
+	picture = GFX_evt_castle_garden
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.151
+
+	immediate = {
+		random_list = {
+			20 = {
+				modifier = { factor = 10 FROM = { NOT = { diplomacy = 8 } } }
+				modifier = { factor = 0 FROM = { diplomacy = 15 } }
+			}
+			60 = { set_character_flag = impressed }
+			20 = {
+				modifier = { factor = 0 FROM = { NOT = { diplomacy = 8 } } }
+				modifier = { factor = 5 FROM = { diplomacy = 15 } }
+				set_character_flag = thoroughly_impressed
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAwonder153
+		trigger = { has_character_flag = thoroughly_impressed }
+		opinion = { modifier = opinion_thoroughly_impressed who = FROM months = 24 }
+	}
+	option = {
+		name = EVTOPTBwonder153
+		trigger = { has_character_flag = impressed }
+		opinion = { modifier = opinion_impressed who = FROM months = 12 }
+		hidden_effect = { FROM = { character_event = { id = wonder.154 } } }
+	}
+	option = {
+		name = EVTOPTCwonder153
+		trigger = {
+			NOR = { has_character_flag = thoroughly_impressed has_character_flag = impressed }
+		}
+		hidden_effect = { FROM = { character_event = { id = wonder.154 } } }
+	}
+
+	after = {
+		clr_character_flag = impressed
+		clr_character_flag = thoroughly_impressed
+	}
+}
+
+# wonder.154 How the talk went
+# Notification for the host.
+# Scope: ROOT is the host, FROM the guest.
+character_event = {
+	id = wonder.154
+	desc = EVTDESCwonder154
+	picture = GFX_evt_courtiers_talking
+	notification = yes
+
+	is_triggered_only = yes # wonder.153
+	hide_from = yes
+
+	option = {
+		name = OK
+	}
+}
+
+# wonder.155 The host's advances
+# Become lovers (wonder.156), take what is offered without love, refuse
+# (wonder.158), or (intrigue 10 or a scheming nature) try to kill the
+# host instead (wonder.159).
+# Scope: ROOT is the guest, FROM the host.
+character_event = {
+	id = wonder.155
+	desc = EVTDESCwonder155
+	picture = GFX_evt_castle_garden
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.151
+
+	option = { # I want you too
+		name = EVTOPTAwonder155
+		trigger = { OR = { FROM = { wonder_may_seduce_trigger = yes } ai = no } }
+		custom_tooltip = { text = EVTTOOLTIPwonder155 }
+		FROM = { character_event = { id = wonder.156 days = 1 } }
+		tooltip = { add_lover = FROM opinion = { modifier = opinion_seduced_attracted who = FROM } }
+		ai_chance = {
+			factor = 1
+			trigger = {
+				FROM = { event_target:target_character = { attacted_to_prev_trigger = yes } }
+			}
+			modifier = {
+				factor = 10
+				OR = {
+					opinion = { who = FROM value = 45 }
+					has_opinion_modifier = { who = FROM modifier = opinion_budding_romance }
+				}
+			}
+			modifier = { factor = 5 FROM = { OR = { trait = seducer trait = seductress } } }
+			modifier = { factor = 5 OR = { trait = hedonist trait = lustful } }
+			modifier = { factor = 0.1 trait = chaste }
+		}
+	}
+	option = { # Nothing serious
+		name = EVTOPTBwonder155
+		trigger = { OR = { FROM = { wonder_may_seduce_trigger = yes } ai = no } }
+		set_character_flag = not_serious_romance
+		custom_tooltip = { text = EVTTOOLTIPwonder155b }
+		FROM = { character_event = { id = wonder.156 days = 1 } }
+		tooltip = { reverse_opinion = { modifier = opinion_seduced_attracted who = FROM } }
+		ai_chance = {
+			factor = 1
+			trigger = {
+				FROM = { event_target:target_character = { attacted_to_prev_trigger = yes } }
+			}
+			modifier = { factor = 5 OR = { trait = seducer trait = seductress } }
+			modifier = { factor = 5 OR = { trait = hedonist trait = lustful } }
+			modifier = { factor = 1.5 has_lover = yes }
+			modifier = { factor = 0.1 trait = chaste }
+		}
+	}
+	option = { # Refuse
+		name = EVTOPTCwonder155
+		FROM = { character_event = { id = wonder.158 days = 1 } clr_character_flag = dummy }
+		ai_chance = { factor = 1 }
+	}
+	option = { # Kill the host
+		name = EVTOPTDwonder155
+		trigger = { wonder_murderous_guest_trigger = yes }
+		tooltip_info_custom = EVTTOOLTIPwonder151d
+		custom_tooltip = { text = EVTTOOLTIPwonder151e }
+		set_character_flag = murderer_target
+		FROM = { character_event = { id = wonder.159 days = 5 } clr_character_flag = dummy }
+		ai_chance = { factor = 0.1 }
+	}
+}
+
+# wonder.156 Lovers
+# The guest gave in: lovers, or (wonder.155 B) only a night.
+# Scope: ROOT is the host, FROM the guest.
+character_event = {
+	id = wonder.156
+	desc = {
+		trigger = { FROM = { has_character_flag = not_serious_romance } }
+		text = EVTDESCwonder156b
+	}
+	desc = {
+		trigger = { FROM = { NOT = { has_character_flag = not_serious_romance } } }
+		text = EVTDESCwonder156
+	}
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.155
+
+	option = {
+		name = {
+			trigger = { FROM = { has_character_flag = not_serious_romance } }
+			text = EVTOPTBwonder156
+		}
+		name = {
+			trigger = { FROM = { NOT = { has_character_flag = not_serious_romance } } }
+			text = EVTOPTAwonder156
+		}
+		if = {
+			limit = {
+				FROM = { NOT = { has_character_flag = not_serious_romance } }
+				is_no_females_race = no
+				FROM = { is_no_females_race = no }
+			}
+			add_lover = FROM
+		}
+		reverse_opinion = { modifier = opinion_seduced_attracted who = FROM }
+		FROM = { clr_character_flag = not_serious_romance }
+	}
+}
+
+# wonder.157 A lovers' meeting
+# Scope: ROOT is the lover who was invited, FROM the host.
+character_event = {
+	id = wonder.157
+	desc = EVTDESCwonder157
+	picture = GFX_evt_lovers
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.151
+
+	option = {
+		name = EVTOPTAwonder157
+		random = { chance = 30 opinion = { modifier = opinion_budding_romance who = FROM } }
+		if = { limit = { trait = stressed } random = { chance = 30 remove_trait = stressed } }
+	}
+}
+
+# wonder.158 Refused
+# Scope: ROOT is the host, FROM the guest.
+character_event = {
+	id = wonder.158
+	desc = EVTDESCwonder158
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.155
+
+	option = {
+		name = EVTOPTAwonder158
+		prestige = -10
+		reverse_opinion = { modifier = opinion_dislike who = FROM years = 1 }
+		opinion = { modifier = opinion_advance_rejected who = FROM }
+	}
+}
+
+# wonder.159 A knife in the garden
+# Run (1 in 4 unhurt, more if quick, a duelist, shrewd or a genius; 1 in 2
+# wounded; 1 in 4 killed) or fight (an even chance, moved by the combat
+# ratings). Either way the attacker is hated.
+# Fixed: the victim's death named no killer; now the attacker.
+# Scope: ROOT is the one attacked, FROM the attacker.
+character_event = {
+	id = wonder.159
+	desc = {
+		trigger = { FROM = { NOT = { has_character_flag = murderer_target } } }
+		text = EVTDESCwonder159
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = murderer_target } }
+		text = EVTDESCwonder159b
+	}
+	picture = GFX_evt_assassination
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.151, wonder.155
+
+	immediate = {
+		FROM = { save_event_target_as = murderer }
+		save_event_target_as = murder_victim
+	}
+
+	option = { # Run
+		name = EVTOPTAwonder159
+		random_list = {
+			25 = {
+				modifier = { factor = 3 trait = quick }
+				modifier = { factor = 2 trait = genius }
+				modifier = { factor = 5 trait = duelist }
+				modifier = { factor = 2 trait = shrewd }
+				custom_tooltip = { text = EVTTOOLTIPwonder159 }
+				character_event = { id = wonder.160 days = 3 }
+				FROM = { character_event = { id = wonder.162 } }
+			}
+			50 = {
+				custom_tooltip = { text = EVTTOOLTIPwonder159b }
+				add_trait = wounded
+				set_character_flag = wounded_in_attempt
+				character_event = { id = wonder.160 days = 3 }
+				FROM = { character_event = { id = wonder.162 } }
+			}
+			25 = {
+				custom_tooltip = { text = EVTTOOLTIPwonder159c }
+				character_event = { id = wonder.161 days = 3 }
+				FROM = { character_event = { id = wonder.163 } }
+			}
+		}
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0.5 combat_rating_diff = { character = FROM value = 10 } }
+			modifier = { factor = 0.5 combat_rating_diff = { character = FROM value = 30 } }
+			modifier = { factor = 0.5 combat_rating_diff = { character = FROM value = 50 } }
+			modifier = { factor = 2 combat_rating_diff = { character = FROM value < -10 } }
+			modifier = { factor = 2 combat_rating_diff = { character = FROM value < -30 } }
+			modifier = { factor = 2 combat_rating_diff = { character = FROM value < -50 } }
+		}
+	}
+	option = { # Fight
+		name = EVTOPTBwonder159
+		set_character_flag = murder_fight
+		FROM = { set_character_flag = murder_fight }
+		random_list = {
+			50 = {
+				custom_tooltip = { text = EVTTOOLTIPwonder159d }
+				character_event = { id = wonder.163 }
+				FROM = { character_event = { id = wonder.161 } }
+			}
+			50 = {
+				modifier = { factor = 0.5 combat_rating_diff = { character = FROM value = 10 } }
+				modifier = { factor = 0.5 combat_rating_diff = { character = FROM value = 30 } }
+				modifier = { factor = 0.5 combat_rating_diff = { character = FROM value = 50 } }
+				modifier = { factor = 2 combat_rating_diff = { character = FROM value < -10 } }
+				modifier = { factor = 2 combat_rating_diff = { character = FROM value < -30 } }
+				modifier = { factor = 2 combat_rating_diff = { character = FROM value < -50 } }
+				custom_tooltip = { text = EVTTOOLTIPwonder159e }
+				character_event = { id = wonder.161 }
+				FROM = { character_event = { id = wonder.163 } }
+			}
+		}
+	}
+
+	after = {
+		opinion = { modifier = opinion_murder_attempt who = FROM }
+		FROM = { clr_character_flag = murderer_target }
+	}
+}
+
+# wonder.160 I got away
+# Scope: ROOT is the one attacked.
+character_event = {
+	id = wonder.160
+	desc = {
+		trigger = { NOT = { has_character_flag = wounded_in_attempt } }
+		text = EVTDESCwonder160
+		picture = GFX_evt_bad_news
+	}
+	desc = {
+		trigger = { has_character_flag = wounded_in_attempt }
+		text = EVTDESCwonder160b
+		picture = GFX_evt_court_physician
+	}
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.159
+
+	option = {
+		name = EVTOPTAwonder160
+		random = { chance = 50 add_trait_stressed_effect = yes }
+	}
+}
+
+# wonder.161 I am dying
+# Scope: ROOT is the one who dies; event_target:murderer and
+# event_target:murder_victim are the attacker and the one attacked, so the
+# killer is whichever of them ROOT is not.
+character_event = {
+	id = wonder.161
+	desc = EVTDESCwonder161
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.159
+
+	option = {
+		name = EVTOPTAwonder161
+		if = {
+			limit = { character = event_target:murderer }
+			death = { death_reason = death_murder killer = event_target:murder_victim }
+		}
+		else = { death = { death_reason = death_murder killer = event_target:murderer } }
+	}
+}
+
+# wonder.162 The attempt failed
+# Scope: ROOT is the attacker, FROM the one attacked.
+character_event = {
+	id = wonder.162
+	desc = {
+		trigger = { FROM = { NOT = { has_character_flag = wounded_in_attempt } } }
+		text = EVTDESCwonder162
+	}
+	desc = {
+		trigger = { FROM = { has_character_flag = wounded_in_attempt } }
+		text = EVTDESCwonder162b
+	}
+	picture = GFX_evt_bad_news
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.159
+
+	option = {
+		name = EVTOPTAwonder162
+		random = { chance = 50 add_trait_stressed_effect = yes }
+	}
+
+	after = {
+		FROM = { clr_character_flag = wounded_in_attempt }
+	}
+}
+
+# wonder.163 The other is dead
+# Scope: ROOT is the one who lives.
+character_event = {
+	id = wonder.163
+	desc = { trigger = { has_character_flag = murder_fight } text = EVTDESCwonder163b }
+	desc = { trigger = { NOT = { has_character_flag = murder_fight } } text = EVTDESCwonder163 }
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.159
+
+	option = {
+		name = EVTOPTAwonder163
+	}
+
+	after = {
+		clr_character_flag = murder_fight
+	}
+}
+
+###############################################################################
+# Part 8: a burial in the wonder
+# (was LT.20501 - 20520 in LT_wonder_flavor_events.txt)
+###############################################################################
+
+# wonder.170 A ruler with a burial ground dies
+# Hidden. Marks who in the realm liked (opinion 20) or hated (below -50)
+# the dead ruler, and asks the heir how to bury them (wonder.171).
+# Scope: ROOT is the dead ruler.
+character_event = {
+	id = wonder.170
+	hide_window = yes
+
+	is_triggered_only = yes # on_death
+	only_independent = yes
+
+	trigger = {
+		realm_wonder_or_upgrade_has_flag_burial_ground_trigger = yes
+		current_heir = { always = yes }
+	}
+
+	immediate = {
+		any_realm_character = {
+			limit = { opinion = { who = ROOT value = 20 } }
+			set_character_flag = liked_dead_ruler_@ROOT
+		}
+		any_realm_character = {
+			limit = { NOT = { opinion = { who = ROOT value = -50 } } }
+			set_character_flag = hated_dead_ruler_@ROOT
+		}
+		current_heir = { character_event = { id = wonder.171 days = 1 } }
+	}
+}
+
+# wonder.171 Where to lay them
+# The heir decides how to bury their predecessor in the realm's burial
+# wonder: a great funeral (wonder.172 in ten days), a fitting one
+# (wonder.172 in five), the cheapest (piety, a loss of prestige), or no
+# proper burial at all (those who liked the dead are angry, those who
+# hated them pleased). The text follows the heir's faith.
+# Fixed: the descs used the texts for Christians, Muslims, Jews and Hindus;
+# the realm's marks were never cleared (a has_flag typo, and the flags sat
+# on the realm's characters, not the heir).
+# Scope: ROOT is the heir, FROM the dead ruler.
+character_event = {
+	id = wonder.171
+	title = EVTNAMEwonder171
+	desc = { trigger = { religion_group = old_world_group } text = EVTDESCwonder171a }
+	desc = { trigger = { religion_group = dwarf_gods_group } text = EVTDESCwonder171b }
+	desc = {
+		trigger = {
+			OR = { religion_group = nehekharan_gods_group religion_group = necromantic_group }
+		}
+		text = EVTDESCwonder171c
+	}
+	desc = { trigger = { religion_group = chaos_gods_group } text = EVTDESCwonder171d }
+	desc = { trigger = { religion_group = ormazd_gods_group } text = EVTDESCwonder171e }
+	desc = {
+		trigger = {
+			NOR = {
+				religion_group = old_world_group
+				religion_group = dwarf_gods_group
+				religion_group = nehekharan_gods_group
+				religion_group = necromantic_group
+				religion_group = chaos_gods_group
+				religion_group = ormazd_gods_group
+			}
+		}
+		text = EVTDESCwonder171
+	}
+	picture = GFX_evt_treasure_chamber
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # wonder.170
+
+	trigger = {
+		is_inaccessible_trigger = no
+		realm_wonder_or_upgrade_has_flag_burial_ground_trigger = yes
+	}
+
+	fail_trigger_effect = { wonder_burial_clear_effect = yes }
+
+	immediate = {
+		random_realm_wonder = {
+			limit = {
+				is_active = yes
+				OR = {
+					has_wonder_flag = burial_ground
+					any_upgrade_on_wonder = {
+						is_active = yes
+						has_wonder_upgrade_flag = burial_ground
+					}
+				}
+			}
+			save_event_target_as = target_wonder
+		}
+	}
+
+	option = { # A great funeral
+		name = EVTOPTAwonder171
+		custom_tooltip = { text = EVTTOOLTIPwonder171 }
+		scaled_wealth = { value = -0.5 min = -100 max = -400 }
+		set_character_flag = big_burial
+		character_event = { id = wonder.172 days = 10 }
+	}
+	option = { # A fitting funeral
+		name = EVTOPTBwonder171
+		custom_tooltip = { text = EVTTOOLTIPwonder171b }
+		scaled_wealth = { value = -0.3 min = -50 max = -200 }
+		set_character_flag = normal_burial
+		character_event = { id = wonder.172 days = 5 }
+	}
+	option = { # The cheapest
+		name = EVTOPTCwonder171
+		scaled_wealth = { value = -0.1 min = -10 max = -100 }
+		prestige = -20
+		piety = 10
+		wonder_burial_clear_effect = yes
+	}
+	option = { # No proper burial
+		name = EVTOPTDwonder171
+		custom_tooltip = { text = EVTTOOLTIPwonder171c }
+		prestige = -50
+		piety = -50
+		hidden_effect = {
+			any_realm_character = {
+				limit = { has_character_flag = liked_dead_ruler_@FROM }
+				opinion = { modifier = opinion_did_not_honor_the_dead who = ROOT }
+			}
+			any_realm_character = {
+				limit = { has_character_flag = hated_dead_ruler_@FROM }
+				opinion = { modifier = opinion_did_not_honor_hated_ruler who = ROOT }
+			}
+		}
+		wonder_burial_clear_effect = yes
+	}
+}
+
+# wonder.172 The funeral
+# The dead are laid in the wonder. A great funeral: 150 prestige and 50
+# piety; those who liked the dead are grateful, those who hated them
+# offended. A fitting one: 50 prestige and 100 piety; those who liked the
+# dead are grateful for a year.
+# Fixed: the fitting funeral sat in an else_if with no limit.
+# Scope: ROOT is the heir, FROMFROM the dead ruler.
+character_event = {
+	id = wonder.172
+	title = EVTNAMEwonder171
+	desc = {
+		trigger = { religion_group = old_world_group }
+		text = EVTDESCwonder172a
+		picture = GFX_evt_died_funeral
+	}
+	desc = {
+		trigger = { religion_group = dwarf_gods_group }
+		text = EVTDESCwonder172b
+		picture = GFX_evt_died_funeral
+	}
+	desc = {
+		trigger = {
+			OR = { religion_group = nehekharan_gods_group religion_group = necromantic_group }
+		}
+		text = EVTDESCwonder172c
+	}
+	desc = {
+		trigger = { religion_group = chaos_gods_group }
+		text = EVTDESCwonder172d
+		picture = GFX_evt_feast_hf
+	}
+	desc = {
+		trigger = { religion_group = ormazd_gods_group }
+		text = EVTDESCwonder172e
+		picture = GFX_evt_died_funeral
+	}
+	desc = {
+		trigger = {
+			NOR = {
+				religion_group = old_world_group
+				religion_group = dwarf_gods_group
+				religion_group = nehekharan_gods_group
+				religion_group = necromantic_group
+				religion_group = chaos_gods_group
+				religion_group = ormazd_gods_group
+			}
+		}
+		text = EVTDESCwonder172
+		picture = GFX_evt_died_funeral
+	}
+	picture = GFX_evt_treasure_chamber
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # wonder.171
+
+	trigger = {
+		is_inaccessible_trigger = no
+		event_target:target_wonder = { wonder_owner = { character = ROOT } }
+		OR = { has_character_flag = big_burial has_character_flag = normal_burial }
+	}
+
+	fail_trigger_effect = {
+		any_realm_character = {
+			limit = {
+				OR = {
+					has_character_flag = liked_dead_ruler_@FROMFROM
+					has_character_flag = hated_dead_ruler_@FROMFROM
+				}
+			}
+			clr_character_flag = liked_dead_ruler_@FROMFROM
+			clr_character_flag = hated_dead_ruler_@FROMFROM
+		}
+		clr_character_flag = big_burial
+		clr_character_flag = normal_burial
+	}
+
+	option = {
+		name = EVTOPTAwonder172
+		custom_tooltip = { text = EVTTOOLTIPwonder172 }
+		if = {
+			limit = { has_character_flag = big_burial }
+			prestige = 150
+			piety = 50
+			hidden_effect = {
+				any_realm_character = {
+					limit = { has_character_flag = liked_dead_ruler_@FROMFROM }
+					opinion = { modifier = opinion_did_honor_the_dead who = ROOT }
+				}
+				any_realm_character = {
+					limit = { has_character_flag = hated_dead_ruler_@FROMFROM }
+					opinion = { modifier = opinion_did_honor_hated_ruler who = ROOT }
+				}
+			}
+		}
+		else = {
+			prestige = 50
+			piety = 100
+			hidden_effect = {
+				any_realm_character = {
+					limit = { has_character_flag = liked_dead_ruler_@FROMFROM }
+					opinion = { modifier = opinion_did_honor_the_dead who = ROOT years = 1 }
+				}
+			}
+		}
+	}
+
+	after = {
+		any_realm_character = {
+			limit = {
+				OR = {
+					has_character_flag = liked_dead_ruler_@FROMFROM
+					has_character_flag = hated_dead_ruler_@FROMFROM
+				}
+			}
+			clr_character_flag = liked_dead_ruler_@FROMFROM
+			clr_character_flag = hated_dead_ruler_@FROMFROM
+		}
+		clr_character_flag = big_burial
+		clr_character_flag = normal_burial
+	}
+}
+
+###############################################################################
+# Part 9: a relic laid in the wonder
+# (was LT.20601 - 20610 in LT_wonder_flavor_events.txt)
+###############################################################################
+
+# wonder.180 A relic for the shrine
+# A ruler building a relic-keeping upgrade (decision store_relic_in_wonder)
+# lays one of up to three holy artifacts in it, for piety and prestige by
+# its quality (100 piety for the least, 500 of each for the finest), or
+# keeps them. If the artifact is no longer the ruler's when it is laid
+# down, the gods strike the cheat (wonder.181).
+# Fixed: the decision's artifact marks (target_artifact_1 - 4) were never
+# cleared.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.180
+	desc = {
+		trigger = { NOT = { event_target:target_artifact_2 = { is_artifact_active = yes } } }
+		text = EVTDESCwonder180
+		picture = GFX_evt_relic_box
+	}
+	desc = {
+		trigger = {
+			event_target:target_artifact_2 = { is_artifact_active = yes }
+			NOT = { event_target:target_artifact_3 = { is_artifact_active = yes } }
+		}
+		text = EVTDESCwonder180b
+	}
+	desc = {
+		trigger = { event_target:target_artifact_3 = { is_artifact_active = yes } }
+		text = EVTDESCwonder180c
+	}
+	picture = GFX_evt_treasure_chamber
+	border = GFX_event_normal_frame_religion
+
+	is_triggered_only = yes # decision store_relic_in_wonder (wonder_decisions.txt)
+	only_independent = yes
+
+	trigger = {
+		any_realm_wonder_upgrade = { has_wonder_upgrade_flag = stores_relic is_active = no }
+	}
+
+	option = {
+		name = EVTOPTAwonder180
+		trigger = { event_target:target_artifact_1 = { is_artifact_active = yes } }
+		event_target:target_artifact_1 = {
+			show_scope_change = no
+			custom_tooltip = { text = EVTTOOLTIPwonder180 }
+			wonder_relic_reward_effect = yes
+		}
+		hidden_effect = {
+			if = {
+				limit = { event_target:target_artifact_1 = { owner = { character = ROOT } } }
+				event_target:target_artifact_1 = { unsafe_destroy_artifact = yes }
+				event_target:target_upgrade = { set_wonder_upgrade_flag = is_storing_relic }
+			}
+			else = { character_event = { id = wonder.181 } }
+		}
+	}
+	option = {
+		name = EVTOPTBwonder180
+		trigger = { event_target:target_artifact_2 = { is_artifact_active = yes } }
+		event_target:target_artifact_2 = {
+			show_scope_change = no
+			custom_tooltip = { text = EVTTOOLTIPwonder180 }
+			wonder_relic_reward_effect = yes
+		}
+		hidden_effect = {
+			if = {
+				limit = { event_target:target_artifact_2 = { owner = { character = ROOT } } }
+				event_target:target_artifact_2 = { unsafe_destroy_artifact = yes }
+				event_target:target_upgrade = { set_wonder_upgrade_flag = is_storing_relic }
+			}
+			else = { character_event = { id = wonder.181 } }
+		}
+	}
+	option = {
+		name = EVTOPTCwonder180
+		trigger = { event_target:target_artifact_3 = { is_artifact_active = yes } }
+		event_target:target_artifact_3 = {
+			show_scope_change = no
+			custom_tooltip = { text = EVTTOOLTIPwonder180 }
+			wonder_relic_reward_effect = yes
+		}
+		hidden_effect = {
+			if = {
+				limit = { event_target:target_artifact_3 = { owner = { character = ROOT } } }
+				event_target:target_artifact_3 = { unsafe_destroy_artifact = yes }
+				event_target:target_upgrade = { set_wonder_upgrade_flag = is_storing_relic }
+			}
+			else = { character_event = { id = wonder.181 } }
+		}
+	}
+	option = { # Not after all
+		name = EVTOPTDwonder180
+	}
+
+	after = {
+		clr_character_flag = taking_relic_decision
+		any_artifact = {
+			limit = {
+				OR = {
+					has_artifact_flag = target_artifact_1
+					has_artifact_flag = target_artifact_2
+					has_artifact_flag = target_artifact_3
+					has_artifact_flag = target_artifact_4
+				}
+			}
+			clr_artifact_flag = target_artifact_1
+			clr_artifact_flag = target_artifact_2
+			clr_artifact_flag = target_artifact_3
+			clr_artifact_flag = target_artifact_4
+		}
+	}
+}
+
+# wonder.181 The gods are not mocked
+# The relic promised to the gods was not the ruler's to give. Lightning.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = wonder.181
+	desc = EVTDESCwonder181
+	picture = GFX_evt_danse_macabre
+	border = GFX_event_normal_frame_intrigue
+
+	is_triggered_only = yes # wonder.180
+
+	option = {
+		name = EVTOPTAwonder181
+		death = { death_reason = death_murder_unknown_lightning }
+	}
+}
+
+###############################################################################
+# Part 10: the strategic exclaves
+# (was LT.20700 in LT_wonder_flavor_events.txt)
+###############################################################################
+
+# wonder.190 Walls for the townships
+# When an upgrade is finished at a wonder with the Strategic Exclaves, every
+# holding in its county gets the strongest walls of its kind, as the
+# upgrade promises. Once per wonder.
+# Revived: the vanilla event was a province event on a character on_action
+# and was switched off, so the upgrade never built its walls.
+# Scope: ROOT is the owner, FROMFROM the wonder, FROMFROMFROM its province.
+character_event = {
+	id = wonder.190
+	title = EVTNAMEwonder190
+	desc = EVTDESCwonder190
+	picture = GFX_evt_castle_construction
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # on_wonder_upgrade_finish
+
+	trigger = {
+		FROMFROM = {
+			has_wonder_upgrade = upgrade_strategic_exclaves
+			NOT = { has_wonder_flag = exclaves_walled }
+		}
+	}
+
+	immediate = {
+		FROMFROM = { save_event_target_as = target_wonder set_wonder_flag = exclaves_walled }
+		FROMFROMFROM = {
+			save_event_target_as = target_province
+			any_province_holding = {
+				trigger_switch = {
+					on_trigger = holding_type
+					city = { add_building = ct_wall_5 }
+					temple = { add_building = tp_wall_5 }
+					castle = { add_building = ca_wall_5 }
+					tribal = { add_building = tb_hillfort_4 }
+					nomad = { add_building = no_camp_fortifications_8 }
+				}
+			}
+		}
+	}
+
+	option = {
+		name = EVTOPTAwonder190
+		custom_tooltip = { text = EVTTOOLTIPwonder190 }
+	}
+}
+
+###############################################################################
+# Part 11: looting a wonder
+# (was LT.20799 - 20820 in LT_wonder_flavor_events.txt)
+###############################################################################
+
+# wonder.200 Looting begins: remember the stage
+# Hidden. Marks the wonder as ruined and remembers how far it was built,
+# for the ruin's name (wonder.3).
+# Scope: ROOT is the looter, FROM the wonder, FROMFROM its province.
+character_event = {
+	id = wonder.200
+	hide_window = yes
+
+	is_triggered_only = yes # on_wonder_loot_start
+
+	trigger = {
+		FROM = { NOT = { has_wonder_flag = was_ruined } }
+	}
+
+	immediate = {
+		FROM = {
+			set_wonder_flag = was_ruined
+			if = { limit = { wonder_stage = 3 } set_wonder_flag = wonder_stage_3 }
+			else = { set_wonder_flag = wonder_stage_less_than_3 }
+		}
+	}
+}
+
+# wonder.201 Looting begins: a treasure
+# Hidden. A looted wonder that holds a treasure (bells, books) yields it
+# to the looter's men in about three weeks (wonder.202).
+# Scope: ROOT is the looter, FROM the wonder.
+character_event = {
+	id = wonder.201
+	hide_window = yes
+
+	is_triggered_only = yes # on_wonder_loot_start
+	only_independent = yes
+
+	trigger = {
+		NOT = { has_character_flag = looted_wonder_artifact }
+		FROM = { has_wonder_flag = gives_artifact }
+	}
+
+	immediate = {
+		FROM = { save_event_target_as = target_wonder }
+		character_event = { id = wonder.202 days = 20 random = 5 }
+	}
+}
+
+# wonder.202 The looters' prize
+# One of the looter's courtiers brings out the wonder's bells or a book.
+# Take it, or let them keep it (they are grateful).
+# Fixed: every courtier of the looter got a copy of the treasure, and the
+# "take it" option sent it to the wonder instead of the looter.
+# Scope: ROOT is the looter.
+character_event = {
+	id = wonder.202
+	desc = EVTDESCwonder202
+	picture = GFX_evt_end_of_days
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # wonder.201
+	only_independent = yes
+
+	trigger = {
+		NOT = { has_character_flag = looted_wonder_artifact }
+		event_target:target_wonder = {
+			has_wonder_flag = gives_artifact
+			NOT = { has_wonder_flag = artifact_was_looted }
+			wonder_owner = { character = ROOT }
+		}
+		any_courtier = { is_inaccessible_or_incapable_trigger = no }
+	}
+
+	immediate = {
+		set_character_flag = looted_wonder_artifact
+		event_target:target_wonder = { set_wonder_flag = artifact_was_looted }
+		random_courtier = {
+			limit = { is_inaccessible_or_incapable_trigger = no }
+			score_value = { value = 10 interesting_courtier_selection_score = yes }
+			save_event_target_as = target_courtier
+			if = {
+				limit = { event_target:target_wonder = { has_wonder_flag = gives_artifact_bells } }
+				add_artifact = wonder_artifact_bells
+				new_artifact = {
+					set_name = looted_wonder_artifact_bells_rename
+					set_description = looted_wonder_artifact_bells_desc
+					set_creation_date = 1.1.1
+					save_event_target_as = looted_artifact
+				}
+				event_target:target_wonder = {
+					if = {
+						limit = { has_wonder_upgrade = upgrade_bells }
+						destroy_wonder_upgrade = upgrade_bells
+					}
+					if = {
+						limit = { has_wonder_upgrade = upgrade_bells_golden }
+						destroy_wonder_upgrade = upgrade_bells_golden
+					}
+				}
+			}
+			else_if = {
+				limit = { event_target:target_wonder = { has_wonder_flag = gives_artifact_book } }
+				add_random_book_effect = yes
+				new_artifact = { set_creation_date = 1.1.1 save_event_target_as = looted_artifact }
+			}
+		}
+	}
+
+	option = { # Mine
+		name = EVTOPTAwonder202
+		event_target:looted_artifact = {
+			show_scope_change = no
+			transfer_artifact = { from = event_target:target_courtier to = ROOT }
+		}
+	}
+	option = { # Theirs to keep
+		name = EVTOPTBwonder202
+		event_target:target_courtier = { opinion = { modifier = opinion_grateful who = ROOT } }
+	}
+}
+
+# wonder.203 A wonder is restored
+# Hidden. A restored wonder can be looted for treasure again, and a hold or
+# city with a lore name takes it back (it was "Ruins of ..." since wonder.3).
+# Scope: ROOT is the owner, FROM the wonder.
+character_event = {
+	id = wonder.203
+	hide_window = yes
+
+	is_triggered_only = yes # on_wonder_restore_finish
+
+	immediate = {
+		FROM = {
+			clr_wonder_flag = artifact_was_looted
+			if = {
+				limit = { has_wonder_flag = wonder_lore_named }
+				clr_wonder_flag = was_renamed
+				location = { wonder_naming_and_describing_effect = yes }
+			}
+		}
+	}
+}
+
+# wonder.204 How to loot it
+# The looter chooses: only their own men loot (the province suffers
+# cultural unrest for two years) or anyone may join (less gold, wonder.205).
+# Scope: ROOT is the looter, FROM the wonder, FROMFROM its province.
+character_event = {
+	id = wonder.204
+	desc = { trigger = { FROM = { has_wonder_flag = cost_low } } text = EVTDESCwonder204b }
+	desc = { trigger = { FROM = { NOT = { has_wonder_flag = cost_low } } } text = EVTDESCwonder204 }
+	picture = GFX_evt_courtiers_talking
+
+	is_triggered_only = yes # on_wonder_loot_start random_events
+	hide_from = yes
+
+	option = { # Only my men
+		name = EVTOPTAwonder204
+		FROM = { clr_wonder_flag = being_looted_public set_wonder_flag = being_looted_private }
+		FROMFROM = { add_province_modifier = { modifier = cultural_unrest years = 2 } }
+	}
+	option = { # Everyone
+		name = EVTOPTBwonder204
+		FROM = { clr_wonder_flag = being_looted_private set_wonder_flag = being_looted_public }
+	}
+}
+
+# wonder.205 A stage is stripped
+# Notification: the looters bring in 300, 500 or 800 gold by the cost of
+# the wonder (400 if unknown), half if everyone joined in.
+# Scope: ROOT is the looter, FROM the wonder.
+character_event = {
+	id = wonder.205
+	title = EVTNAMEwonder205
+	desc = { trigger = { FROM = { is_at_lootable_stage = no } } text = EVTDESCwonder205b }
+	desc = { trigger = { FROM = { is_at_lootable_stage = yes } } text = EVTDESCwonder205 }
+	picture = GFX_evt_courtiers_talking
+	notification = yes
+
+	is_triggered_only = yes # on_wonder_stage_loot_finish
+	hide_from = yes
+
+	immediate = {
+		FROM = {
+			set_variable = { which = global_loot value = 400 }
+			trigger_switch = {
+				on_trigger = has_wonder_flag
+				cost_low = { set_variable = { which = global_loot value = 300 } }
+				cost_medium = { set_variable = { which = global_loot value = 500 } }
+				cost_high = { set_variable = { which = global_loot value = 800 } }
+			}
+		}
+		if = {
+			limit = { FROM = { has_wonder_flag = being_looted_public } }
+			multiply_variable = { which = global_loot value = 0.5 }
+		}
+		wealth = global_loot
+	}
+
+	option = {
+		name = OK
+	}
+
+	after = {
+		FROM = { clear_flags_with_prefix = being_looted_ }
+	}
+}
+
+###############################################################################
+# Part 12: the sack
+# (was LT.21000 in LT_wonder_flavor_events.txt)
+###############################################################################
+
+# wonder.210 The soldiers run wild
+# After a siege the troops of a commander who may not loot start to sack a
+# rich holding (four buildings or more). Let them (a building burns, maybe
+# the wonder is damaged; the holder and their liege are furious, the
+# realm thinks ROOT dishonourable), join in (10 gold, 30 more from a
+# wonder; wroth and cruel may follow; a worse name), or try to stop them
+# (by martial: lose a twentieth of the troops and gain a name for
+# discipline, or fail and get a name for weak command). Not for nomads,
+# who have their own (nomad.24).
+# Scope: ROOT is the commander, FROM the holding.
+character_event = {
+	id = wonder.210
+	desc = EVTDESCwonder210
+	picture = GFX_evt_siege
+	border = GFX_event_normal_frame_war
+	portrait = event_target:top_liege_target
+
+	is_triggered_only = yes # on_siege_won_leader random_events
+
+	trigger = {
+		is_nomadic = no
+		is_allowed_to_loot = no
+		NOT = { has_character_flag = disciplinary_commander }
+		FROM = {
+			OR = {
+				holding_type = city
+				holding_type = temple
+				holding_type = castle
+				holding_type = tribal
+			}
+			num_of_buildings = 4
+			location = { NOT = { has_province_modifier = recently_burnt_the_land_not_owner } }
+		}
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 0 has_character_modifier = strong_leader_modifier }
+		modifier = { factor = 1.5 has_character_modifier = weak_leader_modifier }
+		modifier = { factor = 1.5 FROM = { is_capital = yes } }
+		modifier = { factor = 3 has_character_modifier = plundering_leader_modifier }
+	}
+
+	immediate = {
+		FROM = {
+			holder_scope = {
+				save_event_target_as = holder_target
+				top_liege = { save_event_target_as = top_liege_target }
+			}
+			location = {
+				add_province_modifier = { name = recently_burnt_the_land_not_owner years = 10 }
+			}
+		}
+	}
+
+	option = { # Let them
+		name = EVTOPTAwonder210
+		show_portrait = event_target:holder_target
+		trigger_switch = {
+			on_trigger = prestige
+			1000 = { prestige = -200 }
+			500 = { prestige = -100 }
+			100 = { prestige = -50 }
+			0 = { prestige = -20 }
+		}
+		FROM = {
+			destroy_random_building = THIS
+			location = {
+				show_scope_change = no
+				if = {
+					limit = { has_wonder = yes }
+					random = { chance = 30 wonder = { set_wonder_damaged = yes } }
+				}
+			}
+		}
+		wonder_sack_outrage_effect = yes
+		hidden_effect = { remove_character_modifier = plundering_leader_modifier }
+		add_character_modifier = { name = plundering_leader_modifier years = 2 }
+		ai_chance = { factor = 40 }
+	}
+	option = { # Join in
+		name = EVTOPTBwonder210
+		show_portrait = event_target:holder_target
+		if = { limit = { FROM = { holding_type = tribal } } wealth = 5 }
+		else = { wealth = 10 }
+		trigger_switch = {
+			on_trigger = prestige
+			1000 = { prestige = -400 }
+			500 = { prestige = -200 }
+			100 = { prestige = -80 }
+			0 = { prestige = -40 }
+		}
+		random = { chance = 50 add_trait_wroth_effect = yes }
+		random = { chance = 50 add_trait_cruel_effect = yes }
+		FROM = {
+			destroy_random_building = THIS
+			location = {
+				show_scope_change = no
+				if = {
+					limit = { has_wonder = yes }
+					ROOT = { wealth = 30 }
+					random = { chance = 30 wonder = { set_wonder_damaged = yes } }
+				}
+			}
+		}
+		wonder_sack_outrage_effect = yes
+		hidden_effect = { remove_character_modifier = plundering_leader_modifier }
+		add_character_modifier = { name = plundering_leader_modifier years = 2 }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 5 trait = cruel }
+			modifier = { factor = 5 trait = wroth }
+		}
+	}
+	option = { # Stop them
+		name = EVTOPTCwonder210
+		trigger = {
+			NOR = {
+				has_character_modifier = strong_leader_modifier
+				has_character_modifier = weak_leader_modifier
+			}
+		}
+		random_list = {
+			50 = {
+				modifier = { factor = 0.5 NOT = { martial = 2 } }
+				modifier = { factor = 0.7 NOT = { martial = 4 } }
+				modifier = { factor = 0.8 NOT = { martial = 6 } }
+				modifier = { factor = 0.9 NOT = { martial = 10 } }
+				modifier = { factor = 1.2 martial = 13 }
+				modifier = { factor = 1.3 martial = 17 }
+				modifier = { factor = 1.4 martial = 19 }
+				custom_tooltip = { text = EVTTOOLTIPwonder210 }
+				any_controlled_unit = { troops = -0.05 }
+				prestige = 50
+				hidden_effect = { remove_character_modifier = plundering_leader_modifier }
+				add_character_modifier = { name = strong_leader_modifier years = 10 }
+			}
+			50 = {
+				custom_tooltip = { text = EVTTOOLTIPwonder210b }
+				FROM = {
+					destroy_random_building = THIS
+					location = {
+						show_scope_change = no
+						if = { limit = { has_wonder = yes } wonder = { set_wonder_damaged = yes } }
+					}
+				}
+				hidden_effect = { remove_character_modifier = plundering_leader_modifier }
+				add_character_modifier = { name = weak_leader_modifier years = 10 }
+			}
+		}
+		ai_chance = { factor = 50 }
+	}
+}

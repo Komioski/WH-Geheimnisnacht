@@ -1,0 +1,3961 @@
+###############################################################################
+# The armoury
+# Namespace: armoury (was ARMS.1 - ARMS.9138 in wh_armoury_events.txt)
+# Faction: Generic
+# Serves: every ruler who employs a smith (decision employ_a_smith)
+#
+# A ruler sends for a smith. A weaponsmith or armoursmith comes to court,
+# hears what the ruler wants (a sword, a scimitar, a lance, an axe, a mace,
+# a bow, a suit of armour, or among greenskins a choppa, an 'ard axe, a
+# club, a stabba or 'ard armour) and names a price. The work may be done,
+# run into trouble with the materials (and get better for more gold), or
+# be stolen; while the smith works he may teach, train a ward, take a lover
+# or hurt himself. The greater lords of the Asur and the Druchii may ask
+# for their people's great armours, dwarf lords for a runesmith's gromril
+# or runes, and every ruler but the beasts for a goldsmith's crown jewels.
+# Ogres, greenskins and skaven pick through the battlefields instead. After
+# a won battle a commander may bring home an enemy banner.
+#
+# The weaponsmith and armoursmith      armoury.1 - armoury.24
+# Salvage from the battlefields        armoury.30
+# The runesmith                        armoury.40 - armoury.44
+# The goldsmith                        armoury.50 - armoury.62
+# In the smithy                        armoury.70 - armoury.75
+# Banners of the fallen                armoury.80
+#
+# Callers: the decision employ_a_smith in decisions/mnm_society_decisions.txt
+#   (armoury.1), craft_master_rune in decisions/wh_dawi_decisions.txt
+#   (armoury.44), on_battle_won in common/on_actions/wh_on_actions.txt
+#   (armoury.80). The master of the realm's Armoury is
+#   events/WHG_wonder_events.txt, wonder.130. Effects in
+#   common/scripted_effects/WHG_armoury_effects.txt, triggers in
+#   common/scripted_triggers/WHG_armoury_triggers.txt; the smiths' artifacts
+#   and their give_ effects and have_ triggers in
+#   common/scripted_effects/00_scripted_effects.txt,
+#   common/scripted_triggers/00_scripted_triggers.txt and
+#   common/scripted_triggers/00_armoury_triggers.txt.
+# Saved: event targets smith, smith_employer, my_helpful_marshal,
+#   neighbor_province, the_armory, the_wonder, smith_steal_target,
+#   smith_event_target, sex_partner, combatant_1, combatant_2; flags
+#   weaponsmith, armorsmith, gromrilsmith, runecraft, the order tiers
+#   amazing_ / expensive_ / good_ / cheap_ weapons and jewels, the outcomes
+#   smith_ and goldsmith_ success / fail / steal and smith_duel, the weapon
+#   flags weapon_*, armor_set, ard_armour, the elven armour flags, the rune
+#   flags malice_rune / honor_rune / might_rune, preparing_crafting,
+#   got_terrible_sword, got_terrible_armor, terrible_sword_coming,
+#   terrible_armor_coming, battle_banner_found and smith_event_armoury72
+#   - 75; artifact flag stolen_by_smith.
+# Dropped: the capital ransack chain ARMS.9899 - 9911 (no caller left; the
+#   sack of a capital is artifact.100 - 104 in WHG_artifact_events.txt) and
+#   the second goldsmith exit ARMS.9110, the same as ARMS.9127 (armoury.12).
+###############################################################################
+
+namespace = armoury
+
+###############################################################################
+# Part 1: the weaponsmith and armoursmith
+###############################################################################
+
+# armoury.1 What kind of smith?
+# The ruler who employs a smith chooses: a weaponsmith, an armoursmith, a
+# runesmith (dwarfs), a goldsmith, or among greenskins, ogres and skaven a
+# smith of their own or a search of the battlefields. Never mind gives back
+# the decision's cooldown.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = armoury.1
+	desc = {
+		trigger = {
+			NOR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+		text = EVT_DESC_MNM_9130
+	}
+	desc = {
+		trigger = {
+			OR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+		text = EVT_DESC_ARMSA_11
+	}
+	picture = {
+		trigger = { OR = { trait = creature_chaos_dwarf trait = creature_dwarf } }
+		picture = GFX_evt_dwarf_city
+	}
+	picture = { trigger = { trait = creature_ogre } picture = GFX_evt_questing_darklands }
+	picture = {
+		trigger = {
+			OR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+		picture = GFX_evt_orcthrone
+	}
+	picture = GFX_evt_treasure_chamber
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # employ_a_smith
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+	}
+
+	option = { # A greenskin smith
+		name = EVTOPTAarmoury1
+		trigger = {
+			job_marshal = { always = yes }
+			have_all_greenskin_artifacts_all_flags_trigger = no
+			OR = { culture_group = orc_group culture_group = goblin_group }
+			wealth = 100
+		}
+		custom_tooltip = {
+			text = employ_a_smith_weapon_search_tt
+			hidden_effect = {
+				set_character_flag = weaponsmith
+				character_event = { id = armoury.2 days = 50 random = 50 }
+			}
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0.1 any_artifact = { has_artifact_flag = combat_weapon } }
+		}
+	}
+	option = { # Greenskins search the battlefields
+		name = EVTOPTBarmoury1
+		trigger = {
+			job_marshal = { always = yes }
+			have_any_greenskin_salvaged_weapons_all_flags_trigger = no
+			OR = { culture_group = orc_group culture_group = goblin_group }
+		}
+		armoury_salvage_cost_effect = yes
+		custom_tooltip = {
+			text = employ_a_smith_weapon_search_tt
+			hidden_effect = {
+				set_character_flag = weaponsmith
+				character_event = { id = armoury.30 days = 30 random = 30 }
+			}
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0 any_artifact = { has_artifact_flag = combat_weapon } }
+		}
+	}
+	option = { # Skaven search the battlefields
+		name = EVTOPTCarmoury1
+		trigger = {
+			job_marshal = { always = yes }
+			have_all_skaven_artifacts_all_flags_trigger = no
+			culture_group = skaven_group
+		}
+		armoury_salvage_cost_effect = yes
+		custom_tooltip = {
+			text = employ_a_smith_weapon_search_tt
+			hidden_effect = {
+				set_character_flag = weaponsmith
+				character_event = { id = armoury.30 days = 30 random = 30 }
+			}
+		}
+		ai_chance = { factor = 10 }
+	}
+	option = { # Ogres search the battlefields
+		name = EVTOPTDarmoury1
+		trigger = { job_marshal = { always = yes } trait = creature_ogre }
+		armoury_salvage_cost_effect = yes
+		custom_tooltip = {
+			text = employ_a_smith_weapon_search_tt
+			hidden_effect = {
+				set_character_flag = weaponsmith
+				character_event = { id = armoury.30 days = 30 random = 30 }
+			}
+		}
+		ai_chance = {
+			factor = 10
+			modifier = {
+				factor = 0
+				any_artifact = { has_artifact_flag = combat_weapon }
+				any_artifact = { has_artifact_flag = armor }
+			}
+		}
+	}
+	option = { # A weaponsmith
+		name = EVTOPTEarmoury1
+		trigger = {
+			job_marshal = { always = yes }
+			have_all_weaponsmith_artifacts_all_flags_trigger = no
+			NOR = {
+				culture_group = orc_group
+				culture_group = goblin_group
+				trait = creature_ogre
+				culture_group = skaven_group
+			}
+		}
+		custom_tooltip = {
+			text = employ_a_smith_weapon_search_tt
+			hidden_effect = {
+				set_character_flag = weaponsmith
+				character_event = { id = armoury.2 days = 50 random = 50 }
+			}
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0 any_artifact = { has_artifact_flag = combat_weapon } }
+		}
+	}
+	option = { # An armoursmith
+		name = EVTOPTFarmoury1
+		trigger = {
+			job_marshal = { always = yes }
+			NOR = {
+				culture_group = orc_group
+				culture_group = goblin_group
+				culture_group = beastman_group
+				trait = creature_ogre
+				culture_group = skaven_group
+			}
+			have_all_armorsmith_artifacts_all_flags_trigger = no
+		}
+		custom_tooltip = {
+			text = employ_a_smith_armor_search_tt
+			hidden_effect = {
+				set_character_flag = armorsmith
+				character_event = { id = armoury.2 days = 50 random = 50 }
+			}
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0 any_artifact = { has_artifact_flag = armor_set } }
+		}
+	}
+	option = { # A runesmith
+		name = EVTOPTGarmoury1
+		trigger = {
+			job_treasurer = { always = yes }
+			wealth = 300
+			culture_group = dwarf_group
+			have_all_armorsmith_artifacts_all_flags_trigger = no
+		}
+		custom_tooltip = {
+			text = employ_a_smith_rune_search_tt
+			hidden_effect = {
+				set_character_flag = gromrilsmith
+				character_event = { id = armoury.40 days = 25 random = 50 }
+			}
+		}
+		ai_chance = { factor = 2 }
+	}
+	option = { # A goldsmith
+		name = EVTOPTHarmoury1
+		trigger = {
+			OR = {
+				have_duplicate_goldsmith_artifacts_flag_okay_trigger = no
+				have_duplicate_goldsmith_artifacts_flag_good_trigger = no
+				have_duplicate_goldsmith_artifacts_flag_expensive_trigger = no
+				have_duplicate_goldsmith_artifacts_flag_amazing_trigger = no
+			}
+			NOR = {
+				culture_group = orc_group
+				culture_group = goblin_group
+				culture_group = beastman_group
+				culture_group = lizardman_group
+				trait = creature_ogre
+				culture_group = skaven_group
+			}
+		}
+		custom_tooltip = {
+			text = employ_a_smith_gold_search_tt
+			hidden_effect = { character_event = { id = armoury.50 days = 50 random = 50 } }
+		}
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0 any_artifact = { has_artifact_flag = crown_jewel } }
+		}
+	}
+	option = { # Never mind
+		name = EVTOPTIarmoury1
+		custom_tooltip = {
+			text = employ_smith_cd_reset_tt
+			hidden_effect = { remove_character_modifier = employ_a_smith_cd }
+		}
+		ai_chance = { factor = 0 }
+	}
+}
+
+# armoury.2 A smith is found
+# The marshal (or the boyz) found a smith nearby. Invite him, send him away
+# (and let the court's own smiths try, once in a lifetime for a sword and
+# once for armour: armoury.3), or have the realm's Armoury do the work
+# (wonder.130).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = armoury.2
+	desc = {
+		trigger = {
+			OR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+		text = EVTDESCarmoury2A
+	}
+	desc = {
+		trigger = {
+			job_marshal = { always = yes }
+			NOR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+		text = EVTDESCarmoury2B
+	}
+	desc = {
+		trigger = {
+			NOT = { job_marshal = { always = yes } }
+			NOR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+		text = EVTDESCarmoury2C
+	}
+	picture = {
+		trigger = {
+			OR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+		picture = GFX_evt_greenskinhuts
+	}
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	hide_from = yes
+	is_triggered_only = yes # armoury.1
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+	}
+
+	immediate = {
+		hidden_effect = {
+			job_marshal = { save_event_target_as = my_helpful_marshal }
+			armoury_create_smith_effect = yes
+			event_target:smith = {
+				if = {
+					limit = { ROOT = { has_character_flag = armorsmith } }
+					give_nickname = nick_the_armorsmith
+				}
+				else = { give_nickname = nick_the_weaponsmith }
+				if = {
+					limit = { ROOT = { government = greenskin_government } }
+					random_list = {
+						25 = { culture = goblin_main }
+						25 = { culture = orc_main }
+						25 = { culture = goblin_night }
+						25 = { culture = ROOT }
+					}
+				}
+				random_list = { # a weaponsmith's second chance at the craft
+					15 = { change_stewardship = 1 }
+					25 = { change_stewardship = 3 }
+					20 = { artisan_craftsmen_bloodline_increase_score = yes change_stewardship = 5 }
+					10 = { artisan_craftsmen_bloodline_increase_score = yes change_stewardship = 7 }
+				}
+				armoury_smith_talent_effect = yes
+			}
+		}
+		# The province named in the text
+		random_province = {
+			limit = { owner = { is_within_diplo_range = ROOT } }
+			save_event_target_as = neighbor_province
+		}
+		random_demesne_province = {
+			limit = { any_neighbor_province = { NOT = { owner = { character = ROOT } } } }
+			random_neighbor_province = {
+				limit = { NOT = { owner = { character = ROOT } } }
+				save_event_target_as = neighbor_province
+			}
+		}
+		# The realm's Armoury
+		random_realm_wonder_upgrade = {
+			limit = { has_wonder_upgrade = upgrade_armory is_active = yes }
+			save_event_target_as = the_armory
+			wonder = { save_event_target_as = the_wonder }
+		}
+	}
+
+	option = { # Invite them
+		name = {
+			trigger = { NOR = { culture_group = orc_group culture_group = goblin_group } }
+			text = EVTOPTA_MNM_9115
+		}
+		name = {
+			trigger = { OR = { culture_group = orc_group culture_group = goblin_group } }
+			text = EVTOPTA_ARMS_10
+		}
+		custom_tooltip = { text = EVTOPTA_MNM_9115_TT }
+		if = {
+			limit = { event_target:my_helpful_marshal = { always = yes } }
+			event_target:my_helpful_marshal = { show_portrait = yes }
+			reverse_opinion = {
+				who = event_target:my_helpful_marshal
+				modifier = opinion_was_praised
+			}
+		}
+		hidden_effect = {
+			save_event_target_as = smith_employer
+			event_target:smith = { character_event = { id = armoury.4 days = 7 } }
+		}
+	}
+
+	option = { # Send them away
+		name = EVTOPTB_MNM_9115
+		custom_tooltip = { text = EVTOPTB_MNM_9115_TT }
+		hidden_effect = { event_target:smith = { leave_court_and_die_effect = yes } }
+		if = {
+			limit = {
+				has_character_flag = weaponsmith
+				NOR = { has_artifact = terrible_sword has_character_flag = got_terrible_sword }
+			}
+			set_character_flag = got_terrible_sword
+			set_character_flag = terrible_sword_coming
+			character_event = { id = armoury.3 days = 7 }
+		}
+		else_if = {
+			limit = {
+				has_character_flag = armorsmith
+				NOR = { has_artifact = terrible_armor has_character_flag = got_terrible_armor }
+			}
+			set_character_flag = got_terrible_armor
+			set_character_flag = terrible_armor_coming
+			character_event = { id = armoury.3 days = 7 }
+		}
+		clr_character_flag = weaponsmith
+		clr_character_flag = armorsmith
+		ai_chance = { factor = 0 }
+	}
+
+	option = { # The Armoury will do it
+		name = EVTOPTBarmoury2
+		trigger = { # greenskins use their own smiths
+			event_target:the_armory = { always = yes }
+			NOR = { culture_group = orc_group culture_group = goblin_group }
+		}
+		tooltip_info_custom = EVTOPTC_MNM_9115_TT
+		custom_tooltip = { text = EVTOPTB_MNM_9115_TT }
+		hidden_effect = {
+			event_target:smith = { leave_court_and_die_effect = yes }
+			# The Armoury's own master
+			armoury_create_smith_effect = yes
+			event_target:smith = {
+				if = {
+					limit = { ROOT = { has_character_flag = armorsmith } }
+					give_nickname = nick_the_armorsmith
+				}
+				else = { give_nickname = nick_the_weaponsmith }
+			}
+		}
+		character_event = { id = wonder.130 days = 7 } # the armoury's master smith (WHG_wonder_events)
+		ai_chance = { factor = 100 }
+	}
+}
+
+# armoury.3 The court's own smiths have a go
+# The smith was sent away, so the court's own smiths try. Once in a
+# lifetime for a sword and once for armour.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = armoury.3
+	desc = { trigger = { has_character_flag = terrible_sword_coming } text = MNM_9999_DESC }
+	desc = { trigger = { has_character_flag = terrible_armor_coming } text = MNM_9999_DESC_armor }
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	hide_from = yes
+	hide_new = yes
+	is_triggered_only = yes # armoury.2
+
+	trigger = {
+		OR = {
+			has_character_flag = terrible_sword_coming
+			has_character_flag = terrible_armor_coming
+		}
+	}
+
+	option = {
+		name = EVTOPTAarmoury3
+		if = {
+			limit = { has_character_flag = terrible_sword_coming }
+			add_artifact = terrible_sword
+		}
+		else = { add_artifact = terrible_armor }
+		clr_character_flag = terrible_sword_coming
+		clr_character_flag = terrible_armor_coming
+	}
+}
+
+# armoury.4 The smith comes to court
+# Hidden. A week after the invitation the smith is at court: a runesmith
+# hears what is to be made of gromril (armoury.41), any other what kind of
+# weapon (armoury.5).
+# Scope: ROOT is the smith, FROM the employer.
+character_event = {
+	id = armoury.4
+	hide_window = yes
+	is_triggered_only = yes # armoury.2, armoury.40
+
+	immediate = {
+		if = {
+			limit = { FROM = { has_character_flag = gromrilsmith } }
+			event_target:smith_employer = { character_event = { id = armoury.41 } }
+		}
+		else = { event_target:smith_employer = { character_event = { id = armoury.5 } } }
+	}
+}
+
+# armoury.5 What kind of weapon?
+# The ruler chooses what the smith shall make: a sword (not in Araby or
+# Cathay, nor for dwarfs), a scimitar (Araby and Cathay), a lance (not for
+# Druchii or dwarfs), an axe, a mace (not for nomads or Druchii), a bow
+# (nomads, Asur and Asrai), or armour. Greenskins choose a choppa, an 'ard
+# axe (orcs), a club, a stabba (goblins) or 'ard armour.
+# Scope: ROOT is the ruler, FROM the smith.
+character_event = {
+	id = armoury.5
+	desc = {
+		trigger = {
+			NOR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+		text = EVTDESCarmoury5
+	}
+	desc = {
+		trigger = {
+			OR = { trait = creature_orc trait = creature_goblin trait = creature_hobgoblin }
+		}
+		text = EVT_DESC_ARMSA_12
+	}
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.4
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+	}
+
+	option = { # A sword
+		name = EVTOPTAarmoury5
+		trigger = {
+			has_character_flag = weaponsmith
+			have_all_weaponsmith_swords_all_flags_trigger = no
+			NOR = {
+				religion_group = ormazd_gods_group
+				has_cathayan_religion_trigger = yes
+				trait = creature_goblin
+				trait = creature_orc
+				trait = creature_hobgoblin
+				trait = creature_dwarf
+			}
+		}
+		custom_tooltip = { text = EVTOPTA_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = weapon_sword } }
+		ai_chance = { factor = 2 }
+	}
+	option = { # A scimitar
+		name = EVTOPTBarmoury5
+		trigger = {
+			has_character_flag = weaponsmith
+			have_all_weaponsmith_scimitar_all_flags_trigger = no
+			OR = { religion_group = ormazd_gods_group has_cathayan_religion_trigger = yes }
+			NOR = {
+				trait = creature_goblin
+				trait = creature_orc
+				trait = creature_hobgoblin
+				trait = creature_dwarf
+			}
+		}
+		custom_tooltip = { text = EVTOPTB_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = weapon_scimitar } }
+		ai_chance = { factor = 2 }
+	}
+	option = { # A lance
+		name = EVTOPTCarmoury5
+		trigger = {
+			has_character_flag = weaponsmith
+			have_all_weaponsmith_lance_all_flags_trigger = no
+			NOR = {
+				culture_group = druchii_group
+				trait = creature_goblin
+				trait = creature_orc
+				trait = creature_hobgoblin
+				trait = creature_dwarf
+			}
+		}
+		custom_tooltip = { text = EVTOPTC_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = weapon_lance } }
+		ai_chance = { factor = 1 modifier = { factor = 2 is_nomadic = yes } }
+	}
+	option = { # An axe
+		name = EVTOPTDarmoury5
+		trigger = {
+			has_character_flag = weaponsmith
+			have_all_weaponsmith_axe_all_flags_trigger = no
+			NOR = { trait = creature_goblin trait = creature_orc trait = creature_hobgoblin }
+		}
+		custom_tooltip = { text = EVTOPTD_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = weapon_axe } }
+		ai_chance = { factor = 1 modifier = { factor = 3 is_tribal = yes } }
+	}
+	option = { # A mace
+		name = EVTOPTEarmoury5
+		trigger = {
+			is_nomadic = no
+			has_character_flag = weaponsmith
+			have_all_weaponsmith_mace_all_flags_trigger = no
+			NOR = {
+				culture_group = druchii_group
+				trait = creature_goblin
+				trait = creature_orc
+				trait = creature_hobgoblin
+			}
+		}
+		custom_tooltip = { text = EVTOPTE_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = weapon_mace } }
+		ai_chance = { factor = 1 modifier = { factor = 5 culture_group = dwarf_group } }
+	}
+	option = { # A bow
+		name = EVTOPTFarmoury5
+		trigger = {
+			OR = { is_nomadic = yes culture_group = asur_group culture_group = asrai_group }
+			has_character_flag = weaponsmith
+			have_all_weaponsmith_bow_all_flags_trigger = no
+			NOR = {
+				culture_group = druchii_group
+				trait = creature_goblin
+				trait = creature_orc
+				trait = creature_hobgoblin
+			}
+		}
+		custom_tooltip = { text = EVTOPTF_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = weapon_bow } }
+		ai_chance = { factor = 5 }
+	}
+	option = { # A choppa
+		name = EVTOPTGarmoury5
+		trigger = {
+			has_character_flag = weaponsmith
+			have_all_greenskinweaps_swords_all_flags_trigger = no
+			OR = { trait = creature_goblin trait = creature_orc trait = creature_hobgoblin }
+			NOR = {
+				has_artifact = orc_big_choppa
+				has_artifact = giant_choppa
+				has_artifact = giant_club
+			}
+		}
+		custom_tooltip = { text = EVTOPTE_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = weapon_choppa } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 5 trait = creature_orc }
+			modifier = { factor = 0 trait = creature_goblin }
+			modifier = { factor = 0.2 trait = creature_hobgoblin }
+			modifier = { factor = 0 any_artifact = { has_artifact_flag = combat_weapon } }
+		}
+	}
+	option = { # An 'ard axe
+		name = EVTOPTHarmoury5
+		trigger = {
+			has_character_flag = weaponsmith
+			have_all_greenskinweaps_swords_all_flags_trigger = no
+			trait = creature_orc
+			NOR = { has_artifact = greenskin_ax has_artifact = giant_ax }
+		}
+		custom_tooltip = { text = EVTOPTE_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = weapon_ax } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 0 any_artifact = { has_artifact_flag = combat_weapon } }
+		}
+	}
+	option = { # A club
+		name = EVTOPTIarmoury5
+		trigger = {
+			has_character_flag = weaponsmith
+			have_all_greenskinweaps_swords_all_flags_trigger = no
+			OR = { trait = creature_goblin trait = creature_hobgoblin trait = creature_orc }
+			NOR = { has_artifact = club has_artifact = big_club has_artifact = giant_club }
+		}
+		custom_tooltip = { text = EVTOPTE_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = weapon_club } }
+		ai_chance = {
+			factor = 1
+			modifier = { factor = 5 culture = orc_savage }
+			modifier = { factor = 0 any_artifact = { has_artifact_flag = combat_weapon } }
+		}
+	}
+	option = { # A stabba
+		name = EVTOPTJarmoury5
+		trigger = {
+			has_character_flag = weaponsmith
+			have_all_gobweaps_swords_all_flags_trigger = no
+			OR = { trait = creature_hobgoblin trait = creature_goblin }
+			NOR = {
+				has_artifact = dirk
+				has_artifact = goblin_stabba
+				has_artifact = back_stabba_blade
+			}
+		}
+		custom_tooltip = { text = EVTOPTE_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = weapon_stabba } }
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 0 any_artifact = { has_artifact_flag = combat_weapon } }
+		}
+	}
+	option = { # 'Ard armour
+		name = EVTOPTKarmoury5
+		trigger = {
+			OR = { trait = creature_goblin trait = creature_hobgoblin trait = creature_orc }
+			NAND = {
+				OR = {
+					has_artifact = greenskin_ard_armour
+					has_artifact = greenskin_ard_armour_2
+					has_artifact = greenskin_ard_armour_3
+				}
+				has_artifact = greenskin_gnashas
+			}
+		}
+		custom_tooltip = { text = EVTOPTG_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = ard_armour } }
+		ai_chance = {
+			factor = 5
+			modifier = { factor = 0 any_artifact = { has_artifact_flag = armor } }
+		}
+	}
+	option = { # Armour
+		name = EVTOPTLarmoury5
+		trigger = { has_character_flag = armorsmith }
+		custom_tooltip = { text = EVTOPTG_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = armor_set } }
+	}
+
+	after = {
+		hidden_effect = { FROM = { character_event = { id = armoury.6 days = 7 } } }
+	}
+}
+
+# armoury.6 The smith names a price
+# Hidden. A week later the smith comes back with sketches (armoury.7).
+# Scope: ROOT is the smith, FROM the employer.
+character_event = {
+	id = armoury.6
+	hide_window = yes
+	is_triggered_only = yes # armoury.5
+
+	immediate = {
+		event_target:smith_employer = { character_event = { id = armoury.7 } }
+	}
+}
+
+# armoury.7 And how much are you willing to pay?
+# The smith shows what can be made. Greenskins pay in gold and prestige
+# for a good or great weapon, but their smith may run off with it (duel,
+# armoury.23) or botch it. Others choose the best money can buy
+# (emperors), something nice (kings and emperors) or something cheap. A
+# great Asur or Druchii lord ordering armour may ask for his people's
+# great armours (armoury.8).
+# Scope: ROOT is the ruler, FROM the smith.
+character_event = {
+	id = armoury.7
+	desc = EVTDESCarmoury7
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.6
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+	}
+
+	option = { # Greenskins: make it proppa
+		name = EVTOPTA_MNM_9120_TT_GREENSKIN
+		trigger = {
+			OR = { trait = creature_goblin trait = creature_hobgoblin trait = creature_orc }
+			OR = {
+				AND = { tier = EMPEROR prestige = 500 wealth = 240 }
+				AND = { tier = KING prestige = 400 wealth = 180 }
+				AND = { lower_tier_than = KING prestige = 300 wealth = 120 }
+			}
+		}
+		custom_tooltip = { text = EVTOPTA_MNM_9120_TT_GREENSKIN }
+		if = {
+			limit = { tier = EMPEROR }
+			prestige = -500
+			scaled_wealth = { value = -4.5 min = -240 max = -800 }
+		}
+		else_if = {
+			limit = { tier = KING }
+			prestige = -400
+			scaled_wealth = { value = -3.5 min = -180 max = -500 }
+		}
+		else = { prestige = -300 scaled_wealth = { value = -1.5 min = -120 max = -400 } }
+		hidden_effect = {
+			random_list = {
+				40 = { # Done
+					modifier = { factor = 0.7 FROM = { stewardship <= 2 } }
+					modifier = { factor = 0.7 FROM = { stewardship <= 4 } }
+					modifier = { factor = 0.7 FROM = { stewardship <= 6 } }
+					modifier = { factor = 0.7 FROM = { stewardship <= 8 } }
+					modifier = { factor = 0.7 FROM = { stewardship <= 10 } }
+					modifier = { factor = 1.1 FROM = { stewardship >= 10 } }
+					modifier = { factor = 1.1 FROM = { stewardship >= 12 } }
+					modifier = { factor = 1.1 FROM = { stewardship >= 14 } }
+					modifier = { factor = 1.1 FROM = { stewardship >= 16 } }
+					modifier = { factor = 1.1 FROM = { stewardship >= 18 } }
+					modifier = { factor = 1.1 FROM = { stewardship >= 20 } }
+					modifier = { factor = 1.3 FROM = { trait = greedy } }
+					modifier = { factor = 1.3 FROM = { trait = diligent } }
+					modifier = { factor = 1.3 FROM = { trait = patient } }
+					modifier = { factor = 1.3 FROM = { is_smart_trigger = yes } }
+					modifier = { factor = 1.5 event_target:the_armory = { always = yes } }
+					event_target:smith = { set_character_flag = good_weapons }
+					set_character_flag = good_weapons
+					set_character_flag = smith_success
+				}
+				40 = { # The smith wants to keep it
+					set_character_flag = smith_duel
+					random_list = {
+						50 = {
+							event_target:smith = { set_character_flag = good_weapons }
+							set_character_flag = good_weapons
+						}
+						50 = {
+							event_target:smith = { set_character_flag = expensive_weapons }
+							set_character_flag = expensive_weapons
+						}
+					}
+				}
+				10 = { # The smith runs off with it
+					trigger = {
+						NOT = {
+							any_owned_bloodline = {
+								has_bloodline_flag = bloodline_artisan_craftsmen
+							}
+						}
+					}
+					modifier = { factor = 1.3 FROM = { trait = envious } }
+					modifier = { factor = 0.2 FROM = { trait = charitable } }
+					modifier = { factor = 0.2 FROM = { trait = content } }
+					modifier = { factor = 1.5 FROM = { trait = ambitious } }
+					modifier = { factor = 1.3 FROM = { trait = deceitful } }
+					modifier = { factor = 1.3 FROM = { trait = creature_goblin } }
+					modifier = { factor = 1.3 FROM = { trait = creature_hobgoblin } }
+					event_target:smith = { set_character_flag = expensive_weapons }
+					set_character_flag = expensive_weapons
+					set_character_flag = smith_steal
+				}
+				10 = { # Botched
+					event_target:smith = { set_character_flag = cheap_weapons }
+					set_character_flag = cheap_weapons
+					set_character_flag = smith_success
+				}
+			}
+			character_event = { id = armoury.10 days = 50 random = 100 }
+		}
+		ai_chance = {
+			factor = 33
+			modifier = { factor = 10 OR = { tier = KING tier = DUKE } }
+			modifier = { factor = 3 lower_tier_than = DUKE }
+			modifier = { factor = 3 tier = EMPEROR }
+		}
+	}
+
+	option = { # The best money can buy
+		name = EVTOPTBarmoury7
+		trigger = {
+			tier = EMPEROR
+			NOR = {
+				trait = creature_goblin
+				trait = creature_hobgoblin
+				trait = creature_orc
+				trait = creature_dwarf
+				armoury_elven_armour_trigger = yes
+			}
+		}
+		if = {
+			limit = { FROM = { has_character_flag = weapon_sword } }
+			custom_tooltip = { text = EVTOPTA_MNM_9120_TT_SWORD_EMPEROR }
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_scimitar } }
+			custom_tooltip = { text = EVTOPTA_MNM_9120_TT_SWORDSCIMITAR_EMPEROR }
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_lance } }
+			custom_tooltip = { text = EVTOPTA_MNM_9120_TT_LANCE_EMPEROR }
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_axe } }
+			custom_tooltip = { text = EVTOPTA_MNM_9120_TT_AXE_EMPEROR }
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_mace } }
+			custom_tooltip = { text = EVTOPTA_MNM_9120_TT_MACE_EMPEROR }
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_bow } }
+			custom_tooltip = { text = EVTOPTA_MNM_9120_TT_BOW_EMPEROR }
+		}
+		else = { custom_tooltip = { text = EVTOPTA_MNM_9120_TT_ARMOR_EMPEROR } }
+		scaled_wealth = { value = -3.5 min = -400 max = -2000 }
+		hidden_effect = { armoury_order_expensive_effect = yes }
+		ai_chance = {
+			factor = 33
+			modifier = { factor = 10 tier = EMPEROR }
+			modifier = { factor = 0 NAND = { wealth = 400 yearly_income = 40 } }
+		}
+	}
+
+	option = { # The great armours of the elves
+		name = EVTOPTCarmoury7
+		trigger = { wealth = 450 armoury_elven_armour_trigger = yes }
+		if = {
+			limit = { culture_group = druchii_group }
+			custom_tooltip = { text = EVTOPTA_ARMS_9120_TT_DRUCHII_ARMOR }
+		}
+		else = { custom_tooltip = { text = EVTOPTA_ARMS_9120_TT_ASUR_ARMOR } }
+		hidden_effect = { character_event = { id = armoury.8 days = 7 } }
+		ai_chance = {
+			factor = 33
+			modifier = { factor = 10 tier = EMPEROR }
+			modifier = { factor = 3 tier = KING }
+			modifier = { factor = 0 NAND = { wealth = 400 yearly_income = 40 } }
+		}
+	}
+
+	option = { # Something nice
+		name = { trigger = { tier = EMPEROR } text = EVTOPTB_MNM_9120 }
+		name = { trigger = { tier = KING } text = EVTOPTB_MNM_9120_KING }
+		trigger = {
+			higher_tier_than = DUKE
+			NOR = { trait = creature_goblin trait = creature_hobgoblin trait = creature_orc }
+		}
+		if = {
+			limit = { FROM = { has_character_flag = weapon_sword } }
+			if = {
+				limit = { tier = EMPEROR }
+				custom_tooltip = { text = EVTOPTB_MNM_9120_TT_SWORD_EMPEROR }
+			}
+			else = { custom_tooltip = { text = EVTOPTB_MNM_9120_TT_SWORD_KING } }
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_scimitar } }
+			if = {
+				limit = { tier = EMPEROR }
+				custom_tooltip = { text = EVTOPTB_MNM_9120_TT_SWORDSCIMITAR_EMPEROR }
+			}
+			else = { custom_tooltip = { text = EVTOPTB_MNM_9120_TT_SWORDSCIMITAR_KING } }
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_lance } }
+			if = {
+				limit = { tier = EMPEROR }
+				custom_tooltip = { text = EVTOPTB_MNM_9120_TT_LANCE_EMPEROR }
+			}
+			else = { custom_tooltip = { text = EVTOPTB_MNM_9120_TT_LANCE_KING } }
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_axe } }
+			if = {
+				limit = { tier = EMPEROR }
+				custom_tooltip = { text = EVTOPTB_MNM_9120_TT_AXE_EMPEROR }
+			}
+			else = { custom_tooltip = { text = EVTOPTB_MNM_9120_TT_AXE_KING } }
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_mace } }
+			if = {
+				limit = { tier = EMPEROR }
+				custom_tooltip = { text = EVTOPTB_MNM_9120_TT_MACE_EMPEROR }
+			}
+			else = { custom_tooltip = { text = EVTOPTB_MNM_9120_TT_MACE_KING } }
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = weapon_bow } }
+			if = {
+				limit = { tier = EMPEROR }
+				custom_tooltip = { text = EVTOPTB_MNM_9120_TT_BOW_EMPEROR }
+			}
+			else = { custom_tooltip = { text = EVTOPTB_MNM_9120_TT_BOW_KING } }
+		}
+		else = {
+			if = {
+				limit = { tier = EMPEROR }
+				custom_tooltip = { text = EVTOPTB_MNM_9120_TT_ARMOR_EMPEROR }
+			}
+			else = { custom_tooltip = { text = EVTOPTB_MNM_9120_TT_ARMOR_KING } }
+		}
+		scaled_wealth = { value = -2.5 min = -180 max = -500 }
+		hidden_effect = { armoury_order_good_effect = yes }
+		ai_chance = {
+			factor = 33
+			modifier = { factor = 10 tier = KING }
+			modifier = { factor = 3 tier = EMPEROR }
+			modifier = { factor = 0 NAND = { wealth = 180 yearly_income = 18 } }
+		}
+	}
+
+	option = { # Something I can afford
+		name = { trigger = { tier = EMPEROR } text = EVTOPTC_MNM_9120 }
+		name = { trigger = { tier = KING } text = EVTOPTC_MNM_9120_KING }
+		name = { trigger = { lower_tier_than = KING } text = EVTOPTC_MNM_9120_GENERIC }
+		trigger = {
+			NOR = { trait = creature_goblin trait = creature_hobgoblin trait = creature_orc }
+		}
+		if = {
+			limit = { FROM = { has_character_flag = weapon_bow } }
+			if = {
+				limit = { tier = EMPEROR }
+				custom_tooltip = { text = EVTOPTC_MNM_9120_TT_BOW_EMPEROR }
+			}
+			else_if = {
+				limit = { tier = KING }
+				custom_tooltip = { text = EVTOPTC_MNM_9120_TT_BOW_KING }
+			}
+			else = { custom_tooltip = { text = EVTOPTC_MNM_9120_TT_BOW_GENERIC } }
+		}
+		else_if = {
+			limit = { FROM = { has_character_flag = armor_set } }
+			if = {
+				limit = { tier = EMPEROR }
+				custom_tooltip = { text = EVTOPTC_MNM_9120_TT_ARMOR_EMPEROR }
+			}
+			else_if = {
+				limit = { tier = KING }
+				custom_tooltip = { text = EVTOPTC_MNM_9120_TT_ARMOR_KING }
+			}
+			else = { custom_tooltip = { text = EVTOPTC_MNM_9120_TT_ARMOR_GENERIC } }
+		}
+		else = {
+			if = {
+				limit = { tier = EMPEROR }
+				custom_tooltip = { text = EVTOPTC_MNM_9120_TT_SWORDSCIMITAR_EMPEROR }
+			}
+			else_if = {
+				limit = { tier = KING }
+				custom_tooltip = { text = EVTOPTC_MNM_9120_TT_SWORDSCIMITAR_KING }
+			}
+			else = { custom_tooltip = { text = EVTOPTC_MNM_9120_TT_SWORDSCIMITAR_GENERIC } }
+		}
+		scaled_wealth = { value = -1.25 min = -50 max = -100 }
+		hidden_effect = { armoury_order_cheap_effect = yes }
+		ai_chance = {
+			factor = 33
+			modifier = { factor = 10 tier = COUNT }
+			modifier = { factor = 3 OR = { tier = KING tier = DUKE } }
+			modifier = { factor = 0 NAND = { wealth = 75 yearly_income = 7.5 } }
+		}
+	}
+
+	option = { # Actually, no
+		name = EVTOPTD_MNM_9120
+		custom_tooltip = { text = EVTOPTD_MNM_9120_TT }
+		clr_character_flag = weaponsmith
+		clr_character_flag = armorsmith
+		hidden_effect = { FROM = { character_event = { id = armoury.12 days = 5 } } }
+		ai_chance = {
+			factor = 15
+			modifier = {
+				factor = 20
+				NOR = { has_education_martial_trigger = yes has_lifestyle_martial_trigger = yes }
+			}
+		}
+	}
+}
+
+# armoury.8 The great armours of the elves
+# The smith offers the rare materials. Druchii: armour of dark meteorite or
+# a cloak of sea dragon scales. Asur: armour of ithilmar or dragon armour
+# from the forges of Caledor (cheaper for the Caledorians); Nagarythe
+# lords may also ask for shadow armour.
+# Scope: ROOT is the ruler, event_target:smith the smith.
+character_event = {
+	id = armoury.8
+	desc = { trigger = { culture_group = druchii_group } text = EVTDESCarmoury8A }
+	desc = {
+		trigger = { culture_group = asur_group NOT = { culture = nagarythi } }
+		text = EVTDESCarmoury8B
+	}
+	desc = { trigger = { culture = nagarythi } text = EVTDESCarmoury8C }
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.7
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+		event_target:smith = { is_alive = yes }
+	}
+
+	option = { # Dark meteorite
+		name = EVTOPTAarmoury8
+		trigger = {
+			culture_group = druchii_group
+			NOR = {
+				has_artifact = druchii_meteorite_armour
+				has_artifact = druchii_sea_dragon_cloak
+			}
+			wealth = 625
+		}
+		custom_tooltip = { text = EVTTOOLTIParmoury8A }
+		scaled_wealth = { value = -4.5 min = -625 max = -2000 }
+		hidden_effect = {
+			event_target:smith = { set_character_flag = druchii_meteorite_armour_flag }
+			armoury_order_expensive_effect = yes
+		}
+		ai_chance = { factor = 1 }
+	}
+	option = { # Sea dragon scales
+		name = EVTOPTBarmoury8
+		trigger = {
+			culture_group = druchii_group
+			NOR = {
+				has_artifact = druchii_meteorite_armour
+				has_artifact = druchii_sea_dragon_cloak
+			}
+			wealth = 400
+		}
+		custom_tooltip = { text = EVTTOOLTIParmoury8B }
+		scaled_wealth = { value = -3.5 min = -400 max = -2000 }
+		hidden_effect = {
+			event_target:smith = { set_character_flag = druchii_sea_dragon_cloak_flag }
+			armoury_order_expensive_effect = yes
+		}
+		ai_chance = { factor = 1 }
+	}
+	option = { # Dragon armour from Caledor
+		name = EVTOPTCarmoury8
+		trigger = {
+			culture_group = asur_group
+			NOR = {
+				has_artifact = asur_artifact_dragon_armour
+				has_artifact = asur_artifact_ithilmar_armour
+				has_artifact = asur_artifact_shadow_armour
+			}
+			OR = { AND = { culture = caledori wealth = 550 } wealth = 750 }
+		}
+		custom_tooltip = { text = EVTTOOLTIParmoury8C }
+		if = {
+			limit = { culture = caledori }
+			scaled_wealth = { value = -4.5 min = -550 max = -2000 }
+		}
+		else = { scaled_wealth = { value = -6.5 min = -750 max = -2000 } }
+		hidden_effect = {
+			event_target:smith = { set_character_flag = asur_artifact_dragon_armour_flag }
+			armoury_order_expensive_effect = yes
+		}
+		ai_chance = { factor = 1 modifier = { factor = 3 culture = caledori } }
+	}
+	option = { # Ithilmar
+		name = EVTOPTDarmoury8
+		trigger = {
+			culture_group = asur_group
+			NOR = {
+				has_artifact = asur_artifact_dragon_armour
+				has_artifact = asur_artifact_ithilmar_armour
+				has_artifact = asur_artifact_shadow_armour
+			}
+			wealth = 450
+		}
+		custom_tooltip = { text = EVTTOOLTIParmoury8D }
+		scaled_wealth = { value = -4.2 min = -450 max = -2000 }
+		hidden_effect = {
+			event_target:smith = { set_character_flag = asur_artifact_ithilmar_armour_flag }
+			armoury_order_expensive_effect = yes
+		}
+		ai_chance = { factor = 1 }
+	}
+	option = { # Shadow armour of Nagarythe
+		name = EVTOPTEarmoury8
+		trigger = {
+			culture = nagarythi
+			NOT = { has_artifact = asur_artifact_shadow_armour }
+			wealth = 600
+		}
+		custom_tooltip = { text = EVTTOOLTIParmoury8E }
+		scaled_wealth = { value = -4.8 min = -600 max = -2000 }
+		hidden_effect = {
+			event_target:smith = { set_character_flag = asur_artifact_shadow_armour_flag }
+			armoury_order_expensive_effect = yes
+		}
+		ai_chance = { factor = 1 modifier = { factor = 3 culture = nagarythi } }
+	}
+	option = { # Actually, no
+		name = EVTOPTD_MNM_9120
+		custom_tooltip = { text = EVTOPTD_MNM_9120_TT }
+		clr_character_flag = weaponsmith
+		clr_character_flag = armorsmith
+		hidden_effect = { event_target:smith = { character_event = { id = armoury.12 days = 5 } } }
+		ai_chance = { factor = 0 }
+	}
+}
+
+# armoury.10 The smith reports
+# Hidden. The work is done, in trouble, stolen or claimed by a greenskin
+# smith. A dead smith returns what was left of the gold (armoury.11).
+# Scope: ROOT is the employer.
+character_event = {
+	id = armoury.10
+	hide_window = yes
+	is_triggered_only = yes # armoury_order_*_effect, armoury.7, armoury.14, armoury.41
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+		event_target:smith = { is_alive = yes }
+	}
+
+	fail_trigger_effect = { character_event = { id = armoury.11 } }
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = smith_success }
+			event_target:smith = { character_event = { id = armoury.15 } }
+		}
+		else_if = {
+			limit = { has_character_flag = smith_fail }
+			event_target:smith = { character_event = { id = armoury.13 } }
+		}
+		else_if = {
+			limit = { has_character_flag = smith_steal }
+			event_target:smith = { character_event = { id = armoury.21 } }
+		}
+		else_if = {
+			limit = { has_character_flag = smith_duel }
+			event_target:smith = { character_event = { id = armoury.23 } }
+		}
+		clr_character_flag = smith_success
+		clr_character_flag = smith_fail
+		clr_character_flag = smith_steal
+		clr_character_flag = smith_duel
+	}
+}
+
+# armoury.11 The smith is dead
+# The smith died before finishing; his heirs return what was left of the
+# gold.
+# Scope: ROOT is the employer.
+character_event = {
+	id = armoury.11
+	desc = EVTDESC_MNM_9112
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	hide_from = yes
+	is_triggered_only = yes # armoury.10, armoury.70
+
+	option = { # A great sum returned
+		name = EVTOPTA_MNM_9112
+		trigger = {
+			OR = { has_character_flag = amazing_weapons has_character_flag = expensive_weapons }
+		}
+		scaled_wealth = { value = 3.5 min = 230 }
+	}
+	option = { # A fair sum returned
+		name = EVTOPTB_MNM_9112
+		trigger = { has_character_flag = good_weapons }
+		scaled_wealth = { value = 1.8 min = 100 }
+	}
+	option = { # A little returned
+		name = EVTOPTC_MNM_9112
+		trigger = {
+			NOR = {
+				has_character_flag = amazing_weapons
+				has_character_flag = expensive_weapons
+				has_character_flag = good_weapons
+			}
+		}
+		scaled_wealth = { value = 0.8 min = 40 }
+	}
+
+	after = {
+		armoury_clear_order_effect = yes
+		clr_character_flag = gromrilsmith
+	}
+}
+
+# armoury.12 The smith leaves
+# Hidden. A smith without land leaves the court with any unlanded spouse.
+# Scope: the smith.
+character_event = {
+	id = armoury.12
+	hide_window = yes
+	is_triggered_only = yes # armoury.2 - armoury.20, armoury.52 - armoury.57
+
+	trigger = {
+		is_landed = no
+	}
+
+	immediate = {
+		any_spouse = { limit = { dynasty = none } leave_court_and_die_effect = yes }
+		leave_court_and_die_effect = yes
+	}
+}
+
+# armoury.13 Trouble with the materials
+# Hidden. The smith brings word to the employer (armoury.14).
+# Scope: ROOT is the smith.
+character_event = {
+	id = armoury.13
+	hide_window = yes
+	is_triggered_only = yes # armoury.10
+
+	immediate = {
+		if = {
+			limit = { NOT = { event_target:smith_employer = { is_alive = yes } } }
+			liege = { save_event_target_as = smith_employer }
+		}
+		event_target:smith_employer = { character_event = { id = armoury.14 } }
+	}
+}
+
+# armoury.14 Better materials found
+# The smith has found better metal and tools nearby. Pay for an expedition
+# and the work rises a grade, or settle for what was ordered.
+# Scope: ROOT is the employer, FROM the smith.
+character_event = {
+	id = armoury.14
+	desc = EVTDESCarmoury14
+	picture = GFX_evt_merchant_caravan
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.13
+
+	option = { # The best
+		name = EVTOPTA_MNM_9109
+		trigger = { FROM = { has_character_flag = expensive_weapons } }
+		custom_tooltip = { text = EVTOPTA_MNM_9129_TT_NEW }
+		scaled_wealth = { value = -2 min = -300 max = -1000 }
+		hidden_effect = {
+			FROM = { clr_character_flag = expensive_weapons set_character_flag = amazing_weapons }
+			clr_character_flag = expensive_weapons
+			set_character_flag = amazing_weapons
+		}
+	}
+	option = { # Settle
+		name = EVTOPTB_MNM_9109
+		trigger = { FROM = { has_character_flag = expensive_weapons } }
+		custom_tooltip = { text = EVTOPTB_MNM_9129_TT_NEW }
+	}
+	option = { # Better
+		name = EVTOPTC_MNM_9109
+		trigger = { FROM = { has_character_flag = good_weapons } }
+		custom_tooltip = { text = EVTOPTA_MNM_9129_TT_NEW }
+		scaled_wealth = { value = -1.25 min = -100 max = -500 }
+		hidden_effect = {
+			FROM = { clr_character_flag = good_weapons set_character_flag = expensive_weapons }
+			clr_character_flag = good_weapons
+			set_character_flag = expensive_weapons
+		}
+	}
+	option = { # Settle
+		name = EVTOPTD_MNM_9109
+		trigger = { FROM = { has_character_flag = good_weapons } }
+		custom_tooltip = { text = EVTOPTB_MNM_9129_TT_NEW }
+	}
+
+	after = {
+		hidden_effect = {
+			clr_character_flag = smith_fail
+			set_character_flag = smith_success
+			character_event = { id = armoury.10 days = 50 random = 100 }
+		}
+	}
+}
+
+# armoury.15 The work is done
+# Hidden. The smith brings it: a greenskin's weapon (armoury.20), or by the
+# grade of the work armoury.16 - armoury.19.
+# Scope: ROOT is the smith.
+character_event = {
+	id = armoury.15
+	hide_window = yes
+	is_triggered_only = yes # armoury.10
+
+	immediate = {
+		if = {
+			limit = { NOT = { event_target:smith_employer = { is_alive = yes } } }
+			liege = { save_event_target_as = smith_employer }
+		}
+		if = {
+			limit = {
+				event_target:smith_employer = {
+					OR = { trait = creature_goblin trait = creature_hobgoblin trait = creature_orc }
+				}
+			}
+			event_target:smith_employer = { character_event = { id = armoury.20 } }
+		}
+		else_if = {
+			limit = { has_character_flag = amazing_weapons }
+			event_target:smith_employer = { character_event = { id = armoury.16 } }
+		}
+		else_if = {
+			limit = { has_character_flag = expensive_weapons }
+			event_target:smith_employer = { character_event = { id = armoury.17 } }
+		}
+		else_if = {
+			limit = { has_character_flag = good_weapons }
+			event_target:smith_employer = { character_event = { id = armoury.18 } }
+		}
+		else = { event_target:smith_employer = { character_event = { id = armoury.19 } } }
+	}
+}
+
+# armoury.16 A masterwork
+# The finest work the smith ever made; the ruler names it. A runesmith's
+# gromril masterwork has its own reward.
+# Scope: ROOT is the employer, FROM the smith.
+character_event = {
+	id = armoury.16
+	desc = {
+		trigger = { FROM = { NOT = { has_character_flag = armor_set } } }
+		text = EVTDESCarmoury16A
+	}
+	desc = { trigger = { FROM = { has_character_flag = armor_set } } text = EVTDESCarmoury16B }
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.15
+
+	option = { # First name
+		name = {
+			text = EVTOPTA_MNM_40000_SWORD
+			trigger = { FROM = { has_character_flag = weapon_sword } }
+		}
+		name = {
+			text = EVTOPTA_MNM_40000_SCIMITAR
+			trigger = { FROM = { has_character_flag = weapon_scimitar } }
+		}
+		name = {
+			text = EVTOPTA_MNM_40000_LANCE
+			trigger = { FROM = { has_character_flag = weapon_lance } }
+		}
+		name = {
+			text = EVTOPTA_MNM_40000_AXE
+			trigger = { FROM = { has_character_flag = weapon_axe } }
+		}
+		name = {
+			text = EVTOPTA_MNM_40000_MACE
+			trigger = { FROM = { has_character_flag = weapon_mace } }
+		}
+		name = {
+			text = EVTOPTA_MNM_40000_BOW
+			trigger = { FROM = { has_character_flag = weapon_bow } }
+		}
+		name = {
+			text = EVTOPTA_MNM_40000_ARMOR
+			trigger = {
+				FROM = {
+					has_character_flag = armor_set
+					NOR = {
+						has_character_flag = druchii_meteorite_armour_flag
+						has_character_flag = druchii_sea_dragon_cloak_flag
+					}
+				}
+			}
+		}
+		name = {
+			text = EVTOPTB_ARM_9122_METEORITEB
+			trigger = { FROM = { has_character_flag = druchii_meteorite_armour_flag } }
+		}
+		name = {
+			text = EVTOPTB_ARM_9122_DRAGON_SCALEB
+			trigger = { FROM = { has_character_flag = druchii_sea_dragon_cloak_flag } }
+		}
+		trigger = { NOT = { has_character_flag = gromrilsmith } }
+		if = {
+			limit = { have_duplicate_smith_artifacts_flag_amazing_optionA_trigger = no }
+			give_smith_artifacts_flag_amazing_optionA_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 3.5 min = 230 max = 2000 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+	option = { # The runesmith's masterwork
+		name = EVTOPTAarmoury16
+		trigger = { has_character_flag = gromrilsmith }
+		if = {
+			limit = { have_duplicate_runesmith_artifacts_flag_amazing_option_trigger = no }
+			give_runesmith_artifacts_flag_amazing_option_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 3.5 min = 230 max = 2000 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+	option = { # Second name
+		name = {
+			text = EVTOPTB_MNM_40000_SWORD
+			trigger = { FROM = { has_character_flag = weapon_sword } }
+		}
+		name = {
+			text = EVTOPTB_MNM_40000_SCIMITAR
+			trigger = { FROM = { has_character_flag = weapon_scimitar } }
+		}
+		name = {
+			text = EVTOPTB_MNM_40000_LANCE
+			trigger = { FROM = { has_character_flag = weapon_lance } }
+		}
+		name = {
+			text = EVTOPTB_MNM_40000_AXE
+			trigger = { FROM = { has_character_flag = weapon_axe } }
+		}
+		name = {
+			text = EVTOPTB_MNM_40000_MACE
+			trigger = { FROM = { has_character_flag = weapon_mace } }
+		}
+		name = {
+			text = EVTOPTB_MNM_40000_BOW
+			trigger = { FROM = { has_character_flag = weapon_bow } }
+		}
+		name = {
+			text = EVTOPTB_MNM_40000_ARMOR
+			trigger = { FROM = { has_character_flag = armor_set } }
+		}
+		trigger = {
+			NOT = { has_character_flag = gromrilsmith }
+			FROM = {
+				NOR = {
+					has_character_flag = druchii_meteorite_armour_flag
+					has_character_flag = druchii_sea_dragon_cloak_flag
+				}
+			}
+		}
+		if = {
+			limit = { have_duplicate_smith_artifacts_flag_amazing_optionB_trigger = no }
+			give_smith_artifacts_flag_amazing_optionB_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 3.5 min = 230 max = 2000 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+	option = { # Third name
+		name = {
+			text = EVTOPTC_MNM_40000_SWORD
+			trigger = { FROM = { has_character_flag = weapon_sword } }
+		}
+		name = {
+			text = EVTOPTC_MNM_40000_SCIMITAR
+			trigger = { FROM = { has_character_flag = weapon_scimitar } }
+		}
+		name = {
+			text = EVTOPTC_MNM_40000_LANCE
+			trigger = { FROM = { has_character_flag = weapon_lance } }
+		}
+		name = {
+			text = EVTOPTC_MNM_40000_AXE
+			trigger = { FROM = { has_character_flag = weapon_axe } }
+		}
+		name = {
+			text = EVTOPTC_MNM_40000_MACE
+			trigger = { FROM = { has_character_flag = weapon_mace } }
+		}
+		name = {
+			text = EVTOPTC_MNM_40000_BOW
+			trigger = { FROM = { has_character_flag = weapon_bow } }
+		}
+		name = {
+			text = EVTOPTC_MNM_40000_ARMOR
+			trigger = { FROM = { has_character_flag = armor_set } }
+		}
+		trigger = {
+			NOT = { has_character_flag = gromrilsmith }
+			FROM = {
+				NOR = {
+					has_character_flag = druchii_meteorite_armour_flag
+					has_character_flag = druchii_sea_dragon_cloak_flag
+				}
+			}
+		}
+		if = {
+			limit = { have_duplicate_smith_artifacts_flag_amazing_optionC_trigger = no }
+			give_smith_artifacts_flag_amazing_optionC_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 3.5 min = 230 max = 2000 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+
+	after = {
+		armoury_finish_order_effect = yes
+	}
+}
+
+# armoury.17 A great work
+# The work of the best materials; the ruler names it, or receives the
+# great armour of his people. A runesmith's gromril work has its own
+# reward.
+# Scope: ROOT is the employer, FROM the smith.
+character_event = {
+	id = armoury.17
+	desc = {
+		trigger = { FROM = { NOT = { has_character_flag = armor_set } } }
+		text = EVTDESCarmoury17A
+	}
+	desc = { trigger = { FROM = { has_character_flag = armor_set } } text = EVTDESCarmoury17B }
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.15
+
+	option = { # First name, or the great armour
+		name = {
+			text = EVTOPTA_MNM_9122_SWORD
+			trigger = { FROM = { has_character_flag = weapon_sword } }
+		}
+		name = {
+			text = EVTOPTA_MNM_9122_SCIMITAR
+			trigger = { FROM = { has_character_flag = weapon_scimitar } }
+		}
+		name = {
+			text = EVTOPTA_MNM_9122_LANCE
+			trigger = { FROM = { has_character_flag = weapon_lance } }
+		}
+		name = {
+			text = EVTOPTA_MNM_9122_AXE
+			trigger = { FROM = { has_character_flag = weapon_axe } }
+		}
+		name = {
+			text = EVTOPTA_MNM_9122_MACE
+			trigger = { FROM = { has_character_flag = weapon_mace } }
+		}
+		name = {
+			text = EVTOPTA_MNM_9122_BOW
+			trigger = { FROM = { has_character_flag = weapon_bow } }
+		}
+		name = {
+			text = EVTOPTA_MNM_9122_ARMOR
+			trigger = {
+				FROM = { has_character_flag = armor_set armoury_elven_armour_flag_trigger = no }
+			}
+		}
+		name = {
+			text = EVTOPTB_ARM_9122_METEORITE
+			trigger = { FROM = { has_character_flag = druchii_meteorite_armour_flag } }
+		}
+		name = {
+			text = EVTOPTB_ARM_9122_DRAGON_SCALE
+			trigger = { FROM = { has_character_flag = druchii_sea_dragon_cloak_flag } }
+		}
+		name = {
+			text = EVTOPTB_ARM_9122_SHADOW
+			trigger = { FROM = { has_character_flag = asur_artifact_shadow_armour_flag } }
+		}
+		name = {
+			text = EVTOPTB_ARM_9122_ITHILMAR
+			trigger = { FROM = { has_character_flag = asur_artifact_ithilmar_armour_flag } }
+		}
+		name = {
+			text = EVTOPTB_ARM_9122_DRAGON
+			trigger = { FROM = { has_character_flag = asur_artifact_dragon_armour_flag } }
+		}
+		trigger = { NOT = { has_character_flag = gromrilsmith } }
+		if = {
+			limit = { have_duplicate_smith_artifacts_flag_expensive_optionA_trigger = no }
+			give_smith_artifacts_flag_expensive_optionA_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 3.5 min = 230 max = 2000 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+	option = { # The runesmith's gromril work
+		name = EVTOPTAarmoury17
+		trigger = { has_character_flag = gromrilsmith }
+		if = {
+			limit = { have_duplicate_runesmith_artifacts_flag_expensive_option_trigger = no }
+			give_runesmith_artifacts_flag_expensive_option_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 3.5 min = 230 max = 2000 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+	option = { # Second name
+		name = {
+			text = EVTOPTB_MNM_9122_SWORD
+			trigger = { FROM = { has_character_flag = weapon_sword } }
+		}
+		name = {
+			text = EVTOPTB_MNM_9122_SCIMITAR
+			trigger = { FROM = { has_character_flag = weapon_scimitar } }
+		}
+		name = {
+			text = EVTOPTB_MNM_9122_LANCE
+			trigger = { FROM = { has_character_flag = weapon_lance } }
+		}
+		name = {
+			text = EVTOPTB_MNM_9122_AXE
+			trigger = { FROM = { has_character_flag = weapon_axe } }
+		}
+		name = {
+			text = EVTOPTB_MNM_9122_MACE
+			trigger = { FROM = { has_character_flag = weapon_mace } }
+		}
+		name = {
+			text = EVTOPTB_MNM_9122_BOW
+			trigger = { FROM = { has_character_flag = weapon_bow } }
+		}
+		name = {
+			text = EVTOPTB_MNM_9122_ARMOR
+			trigger = { FROM = { has_character_flag = armor_set } }
+		}
+		trigger = {
+			NOT = { has_character_flag = gromrilsmith }
+			FROM = { armoury_elven_armour_flag_trigger = no }
+		}
+		if = {
+			limit = { have_duplicate_smith_artifacts_flag_expensive_optionB_trigger = no }
+			give_smith_artifacts_flag_expensive_optionB_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 3.5 min = 230 max = 2000 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+	option = { # Third name
+		name = {
+			text = EVTOPTC_MNM_9122_SWORD
+			trigger = { FROM = { has_character_flag = weapon_sword } }
+		}
+		name = {
+			text = EVTOPTC_MNM_9122_SCIMITAR
+			trigger = { FROM = { has_character_flag = weapon_scimitar } }
+		}
+		name = {
+			text = EVTOPTC_MNM_9122_LANCE
+			trigger = { FROM = { has_character_flag = weapon_lance } }
+		}
+		name = {
+			text = EVTOPTC_MNM_9122_AXE
+			trigger = { FROM = { has_character_flag = weapon_axe } }
+		}
+		name = {
+			text = EVTOPTC_MNM_9122_MACE
+			trigger = { FROM = { has_character_flag = weapon_mace } }
+		}
+		name = {
+			text = EVTOPTC_MNM_9122_BOW
+			trigger = { FROM = { has_character_flag = weapon_bow } }
+		}
+		name = {
+			text = EVTOPTC_MNM_9122_ARMOR
+			trigger = { FROM = { has_character_flag = armor_set } }
+		}
+		trigger = {
+			NOT = { has_character_flag = gromrilsmith }
+			FROM = { armoury_elven_armour_flag_trigger = no }
+		}
+		if = {
+			limit = { have_duplicate_smith_artifacts_flag_expensive_optionC_trigger = no }
+			give_smith_artifacts_flag_expensive_optionC_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 3.5 min = 230 max = 2000 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+
+	after = {
+		armoury_finish_order_effect = yes
+	}
+}
+
+# armoury.18 A good work
+# Scope: ROOT is the employer, FROM the smith.
+character_event = {
+	id = armoury.18
+	desc = EVTDESCarmoury18
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.15
+
+	option = {
+		name = EVTOPTAarmoury18
+		if = {
+			limit = { have_duplicate_smith_artifacts_flag_good_trigger = no }
+			give_smith_artifacts_flag_good_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 1.8 min = 100 max = 500 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+
+	after = {
+		armoury_finish_order_effect = yes
+	}
+}
+
+# armoury.19 A plain work
+# Scope: ROOT is the employer, FROM the smith.
+character_event = {
+	id = armoury.19
+	desc = { trigger = { tier = EMPEROR } text = EVTDESCarmoury19A }
+	desc = { trigger = { tier = KING } text = EVTDESCarmoury19B }
+	desc = { trigger = { lower_tier_than = KING } text = EVTDESCarmoury19C }
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.15
+
+	option = {
+		name = EVTOPTAarmoury19
+		if = {
+			limit = { have_duplicate_smith_artifacts_flag_okay_trigger = no }
+			give_smith_artifacts_flag_okay_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 0.8 min = 40 max = 100 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+
+	after = {
+		armoury_finish_order_effect = yes
+	}
+}
+
+# armoury.20 Da proppa weapon
+# A greenskin's smith brings what he made.
+# Scope: ROOT is the employer, FROM the smith.
+character_event = {
+	id = armoury.20
+	desc = EVTDESCarmoury20
+	picture = GFX_evt_greenskinhuts
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.15
+
+	option = {
+		name = EVTOPTAarmoury20
+		armoury_greenskin_weapon_effect = yes
+		new_artifact = {
+			set_name = artifact_name_greenskin
+			set_description = artifact_description_smith_greenskin
+		}
+	}
+
+	after = {
+		armoury_finish_order_effect = yes
+		FROM = {
+			clr_character_flag = weapon_choppa
+			clr_character_flag = weapon_ax
+			clr_character_flag = weapon_club
+			clr_character_flag = weapon_stabba
+			clr_character_flag = ard_armour
+		}
+	}
+}
+
+# armoury.21 The smith steals the work
+# Hidden. The smith makes off with what he made: to a landed rival of the
+# employer nearby, or a neighbouring ruler who dislikes him, else he flees
+# with it himself. The employer hears of it (armoury.22).
+# Scope: ROOT is the smith, FROM the employer.
+character_event = {
+	id = armoury.21
+	hide_window = yes
+	is_triggered_only = yes # armoury.10, armoury.61
+
+	immediate = {
+		if = {
+			limit = { NOT = { event_target:smith_employer = { is_alive = yes } } }
+			liege = { save_event_target_as = smith_employer }
+		}
+		# What the smith made
+		if = {
+			limit = {
+				OR = {
+					has_character_flag = weapon_choppa
+					has_character_flag = weapon_ax
+					has_character_flag = weapon_club
+					has_character_flag = weapon_stabba
+					has_character_flag = ard_armour
+				}
+			}
+			armoury_greenskin_weapon_effect = yes
+			new_artifact = { set_artifact_flag = stolen_by_smith }
+		}
+		else_if = {
+			limit = { has_character_flag = expensive_jewels }
+			if = {
+				limit = { FROM = { religion_group = ormazd_gods_group } }
+				add_artifact = dagger_of_glory
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = ruby_bracelets
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+			}
+			else_if = {
+				limit = { FROM = { religion_group = oriental_gods_group } }
+				add_artifact = circlet_of_the_heavens
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = staff_of_majesty
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+			}
+			else_if = {
+				limit = { FROM = { religion_group = chaos_gods_group } }
+				add_artifact = crown_of_crows
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = sword_of_heroes
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+			}
+			else = {
+				add_artifact = crown_of_majesty
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = emerald_scepter
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = sword_of_heroes
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+			}
+		}
+		else_if = {
+			limit = { has_character_flag = good_jewels }
+			if = {
+				limit = { FROM = { religion_group = ormazd_gods_group } }
+				add_artifact = bejeweled_dagger
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = golden_bracelets
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+			}
+			else_if = {
+				limit = { FROM = { religion_group = oriental_gods_group } }
+				add_artifact = circlet_of_the_heavens
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = golden_staff
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+			}
+			else_if = {
+				limit = { FROM = { religion_group = chaos_gods_group } }
+				add_artifact = crown_of_the_sea
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = golden_sword
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+			}
+			else = {
+				add_artifact = crown_of_pearls
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = ruby_scepter
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = golden_sword
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+			}
+		}
+		else_if = {
+			limit = { has_character_flag = cheap_jewels }
+			if = {
+				limit = { FROM = { religion_group = ormazd_gods_group } }
+				add_artifact = engraved_dagger
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = silver_bracelets
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+			}
+			else_if = {
+				limit = { FROM = { religion_group = oriental_gods_group } }
+				add_artifact = circlet_of_twilight
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = silver_staff
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+			}
+			else_if = {
+				limit = { FROM = { religion_group = chaos_gods_group } }
+				add_artifact = iron_crown
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = engraved_sword
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+			}
+			else = {
+				add_artifact = the_lily_crown
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = noble_scepter
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+				add_artifact = engraved_sword
+				new_artifact = { set_artifact_flag = stolen_by_smith }
+			}
+		}
+		else_if = {
+			limit = { has_character_flag = amazing_weapons }
+			if = {
+				limit = { has_character_flag = weapon_sword }
+				random_list = {
+					1 = { add_artifact = sword_tier_4_heartseeker }
+					1 = { add_artifact = sword_tier_4_vengeance }
+					1 = { add_artifact = sword_tier_4_fury }
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = weapon_scimitar }
+				random_list = {
+					1 = { add_artifact = scimitar_tier_4_golden }
+					1 = { add_artifact = scimitar_tier_4_fortune }
+					1 = { add_artifact = scimitar_tier_4_conquest }
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = weapon_lance }
+				random_list = {
+					1 = { add_artifact = lance_tier_4_impaler }
+					1 = { add_artifact = lance_tier_4_trident }
+					1 = { add_artifact = lance_tier_4_piercer }
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = weapon_axe }
+				random_list = {
+					1 = { add_artifact = axe_tier_4_cleaver }
+					1 = { add_artifact = axe_tier_4_ravager }
+					1 = { add_artifact = axe_tier_4_marauder }
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = weapon_mace }
+				random_list = {
+					1 = { add_artifact = mace_tier_4_foe_hammer }
+					1 = { add_artifact = mace_tier_4_bone_breaker }
+					1 = { add_artifact = mace_tier_4_shatterer }
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = weapon_bow }
+				random_list = {
+					1 = { add_artifact = bow_tier_4_silent_wind }
+					1 = { add_artifact = bow_tier_4_lightning }
+					1 = { add_artifact = bow_tier_4_eagle }
+				}
+			}
+			else = {
+				random_list = {
+					1 = { add_artifact = armor_tier_4_guardian }
+					1 = { add_artifact = armor_tier_4_champion }
+					1 = { add_artifact = armor_tier_4_warden }
+				}
+			}
+			new_artifact = { set_artifact_flag = stolen_by_smith }
+		}
+		else_if = {
+			limit = { has_character_flag = expensive_weapons }
+			if = {
+				limit = { has_character_flag = weapon_sword }
+				random_list = {
+					1 = { add_artifact = sword_tier_3_heartseeker }
+					1 = { add_artifact = sword_tier_3_vengeance }
+					1 = { add_artifact = sword_tier_3_fury }
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = weapon_scimitar }
+				random_list = {
+					1 = { add_artifact = scimitar_tier_3_golden }
+					1 = { add_artifact = scimitar_tier_3_fortune }
+					1 = { add_artifact = scimitar_tier_3_conquest }
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = weapon_lance }
+				random_list = {
+					1 = { add_artifact = lance_tier_3_impaler }
+					1 = { add_artifact = lance_tier_3_trident }
+					1 = { add_artifact = lance_tier_3_piercer }
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = weapon_axe }
+				random_list = {
+					1 = { add_artifact = axe_tier_3_cleaver }
+					1 = { add_artifact = axe_tier_3_ravager }
+					1 = { add_artifact = axe_tier_3_marauder }
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = weapon_mace }
+				random_list = {
+					1 = { add_artifact = mace_tier_3_foe_hammer }
+					1 = { add_artifact = mace_tier_3_bone_breaker }
+					1 = { add_artifact = mace_tier_3_shatterer }
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = weapon_bow }
+				random_list = {
+					1 = { add_artifact = bow_tier_3_silent_wind }
+					1 = { add_artifact = bow_tier_3_lightning }
+					1 = { add_artifact = bow_tier_3_eagle }
+				}
+			}
+			else = {
+				random_list = {
+					1 = { add_artifact = armor_tier_3_guardian }
+					1 = { add_artifact = armor_tier_3_champion }
+					1 = { add_artifact = armor_tier_3_warden }
+				}
+			}
+			new_artifact = { set_artifact_flag = stolen_by_smith }
+		}
+		else_if = {
+			limit = { has_character_flag = good_weapons }
+			if = { limit = { has_character_flag = weapon_sword } add_artifact = sword_tier_2_new }
+			else_if = {
+				limit = { has_character_flag = weapon_scimitar }
+				add_artifact = scimitar_tier_2_new
+			}
+			else_if = {
+				limit = { has_character_flag = weapon_lance }
+				add_artifact = lance_tier_2_new
+			}
+			else_if = { limit = { has_character_flag = weapon_axe } add_artifact = axe_tier_2_new }
+			else_if = {
+				limit = { has_character_flag = weapon_mace }
+				add_artifact = mace_tier_2_new
+			}
+			else_if = { limit = { has_character_flag = weapon_bow } add_artifact = bow_tier_2_new }
+			else = { add_artifact = armor_tier_2 }
+			new_artifact = { set_artifact_flag = stolen_by_smith }
+		}
+		else = {
+			if = { limit = { has_character_flag = weapon_sword } add_artifact = sword_tier_1_new }
+			else_if = {
+				limit = { has_character_flag = weapon_scimitar }
+				add_artifact = scimitar_tier_1_new
+			}
+			else_if = {
+				limit = { has_character_flag = weapon_lance }
+				add_artifact = lance_tier_1_new
+			}
+			else_if = { limit = { has_character_flag = weapon_axe } add_artifact = axe_tier_1_new }
+			else_if = {
+				limit = { has_character_flag = weapon_mace }
+				add_artifact = mace_tier_1_new
+			}
+			else_if = { limit = { has_character_flag = weapon_bow } add_artifact = bow_tier_1_new }
+			else = { add_artifact = armor_tier_1 }
+			new_artifact = { set_artifact_flag = stolen_by_smith }
+		}
+		# Who gets it: a landed rival nearby, a neighbour who dislikes the
+		# employer, else the smith himself
+		if = {
+			limit = {
+				event_target:smith_employer = {
+					any_rival = { is_landed = yes is_within_diplo_range = ROOT }
+				}
+			}
+			event_target:smith_employer = {
+				random_rival = {
+					limit = { is_landed = yes is_within_diplo_range = ROOT }
+					save_event_target_as = smith_steal_target
+				}
+			}
+		}
+		else_if = {
+			limit = {
+				event_target:smith_employer = {
+					any_neighbor_independent_ruler = {
+						is_landed = yes
+						NOT = { opinion = { who = PREV value = 0 } }
+					}
+				}
+			}
+			event_target:smith_employer = {
+				random_neighbor_independent_ruler = {
+					limit = { is_landed = yes NOT = { opinion = { who = PREV value = 0 } } }
+					score_value = { # the one who hates him most
+						value = 10
+						modifier = { factor = 3 NOT = { opinion = { who = PREV value = -30 } } }
+					}
+					save_event_target_as = smith_steal_target
+				}
+			}
+		}
+		else = { save_event_target_as = smith_steal_target }
+		any_artifact = {
+			limit = { has_artifact_flag = stolen_by_smith }
+			set_original_owner = event_target:smith_employer
+			transfer_artifact = { from = ROOT to = event_target:smith_steal_target }
+		}
+		if = {
+			limit = { event_target:smith_steal_target = { is_landed = yes } is_landed = no }
+			move_character = event_target:smith_steal_target
+			opinion = {
+				who = event_target:smith_steal_target
+				modifier = opinion_grateful
+				years = 10
+			}
+			reverse_opinion = {
+				who = event_target:smith_steal_target
+				modifier = opinion_grateful
+				years = 10
+			}
+		}
+		else = { banish = yes }
+		event_target:smith_employer = { character_event = { id = armoury.22 } }
+		clr_character_flag = amazing_weapons
+		clr_character_flag = expensive_weapons
+		clr_character_flag = good_weapons
+		clr_character_flag = cheap_weapons
+		clr_character_flag = amazing_jewels
+		clr_character_flag = expensive_jewels
+		clr_character_flag = good_jewels
+		clr_character_flag = cheap_jewels
+	}
+}
+
+# armoury.22 The smith fled with it
+# The employer learns where the work went. Swear vengeance, or with
+# intrigue 15 or more have it stolen back and the smith killed.
+# Scope: ROOT is the employer, FROM the smith.
+character_event = {
+	id = armoury.22
+	desc = EVTDESCarmoury22
+	picture = GFX_evt_merchant_caravan
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.21
+
+	option = { # They will pay
+		name = EVTOPTAarmoury22
+		event_target:smith_steal_target = {
+			show_scope_change = no
+			any_artifact = {
+				limit = { has_artifact_flag = stolen_by_smith }
+				clr_artifact_flag = stolen_by_smith
+			}
+			if = {
+				limit = { NOT = { character = FROM } }
+				reverse_opinion = { who = ROOT modifier = opinion_thief years = 10 }
+			}
+		}
+		FROM = {
+			show_scope_change = no
+			reverse_opinion = { who = ROOT modifier = opinion_thief years = 10 }
+			hidden_effect = { remove_nickname = yes }
+		}
+		armoury_clear_order_effect = yes
+	}
+	option = { # Steal it back
+		name = EVTOPTBarmoury22
+		tooltip_info = intrigue
+		trigger = { intrigue = 15 }
+		custom_tooltip = { text = EVT_OPTB_MNM_9132_TT }
+		hidden_effect = {
+			event_target:smith_steal_target = {
+				any_artifact = {
+					limit = { has_artifact_flag = stolen_by_smith }
+					transfer_artifact = { from = event_target:smith_steal_target to = ROOT }
+					clr_artifact_flag = stolen_by_smith
+				}
+			}
+		}
+		FROM = { show_scope_change = no death = { death_reason = death_execution killer = ROOT } }
+		armoury_clear_order_effect = yes
+	}
+}
+
+# armoury.23 Da smith wants to keep it
+# Hidden. A greenskin smith likes his work too much to hand it over. The
+# employer may fight him for it (armoury.24).
+# Scope: ROOT is the smith, FROM the employer.
+character_event = {
+	id = armoury.23
+	hide_window = yes
+	is_triggered_only = yes # armoury.10
+
+	immediate = {
+		if = {
+			limit = { NOT = { event_target:smith_employer = { is_alive = yes } } }
+			liege = { save_event_target_as = smith_employer }
+		}
+		armoury_greenskin_weapon_effect = yes
+		new_artifact = {
+			set_artifact_flag = stolen_by_smith
+			set_original_owner = event_target:smith_employer
+		}
+		save_event_target_as = smith_steal_target
+		event_target:smith_employer = { character_event = { id = armoury.24 } }
+	}
+}
+
+# armoury.24 Fight for it, or let him go
+# The smith won't give up his work. Fight him to the death for it: the
+# work is the boss's as long as the boss lives. Or kick him out, work and
+# all.
+# Scope: ROOT is the employer, FROM the smith.
+character_event = {
+	id = armoury.24
+	desc = EVTDESCarmoury24
+	picture = GFX_evt_orc_boss
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.23
+
+	option = { # Fight him for it
+		name = EVTOPTAarmoury24
+		save_event_target_as = combatant_2
+		set_character_flag = flag_duel_no_draws
+		set_character_flag = duel
+		event_target:smith_steal_target = {
+			show_scope_change = no
+			any_artifact = {
+				limit = { has_artifact_flag = stolen_by_smith }
+				clr_artifact_flag = stolen_by_smith
+				transfer_artifact = { from = event_target:smith_steal_target to = ROOT }
+			}
+			add_character_modifier = { modifier = recent_duel_timer duration = 720 hidden = yes }
+			save_event_target_as = combatant_1
+			set_character_flag = duel
+			set_character_flag = flag_duel_no_draws
+			set_character_flag = deadly_duel@event_target:combatant_2
+			reverse_opinion = { who = ROOT modifier = opinion_thief years = 10 }
+			hidden_effect = { remove_nickname = yes }
+		}
+		hidden_tooltip = { character_event = { id = duel.1 } }
+		hidden_tooltip = { character_event = { id = warboss.21 days = 10 } }
+		armoury_clear_order_effect = yes
+		FROM = {
+			clr_character_flag = weapon_choppa
+			clr_character_flag = weapon_ax
+			clr_character_flag = weapon_club
+			clr_character_flag = weapon_stabba
+			clr_character_flag = ard_armour
+		}
+	}
+	option = { # Kick him out
+		name = EVTOPTBarmoury24
+		armoury_clear_order_effect = yes
+		event_target:smith_steal_target = {
+			any_artifact = {
+				limit = { has_artifact_flag = stolen_by_smith }
+				clr_artifact_flag = stolen_by_smith
+			}
+			banish = yes
+		}
+	}
+}
+
+###############################################################################
+# Part 2: salvage from the battlefields
+###############################################################################
+
+# armoury.30 Picked from the dead
+# The boyz, the ratmen or the ogre's gnoblars bring back what they took
+# from a battlefield: greenskin weapons, ogre clubs, blades and gut plates,
+# or skaven blades, halberds, slings and armour. Never something already
+# owned.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = armoury.30
+	desc = EVTDESCarmoury30
+	picture = GFX_evt_greenskin_mound
+	border = GFX_event_normal_frame_economy
+
+	hide_from = yes
+	is_triggered_only = yes # armoury.1
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+	}
+
+	option = { # Greenskin and other loot
+		name = EVTOPTAarmoury30
+		trigger = { NOR = { trait = creature_ogre trait = creature_skaven } }
+		random_list = {
+			25 = {
+				trigger = { NOT = { has_artifact = club } }
+				modifier = { factor = 1.5 culture = orc_savage }
+				add_artifact = club
+			}
+			25 = {
+				trigger = { NOT = { has_artifact = dirk } }
+				modifier = {
+					factor = 0.5
+					NOR = { trait = creature_goblin trait = creature_hobgoblin }
+				}
+				add_artifact = dirk
+			}
+			10 = {
+				trigger = { NOT = { has_artifact = greenskin_ax } }
+				modifier = { factor = 2 trait = creature_orc }
+				add_artifact = greenskin_ax
+			}
+			10 = {
+				trigger = { NOT = { has_artifact = goblin_stabba } }
+				modifier = {
+					factor = 2
+					OR = { trait = creature_goblin trait = creature_hobgoblin }
+				}
+				modifier = {
+					factor = 0.6
+					NOR = { trait = creature_goblin trait = creature_hobgoblin }
+				}
+				add_artifact = goblin_stabba
+			}
+			10 = {
+				trigger = { NOT = { has_artifact = orc_choppa } }
+				modifier = { factor = 2 trait = creature_orc }
+				modifier = { factor = 0.6 NOT = { trait = creature_orc } }
+				add_artifact = orc_choppa
+			}
+		}
+	}
+	option = { # Ogre loot
+		name = EVTOPTBarmoury30
+		trigger = { trait = creature_ogre }
+		random_list = {
+			1 = {
+				trigger = { NOT = { has_artifact = giant_club } }
+				modifier = { factor = 2 NOT = { trait = is_fat } }
+				add_artifact = giant_club
+			}
+			5 = {
+				trigger = { NOT = { has_artifact = big_club } }
+				modifier = { factor = 2 NOT = { trait = is_fat } }
+				add_artifact = big_club
+			}
+			25 = {
+				trigger = { NOT = { has_artifact = club } }
+				modifier = { factor = 2 NOT = { trait = is_fat } }
+				add_artifact = club
+			}
+			10 = {
+				trigger = {
+					NOT = { has_artifact = Gut_Plate }
+					any_artifact = { has_artifact_flag = combat_weapon }
+				}
+				modifier = { factor = 5 any_artifact = { has_artifact_flag = combat_weapon } }
+				add_artifact = Gut_Plate
+			}
+			25 = { trigger = { NOT = { has_artifact = ogre_blade } } add_artifact = ogre_blade }
+			5 = {
+				trigger = { NOT = { has_artifact = orc_big_choppa } }
+				add_artifact = orc_big_choppa
+			}
+			2 = { trigger = { NOT = { has_artifact = giant_choppa } } add_artifact = giant_choppa }
+			10 = {
+				trigger = { NOT = { has_artifact = Gut_Blade } }
+				modifier = { factor = 2 trait = is_fat }
+				add_artifact = Gut_Blade
+			}
+		}
+	}
+	option = { # Skaven loot
+		name = EVTOPTCarmoury30
+		trigger = { trait = creature_skaven }
+		random_list = {
+			10 = {
+				trigger = {
+					NOT = { has_artifact = clanrat_armour }
+					any_artifact = { has_artifact_flag = combat_weapon }
+				}
+				modifier = { factor = 5 any_artifact = { has_artifact_flag = combat_weapon } }
+				add_artifact = clanrat_armour
+			}
+			2 = {
+				trigger = {
+					NOT = { has_artifact = stormvermin_armour }
+					any_artifact = { has_artifact_flag = combat_weapon }
+				}
+				modifier = { factor = 5 tier = KING }
+				modifier = { factor = 5 any_artifact = { has_artifact_flag = combat_weapon } }
+				add_artifact = stormvermin_armour
+			}
+			5 = {
+				trigger = { NOT = { has_artifact = skaven_glaive } }
+				modifier = { factor = 2 NOT = { trait = is_fat } }
+				add_artifact = skaven_glaive
+			}
+			25 = {
+				trigger = { NOT = { has_artifact = skaven_warhammer } }
+				modifier = { factor = 2 NOT = { trait = is_fat } }
+				add_artifact = skaven_warhammer
+			}
+			2 = {
+				trigger = { NOT = { has_artifact = skaven_warglaive } }
+				modifier = { factor = 5 tier = KING }
+				add_artifact = skaven_warglaive
+			}
+			15 = {
+				trigger = { NOT = { has_artifact = skaven_sling } lower_tier_than = KING }
+				add_artifact = skaven_sling
+			}
+			25 = {
+				trigger = { NOT = { has_artifact = skaven_blade_1 } lower_tier_than = KING }
+				add_artifact = skaven_blade_1
+			}
+			5 = {
+				trigger = { NOT = { has_artifact = skaven_blade_2 } }
+				add_artifact = skaven_blade_2
+			}
+			2 = {
+				trigger = { NOT = { has_artifact = skaven_blade_3 } }
+				modifier = { factor = 5 tier = KING }
+				add_artifact = skaven_blade_3
+			}
+		}
+	}
+
+	after = {
+		clr_character_flag = weaponsmith
+	}
+}
+
+###############################################################################
+# Part 3: the runesmith
+###############################################################################
+
+# armoury.40 Summon a runesmith
+# A dwarf lord's treasurer finds a runesmith: one of his own court, a
+# runesmith lord of his realm, or any free member of the Runesmiths. A
+# runesmith lord may do the work himself. If no runesmith answers, the
+# decision can be used again.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = armoury.40
+	desc = { trigger = { event_target:smith = { always = yes } } text = EVT_DESC_ARMSA_20 }
+	desc = {
+		trigger = { NOT = { event_target:smith = { always = yes } } }
+		text = EVTDESCBarmoury40
+	}
+	picture = GFX_evt_chaos_dwarf_forge
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.1
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+	}
+
+	immediate = {
+		hidden_effect = {
+			job_treasurer = { save_event_target_as = my_helpful_marshal }
+			if = { # A runesmith of the court
+				limit = {
+					any_courtier = { armoury_runesmith_trigger = yes is_within_diplo_range = ROOT }
+				}
+				random_courtier = {
+					limit = { armoury_runesmith_trigger = yes is_within_diplo_range = ROOT }
+					save_event_target_as = smith
+					set_character_flag = preparing_crafting
+				}
+			}
+			else_if = { # A runesmith lord of the realm
+				limit = {
+					any_realm_lord = {
+						armoury_runesmith_trigger = yes
+						society_member_of = runesmiths_society
+						is_within_diplo_range = ROOT
+					}
+				}
+				random_realm_lord = {
+					limit = {
+						armoury_runesmith_trigger = yes
+						society_member_of = runesmiths_society
+						is_within_diplo_range = ROOT
+					}
+					save_event_target_as = smith
+					set_character_flag = preparing_crafting
+				}
+			}
+			else_if = { # Any of the Runesmiths
+				limit = {
+					runesmiths_society = {
+						any_society_member = {
+							armoury_runesmith_trigger = yes
+							is_within_diplo_range = ROOT
+						}
+					}
+				}
+				runesmiths_society = {
+					random_society_member = {
+						limit = { armoury_runesmith_trigger = yes is_within_diplo_range = ROOT }
+						save_event_target_as = smith
+						set_character_flag = preparing_crafting
+					}
+				}
+			}
+		}
+	}
+
+	option = { # Invite them
+		name = EVTOPTAarmoury40
+		trigger = { event_target:smith = { always = yes } }
+		custom_tooltip = { text = EVTOPTA_MNM_9115_TT }
+		save_event_target_as = smith_employer
+		event_target:smith = { show_portrait = yes character_event = { id = armoury.4 days = 7 } }
+	}
+	option = { # Don't
+		name = EVTOPTB_MNM_9115
+		trigger = { event_target:smith = { always = yes } }
+		custom_tooltip = { text = EVTOPTB_MNM_9115_TT }
+		clr_character_flag = gromrilsmith
+		event_target:smith = { clr_character_flag = preparing_crafting }
+		ai_chance = { factor = 0 }
+	}
+	option = { # I can do it myself
+		name = EVTOPTCarmoury40
+		trigger = { OR = { trait = runelord trait = runesmith } }
+		tooltip_info_custom = EVTOPTC_MNM_9115_TT
+		custom_tooltip = { text = EVTOPTB_MNM_9115_TT }
+		if = {
+			limit = { event_target:smith = { always = yes } }
+			event_target:smith = { clr_character_flag = preparing_crafting }
+		}
+		save_event_target_as = smith_employer
+		save_event_target_as = smith
+		set_character_flag = preparing_crafting
+		character_event = { id = armoury.41 }
+		ai_chance = { factor = 100 }
+	}
+	option = { # No runesmith came
+		name = EVTOPTDarmoury40
+		trigger = {
+			NOT = { event_target:smith = { always = yes } }
+			NOR = { trait = runelord trait = runesmith }
+		}
+		custom_tooltip = {
+			text = employ_smith_cd_reset_tt
+			hidden_effect = { remove_character_modifier = employ_a_smith_cd }
+		}
+		clr_character_flag = gromrilsmith
+	}
+}
+
+# armoury.41 What shall be made of gromril?
+# A gromril axe, a gromril hammer, gromril armour, or a rune. Kings and
+# emperors pay more, dukes and counts also in prestige; a runesmith who
+# works for himself gets part of it back. The great work is done one time
+# in seven, else a fine one.
+# Scope: ROOT is the ruler, FROM the runesmith.
+character_event = {
+	id = armoury.41
+	desc = EVTDESCarmoury41
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.4, armoury.40
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+	}
+
+	option = { # A gromril axe
+		name = EVTOPTAarmoury41
+		trigger = { have_all_weaponsmith_axe_all_flags_trigger = no }
+		custom_tooltip = { text = EVTOPTD_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = weapon_axe } }
+		armoury_gromril_cost_effect = yes
+		hidden_effect = { armoury_gromril_order_effect = yes }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0.1 any_artifact = { has_artifact_flag = combat_weapon } }
+		}
+	}
+	option = { # A gromril hammer
+		name = EVTOPTBarmoury41
+		trigger = { is_nomadic = no have_all_weaponsmith_mace_all_flags_trigger = no }
+		custom_tooltip = { text = EVTOPTE_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = weapon_mace } }
+		armoury_gromril_cost_effect = yes
+		hidden_effect = { armoury_gromril_order_effect = yes }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0.1 any_artifact = { has_artifact_flag = combat_weapon } }
+		}
+	}
+	option = { # Gromril armour
+		name = EVTOPTCarmoury41
+		custom_tooltip = { text = EVTOPTG_MNM_9118_TT }
+		hidden_tooltip = { FROM = { set_character_flag = armor_set } }
+		if = { limit = { tier = EMPEROR } scaled_wealth = { value = -4.9 min = -1120 max = -2500 } }
+		else_if = {
+			limit = { tier = KING }
+			scaled_wealth = { value = -3.8 min = -980 max = -2500 }
+		}
+		else = { prestige = -300 scaled_wealth = { value = -2.9 min = -800 max = -2400 } }
+		if = {
+			limit = { FROM = { character = ROOT } }
+			scaled_wealth = { value = 1.5 min = 250 max = 800 }
+		}
+		hidden_effect = { armoury_gromril_order_effect = yes }
+		ai_chance = {
+			factor = 10
+			modifier = { factor = 0.1 any_artifact = { has_artifact_flag = armor } }
+		}
+	}
+	option = { # A rune
+		name = EVTOPTDarmoury41
+		custom_tooltip = { text = EVTTOOLTIParmoury41 }
+		if = { limit = { tier = EMPEROR } scaled_wealth = { value = -2.5 min = -380 max = -2000 } }
+		else_if = {
+			limit = { tier = KING }
+			scaled_wealth = { value = -2.5 min = -320 max = -2000 }
+		}
+		else = { prestige = -300 scaled_wealth = { value = -1.5 min = -250 max = -1800 } }
+		if = {
+			limit = { FROM = { character = ROOT } }
+			scaled_wealth = { value = 1.5 min = 126 max = 400 }
+		}
+		hidden_effect = {
+			set_character_flag = runecraft
+			character_event = { id = armoury.42 days = 25 }
+		}
+		ai_chance = { factor = 5 }
+	}
+}
+
+# armoury.42 What kind of rune?
+# Runes of malice, honour or might. The runesmith's learning decides
+# whether it becomes a master rune.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = armoury.42
+	title = RUNECRAFT
+	desc = EVTDESCarmoury42
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.41
+
+	option = { # Malice
+		name = EVTOPTAarmoury42
+		set_character_flag = malice_rune
+		hidden_effect = { armoury_rune_roll_effect = yes }
+	}
+	option = { # Honour
+		name = EVTOPTBarmoury42
+		set_character_flag = honor_rune
+		hidden_effect = { armoury_rune_roll_effect = yes }
+	}
+	option = { # Might
+		name = EVTOPTCarmoury42
+		set_character_flag = might_rune
+		hidden_effect = { armoury_rune_roll_effect = yes }
+	}
+}
+
+# armoury.43 The rune is struck
+# The runesmith hands over the rune: a master rune for the learned, else a
+# lesser one. A rune already owned is not struck twice; the gold comes
+# back instead.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = armoury.43
+	title = RUNECRAFT
+	desc = EVTDESCarmoury43
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury_rune_roll_effect
+
+	option = {
+		name = EVTOPTAarmoury43
+		trigger = {
+			OR = {
+				AND = {
+					has_character_flag = good_weapons
+					OR = {
+						AND = {
+							has_character_flag = honor_rune
+							OR = {
+								NOT = { has_artifact = master_rune_of_stoicism }
+								NOT = { has_artifact = master_rune_of_steel }
+							}
+						}
+						AND = {
+							has_character_flag = might_rune
+							OR = {
+								NOT = { has_artifact = master_rune_of_courage }
+								NOT = { has_artifact = master_rune_of_shielding }
+							}
+						}
+						AND = {
+							has_character_flag = malice_rune
+							OR = {
+								NOT = { has_artifact = master_rune_of_fury }
+								NOT = { has_artifact = master_rune_of_fear }
+								NOT = { has_artifact = master_rune_of_swiftness }
+							}
+						}
+					}
+				}
+				AND = {
+					NOT = { has_character_flag = good_weapons }
+					OR = {
+						AND = {
+							has_character_flag = honor_rune
+							OR = {
+								NOT = { has_artifact = rune_of_stoicism }
+								NOT = { has_artifact = rune_of_steel }
+							}
+						}
+						AND = {
+							has_character_flag = might_rune
+							OR = {
+								NOT = { has_artifact = rune_of_courage }
+								NOT = { has_artifact = rune_of_shielding }
+							}
+						}
+						AND = {
+							has_character_flag = malice_rune
+							OR = {
+								NOT = { has_artifact = rune_of_fury }
+								NOT = { has_artifact = rune_of_dismay }
+								NOT = { has_artifact = rune_of_swiftness }
+							}
+						}
+					}
+				}
+			}
+		}
+		if = {
+			limit = { has_character_flag = good_weapons }
+			if = {
+				limit = { has_character_flag = honor_rune }
+				random_list = {
+					10 = {
+						trigger = { NOT = { has_artifact = master_rune_of_stoicism } }
+						add_artifact = master_rune_of_stoicism
+					}
+					10 = {
+						trigger = { NOT = { has_artifact = master_rune_of_steel } }
+						add_artifact = master_rune_of_steel
+					}
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = might_rune }
+				random_list = {
+					10 = {
+						trigger = { NOT = { has_artifact = master_rune_of_courage } }
+						add_artifact = master_rune_of_courage
+					}
+					10 = {
+						trigger = { NOT = { has_artifact = master_rune_of_shielding } }
+						add_artifact = master_rune_of_shielding
+					}
+				}
+			}
+			else = {
+				random_list = {
+					10 = {
+						trigger = { NOT = { has_artifact = master_rune_of_fury } }
+						add_artifact = master_rune_of_fury
+					}
+					10 = {
+						trigger = { NOT = { has_artifact = master_rune_of_fear } }
+						add_artifact = master_rune_of_fear
+					}
+					10 = {
+						trigger = { NOT = { has_artifact = master_rune_of_swiftness } }
+						add_artifact = master_rune_of_swiftness
+					}
+				}
+			}
+		}
+		else = {
+			if = {
+				limit = { has_character_flag = honor_rune }
+				random_list = {
+					10 = {
+						trigger = { NOT = { has_artifact = rune_of_stoicism } }
+						add_artifact = rune_of_stoicism
+					}
+					10 = {
+						trigger = { NOT = { has_artifact = rune_of_steel } }
+						add_artifact = rune_of_steel
+					}
+				}
+			}
+			else_if = {
+				limit = { has_character_flag = might_rune }
+				random_list = {
+					10 = {
+						trigger = { NOT = { has_artifact = rune_of_courage } }
+						add_artifact = rune_of_courage
+					}
+					10 = {
+						trigger = { NOT = { has_artifact = rune_of_shielding } }
+						add_artifact = rune_of_shielding
+					}
+				}
+			}
+			else = {
+				random_list = {
+					10 = {
+						trigger = { NOT = { has_artifact = rune_of_fury } }
+						add_artifact = rune_of_fury
+					}
+					10 = {
+						trigger = { NOT = { has_artifact = rune_of_dismay } }
+						add_artifact = rune_of_dismay
+					}
+					10 = {
+						trigger = { NOT = { has_artifact = rune_of_swiftness } }
+						add_artifact = rune_of_swiftness
+					}
+				}
+			}
+		}
+	}
+	option = { # Every such rune is already owned
+		name = EVTOPTBarmoury43
+		trigger = {
+			NOT = {
+				OR = {
+					AND = {
+						has_character_flag = good_weapons
+						OR = {
+							AND = {
+								has_character_flag = honor_rune
+								OR = {
+									NOT = { has_artifact = master_rune_of_stoicism }
+									NOT = { has_artifact = master_rune_of_steel }
+								}
+							}
+							AND = {
+								has_character_flag = might_rune
+								OR = {
+									NOT = { has_artifact = master_rune_of_courage }
+									NOT = { has_artifact = master_rune_of_shielding }
+								}
+							}
+							AND = {
+								has_character_flag = malice_rune
+								OR = {
+									NOT = { has_artifact = master_rune_of_fury }
+									NOT = { has_artifact = master_rune_of_fear }
+									NOT = { has_artifact = master_rune_of_swiftness }
+								}
+							}
+						}
+					}
+					AND = {
+						NOT = { has_character_flag = good_weapons }
+						OR = {
+							AND = {
+								has_character_flag = honor_rune
+								OR = {
+									NOT = { has_artifact = rune_of_stoicism }
+									NOT = { has_artifact = rune_of_steel }
+								}
+							}
+							AND = {
+								has_character_flag = might_rune
+								OR = {
+									NOT = { has_artifact = rune_of_courage }
+									NOT = { has_artifact = rune_of_shielding }
+								}
+							}
+							AND = {
+								has_character_flag = malice_rune
+								OR = {
+									NOT = { has_artifact = rune_of_fury }
+									NOT = { has_artifact = rune_of_dismay }
+									NOT = { has_artifact = rune_of_swiftness }
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		scaled_wealth = { value = 1.5 min = 126 max = 400 }
+	}
+
+	after = {
+		clr_character_flag = good_weapons
+		clr_character_flag = cheap_weapons
+		clr_character_flag = gromrilsmith
+		clr_character_flag = runecraft
+		clr_character_flag = malice_rune
+		clr_character_flag = honor_rune
+		clr_character_flag = might_rune
+		event_target:smith = { clr_character_flag = preparing_crafting }
+	}
+}
+
+# armoury.44 A master rune of the ancestors
+# A runesmith of high rank in the Runesmiths strikes a master rune of
+# Valaya, Grimnir, Grungni, Thungni or Morgrim, as his school allows. If
+# he already bears every rune his school knows, the society's favour is
+# returned.
+# Scope: ROOT is the runesmith.
+character_event = {
+	id = armoury.44
+	title = RUNECRAFT
+	desc = EVTDESCarmoury44
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # craft_master_rune
+
+	option = { # Valaya
+		name = EVTOPTAarmoury44
+		trigger = {
+			OR = { trait = school_of_thungi trait = school_of_valaya }
+			NOT = { has_artifact = master_rune_of_valaya }
+		}
+		add_artifact = master_rune_of_valaya
+	}
+	option = { # Grimnir
+		name = EVTOPTBarmoury44
+		trigger = {
+			OR = { trait = school_of_thungi trait = school_of_grimnir }
+			NOT = { has_artifact = master_rune_of_grimnir }
+		}
+		add_artifact = master_rune_of_grimnir
+	}
+	option = { # Grungni
+		name = EVTOPTCarmoury44
+		trigger = {
+			OR = { trait = school_of_thungi trait = school_of_grungi }
+			NOT = { has_artifact = master_rune_of_grungi }
+		}
+		add_artifact = master_rune_of_grungi
+	}
+	option = { # Thungni
+		name = EVTOPTDarmoury44
+		trigger = {
+			OR = { trait = school_of_thungi trait = school_of_grungi trait = school_of_valaya }
+			NOT = { has_artifact = master_rune_of_thungi }
+		}
+		add_artifact = master_rune_of_thungi
+	}
+	option = { # Morgrim
+		name = EVTOPTEarmoury44
+		trigger = {
+			OR = { trait = school_of_grimnir trait = school_of_grungi }
+			NOT = { has_artifact = master_rune_of_morgrim }
+		}
+		add_artifact = master_rune_of_morgrim
+	}
+	option = { # Nothing left to strike
+		name = EVTOPTFarmoury44
+		trigger = {
+			NOR = {
+				AND = {
+					OR = { trait = school_of_thungi trait = school_of_valaya }
+					NOT = { has_artifact = master_rune_of_valaya }
+				}
+				AND = {
+					OR = { trait = school_of_thungi trait = school_of_grimnir }
+					NOT = { has_artifact = master_rune_of_grimnir }
+				}
+				AND = {
+					OR = { trait = school_of_thungi trait = school_of_grungi }
+					NOT = { has_artifact = master_rune_of_grungi }
+				}
+				AND = {
+					OR = {
+						trait = school_of_thungi
+						trait = school_of_grungi
+						trait = school_of_valaya
+					}
+					NOT = { has_artifact = master_rune_of_thungi }
+				}
+				AND = {
+					OR = { trait = school_of_grimnir trait = school_of_grungi }
+					NOT = { has_artifact = master_rune_of_morgrim }
+				}
+			}
+		}
+		change_society_currency = 1250
+	}
+
+	after = {
+		clr_character_flag = choosing_warrior_training
+	}
+}
+
+###############################################################################
+# Part 4: the goldsmith
+###############################################################################
+
+# armoury.50 A goldsmith is found
+# A goldsmith has come to the region. Invite them to court, or not.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = armoury.50
+	desc = EVTDESCarmoury50
+	picture = GFX_evt_treasure_chamber
+	border = GFX_event_normal_frame_economy
+
+	hide_from = yes
+	is_triggered_only = yes # armoury.1
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+	}
+
+	immediate = {
+		hidden_effect = {
+			armoury_create_smith_effect = yes
+			event_target:smith = {
+				give_nickname = nick_the_goldsmith
+				armoury_smith_talent_effect = yes
+			}
+		}
+	}
+
+	option = { # Invite them
+		name = EVTOPTAarmoury50
+		custom_tooltip = { text = EVTOPTA_MNM_9100_TT }
+		hidden_effect = {
+			save_event_target_as = smith_employer
+			event_target:smith = { character_event = { id = armoury.51 } }
+		}
+	}
+	option = { # Don't
+		name = EVTOPTBarmoury50
+		custom_tooltip = { text = EVTOPTB_MNM_9100_TT }
+		hidden_effect = { event_target:smith = { leave_court_and_die_effect = yes } }
+	}
+}
+
+# armoury.51 The goldsmith arrives
+# Hidden. The goldsmith comes to court (armoury.52).
+# Scope: ROOT is the goldsmith.
+character_event = {
+	id = armoury.51
+	hide_window = yes
+	is_triggered_only = yes # armoury.50
+
+	immediate = {
+		event_target:smith_employer = { character_event = { id = armoury.52 } }
+	}
+}
+
+# armoury.52 How much for the crown jewels?
+# The best money can buy (emperors), something impressive (kings and
+# emperors), or what befits the ruler's station. The goldsmith reports in
+# 50 to 150 days (armoury.61).
+# Scope: ROOT is the ruler, FROM the goldsmith.
+character_event = {
+	id = armoury.52
+	desc = EVTDESCarmoury52
+	picture = GFX_evt_emissary
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.51
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+	}
+
+	option = { # The best money can buy
+		name = EVTOPTAarmoury52
+		trigger = { tier = EMPEROR }
+		custom_tooltip = { text = EVTOPTA_MNM_9103_TT }
+		scaled_wealth = { value = -3.5 min = -300 max = -2000 }
+		hidden_effect = { armoury_order_expensive_effect = yes }
+		ai_chance = {
+			factor = 33
+			modifier = { factor = 10 tier = EMPEROR }
+			modifier = { factor = 0 NOR = { wealth = 200 yearly_income = 50 } }
+		}
+	}
+	option = { # Something impressive
+		name = { trigger = { tier = EMPEROR } text = EVTOPTB_MNM_9103 }
+		name = { trigger = { tier = KING } text = EVTOPTB_MNM_9103_KING }
+		trigger = { higher_tier_than = DUKE }
+		if = { limit = { tier = EMPEROR } custom_tooltip = { text = EVTOPTB_MNM_9103_TT } }
+		else = { custom_tooltip = { text = EVTOPTB_MNM_9103_TT_KING } }
+		scaled_wealth = { value = -2 min = -150 max = -500 }
+		hidden_effect = { armoury_order_good_effect = yes }
+		ai_chance = {
+			factor = 33
+			modifier = { factor = 10 tier = KING }
+			modifier = { factor = 3 tier = EMPEROR }
+			modifier = { factor = 0 NOR = { wealth = 150 yearly_income = 25 } }
+		}
+	}
+	option = { # What I can afford
+		name = { trigger = { tier = EMPEROR } text = EVTOPTC_MNM_9103 }
+		name = { trigger = { tier = KING } text = EVTOPTC_MNM_9103_KING }
+		name = { trigger = { lower_tier_than = KING } text = EVTOPTC_MNM_9103_GENERIC }
+		if = { limit = { tier = EMPEROR } custom_tooltip = { text = EVTOPTC_MNM_9103_TT } }
+		else_if = { limit = { tier = KING } custom_tooltip = { text = EVTOPTC_MNM_9103_TT_KING } }
+		else = { custom_tooltip = { text = EVTOPTC_MNM_9103_TT_GENERIC } }
+		scaled_wealth = { value = -1 min = -50 max = -100 }
+		hidden_effect = { armoury_order_cheap_effect = yes }
+		ai_chance = {
+			factor = 33
+			modifier = { factor = 10 lower_tier_than = KING }
+			modifier = { factor = 3 tier = KING }
+			modifier = { factor = 0 NOR = { wealth = 25 yearly_income = 5 } }
+		}
+	}
+	option = { # Actually, no
+		name = EVTOPTBarmoury52
+		custom_tooltip = { text = EVTOPTD_MNM_9103_TT }
+		hidden_effect = { FROM = { character_event = { id = armoury.12 days = 5 } } }
+		ai_chance = { factor = 15 }
+	}
+}
+
+# armoury.53 The crown jewels are done
+# Hidden. The goldsmith brings them, by the grade of the work
+# (armoury.54 - armoury.57).
+# Scope: ROOT is the goldsmith.
+character_event = {
+	id = armoury.53
+	hide_window = yes
+	is_triggered_only = yes # armoury.61
+
+	immediate = {
+		if = {
+			limit = { NOT = { event_target:smith_employer = { is_alive = yes } } }
+			liege = { save_event_target_as = smith_employer }
+		}
+		if = {
+			limit = { has_character_flag = amazing_jewels }
+			event_target:smith_employer = { character_event = { id = armoury.54 } }
+		}
+		else_if = {
+			limit = { has_character_flag = expensive_jewels }
+			event_target:smith_employer = { character_event = { id = armoury.55 } }
+		}
+		else_if = {
+			limit = { has_character_flag = good_jewels }
+			event_target:smith_employer = { character_event = { id = armoury.56 } }
+		}
+		else = { event_target:smith_employer = { character_event = { id = armoury.57 } } }
+	}
+}
+
+# armoury.54 Magnificent crown jewels
+# Scope: ROOT is the ruler, FROM the goldsmith.
+character_event = {
+	id = armoury.54
+	desc = EVTDESCarmoury54
+	picture = GFX_evt_treasure_chamber
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.53
+
+	option = {
+		name = EVTOPTA_MNM_9105
+		if = {
+			limit = { have_duplicate_goldsmith_artifacts_flag_amazing_trigger = no }
+			give_goldsmith_artifacts_flag_amazing_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 3.5 min = 230 max = 2000 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+
+	after = {
+		armoury_finish_jewels_effect = yes
+	}
+}
+
+# armoury.55 Splendid crown jewels
+# Scope: ROOT is the ruler, FROM the goldsmith.
+character_event = {
+	id = armoury.55
+	desc = EVTDESCarmoury55
+	picture = GFX_evt_treasure_chamber
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.53
+
+	option = {
+		name = EVTOPTA_MNM_9105
+		if = {
+			limit = { have_duplicate_goldsmith_artifacts_flag_expensive_trigger = no }
+			give_goldsmith_artifacts_flag_expensive_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 3.5 min = 230 max = 2000 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+
+	after = {
+		armoury_finish_jewels_effect = yes
+	}
+}
+
+# armoury.56 Fine crown jewels
+# Scope: ROOT is the ruler, FROM the goldsmith.
+character_event = {
+	id = armoury.56
+	desc = EVTDESCarmoury56
+	picture = GFX_evt_treasure_chamber
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.53
+
+	option = {
+		name = EVTOPTAarmoury56
+		if = {
+			limit = { have_duplicate_goldsmith_artifacts_flag_good_trigger = no }
+			give_goldsmith_artifacts_flag_good_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 1.8 min = 100 max = 500 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+
+	after = {
+		armoury_finish_jewels_effect = yes
+	}
+}
+
+# armoury.57 Proper crown jewels
+# Scope: ROOT is the ruler, FROM the goldsmith.
+character_event = {
+	id = armoury.57
+	desc = { trigger = { tier = EMPEROR } text = EVTDESCarmoury57A }
+	desc = { trigger = { tier = KING } text = EVTDESCarmoury57B }
+	desc = { trigger = { lower_tier_than = KING } text = EVTDESCarmoury57C }
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.53
+
+	option = {
+		name = EVTOPTAarmoury57
+		if = {
+			limit = { have_duplicate_goldsmith_artifacts_flag_okay_trigger = no }
+			give_goldsmith_artifacts_flag_okay_effect = yes
+		}
+		else = {
+			scaled_wealth = { value = 0.8 min = 40 max = 100 } # some gold back for a duplicate
+			custom_tooltip = { text = EVTTT_MNM_9105_NO_DUPLICATES }
+		}
+	}
+
+	after = {
+		armoury_finish_jewels_effect = yes
+	}
+}
+
+# armoury.58 Precious stones found
+# Hidden. The goldsmith brings word (armoury.59).
+# Scope: ROOT is the goldsmith.
+character_event = {
+	id = armoury.58
+	hide_window = yes
+	is_triggered_only = yes # armoury.61
+
+	immediate = {
+		if = {
+			limit = { NOT = { event_target:smith_employer = { is_alive = yes } } }
+			liege = { save_event_target_as = smith_employer }
+		}
+		event_target:smith_employer = { character_event = { id = armoury.59 } }
+	}
+}
+
+# armoury.59 Better gems and gold
+# Precious metals and stones have been found nearby. Pay for an expedition
+# and the jewels rise a grade, or settle for what was ordered.
+# Scope: ROOT is the ruler, FROM the goldsmith.
+character_event = {
+	id = armoury.59
+	desc = EVTDESCarmoury59
+	picture = GFX_evt_merchant_caravan
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.58
+
+	option = { # The best
+		name = EVTOPTA_MNM_9109
+		trigger = { FROM = { has_character_flag = expensive_jewels } }
+		custom_tooltip = { text = EVTOPTA_MNM_9109_TT_NEW }
+		scaled_wealth = { value = -3 min = -150 max = -1000 }
+		hidden_effect = {
+			FROM = { clr_character_flag = expensive_jewels set_character_flag = amazing_jewels }
+			clr_character_flag = expensive_jewels
+			set_character_flag = amazing_jewels
+		}
+	}
+	option = { # Settle
+		name = EVTOPTB_MNM_9109
+		trigger = { FROM = { has_character_flag = expensive_jewels } }
+		custom_tooltip = { text = EVTOPTB_MNM_9109_TT_NEW }
+	}
+	option = { # Better
+		name = EVTOPTC_MNM_9109
+		trigger = { FROM = { has_character_flag = good_jewels } }
+		custom_tooltip = { text = EVTOPTC_MNM_9109_TT_NEW }
+		scaled_wealth = { value = -1.5 min = -100 max = -500 }
+		hidden_effect = {
+			FROM = { clr_character_flag = good_jewels set_character_flag = expensive_jewels }
+			clr_character_flag = good_jewels
+			set_character_flag = expensive_jewels
+		}
+	}
+	option = { # Settle
+		name = EVTOPTD_MNM_9109
+		trigger = { FROM = { has_character_flag = good_jewels } }
+		custom_tooltip = { text = EVTOPTD_MNM_9109_TT_NEW }
+	}
+
+	after = {
+		hidden_effect = {
+			clr_character_flag = goldsmith_fail
+			set_character_flag = goldsmith_success
+			character_event = { id = armoury.61 days = 50 random = 100 }
+		}
+	}
+}
+
+# armoury.61 The goldsmith reports
+# Hidden. The jewels are done, in trouble or stolen. A dead goldsmith
+# returns what was left of the gold (armoury.62).
+# Scope: ROOT is the ruler.
+character_event = {
+	id = armoury.61
+	hide_window = yes
+	is_triggered_only = yes # armoury_order_*_effect, armoury.59
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+		event_target:smith = { is_alive = yes }
+	}
+
+	fail_trigger_effect = { character_event = { id = armoury.62 } }
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = goldsmith_success }
+			event_target:smith = { character_event = { id = armoury.53 } }
+		}
+		else_if = {
+			limit = { has_character_flag = goldsmith_fail }
+			event_target:smith = { character_event = { id = armoury.58 } }
+		}
+		else_if = {
+			limit = { has_character_flag = goldsmith_steal }
+			event_target:smith = { character_event = { id = armoury.21 } }
+		}
+		clr_character_flag = goldsmith_success
+		clr_character_flag = goldsmith_fail
+		clr_character_flag = goldsmith_steal
+	}
+}
+
+# armoury.62 The goldsmith is dead
+# The goldsmith died before finishing; his heirs return what was left of
+# the gold.
+# Scope: ROOT is the ruler.
+character_event = {
+	id = armoury.62
+	desc = EVTDESC_MNM_9112
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	hide_from = yes
+	is_triggered_only = yes # armoury.61, armoury.70
+
+	option = { # A great sum returned
+		name = EVTOPTA_MNM_9112
+		trigger = {
+			OR = { has_character_flag = amazing_jewels has_character_flag = expensive_jewels }
+		}
+		scaled_wealth = { value = 3 min = 180 }
+	}
+	option = { # A fair sum returned
+		name = EVTOPTB_MNM_9112
+		trigger = { has_character_flag = good_jewels }
+		scaled_wealth = { value = 1.5 min = 90 }
+	}
+	option = { # A little returned
+		name = EVTOPTC_MNM_9112
+		trigger = {
+			NOR = {
+				has_character_flag = amazing_jewels
+				has_character_flag = expensive_jewels
+				has_character_flag = good_jewels
+			}
+		}
+		scaled_wealth = { value = 0.5 min = 25 }
+	}
+
+	after = {
+		armoury_clear_order_effect = yes
+	}
+}
+
+###############################################################################
+# Part 5: in the smithy
+###############################################################################
+
+# armoury.70 While the smith works
+# Hidden. Three weeks into the work something may happen: the smith
+# teaches a courtier the craft (armoury.72), trains a child or ward
+# (armoury.73), takes a lover at court (armoury.74), or has an accident,
+# the dull more often (armoury.75). A dead smith returns the gold instead
+# (armoury.11, goldsmith armoury.62).
+# Scope: ROOT is the employer.
+character_event = {
+	id = armoury.70
+	hide_window = yes
+	is_triggered_only = yes # armoury_order_*_effect
+
+	trigger = {
+		OR = { has_dlc = "Mystics" has_dlc = "Jade Dragon" }
+		event_target:smith = { is_alive = yes }
+	}
+
+	fail_trigger_effect = {
+		if = {
+			limit = { OR = { has_character_flag = weaponsmith has_character_flag = armorsmith } }
+			character_event = { id = armoury.11 }
+		}
+		else = { character_event = { id = armoury.62 } }
+		clear_delayed_event = { id = armoury.61 }
+		clear_delayed_event = { id = armoury.10 }
+	}
+
+	immediate = {
+		event_target:smith = {
+			random_list = {
+				20 = { # Teaches a courtier
+					trigger = {
+						ROOT = {
+							OR = {
+								any_courtier = {
+									is_inaccessible_or_incapable_trigger = no
+									age = 13
+									stewardship < 14
+									NOT = { character = PREVPREV }
+								}
+								any_friend = {
+									is_inaccessible_or_incapable_trigger = no
+									liege = { character = ROOT }
+									age = 13
+									stewardship < 14
+									NOT = { character = PREVPREV }
+								}
+								any_child = {
+									is_inaccessible_or_incapable_trigger = no
+									liege = { character = ROOT }
+									age = 13
+									stewardship < 14
+								}
+							}
+						}
+					}
+					modifier = {
+						factor = 1.5
+						ROOT = {
+							NOR = {
+								has_character_flag = weaponsmith
+								has_character_flag = armorsmith
+							}
+						}
+					}
+					set_character_flag = smith_event_armoury72
+					character_event = { id = armoury.71 }
+				}
+				20 = { # Trains a child or ward
+					trigger = {
+						ROOT = {
+							OR = {
+								any_child = {
+									is_inaccessible_or_incapable_trigger = no
+									liege = { character = ROOT }
+									age = 9
+									age <= 16
+									is_strong_trigger = no
+									NOT = { trait = weak }
+								}
+								any_pupil = {
+									is_inaccessible_or_incapable_trigger = no
+									age = 9
+									age <= 16
+									is_strong_trigger = no
+									NOT = { trait = weak }
+								}
+							}
+						}
+					}
+					modifier = {
+						factor = 1.5
+						ROOT = {
+							OR = {
+								has_character_flag = weaponsmith
+								has_character_flag = armorsmith
+							}
+						}
+					}
+					set_character_flag = smith_event_armoury73
+					character_event = { id = armoury.71 }
+				}
+				15 = { # Takes a lover
+					trigger = {
+						NOR = { trait = chaste trait = celibate }
+						ROOT = {
+							NOT = {
+								any_owned_bloodline = {
+									has_bloodline_flag = bloodline_artisan_craftsmen
+								}
+							}
+							any_courtier = { armoury_smith_lover_trigger = yes }
+						}
+					}
+					modifier = { factor = 2 trait = lustful }
+					modifier = { factor = 2 trait = hedonist }
+					modifier = { factor = 2 OR = { trait = seducer trait = seductress } }
+					set_character_flag = smith_event_armoury74
+					character_event = { id = armoury.71 }
+				}
+				15 = { # An accident
+					modifier = { factor = 5 is_dumb_trigger = yes }
+					set_character_flag = smith_event_armoury75
+					character_event = { id = armoury.71 }
+				}
+				30 = { }
+			}
+		}
+	}
+}
+
+# armoury.71 Word from the smithy
+# Hidden. The smith's doings reach the employer (armoury.72 - armoury.75).
+# Scope: ROOT is the smith, FROM the employer.
+character_event = {
+	id = armoury.71
+	hide_window = yes
+	is_triggered_only = yes # armoury.70
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = smith_event_armoury72 }
+			FROM = { character_event = { id = armoury.72 } }
+		}
+		else_if = {
+			limit = { has_character_flag = smith_event_armoury73 }
+			FROM = { character_event = { id = armoury.73 } }
+		}
+		else_if = {
+			limit = { has_character_flag = smith_event_armoury74 }
+			FROM = { character_event = { id = armoury.74 } }
+		}
+		else_if = {
+			limit = { has_character_flag = smith_event_armoury75 }
+			FROM = { character_event = { id = armoury.75 } }
+		}
+		clr_character_flag = smith_event_armoury72
+		clr_character_flag = smith_event_armoury73
+		clr_character_flag = smith_event_armoury74
+		clr_character_flag = smith_event_armoury75
+	}
+}
+
+# armoury.72 The smith teaches
+# The smith has been teaching a courtier the craft. Let it go on (the
+# pupil learns, the court loses some face), or keep the smith at the work
+# (it may even get better).
+# Scope: ROOT is the employer, FROM the smith.
+character_event = {
+	id = armoury.72
+	desc = EVTDESCarmoury72
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.71
+
+	immediate = {
+		random_courtier = {
+			limit = {
+				is_inaccessible_or_incapable_trigger = no
+				age = 13
+				stewardship < 14
+				NOT = { character = FROM }
+			}
+			save_event_target_as = smith_event_target
+		}
+		random_friend = {
+			limit = {
+				is_inaccessible_or_incapable_trigger = no
+				liege = { character = ROOT }
+				age = 13
+				stewardship < 14
+				NOT = { character = FROM }
+			}
+			save_event_target_as = smith_event_target
+		}
+		random_child = {
+			limit = {
+				is_inaccessible_or_incapable_trigger = no
+				liege = { character = ROOT }
+				age = 13
+				stewardship < 14
+			}
+			save_event_target_as = smith_event_target
+		}
+	}
+
+	option = { # Let them learn
+		name = EVTOPTAarmoury72
+		prestige = -50
+		event_target:smith_event_target = {
+			change_stewardship = 1
+			opinion = { who = ROOT modifier = opinion_happy months = 12 }
+		}
+		FROM = {
+			show_scope_change = no
+			reverse_opinion = {
+				who = event_target:smith_event_target
+				modifier = opinion_grateful
+				months = 12
+			}
+			reverse_opinion = { who = ROOT modifier = opinion_grateful months = 12 }
+		}
+	}
+	option = { # Back to work
+		name = EVTOPTBarmoury72
+		event_target:smith_event_target = {
+			show_scope_change = no
+			opinion = { who = ROOT modifier = opinion_disappointed months = 12 }
+		}
+		reverse_opinion = { who = FROM modifier = opinion_upset months = 12 }
+		armoury_smith_focus_effect = yes
+	}
+}
+
+# armoury.73 The smith trains a ward
+# The smith has been training a child of the court at the anvil. Let it go
+# on (the child grows strong), or keep the smith at the work (it may even
+# get better).
+# Scope: ROOT is the employer, FROM the smith.
+character_event = {
+	id = armoury.73
+	desc = EVTDESCarmoury73
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # armoury.71
+
+	immediate = {
+		random_child = {
+			limit = {
+				liege = { character = ROOT }
+				age = 9
+				age <= 16
+				is_strong_trigger = no
+				NOT = { trait = weak }
+				is_inaccessible_or_incapable_trigger = no
+			}
+			save_event_target_as = smith_event_target
+		}
+		random_pupil = {
+			limit = {
+				age = 9
+				age <= 16
+				is_strong_trigger = no
+				NOT = { trait = weak }
+				is_inaccessible_or_incapable_trigger = no
+			}
+			save_event_target_as = smith_event_target
+		}
+	}
+
+	option = { # Let them train
+		name = EVTOPTAarmoury73
+		prestige = -50
+		event_target:smith_event_target = {
+			show_scope_change = no
+			if = { limit = { trait = feeble } remove_trait = feeble }
+			else = { add_trait = robust }
+			opinion = { who = ROOT modifier = opinion_happy months = 12 }
+		}
+		FROM = {
+			show_scope_change = no
+			reverse_opinion = {
+				who = event_target:smith_event_target
+				modifier = opinion_grateful
+				months = 12
+			}
+			reverse_opinion = { who = ROOT modifier = opinion_grateful months = 12 }
+		}
+	}
+	option = { # Back to work
+		name = EVTOPTBarmoury73
+		event_target:smith_event_target = {
+			show_scope_change = no
+			opinion = { who = ROOT modifier = opinion_disappointed months = 12 }
+		}
+		reverse_opinion = { who = FROM modifier = opinion_upset months = 12 }
+		armoury_smith_focus_effect = yes
+	}
+}
+
+# armoury.74 The smith's lover
+# The smith shares a bed with a courtier. Look away, scold the smith,
+# throw the smith out (the lover may follow), or have the smith beheaded.
+# Scope: ROOT is the employer, FROM the smith.
+character_event = {
+	id = armoury.74
+	desc = EVTDESCarmoury74
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_war
+
+	is_triggered_only = yes # armoury.71
+
+	immediate = {
+		random_courtier = {
+			limit = { armoury_smith_lover_trigger = yes }
+			save_event_target_as = smith_event_target
+			save_event_target_as = sex_partner
+		}
+		FROM = { unprotected_sex_effect_event_target = yes }
+	}
+
+	option = { # Not my business
+		name = EVTOPTAarmoury74
+		prestige = -75
+	}
+	option = { # Not at my court
+		name = EVTOPTBarmoury74
+		event_target:smith_event_target = {
+			show_scope_change = no
+			opinion = { who = ROOT modifier = opinion_upset months = 12 }
+		}
+		opinion = { who = FROM modifier = opinion_angry months = 12 }
+		reverse_opinion = { who = FROM modifier = opinion_worried months = 12 }
+		prestige = 25
+	}
+	option = { # Get out of my court
+		name = EVTOPTCarmoury74
+		hidden_effect = { armoury_clear_order_effect = yes }
+		prestige = 100
+		FROM = {
+			show_scope_change = no
+			opinion = { who = ROOT modifier = opinion_angry months = 12 }
+			banish = yes
+		}
+		reverse_opinion = {
+			who = event_target:smith_event_target
+			modifier = opinion_angry
+			months = 12
+		}
+		random = {
+			chance = 30
+			modifier = { factor = 0 event_target:smith_event_target = { is_married = yes } }
+			custom_tooltip = {
+				text = smith_lover_elopes_tt
+				event_target:smith_event_target = { banish = yes }
+			}
+		}
+	}
+	option = { # Off with the smith's head
+		name = EVTOPTDarmoury74
+		hidden_effect = { armoury_clear_order_effect = yes }
+		prestige = 100
+		FROM = { death = { death_reason = death_execution killer = ROOT } }
+		reverse_opinion = {
+			who = event_target:smith_event_target
+			modifier = opinion_angry
+			months = 12
+		}
+	}
+}
+
+# armoury.75 An accident at the forge
+# The smith was hurt at the forge. Pay for care and the work goes on, or
+# send the smith away.
+# Scope: ROOT is the employer, FROM the smith.
+character_event = {
+	id = armoury.75
+	desc = EVTDESCarmoury75
+	picture = GFX_evt_weaponsmith
+	border = GFX_event_normal_frame_economy
+
+	is_triggered_only = yes # armoury.71
+
+	option = { # Pay for the physician
+		name = EVTOPTAarmoury75
+		scaled_wealth = { value = -0.2 min = -30 max = -100 }
+		FROM = {
+			show_scope_change = no
+			random_list = {
+				1 = { add_maimed_trait_effect = yes }
+				2 = { trigger = { NOT = { trait = wounded } } add_trait = wounded }
+			}
+			add_character_modifier = { name = good_care duration = 365 }
+		}
+	}
+	option = { # Send the smith away
+		name = EVTOPTBarmoury75
+		hidden_effect = { armoury_clear_order_effect = yes }
+		FROM = {
+			show_scope_change = no
+			random_list = {
+				1 = { add_maimed_trait_effect = yes }
+				2 = { trigger = { NOT = { trait = wounded } } add_trait = wounded }
+			}
+			banish = yes
+		}
+	}
+}
+
+###############################################################################
+# Part 6: banners of the fallen
+###############################################################################
+
+# armoury.80 A banner from the field
+# After a won battle a commander brings home a fine banner taken from the
+# enemy dead. Not once in a lifetime: a commander may win several over a
+# long career, but at most one every ten years and never while holding three
+# banners. Never for the Tomb Kings or daemons. The just and patient are likelier to
+# be brought it, the deceitful less.
+# Scope: ROOT is a commander on the winning side.
+character_event = {
+	id = armoury.80
+	desc = EVTDESCarmoury80
+	picture = GFX_evt_battle
+	border = GFX_event_normal_frame_war
+
+	hide_from = yes
+	is_triggered_only = yes # on_battle_won
+
+	trigger = {
+		is_alive = yes
+		OR = { # One banner every ten years at most
+			NOT = { has_character_flag = battle_banner_found }
+			had_character_flag = { flag = battle_banner_found years = 10 }
+		}
+		NOT = { trait = creature_nehekharan }
+		NOT = { culture_group = daemonic_group }
+		NOT = { any_artifact = { count = 3 has_artifact_flag = banner } }
+	}
+
+	weight_multiplier = {
+		factor = 1
+		modifier = { factor = 1.5 trait = patient }
+		modifier = { factor = 1.5 trait = just }
+		modifier = { factor = 1.5 trait = diligent }
+		modifier = { factor = 0.2 trait = deceitful }
+		modifier = { factor = 0.2 trait = arbitrary }
+		modifier = { factor = 2 has_character_modifier = good_battle_omen }
+		modifier = { factor = 0.9 has_character_modifier = bad_battle_omen }
+	}
+
+	option = {
+		name = EXCELLENT
+		clr_character_flag = battle_banner_found # restart the ten years
+		set_character_flag = battle_banner_found
+		random_list = {
+			10 = { add_artifact = rampagers_standard }
+			10 = { add_artifact = rangers_standard }
+			10 = { add_artifact = razor_standard }
+			10 = { add_artifact = wailing_banner }
+			10 = { add_artifact = banner_of_swiftness }
+			10 = { add_artifact = lichebone_pennant }
+			10 = { add_artifact = standard_of_discipline }
+			10 = { add_artifact = banner_of_eternal_flame }
+			10 = { add_artifact = scarecrow_banner }
+			10 = { add_artifact = gleaming_pennant }
+			3 = { trigger = { religion_group = chaos_gods_group } add_artifact = ruinous_standard }
+			10 = {
+				trigger = { trait = creature_beastman }
+				add_artifact = beastmen_artifact_beast_banner
+			}
+		}
+	}
+
+	after = {
+		remove_scrying_omen_modifiers_effect = yes
+	}
+}

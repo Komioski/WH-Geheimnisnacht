@@ -14,7 +14,7 @@ from factions import factions_of, VANILLA_NAMESPACES
 EVENT_TYPES = ('character_event', 'province_event', 'letter_event', 'narrative_event',
                'long_character_event', 'diploresponse_event', 'society_quest_event',
                'unit_event')
-DECISION_BLOCKS = ('decisions', 'targetted_decisions', 'title_decisions', 'plot_decisions',
+DECISION_BLOCKS = ('decisions', 'targetted_decisions', 'targeted_decisions', 'society_decisions', 'title_decisions', 'plot_decisions',
                    'offmap_decisions', 'fort_decisions', 'hospital_decisions',
                    'trade_post_decisions', 'settlement_decisions', 'unit_decisions')
 # Keys allowed before `trigger`; the engine checks them cheaply before the trigger.

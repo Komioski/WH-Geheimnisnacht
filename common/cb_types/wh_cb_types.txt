@@ -1311,7 +1311,7 @@ cultist_bid_for_independence = { #WIP
 		hidden_tooltip = {
 			any_defender = {
 				letter_event = {
-					id = 251
+					id = battle.104
 				}
 			}
 		}
@@ -2679,8 +2679,17 @@ cathayan_subjugation = {
         factor = 100
     }
 }
-#Colonization
-#Used by The League Members (only works against coastal provinces)
+# Colonial Charter (coastal_colonization): the Venturers' war for a colony
+# (power venturer_charter_colony, rank 3 Charter Captain). Takes a port
+# county across the sea, in Lustria, Naggaroth and the New World, the
+# Southlands or Albion (when the mists are gone), from a ruler of another
+# people and another faith. The county must be on the Venturer's charts
+# (province flag venture_surveyed, from a successful expedition) or lie in
+# a land where the Venturer's realm already holds a harbour. An Asur
+# Venturer also needs the Phoenix King's leave (interventionist_elf), as
+# with the Asur colonial wars of cb_types_elf.txt. The won county becomes
+# a chartered colony (province flag venture_colony) and the Venturer picks
+# its governor (venture.40). Events in events/WHG_venture_events.txt.
 coastal_colonization = {
 	name = CB_NAME_COASTAL_COLONIZATION
 	war_name = WAR_NAME_COASTAL_COLONIZATION
@@ -2693,72 +2702,46 @@ coastal_colonization = {
 	attacker_can_call_allies = no
 	can_call_vassals = no
 	can_ask_to_join_war = no
-	apply_short_occ_mod = no #suffers new Colony instead
+	apply_short_occ_mod = no # A new colony suffers enough already
 
 	allow_distant = yes
 
 	can_use = {
-        always = no
-		OR={
-			AND={
-				FROM={capital_scope={region = world_new_world_lustria }
-					NOR={
-					religion_group=ROOT
-					culture_group=ROOT
+		ROOT = {
+			society_member_of = adventurers_the_league
+			society_rank >= 3
+			is_landed = yes
+			any_realm_province = { port = yes }
+			NOT = { same_realm = FROM }
+			trigger_if = {
+				limit = { trait = creature_elf }
+				culture_group = asur_group
+				trait = interventionist_elf
+				e_ulthuan = {
+					OR = {
+						has_holder = no
+						holder_scope = { trait = interventionist_elf }
 					}
-				}
-				ROOT={capital_scope={region = world_old_world }}
-			}
-			AND={
-				FROM={capital_scope={region = world_new_world_lustria }
-					NOR={
-					religion_group=ROOT
-					culture_group=ROOT
-					}
-				}
-				ROOT={capital_scope={region = world_greater_araby }}
-			}
-			AND={
-				FROM={capital_scope={region = world_greater_araby }
-					NOR={
-					religion_group=ROOT
-					culture_group=ROOT
-					}
-				}
-				ROOT={capital_scope={region = world_old_world }}
-			}
-			AND={
-				FROM={capital_scope={region = world_old_world }
-					NOR={
-					religion_group=ROOT
-					culture_group=ROOT
-					}
-				}
-				ROOT={
-					NOT={religion_group=old_world_group}
-					culture_group=arabyan_group
-					capital_scope={region = world_greater_araby }
 				}
 			}
-			AND={
-				NOT={has_global_flag=mists_of_albion}
-				ROOT={NOT={capital_scope={region = world_albion }}}
-				FROM={capital_scope={region = world_albion }}
-				NOT={
-					any_independent_ruler={
-						capital_scope={capital_scope={region = world_albion }}
-						NOR={
-							religion_group=ROOT
-							culture_group=ROOT
-						}
-					}
-				}
+		}
+		FROM = {
+			NOR = {
+				religion_group = ROOT
+				culture_group = ROOT
 			}
 		}
 	}
 
 	can_use_title = {
-		location = { port = yes }
+		location = {
+			port = yes
+			venture_colony_region_trigger = yes
+			OR = {
+				has_province_flag = venture_surveyed
+				venture_realm_in_region_trigger = yes
+			}
+		}
 	}
 
 	is_valid = {
@@ -2773,21 +2756,6 @@ coastal_colonization = {
 	}
 
 	is_valid_title = {
-		e_ulthuan = { holder_scope = { trait = interventionist_elf } }	#If the King is against meddling, the Princes cannot go
-		ROOT = {
-			religion_group = cadai_group
-			trait = interventionist_elf
-			OR = { has_landed_title = e_ulthuan
-				top_liege = { has_landed_title = e_ulthuan } }	#The colonization can only start from Ulthuan
-			NOT = { same_realm = FROM }
-		}
-		FROM = {
-			OR = {
-				NOT = { trait = creature_elf } #any non-elf ruler is a good target
-				religion_group = cytharai_group
-			}
-		}
-
 		OR = {
 			FROM = {
 				has_landed_title = PREV
@@ -2797,11 +2765,18 @@ coastal_colonization = {
 			}
 		}
 	}
+
 	on_success = {
-		#ROOT = { character_event = { id = asur.26 days = 1 } } #create character, assign by flag
-		}
+		ROOT = { venture_deed_effect = yes }
+	}
+
 	on_success_title = {
-		set_title_flag = elven_colony_flag
+		location = { # Before the usurpation, so colony.30 knows to stand aside
+			set_province_flag = venture_colony
+			set_province_flag = venture_colony_new # Read by venture.40
+			clr_province_flag = venture_surveyed
+			add_province_modifier = { name = venture_new_colony years = 10 }
+		}
 		usurp_title_plus_barony_if_unlanded = { target = ROOT type = invasion }
 
 		any_de_jure_vassal_title = { # take all baronies too
@@ -2815,39 +2790,32 @@ coastal_colonization = {
 							is_liege_or_above = ROOT
 							NOT = { culture = ROOT }
 							NOT = { religion = ROOT }
-							}
 						}
-					 }
+					}
 				}
-
-			usurp_title = ROOT
 			}
+			usurp_title = ROOT
+		}
+		ROOT = { character_event = { id = venture.40 days = 1 } }
+
 		any_attacker = {
 			limit = { character = ROOT }
 			participation_scaled_prestige = 100
-			participation_scaled_piety = 50
 		}
 		any_attacker = {
 			limit = { NOT = { character = ROOT } }
 			hidden_tooltip = {
 				participation_scaled_prestige = 100
-				participation_scaled_piety = 50
 			}
 		}
-
 		ROOT = {
-			religion_authority = {
-				modifier = won_county_conquest
-			}
+			add_society_currency_medium_effect = yes
 		}
 	}
 
 	on_fail_title = {
 		ROOT = {
 			prestige = -100
-			religion_authority = {
-				modifier = lost_county_conquest
-			}
 		}
 		any_defender = {
 			limit = { character = FROM }
@@ -2866,20 +2834,15 @@ coastal_colonization = {
 				to = FROM
 				value = 4.0
 			}
-			religion_authority = {
-				modifier = lost_county_conquest
-			}
 		}
 		any_defender = {
 			limit = { character = FROM }
 			participation_scaled_prestige = 100
-			participation_scaled_piety = 50
 		}
 		any_defender = {
 			limit = { NOT = { character = FROM } }
 			hidden_tooltip = {
 				participation_scaled_prestige = 100
-				participation_scaled_piety = 50
 			}
 		}
 	}
@@ -2899,19 +2862,16 @@ coastal_colonization = {
 	defender_ai_defeat_worth = {
 		factor = 100
 	}
+
 	ai_will_do = {
 		factor = 1
 		modifier = {
-			factor = 0.25
-			holder_scope = {
-				trait = phoenix_king	# To prevent excessive imperialism, leave something to the poor Princes!
-			}
+			factor = 0.5
+			ROOT = { trait = content }
 		}
 		modifier = {
-			factor = 0
-			holder_scope = {
-				trait = everqueen # Spiritual guide
-			}
+			factor = 1.5
+			ROOT = { trait = ambitious }
 		}
 	}
 }
@@ -3414,7 +3374,7 @@ caliphal_jihad = {
 					has_landed_title = e_the_empire
 					religion_group = old_world_group
 				}
-				hidden_tooltip = { character_event = { id = LoR.30 days = 12 } }
+				hidden_tooltip = { character_event = { id = triumph.10 days = 12 } }
 			}
 
 			hidden_tooltip = {
@@ -3479,7 +3439,7 @@ caliphal_jihad = {
 					has_landed_title = e_the_empire
 					religion_group = old_world_group
 				}
-				hidden_tooltip = { character_event = { id = LoR.30 days = 12 } }
+				hidden_tooltip = { character_event = { id = triumph.10 days = 12 } }
 			}
 			hidden_tooltip = {
 				if = {

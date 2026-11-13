@@ -34,6 +34,17 @@ LOC_KEY = re.compile(r'^[A-Za-z0-9_.\-]+$')
 CODE_COMMENT = re.compile(r'^\s*#\s*[a-z_]+\s*=\s*[{\w]')
 
 
+
+# Pulse events that must look at every character of a kind that only traits
+# mark (no flag, faith or culture is shared by all of them). Their trigger
+# opens with that trait check, which costs about as much as a pre-trigger.
+# Reviewed 2026-11-12; add an event here only with the reason.
+PULSE_REVIEWED = {
+    'physique.10': 'every mortal body between 11 and 55 gains or loses weight',
+    'nehekhara.49': 'vampires, Tomb Kings and daemons of any faith mend; vampire traits come from 56 places',
+    'vampsoc.2': 'vampires outside a society are found again; vampire traits come from 56 places',
+}
+
 def check(idx, only=None):
     """Return list of (level, file, line, message)."""
     out = []
@@ -85,7 +96,7 @@ def check(idx, only=None):
             out.append(('WARN', ev.path, ev.line, '%s: MTTH event with no cheap pre-trigger '
                         '(only_playable, only_rulers, religion_group, has_character_flag...)' % ev.id))
         pulses = idx.pulse_listed.get(ev.id, set()) & PULSES
-        if pulses and not strong:
+        if pulses and not strong and ev.id not in PULSE_REVIEWED:
             out.append(('WARN', ev.path, ev.line, '%s: runs on %s for every character; add a '
                         'pre-trigger' % (ev.id, ', '.join(sorted(pulses)))))
         if (ev.has_weight and ev.triggered_only and ev.origin == 'mod'

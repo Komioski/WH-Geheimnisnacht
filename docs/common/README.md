@@ -40,6 +40,7 @@ fail silently on a mistake there.
 | on_actions | done | 15 files merged into 9 `WHG_*_on_actions.txt` by subject; `00_on_actions.txt` and `00_zeus_education.txt` are vanilla-name overrides with the index |
 | modifiers | done | event_modifiers (57 files to 21), opinion_modifiers (22 to 21), triggered_modifiers (1 to 3), modifier_definitions (2 to 3), all `WHG_<subject>_<folder>.txt`; the vanilla names are overrides with the index |
 | scripted triggers, effects, score values | done | 326 files merged into 23 `WHG_<subject>_triggers.txt`, 23 `WHG_<subject>_effects.txt` and 2 `WHG_*_score_values.txt`; the 24 vanilla names are overrides (the 00_ files hold the index) |
+| character | done | traits (14 files to 19 `WHG_<subject>_traits.txt`), nicknames (3 to 2), death, death_text, heir_text, execution_methods, disease (one `WHG_` file each); the vanilla names are empty overrides |
 
 ## on_actions
 
@@ -116,3 +117,43 @@ fail silently on a mistake there.
   `*_trigger`/`*_effect`/`*_score` calls that nothing defines, effect
   commands in a trigger, missing `Used by` lines, UTF-8 files and
   commented-out code. `--unused` lists what no live script reaches.
+
+## Character (traits, nicknames, death, death_text, heir_text, execution_methods, disease)
+
+- **Traits** have `replace_path`, so there are no vanilla-name files. One
+  file per subject: education, race, leadership, magic, congenital,
+  lifestyle, personality, health, scar, status, faith, activity, and the
+  races with many traits of their own (dwarf, greenskin, skaven, undead,
+  elves, chaos, mutation). Each trait starts with `# <name in game> - <files
+  that use it>`.
+- A save stores each trait by its place in the load order (the files
+  alphabetically, then their order inside). Adding a trait anywhere but at
+  the end of the last file (`WHG_undead_traits.txt`), or removing one,
+  breaks old saves: add new traits at the end of that file, or accept a
+  save break and put them with their subject. Keep the education traits in
+  order: the game picks the tier by order within each attribute.
+- **Nicknames**: `WHG_nicknames.txt` (general, mostly vanilla) and
+  `WHG_race_nicknames.txt` (races, monster hunters, pirates, the
+  Everchosen, deeds). An empty body is given by script; otherwise `allow`
+  and `chance.factor` (percent per year) let the game hand it out.
+- **Diseases** (`WHG_disease.txt`): `rip = yes` is only used with The
+  Reaper's Due, `rip = no` only without it, no `rip` key both. With The
+  Reaper's Due a character is infected only through
+  `on_character_infection`, rolled every `character_infection_chances`
+  months; without it a disease does nothing. One key may be written once
+  per version (`rip = yes` and `rip = no`).
+- **Death reasons** (`WHG_death.txt`): each new reason also goes in its
+  `death_*_trigger` family in `WHG_character_triggers.txt`. An execution
+  death needs `execution = yes` and an entry in
+  `WHG_execution_methods.txt`.
+- **Death and heir texts** are picked by weight; a modifier with
+  `factor = 0` rules one out. The text is the localisation key of the same
+  name.
+- Texts without a home file go in `localisation/00_WHG_character.csv`
+  (loaded before vanilla's files, so it also corrects vanilla text).
+- `python3 tools/common/check_character.py` reports keys defined twice,
+  traits, nicknames, death reasons and diseases used but not defined,
+  undefined trait opposites, disease traits and execution deaths, unknown
+  faiths and cultures, `rip = no` diseases, UTF-8 files and commented-out
+  code. With `--vanilla-loc <CK2>/localisation` it also reports visible
+  traits, nicknames and death reasons with no text.

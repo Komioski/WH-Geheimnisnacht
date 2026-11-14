@@ -41,6 +41,7 @@ fail silently on a mistake there.
 | modifiers | done | event_modifiers (57 files to 21), opinion_modifiers (22 to 21), triggered_modifiers (1 to 3), modifier_definitions (2 to 3), all `WHG_<subject>_<folder>.txt`; the vanilla names are overrides with the index |
 | scripted triggers, effects, score values | done | 326 files merged into 23 `WHG_<subject>_triggers.txt`, 23 `WHG_<subject>_effects.txt` and 2 `WHG_*_score_values.txt`; the 24 vanilla names are overrides (the 00_ files hold the index) |
 | character | done | traits (14 files to 19 `WHG_<subject>_traits.txt`), nicknames (3 to 2), death, death_text, heir_text, execution_methods, disease (one `WHG_` file each); the vanilla names are empty overrides |
+| faith | done | religions (`wh_religions.txt` to 9 `WHG_<subject>_religions.txt`), religion_modifiers (2 to `WHG_religion_modifiers.txt`), religion_features (`WHG_religion_features.txt`), religious_titles (`WHG_religious_titles.txt`); `00_religion_modifiers.txt` and `00_features.txt` are empty overrides |
 
 ## on_actions
 
@@ -157,3 +158,34 @@ fail silently on a mistake there.
   faiths and cultures, `rip = no` diseases, UTF-8 files and commented-out
   code. With `--vanilla-loc <CK2>/localisation` it also reports visible
   traits, nicknames and death reasons with no text.
+
+## Faith (religions, religion_modifiers, religion_features, religious_titles)
+
+- **Religions** and **religious titles** have `replace_path`. Religions are
+  in one file per subject (chaos, dwarf, east, elves, greenskin, old_world,
+  skaven, south, undead); each file header lists its groups and religions.
+  `crusade.info` is vanilla's documentation and stays.
+- A heresy has `parent`; its icon and colour may match the parent's. Any
+  other two religions need their own icon and colour. `intermarry` only
+  matters across groups and is written on both sides.
+- A religion needs texts for its name, `<key>_DESC`, its god names, priest
+  title and scripture: new ones go with the faith's existing text, or in
+  `localisation/00_WHG_faith.csv`.
+- **Authority modifiers** (`WHG_religion_modifiers.txt`) are grouped by who
+  gives them out, each with a `# Used by:` line. The four the engine gives
+  out (`temple_built`, `temple_looted`, `looted_infidel_temple`,
+  `deposed_antipope`) must keep their names.
+- **Reformation features** (`WHG_religion_features.txt`) keep vanilla's key
+  names, since the engine and the reformation screen use them. The header
+  lists which faith may take each faith-only doctrine.
+- In a check, use `religion_group`/`religion`/`secret_religion_group` with
+  a group or faith that exists: the real-world names vanilla used
+  (`christian`, `muslim`, `pagan_group`, `zoroastrian_group`...) do nothing.
+- `python3 tools/common/check_faith.py` reports groups, religions, titles,
+  features and authority modifiers defined twice; parent, reformed and
+  intermarry targets that are not religions; one-sided intermarry; shared
+  icons and colours; undefined graphical cultures; faiths, groups,
+  features and authority modifiers used anywhere in the mod but not
+  defined; UTF-8 files and commented-out code. Leftovers in folders not
+  yet refactored are WARN, to be fixed with that folder. With
+  `--vanilla-loc <CK2>/localisation` it also reports missing texts.

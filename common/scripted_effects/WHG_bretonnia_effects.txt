@@ -1,11 +1,177 @@
 ###############################################################################
-# Bretonnia scripted effects (events/WHG_bretonnia_events.txt)
+# WHG_bretonnia_effects.txt: scripted effects
+# Subject: Bretonnia: knights, the Lady, the Grail, tourneys
+#
+# A scripted effect is a named list of commands, used anywhere an effect can go
+# as "name = yes". It runs in the scope it is called from. Names are global
+# across the folder and must be unique; the load order of files does not
+# matter.
+#
+# Each entry lists the files that use it ("Used by"). Sections:
+#   Building blocks of other entries in this file (4)
+#   Used by WHG_bretonnia_events (8)
+#   Used by WHG_tournament_events (9)
+#   Other helpers used by one or two files (6)
+###############################################################################
+
+###############################################################################
+# Building blocks of other entries in this file
+###############################################################################
+
+# Scope: a guest. Clears the flag that picked a tourney lesson.
+# Used by: WHG_bretonnia_effects, WHG_tournament_events
+tourney_clear_lesson_effect = {
+	clr_character_flag = tourney_lesson_craven
+	clr_character_flag = tourney_lesson_brave
+	clr_character_flag = tourney_lesson_homosexual
+	clr_character_flag = tourney_lesson_pox
+	clr_character_flag = tourney_lesson_drunkard
+	clr_character_flag = tourney_lesson_duelist
+	clr_character_flag = tourney_lesson_intrigue_up
+	clr_character_flag = tourney_lesson_intrigue_down
+	clr_character_flag = tourney_lesson_stewardship_up
+	clr_character_flag = tourney_lesson_stewardship_down
+	clr_character_flag = tourney_lesson_diplomacy_up
+	clr_character_flag = tourney_lesson_diplomacy_down
+}
+
+# Scope: a new rider. Enters the lists of event_target:tourney_host.
+# Used by: WHG_bretonnia_effects, WHG_tournament_events
+tourney_join_lists_effect = {
+	set_character_flag = tourney_rider
+	opinion = { modifier = opinion_attending_tournament who = event_target:tourney_host years = 1 }
+	reverse_opinion = { modifier = opinion_attending_tournament who = event_target:tourney_host years = 1 }
+	character_event = { id = tourney.14 days = 200 } # Safety catch
+}
+
+# Scope: the loser of a tilt. How the fall goes: most are merely unhorsed,
+# some wounded, a few crippled and one in a hundred killed. A rider who took
+# a purse falls on purpose and comes to no harm. The host and the players at
+# the tourney hear of a crippling or a death (tourney.29).
+# Used by: WHG_bretonnia_effects
+tourney_fall_effect = {
+	if = {
+		limit = { has_character_flag = tourney_bribed }
+		set_character_flag = tourney_fate_threw
+	}
+	else = {
+		random_list = {
+			88 = {
+				set_character_flag = tourney_fate_unhorsed
+			}
+			8 = {
+				set_character_flag = tourney_fate_wounded
+				if = {
+					limit = { NOT = { trait = wounded } }
+					add_trait = wounded
+				}
+			}
+			3 = {
+				set_character_flag = tourney_fate_crippled
+				random_list = {
+					25 = {
+						modifier = { factor = 0 trait = one_eyed }
+						add_trait = one_eyed
+					}
+					25 = {
+						modifier = { factor = 0 trait = one_legged }
+						add_trait = one_legged
+					}
+					25 = {
+						modifier = { factor = 0 trait = disfigured }
+						add_trait = disfigured
+					}
+					25 = {
+						modifier = { factor = 0 trait = maimed }
+						add_trait = maimed
+					}
+				}
+				if = {
+					limit = { NOT = { trait = wounded } }
+					add_trait = wounded
+				}
+			}
+			1 = {
+				set_character_flag = tourney_fate_killed
+			}
+		}
+	}
+	if = {
+		limit = {
+			OR = {
+				has_character_flag = tourney_fate_crippled
+				has_character_flag = tourney_fate_killed
+			}
+		}
+		event_target:tourney_host = {
+			if = {
+				limit = { NOT = { has_character_flag = tourney_no_msg_fallen } }
+				character_event = { id = tourney.29 }
+			}
+			any_opinion_modifier_target = {
+				limit = {
+					ai = no
+					NOT = { has_character_flag = tourney_no_msg_fallen }
+					NOT = { character = event_target:tourney_tilt_winner }
+					NOT = { character = event_target:tourney_tilt_loser }
+					OR = {
+						has_opinion_modifier = { who = PREV modifier = opinion_attending_tournament }
+						has_opinion_modifier = { who = PREV modifier = opinion_spectating_tournament }
+					}
+				}
+				character_event = { id = tourney.29 }
+			}
+		}
+	}
+	if = {
+		limit = { has_character_flag = tourney_fate_killed }
+		if = {
+			limit = { is_invincible_trigger = yes }
+			antideath_effect = yes
+		}
+		else = {
+			death = {
+				death_reason = death_duel
+				killer = event_target:tourney_tilt_winner
+			}
+		}
+	}
+}
+
+# Scope: a character. ROOT is the host. Sends a letter to ride (tourney.2) to
+# a fit rider good enough for this tourney's size, or else, to a lord, a
+# letter to watch (tourney.3).
+# Used by: WHG_bretonnia_effects
+tourney_send_invitation_effect = {
+	if = {
+		limit = {
+			NOT = { character = ROOT }
+			tourney_can_ride_trigger = yes
+			OR = {
+				AND = {
+					ROOT = { has_character_flag = tourney_local }
+					tourney_local_rider_trigger = yes
+				}
+				tourney_worthy_rider_trigger = yes
+			}
+		}
+		letter_event = { id = tourney.2 days = 2 random = 5 }
+	}
+	else_if = {
+		limit = { tourney_can_watch_trigger = yes }
+		letter_event = { id = tourney.3 days = 7 random = 5 }
+	}
+}
+
+###############################################################################
+# Used by WHG_bretonnia_events
 ###############################################################################
 
 # The man the Damsel must hunt (bretonmagic.3): from her Bretonnian liege's
 # realm first, else a neighbouring Bretonnian realm. Prefers men she
 # dislikes.
 # Scope: ROOT is the Damsel. Saves event_target:male_target.
+# Used by: WHG_bretonnia_events
 damsel_find_male_mage_effect = {
 	if = {
 		limit = {
@@ -50,6 +216,7 @@ damsel_find_male_mage_effect = {
 # realm, of a neighbouring Bretonnian realm. Prefers young girls with strong
 # gifts (ice_witch_recruit_score).
 # Scope: ROOT is the Damsel. Saves event_target:recruit_to_be.
+# Used by: WHG_bretonnia_events
 damsel_find_recruit_effect = {
 	if = {
 		limit = { any_player = { damsel_recruit_trigger = yes } }
@@ -106,6 +273,7 @@ damsel_find_recruit_effect = {
 
 # The lessons stop (bretonmagic.12 - 15): the pupil leaves off her studies
 # and the teacher's mission ends.
+# Used by: WHG_bretonnia_events
 damsel_end_lessons_effect = {
 	event_target:recruit_to_be = {
 		if = { limit = { is_alive = yes } remove_trait = studying_magic }
@@ -118,6 +286,7 @@ damsel_end_lessons_effect = {
 # The Lady's gifts to a new Damsel who knows no lore yet: Life or Beasts
 # most often, now and then both, Light or the Heavens.
 # Scope: the new Damsel.
+# Used by: WHG_bretonnia_events
 damsel_learn_lore_effect = {
 	random_list = {
 		30 = { add_trait = lore_life }
@@ -133,6 +302,7 @@ damsel_learn_lore_effect = {
 # A new Fay Enchantress: the Lady's chosen takes the high magic and leads
 # the Damsels (bretonmagic.26).
 # Scope: the new Fay Enchantress.
+# Used by: WHG_bretonnia_events
 damsel_make_fay_enchantress_effect = {
 	add_trait = fay_enchantress
 	add_trait = lore_high_magic
@@ -143,4 +313,1228 @@ damsel_make_fay_enchantress_effect = {
 	join_society = handmaidens_of_the_lady
 	society_rank_up = { society = handmaidens_of_the_lady rank = 3 }
 	set_society_grandmaster = yes
+}
+
+# ROOT is the host.
+# Used by: WHG_bretonnia_events
+errant_end_visit_effect = {
+	clr_character_flag = errant_visiting
+	clr_character_flag = errant_recruited
+	clr_character_flag = errant_seduction
+	clr_character_flag = errant_scene_1
+	clr_character_flag = errant_scene_2
+	clr_character_flag = errant_scene_3
+	clr_character_flag = errant_band_hedge
+}
+
+# The seduced woman. The knight is the new_character afterwards.
+# Used by: WHG_bretonnia_events
+errant_seducer_effect = {
+	add_trait = lustful
+	create_character = {
+		random_traits = yes
+		dynasty = random
+		fertility = 0.6
+		female = no
+		age = 24
+		religion = ROOT
+		culture = ROOT
+	}
+	new_character = {
+		character_event = { id = aiclean.31 } # racial trait
+		PREV = { impregnate = PREV } # impregnate runs in the mother's scope; PREV in here is the knight
+		if = {
+			limit = { PREV = { is_no_females_race = no } }
+			add_lover = PREV
+		}
+		add_trait = lustful
+	}
+}
+
+# Used by: WHG_bretonnia_events
+add_virtue_grail = {
+	if = {
+		limit = { has_character_modifier = virtue_audacity }
+		add_character_modifier = {
+			name = virtue_audacity_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_audacity
+	}
+	if = {
+		limit = { has_character_modifier = virtue_confidence }
+		add_character_modifier = {
+			name = virtue_confidence_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_confidence
+	}
+	if = {
+		limit = { has_character_modifier = virtue_discipline }
+		add_character_modifier = {
+			name = virtue_discipline_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_discipline
+	}
+	if = {
+		limit = { has_character_modifier = virtue_duty }
+		add_character_modifier = {
+			name = virtue_duty_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_duty
+	}
+	if = {
+		limit = { has_character_modifier = virtue_empathy }
+		add_character_modifier = {
+			name = virtue_empathy_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_empathy
+	}
+	if = {
+		limit = { has_character_modifier = virtue_heroism }
+		add_character_modifier = {
+			name = virtue_heroism_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_heroism
+	}
+	if = {
+		limit = { has_character_modifier = virtue_ideal }
+		add_character_modifier = {
+			name = virtue_ideal_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_ideal
+	}
+	if = {
+		limit = { has_character_modifier = virtue_impetuous_knight }
+		add_character_modifier = {
+			name = virtue_impetuous_knight_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_impetuous_knight
+	}
+	if = {
+		limit = { has_character_modifier = virtue_joust }
+		add_character_modifier = {
+			name = virtue_joust_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_joust
+	}
+	if = {
+		limit = { has_character_modifier = virtue_knightly_temper }
+		add_character_modifier = {
+			name = virtue_knightly_temper_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_knightly_temper
+	}
+	if = {
+		limit = { has_character_modifier = virtue_noble_disdain }
+		add_character_modifier = {
+			name = virtue_noble_disdain_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_noble_disdain
+	}
+	if = {
+		limit = { has_character_modifier = virtue_penitent }
+		add_character_modifier = {
+			name = virtue_penitent_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_penitent
+	}
+	if = {
+		limit = { has_character_modifier = virtue_purity }
+		add_character_modifier = {
+			name = virtue_purity_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_purity
+	}
+	if = {
+		limit = { has_character_modifier = virtue_stoicism }
+		add_character_modifier = {
+			name = virtue_stoicism_grail
+			duration = -1
+		}
+		remove_character_modifier = virtue_stoicism
+	}
+}
+
+###############################################################################
+# Used by WHG_tournament_events
+###############################################################################
+
+# Scope: a guest. Leaves the tourney: clears every tourney flag and the
+# opinion links to the host (event_target:tourney_host). Records of past
+# placings (grand_tourny_1st and the rest) stay.
+# Used by: WHG_tournament_events
+tourney_clear_guest_effect = {
+	clr_character_flag = tourney_rider
+	clr_character_flag = tourney_watcher
+	clr_character_flag = tourney_out
+	clr_character_flag = tourney_paired
+	clr_character_flag = tourney_tilting
+	clr_character_flag = tourney_bribed
+	clr_character_flag = tourney_blessed
+	clr_character_flag = tourney_first
+	clr_character_flag = tourney_second
+	clr_character_flag = tourney_third
+	clr_character_flag = tourney_happening
+	clr_character_flag = tourney_fate_unhorsed
+	clr_character_flag = tourney_fate_wounded
+	clr_character_flag = tourney_fate_crippled
+	clr_character_flag = tourney_fate_killed
+	clr_character_flag = tourney_fate_yielded
+	clr_character_flag = tourney_fate_threw
+	tourney_clear_lesson_effect = yes
+	event_target:tourney_host = {
+		remove_opinion = { modifier = opinion_attending_tournament who = PREV }
+		remove_opinion = { modifier = opinion_spectating_tournament who = PREV }
+		reverse_remove_opinion = { modifier = opinion_attending_tournament who = PREV }
+		reverse_remove_opinion = { modifier = opinion_spectating_tournament who = PREV }
+	}
+}
+
+# Scope: the host. Ends the tourney. The epic_tournament flag stays for the
+# ten-year cooldown of the decision.
+# Used by: WHG_tournament_events
+tourney_clear_host_effect = {
+	clr_character_flag = tourney_host
+	clr_character_flag = tourney_running
+	clr_character_flag = tourney_local
+	clr_character_flag = tourney_regional
+	clr_character_flag = tourney_grand
+	clr_character_flag = tourney_semi_round
+	clr_character_flag = tourney_final_round
+	clr_character_flag = tourney_no_msg_fallen
+	clr_character_flag = tourney_ended
+	clr_character_flag = do_not_disturb
+	remove_character_modifier = holding_epic_tournament
+	set_variable = { which = tourney_waits value = 0 }
+}
+
+# Scope: the host. A hedge knight rides in to fill the lists: a Knight of the
+# Realm of the host's people and faith, sound of body.
+# Used by: WHG_tournament_events
+tourney_hedge_knight_effect = {
+	capital_scope = {
+		ROOT = {
+			create_character = {
+				random_traits = yes
+				dynasty = culture
+				culture = PREV
+				religion = ROOT
+				female = no
+				age = 24
+				trait = tough_soldier
+			}
+			new_character = {
+				character_event = { id = aiclean.31 } # Racial trait
+				join_society = { society = knights_of_bretonnia rank = 2 }
+				give_minor_title = title_sir_bretonnian
+				remove_trait = weak
+				remove_trait = imbecile
+				remove_trait = clubfooted
+				remove_trait = inbred
+				tourney_join_lists_effect = yes
+			}
+		}
+	}
+}
+
+# Scope: a rider. Leaves the lists for good (unhorsed, hurt, thrown out or
+# yielded). At the semi-finals or the final, earns third or second place.
+# Used by: WHG_tournament_events, WHG_bretonnia_effects
+tourney_leave_lists_effect = {
+	set_character_flag = tourney_out
+	clr_character_flag = tourney_tilting
+	if = {
+		limit = { event_target:tourney_host = { has_character_flag = tourney_final_round } }
+		set_character_flag = tourney_second
+	}
+	else_if = {
+		limit = { event_target:tourney_host = { has_character_flag = tourney_semi_round } }
+		set_character_flag = tourney_third
+	}
+}
+
+# Scope: a rider (ROOT). event_target:tourney_foe is the other. The two ride
+# at each other until one is unhorsed. Skill at arms decides most tilts; a
+# rider who took a purse to lose always falls, and the Lady's blessing or a
+# brave heart help. The loser may be hurt, crippled or, one time in a
+# hundred, killed. Players are told the result (tourney.27, tourney.28).
+# Used by: WHG_tournament_events
+tourney_tilt_effect = {
+	random_list = {
+		50 = {
+			modifier = {
+				factor = 0
+				has_character_flag = tourney_bribed
+			}
+			modifier = {
+				factor = 1000
+				event_target:tourney_foe = { has_character_flag = tourney_bribed }
+				NOT = { has_character_flag = tourney_bribed }
+			}
+			modifier = {
+				factor = 1.5
+				combat_rating_diff = { who = event_target:tourney_foe value = 10 }
+			}
+			modifier = {
+				factor = 1.5
+				combat_rating_diff = { who = event_target:tourney_foe value = 25 }
+			}
+			modifier = {
+				factor = 2
+				combat_rating_diff = { who = event_target:tourney_foe value = 50 }
+			}
+			modifier = {
+				factor = 2
+				combat_rating_diff = { who = event_target:tourney_foe value = 100 }
+			}
+			modifier = {
+				factor = 1.5
+				has_character_flag = tourney_blessed
+			}
+			modifier = {
+				factor = 1.2
+				trait = brave
+			}
+			modifier = {
+				factor = 0.8
+				trait = craven
+			}
+			modifier = {
+				factor = 0.7
+				OR = {
+					trait = wounded
+					is_ill = yes
+				}
+			}
+			save_event_target_as = tourney_tilt_winner
+			event_target:tourney_foe = { save_event_target_as = tourney_tilt_loser }
+		}
+		50 = {
+			modifier = {
+				factor = 0
+				event_target:tourney_foe = { has_character_flag = tourney_bribed }
+			}
+			modifier = {
+				factor = 1000
+				has_character_flag = tourney_bribed
+				event_target:tourney_foe = { NOT = { has_character_flag = tourney_bribed } }
+			}
+			modifier = {
+				factor = 1.5
+				event_target:tourney_foe = { combat_rating_diff = { who = ROOT value = 10 } }
+			}
+			modifier = {
+				factor = 1.5
+				event_target:tourney_foe = { combat_rating_diff = { who = ROOT value = 25 } }
+			}
+			modifier = {
+				factor = 2
+				event_target:tourney_foe = { combat_rating_diff = { who = ROOT value = 50 } }
+			}
+			modifier = {
+				factor = 2
+				event_target:tourney_foe = { combat_rating_diff = { who = ROOT value = 100 } }
+			}
+			modifier = {
+				factor = 1.5
+				event_target:tourney_foe = { has_character_flag = tourney_blessed }
+			}
+			modifier = {
+				factor = 1.2
+				event_target:tourney_foe = { trait = brave }
+			}
+			modifier = {
+				factor = 0.8
+				event_target:tourney_foe = { trait = craven }
+			}
+			modifier = {
+				factor = 0.7
+				event_target:tourney_foe = {
+					OR = {
+						trait = wounded
+						is_ill = yes
+					}
+				}
+			}
+			event_target:tourney_foe = { save_event_target_as = tourney_tilt_winner }
+			save_event_target_as = tourney_tilt_loser
+		}
+	}
+	event_target:tourney_tilt_winner = {
+		clr_character_flag = tourney_tilting
+		clr_character_flag = tourney_blessed
+		if = {
+			limit = { event_target:tourney_tilt_loser = { higher_tier_than = COUNT } }
+			prestige = 10
+		}
+		else = {
+			prestige = 5
+		}
+		small_chance_for_one_duel_experience_modifier = yes
+	}
+	event_target:tourney_tilt_loser = {
+		clr_character_flag = tourney_blessed
+		prestige = -10
+		tourney_leave_lists_effect = yes
+		tourney_fall_effect = yes
+	}
+	event_target:tourney_tilt_winner = {
+		if = {
+			limit = { ai = no }
+			character_event = { id = tourney.27 }
+		}
+	}
+	event_target:tourney_tilt_loser = {
+		if = {
+			limit = {
+				ai = no
+				is_alive = yes
+			}
+			character_event = { id = tourney.28 }
+		}
+	}
+}
+
+# Scope: a rider with tourney_first, tourney_second or tourney_third. Adds a
+# medal of the tourney's size (grand, regional or local) and the record flag
+# that opens the bigger tourneys.
+# Used by: WHG_tournament_events
+tourney_medal_effect = {
+	if = {
+		limit = {
+			has_character_flag = tourney_first
+			event_target:tourney_host = { has_character_flag = tourney_grand }
+		}
+		set_character_flag = grand_tourny_1st
+		if = {
+			limit = { has_character_modifier = grand_tourny_1st_4 }
+			remove_character_modifier = grand_tourny_1st_4
+			add_character_modifier = { name = grand_tourny_1st_5 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = grand_tourny_1st_3 }
+			remove_character_modifier = grand_tourny_1st_3
+			add_character_modifier = { name = grand_tourny_1st_4 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = grand_tourny_1st_2 }
+			remove_character_modifier = grand_tourny_1st_2
+			add_character_modifier = { name = grand_tourny_1st_3 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = grand_tourny_1st_1 }
+			remove_character_modifier = grand_tourny_1st_1
+			add_character_modifier = { name = grand_tourny_1st_2 duration = -1 }
+		}
+		else_if = {
+			limit = { NOT = { has_character_modifier = grand_tourny_1st_5 } }
+			add_character_modifier = { name = grand_tourny_1st_1 duration = -1 }
+		}
+	}
+	else_if = {
+		limit = {
+			has_character_flag = tourney_second
+			event_target:tourney_host = { has_character_flag = tourney_grand }
+		}
+		set_character_flag = grand_tourny_2nd
+		if = {
+			limit = { has_character_modifier = grand_tourny_2nd_4 }
+			remove_character_modifier = grand_tourny_2nd_4
+			add_character_modifier = { name = grand_tourny_2nd_5 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = grand_tourny_2nd_3 }
+			remove_character_modifier = grand_tourny_2nd_3
+			add_character_modifier = { name = grand_tourny_2nd_4 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = grand_tourny_2nd_2 }
+			remove_character_modifier = grand_tourny_2nd_2
+			add_character_modifier = { name = grand_tourny_2nd_3 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = grand_tourny_2nd_1 }
+			remove_character_modifier = grand_tourny_2nd_1
+			add_character_modifier = { name = grand_tourny_2nd_2 duration = -1 }
+		}
+		else_if = {
+			limit = { NOT = { has_character_modifier = grand_tourny_2nd_5 } }
+			add_character_modifier = { name = grand_tourny_2nd_1 duration = -1 }
+		}
+	}
+	else_if = {
+		limit = {
+			has_character_flag = tourney_third
+			event_target:tourney_host = { has_character_flag = tourney_grand }
+		}
+		set_character_flag = grand_tourny_3rd
+		if = {
+			limit = { has_character_modifier = grand_tourny_3rd_4 }
+			remove_character_modifier = grand_tourny_3rd_4
+			add_character_modifier = { name = grand_tourny_3rd_5 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = grand_tourny_3rd_3 }
+			remove_character_modifier = grand_tourny_3rd_3
+			add_character_modifier = { name = grand_tourny_3rd_4 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = grand_tourny_3rd_2 }
+			remove_character_modifier = grand_tourny_3rd_2
+			add_character_modifier = { name = grand_tourny_3rd_3 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = grand_tourny_3rd_1 }
+			remove_character_modifier = grand_tourny_3rd_1
+			add_character_modifier = { name = grand_tourny_3rd_2 duration = -1 }
+		}
+		else_if = {
+			limit = { NOT = { has_character_modifier = grand_tourny_3rd_5 } }
+			add_character_modifier = { name = grand_tourny_3rd_1 duration = -1 }
+		}
+	}
+	else_if = {
+		limit = {
+			has_character_flag = tourney_first
+			event_target:tourney_host = { has_character_flag = tourney_regional }
+		}
+		set_character_flag = normal_tourny_1st
+		if = {
+			limit = { has_character_modifier = normal_tourny_1st_4 }
+			remove_character_modifier = normal_tourny_1st_4
+			add_character_modifier = { name = normal_tourny_1st_5 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = normal_tourny_1st_3 }
+			remove_character_modifier = normal_tourny_1st_3
+			add_character_modifier = { name = normal_tourny_1st_4 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = normal_tourny_1st_2 }
+			remove_character_modifier = normal_tourny_1st_2
+			add_character_modifier = { name = normal_tourny_1st_3 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = normal_tourny_1st_1 }
+			remove_character_modifier = normal_tourny_1st_1
+			add_character_modifier = { name = normal_tourny_1st_2 duration = -1 }
+		}
+		else_if = {
+			limit = { NOT = { has_character_modifier = normal_tourny_1st_5 } }
+			add_character_modifier = { name = normal_tourny_1st_1 duration = -1 }
+		}
+	}
+	else_if = {
+		limit = {
+			has_character_flag = tourney_second
+			event_target:tourney_host = { has_character_flag = tourney_regional }
+		}
+		set_character_flag = normal_tourny_2nd
+		if = {
+			limit = { has_character_modifier = normal_tourny_2nd_4 }
+			remove_character_modifier = normal_tourny_2nd_4
+			add_character_modifier = { name = normal_tourny_2nd_5 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = normal_tourny_2nd_3 }
+			remove_character_modifier = normal_tourny_2nd_3
+			add_character_modifier = { name = normal_tourny_2nd_4 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = normal_tourny_2nd_2 }
+			remove_character_modifier = normal_tourny_2nd_2
+			add_character_modifier = { name = normal_tourny_2nd_3 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = normal_tourny_2nd_1 }
+			remove_character_modifier = normal_tourny_2nd_1
+			add_character_modifier = { name = normal_tourny_2nd_2 duration = -1 }
+		}
+		else_if = {
+			limit = { NOT = { has_character_modifier = normal_tourny_2nd_5 } }
+			add_character_modifier = { name = normal_tourny_2nd_1 duration = -1 }
+		}
+	}
+	else_if = {
+		limit = {
+			has_character_flag = tourney_third
+			event_target:tourney_host = { has_character_flag = tourney_regional }
+		}
+		set_character_flag = normal_tourny_3rd
+		if = {
+			limit = { has_character_modifier = normal_tourny_3rd_4 }
+			remove_character_modifier = normal_tourny_3rd_4
+			add_character_modifier = { name = normal_tourny_3rd_5 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = normal_tourny_3rd_3 }
+			remove_character_modifier = normal_tourny_3rd_3
+			add_character_modifier = { name = normal_tourny_3rd_4 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = normal_tourny_3rd_2 }
+			remove_character_modifier = normal_tourny_3rd_2
+			add_character_modifier = { name = normal_tourny_3rd_3 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = normal_tourny_3rd_1 }
+			remove_character_modifier = normal_tourny_3rd_1
+			add_character_modifier = { name = normal_tourny_3rd_2 duration = -1 }
+		}
+		else_if = {
+			limit = { NOT = { has_character_modifier = normal_tourny_3rd_5 } }
+			add_character_modifier = { name = normal_tourny_3rd_1 duration = -1 }
+		}
+	}
+	else_if = {
+		limit = {
+			has_character_flag = tourney_first
+			event_target:tourney_host = { has_character_flag = tourney_local }
+		}
+		set_character_flag = small_tourny_1st
+		if = {
+			limit = { has_character_modifier = small_tourny_1st_4 }
+			remove_character_modifier = small_tourny_1st_4
+			add_character_modifier = { name = small_tourny_1st_5 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = small_tourny_1st_3 }
+			remove_character_modifier = small_tourny_1st_3
+			add_character_modifier = { name = small_tourny_1st_4 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = small_tourny_1st_2 }
+			remove_character_modifier = small_tourny_1st_2
+			add_character_modifier = { name = small_tourny_1st_3 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = small_tourny_1st_1 }
+			remove_character_modifier = small_tourny_1st_1
+			add_character_modifier = { name = small_tourny_1st_2 duration = -1 }
+		}
+		else_if = {
+			limit = { NOT = { has_character_modifier = small_tourny_1st_5 } }
+			add_character_modifier = { name = small_tourny_1st_1 duration = -1 }
+		}
+	}
+	else_if = {
+		limit = {
+			has_character_flag = tourney_second
+			event_target:tourney_host = { has_character_flag = tourney_local }
+		}
+		set_character_flag = small_tourny_2nd
+		if = {
+			limit = { has_character_modifier = small_tourny_2nd_4 }
+			remove_character_modifier = small_tourny_2nd_4
+			add_character_modifier = { name = small_tourny_2nd_5 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = small_tourny_2nd_3 }
+			remove_character_modifier = small_tourny_2nd_3
+			add_character_modifier = { name = small_tourny_2nd_4 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = small_tourny_2nd_2 }
+			remove_character_modifier = small_tourny_2nd_2
+			add_character_modifier = { name = small_tourny_2nd_3 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = small_tourny_2nd_1 }
+			remove_character_modifier = small_tourny_2nd_1
+			add_character_modifier = { name = small_tourny_2nd_2 duration = -1 }
+		}
+		else_if = {
+			limit = { NOT = { has_character_modifier = small_tourny_2nd_5 } }
+			add_character_modifier = { name = small_tourny_2nd_1 duration = -1 }
+		}
+	}
+	else_if = {
+		limit = {
+			has_character_flag = tourney_third
+			event_target:tourney_host = { has_character_flag = tourney_local }
+		}
+		set_character_flag = small_tourny_3rd
+		if = {
+			limit = { has_character_modifier = small_tourny_3rd_4 }
+			remove_character_modifier = small_tourny_3rd_4
+			add_character_modifier = { name = small_tourny_3rd_5 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = small_tourny_3rd_3 }
+			remove_character_modifier = small_tourny_3rd_3
+			add_character_modifier = { name = small_tourny_3rd_4 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = small_tourny_3rd_2 }
+			remove_character_modifier = small_tourny_3rd_2
+			add_character_modifier = { name = small_tourny_3rd_3 duration = -1 }
+		}
+		else_if = {
+			limit = { has_character_modifier = small_tourny_3rd_1 }
+			remove_character_modifier = small_tourny_3rd_1
+			add_character_modifier = { name = small_tourny_3rd_2 duration = -1 }
+		}
+		else_if = {
+			limit = { NOT = { has_character_modifier = small_tourny_3rd_5 } }
+			add_character_modifier = { name = small_tourny_3rd_1 duration = -1 }
+		}
+	}
+}
+
+# Scope: the champion of a grand or regional tourney. Once in a life, may
+# ride home on a Bretonnian charger from the host's stables or carry off the
+# Champion's Lance: one in two at a grand tourney, one in ten at a regional.
+# Used by: WHG_tournament_events
+tourney_prize_effect = {
+	if = {
+		limit = { tourney_can_win_prize_trigger = yes }
+		random = {
+			chance = 10
+			modifier = {
+				factor = 5
+				event_target:tourney_host = { has_character_flag = tourney_grand }
+			}
+			set_character_flag = tourney_prize_won
+			if = {
+				limit = {
+					NOT = { any_artifact = { has_artifact_flag = mount } }
+				}
+				add_artifact = bretonnian_charger
+			}
+			else_if = {
+				limit = {
+					NOT = { any_artifact = { has_artifact_flag = tourney_lance } }
+				}
+				add_artifact = tourney_champion_lance
+			}
+		}
+	}
+}
+
+# Scope: the host. Invites the right people for the tourney's size:
+# - local: the host's own realm and court, the host's liege and the liege's
+#   other vassals;
+# - regional: the realm of the host's king-tier liege (a Bretonnian
+#   dukedom), or the host's own realm if the host is of that rank or higher;
+# - grand: the whole realm of the top liege.
+# Used by: WHG_tournament_events
+tourney_invite_effect = {
+	if = {
+		limit = { has_character_flag = tourney_grand }
+		top_liege = {
+			if = {
+				limit = { NOT = { character = ROOT } }
+				tourney_send_invitation_effect = yes
+			}
+			any_realm_character = { tourney_send_invitation_effect = yes }
+		}
+	}
+	else_if = {
+		limit = {
+			has_character_flag = tourney_regional
+			lower_tier_than = KING
+			any_liege = { tier = KING }
+		}
+		any_liege = {
+			limit = { tier = KING }
+			tourney_send_invitation_effect = yes
+			any_realm_character = { tourney_send_invitation_effect = yes }
+		}
+	}
+	else = {
+		any_realm_character = { tourney_send_invitation_effect = yes }
+		liege = {
+			if = {
+				limit = { NOT = { character = ROOT } }
+				tourney_send_invitation_effect = yes
+				any_vassal = {
+					limit = { NOT = { character = ROOT } }
+					tourney_send_invitation_effect = yes
+				}
+			}
+		}
+	}
+}
+
+# Scope: the champion. A wife or betrothed passed over for
+# event_target:tourney_queen takes it as an insult.
+# Used by: WHG_tournament_events
+tourney_snub_effect = {
+	any_spouse = {
+		limit = {
+			is_woman_trigger = yes
+			NOT = { character = event_target:tourney_queen }
+		}
+		opinion = { modifier = insulted who = ROOT multiplier = 1.5 }
+	}
+	betrothed = {
+		if = {
+			limit = {
+				is_woman_trigger = yes
+				NOT = { character = event_target:tourney_queen }
+			}
+			opinion = { modifier = insulted who = ROOT multiplier = 1.5 }
+		}
+	}
+}
+
+###############################################################################
+# Other helpers used by one or two files
+###############################################################################
+
+# Used by: wh_bretonnian_decisions
+irrepressible_spirit_scrip = {
+	remove_trait = wounded
+	remove_trait = infection
+	remove_trait = severely_injured
+	add_scarred_tiered_effect = yes
+	clr_character_flag = pending_infection
+}
+
+# Used by: wh_bretonnian_decisions
+remove_all_disease_effect = {
+	if = {
+	 	limit = { trait = ill }
+	 	remove_trait = ill
+	}
+	if = {
+	 	limit = { trait = has_tuberculosis }
+	 	remove_trait = has_tuberculosis
+	}
+	if = {
+	 	limit = { trait = has_typhoid_fever }
+	 	remove_trait = has_typhoid_fever
+	}
+	if = {
+	 	limit = { trait = has_typhus }
+	 	remove_trait = has_typhus
+	}
+	if = {
+	 	limit = { trait = has_bubonic_plague }
+	 	remove_trait = has_bubonic_plague
+	}
+	if = {
+	 	limit = { trait = has_measles }
+	 	remove_trait = has_measles
+	}
+	if = {
+	 	limit = { trait = has_small_pox }
+	 	remove_trait = has_small_pox
+	}
+	if = {
+	 	limit = { trait = has_aztec_disease }
+	 	remove_trait = has_aztec_disease
+	}
+	if = {
+	 	limit = { trait = syphilitic }
+	 	remove_trait = syphilitic
+	}
+	if = {
+	 	limit = { trait = flu }
+	 	remove_trait = flu
+	}
+	if = {
+	 	limit = { trait = dysentery }
+	 	remove_trait = dysentery
+	}
+	if = {
+	 	limit = { trait = gout }
+	 	remove_trait = gout
+	}
+	if = {
+	 	limit = { trait = food_poisoning }
+	 	remove_trait = food_poisoning
+	}
+	if = {
+	 	limit = { trait = rabies }
+	 	remove_trait = rabies
+	}
+	if = {
+	 	limit = { trait = cancer }
+	 	remove_trait = cancer
+	}
+	if = {
+	 	limit = { trait = pneumonic }
+	 	remove_trait = pneumonic
+	}
+	if = {
+	 	limit = { trait = scurvy }
+	 	remove_trait = scurvy
+	}
+	if = {
+	 	limit = { trait = dancing_plague }
+	 	remove_trait = dancing_plague
+	}
+	if = {
+	 	limit = { trait = leper }
+	 	remove_trait = leper
+	}
+	if = {
+		limit = { trait = has_creeping_buboes }
+		remove_trait = has_creeping_buboes
+	}
+	if = {
+		limit = { trait = has_measles }
+		remove_trait = has_measles
+	}
+	if = {
+		limit = { trait = has_typhus }
+		remove_trait = has_typhus
+	}
+	if = {
+		limit = { trait = has_rattlelung }
+		remove_trait = has_rattlelung
+	}
+	if = {
+		limit = { trait = has_tomb_rot }
+		remove_trait = has_tomb_rot
+	}
+	if = {
+		limit = { trait = has_nurgles_rot }
+		remove_trait = has_nurgles_rot
+	}
+	if = {
+		limit = { trait = has_bone_auge }
+		remove_trait = has_bone_auge
+	}
+	clear_disease_level_effect = yes
+}
+
+# Used by: WHG_chaos_undivided_events
+send_duel_result_tournament_effect = {
+	# Runs via the attacker/combatant_1
+	### Disclaimer: Assumes combatant_1 is ROOT. combatant_2 is referred to as its event_target-name.
+	###############################
+	# duel_result_score bands: see send_duel_result_event_effect in
+	# WHG_war_effects.txt. Each bout ends with one fighter dead. Who
+	# dies follows the same score ladder as the duel wounds (35 a side when
+	# even), plus a little for poor skill; poison and guns still count, and at a
+	# crushing gap (8x or more) only poison lets the weaker fighter win.
+	###  Flags used:
+	# title_challenge_duel			(NOT YET USED)
+	# is_legendary_duel				(used in hf_warrior_lodge_legends_events)
+	# mock_duel						(induction for Warrior Lodges)
+	# intrigue_options_available
+	## Flags I MIGHT use (but most likely for triggered descs, etc)
+	# is_friendly_fight
+	# is_family_fight
+	# is_rival_fight
+	# fight_could_spark_romance
+	# fight_could_spark_rivalry
+	# fight_could_spark_friendship
+	#### 1. Not without war focus or Warrior lodges (LETHAL)
+	#### 2. Make sure there is some kind of gating that checks whether a duel is:
+	# A. For Honor (default, available for anyone)
+	# B. To the Death (against your foes)
+	# C. A Sparring Match (against anyone)
+	# (D. Something else?)
+	random_list = {
+		# 	#mostly to deal with Kinslayer effect and tooltips...
+		# 	event_target:combatant_2 = { set_character_flag = someone_died }
+		# 	#to determine custom loc outcomes...
+		# 	event_target:combatant_2 = {
+		# 	}
+		# 	event_target:combatant_2 = { character_event = { id = chaosfl.13 days = 1 } } #double death event (defender)
+		# }
+		5 = {
+			#LETHAL for attacker...
+			trigger = {
+				NOR = {
+					has_character_flag = mock_duel
+					has_character_flag = is_legendary_duel
+				}
+				OR = {
+					has_character_flag = claim_duel@event_target:combatant_2
+					has_character_flag = is_battlefield_duel
+					is_member_of_any_warband_trigger = yes
+					is_member_of_any_warrior_lodge_trigger = yes
+					has_focus = focus_war
+					event_target:combatant_1 = {
+						has_character_flag = flag_duel_no_draws
+					}					#Special triggered event duels.
+					event_target:combatant_2 = {
+						has_character_flag = flag_duel_no_draws
+					}
+					event_target:combatant_1 = {
+						has_character_flag = deadly_duel@event_target:combatant_2
+					}
+				}
+			}
+			additive_modifier = {
+				duel_result_score_the_worst_trigger = yes
+				value = 110
+			}
+			additive_modifier = {
+				duel_result_score_terrible_trigger = yes
+				value = 90
+			}
+			additive_modifier = {
+				duel_result_score_bad_trigger = yes
+				value = 70
+			}
+			additive_modifier = {
+				duel_result_score_ok_trigger = yes
+				value = 50
+			}
+			additive_modifier = {
+				duel_result_score_decent_trigger = yes
+				value = 30
+			}
+			additive_modifier = {
+				duel_result_score_good_trigger = yes
+				value = 15
+			}
+			additive_modifier = {
+				duel_result_score_great_trigger = yes
+				value = 8
+			}
+			additive_modifier = {
+				duel_result_score_fantastic_trigger = yes
+				value = 2
+			}
+			additive_modifier = {
+				duel_result_score_the_best_trigger = yes
+				value = -4
+			}
+			additive_modifier = {
+				is_bad_duelist_trigger = yes
+				value = 5
+			}
+			additive_modifier = {
+				is_terrible_duelist_trigger = yes
+				value = 10
+			}
+			additive_modifier = {
+				is_the_worst_duelist_trigger = yes
+				value = 15
+			}
+			additive_modifier = {
+				has_character_flag = defender_using_poison@event_target:combatant_1				#Defender used poison
+				value = 30
+			}
+			additive_modifier = {
+				has_character_flag = poison_can_fail_against@event_target:combatant_1				#Attacker might catch the poison
+				value = -25
+			}
+			additive_modifier = {
+				event_target:dueling_weapon_2 = {
+					#Defender is using a *gun*
+					has_artifact_flag = gun
+				}
+				NOT = {
+					event_target:dueling_weapon_1 = {
+						has_artifact_flag = gun
+					}
+				}
+				value = 30
+			}
+			modifier = { #A crushing gap: only poison kills the stronger fighter
+				factor = 0
+				duel_result_score_crushing_trigger = yes
+				NOR = { has_character_flag = defender_using_poison@event_target:combatant_1 has_character_flag = poison_can_fail_against@event_target:combatant_1 }
+			}
+			if = {
+				#this fight is taking place on the battlefield!
+				limit = {
+					has_character_flag = is_battlefield_duel
+				}
+				log = "BATTLE EVENTS: [combatant_1.GetBestName] should have died, but gets to offer themselves up as prisoner, to [combatant_2.GetBestName] instead."
+				character_event = {
+					id = battle.33
+				}				#You can offer yourself up as their prisoner instead-event
+			}
+			else = {
+				#Otherwise, regular duel death for the attacker...
+				set_character_flag = someone_died
+				set_character_flag = actually_injured
+				set_character_flag = injury_kills
+				event_target:combatant_2 = {
+					set_character_flag = someone_died
+					character_event = {
+						id = chaosfl.12
+						days = 1
+					}					#"I decapitated someone!" event sent to winner...
+				}
+			}
+		}
+		5 = {
+			#LETHAL for defender...
+			trigger = {
+				NOR = {
+					has_character_flag = mock_duel
+					has_character_flag = is_legendary_duel
+				}
+				OR = {
+					has_character_flag = claim_duel@event_target:combatant_2
+					has_character_flag = is_battlefield_duel
+					is_member_of_any_warband_trigger = yes
+					is_member_of_any_warrior_lodge_trigger = yes
+					has_focus = focus_war
+					event_target:combatant_1 = {
+						has_character_flag = flag_duel_no_draws
+					}					#Special triggered event duels.
+					event_target:combatant_2 = {
+						has_character_flag = flag_duel_no_draws
+					}
+					event_target:combatant_1 = {
+						has_character_flag = deadly_duel@event_target:combatant_2
+					}
+				}
+			}
+			additive_modifier = {
+				duel_result_score_the_worst_trigger = yes
+				value = -4
+			}
+			additive_modifier = {
+				duel_result_score_terrible_trigger = yes
+				value = 2
+			}
+			additive_modifier = {
+				duel_result_score_bad_trigger = yes
+				value = 8
+			}
+			additive_modifier = {
+				duel_result_score_ok_trigger = yes
+				value = 15
+			}
+			additive_modifier = {
+				duel_result_score_decent_trigger = yes
+				value = 30
+			}
+			additive_modifier = {
+				duel_result_score_good_trigger = yes
+				value = 50
+			}
+			additive_modifier = {
+				duel_result_score_great_trigger = yes
+				value = 70
+			}
+			additive_modifier = {
+				duel_result_score_fantastic_trigger = yes
+				value = 90
+			}
+			additive_modifier = {
+				duel_result_score_the_best_trigger = yes
+				value = 110
+			}
+			additive_modifier = {
+				event_target:combatant_2 = { is_bad_duelist_trigger = yes }
+				value = 5
+			}
+			additive_modifier = {
+				event_target:combatant_2 = { is_terrible_duelist_trigger = yes }
+				value = 10
+			}
+			additive_modifier = {
+				event_target:combatant_2 = { is_the_worst_duelist_trigger = yes }
+				value = 15
+			}
+			additive_modifier = {
+				has_character_flag = attacker_using_poison@event_target:combatant_2				#Attacker used poison
+				value = 30
+			}
+			additive_modifier = {
+				has_character_flag = poison_can_fail_against@event_target:combatant_2				#Defender might catch the poison
+				value = -25
+			}
+			additive_modifier = {
+				event_target:dueling_weapon_1 = {
+					#Attacker is using a *gun*
+					has_artifact_flag = gun
+				}
+				NOT = {
+					event_target:dueling_weapon_2 = {
+						has_artifact_flag = gun
+					}
+				}
+				value = 30
+			}
+			modifier = { #A crushing gap: only poison kills the stronger fighter
+				factor = 0
+				duel_result_score_crushed_trigger = yes
+				NOR = { has_character_flag = attacker_using_poison@event_target:combatant_2 has_character_flag = poison_can_fail_against@event_target:combatant_2 }
+			}
+			set_character_flag = someone_died
+			event_target:combatant_2 = {
+				set_character_flag = someone_died
+				set_character_flag = actually_injured
+				set_character_flag = injury_kills
+			}
+			character_event = {
+				id = chaosfl.12
+			}			#"I decapitated someone!" event sent to winner...
+		}
+		#10 = {
+		#OTHER OUTCOMES? ADD HERE!
+		#}
+	}
+}
+
+# Cursed Mousillon follows its ruler: every Mousillon province the character
+# holds takes the curse under a vampire and loses it under anyone else.
+# Scope: the holder of one or more Mousillon counties.
+# Used by: WHG_mousillon_events
+mousillon_cursed_update_effect = {
+	if = {
+		limit = { is_vampire_trigger = yes }
+		any_demesne_province = {
+			limit = {
+				mousillon_province_trigger = yes
+				NOT = { has_province_modifier = cursed_mousillon }
+			}
+			add_province_modifier = { name = cursed_mousillon duration = -1 }
+		}
+	}
+	else = {
+		any_demesne_province = {
+			limit = {
+				mousillon_province_trigger = yes
+				has_province_modifier = cursed_mousillon
+			}
+			remove_province_modifier = cursed_mousillon
+		}
+	}
+}
+
+# Counts a Mousillon tale lived through. The third earns "the Damned".
+# Scope: the character.
+# Used by: WHG_mousillon_events
+mousillon_survived_effect = {
+	change_variable = { which = mousillon_tales value = 1 }
+	if = {
+		limit = {
+			check_variable = { which = mousillon_tales value >= 3 }
+			NOT = { has_nickname = yes }
+		}
+		give_nickname = nick_the_damned
+	}
+}
+
+# Saves event_target:mousillon_province: a Mousillon province the character
+# holds, else the one they are in.
+# Scope: the character.
+# Used by: WHG_mousillon_events
+mousillon_save_province_effect = {
+	if = {
+		limit = { any_demesne_province = { mousillon_province_trigger = yes } }
+		random_demesne_province = {
+			limit = { mousillon_province_trigger = yes }
+			save_event_target_as = mousillon_province
+		}
+	}
+	else = {
+		location = { save_event_target_as = mousillon_province }
+	}
 }
